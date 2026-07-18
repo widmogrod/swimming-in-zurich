@@ -31,6 +31,15 @@ returns eligibility-annotated options + statuses + warnings. Follows the
 `python-dev:fastapi-service` conventions; deviations recorded in
 `docs/concepts/fastapi-service-integration.md`.
 
+Data source is chosen at startup by the `SwimData` port: if `SWIMZH_GOLD_DB` points at a
+populated gold store it serves from SQLite, else it falls back to the curated dataset
+(always available, offline). Build the gold store from the live WFS with:
+
+```sh
+uv run python -m swimzh.cli build-gold --db gold.sqlite
+SWIMZH_GOLD_DB=gold.sqlite uv run uvicorn apps.web.main:app --reload
+```
+
 ## Engineering conventions
 
 This project follows the agentic-engineering conventions. When implementing code here,

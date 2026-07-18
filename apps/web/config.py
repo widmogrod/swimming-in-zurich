@@ -15,11 +15,14 @@ class Config:
     data_dir: Path
     host: str
     port: int
+    gold_db: Path | None  # when set and present, the app serves from the gold store
 
     @staticmethod
     def from_env() -> Config:
+        gold = os.getenv("SWIMZH_GOLD_DB")
         return Config(
             data_dir=Path(os.getenv("SWIMZH_DATA_DIR", "data")),
             host=os.getenv("SWIMZH_HOST", "127.0.0.1"),
             port=int(os.getenv("SWIMZH_PORT", "8000")),
+            gold_db=Path(gold) if gold else None,
         )
