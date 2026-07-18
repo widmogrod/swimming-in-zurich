@@ -21,7 +21,7 @@ from pydantic import ValidationError
 from swimzh.boundary.geo_sport_dto import FeatureCollectionDTO, FeatureDTO
 from swimzh.core.errors import ParseError, ProviderError, SchemaMismatch
 from swimzh.core.http import HttpClient
-from swimzh.core.result import Err, Ok, Result
+from swimzh.core.result import Err, Ok, Result, bind
 from swimzh.domain.geo import GeoPoint
 
 _SOURCE = "geo_sport"
@@ -73,21 +73,32 @@ def _to_geo_pool(feature: FeatureDTO) -> GeoPool:
     )
 
 
-def fetch_indoor_pools(client: HttpClient) -> Result[list[GeoPool], ProviderError]:
-    """Fetch indoor-pool locations. Returns typed pools on success, a ProviderError value
-    on any failure — transport, HTTP status, malformed body, or unexpected shape."""
-    response = client.get(WFS_URL, params=INDOOR_POOL_PARAMS)
-    match response:
+def fetch_raw(client: HttpClient) -> Result[bytes, ProviderError]:
+    """The raw stage: fetch the GeoJSON bytes (transport/status errors as values). These
+    bytes are what the medallion `raw` layer persists verbatim, before any parsing."""
+    match client.get(WFS_URL, params=INDOOR_POOL_PARAMS):
         case Err(error):
             return Err(error)
         case Ok(resp):
-            try:
-                payload = json.loads(resp.content)
-            except json.JSONDecodeError as exc:
-                snippet = resp.content[:200].decode("utf-8", "replace")
-                return Err(ParseError(source=_SOURCE, detail=str(exc), raw_snippet=snippet))
-            try:
-                collection = FeatureCollectionDTO.model_validate(payload)
-            except ValidationError as exc:
-                return Err(SchemaMismatch(source=_SOURCE, detail=str(exc)))
-            return Ok([_to_geo_pool(f) for f in collection.features])
+            return Ok(resp.content)
+
+
+def parse_pools(raw: bytes) -> Result[list[GeoPool], ProviderError]:
+    """The parse stage: bytes -> typed pools. Malformed body -> ParseError; valid JSON of
+    the wrong shape -> SchemaMismatch."""
+    try:
+        payload = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        snippet = raw[:200].decode("utf-8", "replace")
+        return Err(ParseError(source=_SOURCE, detail=str(exc), raw_snippet=snippet))
+    try:
+        collection = FeatureCollectionDTO.model_validate(payload)
+    except ValidationError as exc:
+        return Err(SchemaMismatch(source=_SOURCE, detail=str(exc)))
+    return Ok([_to_geo_pool(f) for f in collection.features])
+
+
+def fetch_indoor_pools(client: HttpClient) -> Result[list[GeoPool], ProviderError]:
+    """Convenience: fetch + parse in one call. Returns typed pools or a ProviderError value
+    on any failure — transport, HTTP status, malformed body, or unexpected shape."""
+    return bind(fetch_raw(client), parse_pools)
