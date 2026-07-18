@@ -96,7 +96,8 @@ def main(argv: list[str] | None = None) -> int:
     # with an injected client.
     import httpx  # pragma: no cover
 
-    with httpx.Client(timeout=30.0) as inner:  # pragma: no cover - live network path
+    # follow_redirects: some pool pages (e.g. bad-altstetten.ch) redirect http→https.
+    with httpx.Client(timeout=30.0, follow_redirects=True) as inner:  # pragma: no cover - live
         client = HttpClient(inner, source="geo_sport", timeout_s=30.0)
         now = datetime.now(_ZURICH)
         if args.command == "build-gold":
