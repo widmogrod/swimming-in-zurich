@@ -1,0 +1,182 @@
+"""Pydantic v2 DTOs for the hand-curated YAML (calendar, registry, per-pool files).
+
+These validate the on-disk shape; `providers.curated` maps them into the domain. Access
+rules are a discriminated union on `type`, mirroring the domain's `SessionAccess` tagged
+union so the boundary and the domain stay in one-to-one correspondence.
+"""
+
+from __future__ import annotations
+
+from datetime import date, time
+from decimal import Decimal
+from typing import Annotated, Literal
+
+from pydantic import BaseModel, ConfigDict, Field
+
+_Weekday = Literal["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
+_Scope = Literal["always", "school_term", "school_holiday"]
+_HolidayPolicy = Literal["normal", "sunday_schedule", "closed"]
+_PoolKind = Literal["indoor", "thermal", "school"]
+_PriceCategory = Literal["child", "youth", "adult", "senior"]
+
+
+class _Strict(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+
+# --- access (discriminated union) -------------------------------------------------
+
+
+class PublicDTO(_Strict):
+    type: Literal["public"]
+
+
+class LaneSwimDTO(_Strict):
+    type: Literal["lane_swim"]
+    note: str = ""
+
+
+class FamilyDTO(_Strict):
+    type: Literal["family"]
+    note: str = ""
+
+
+class WomenOnlyDTO(_Strict):
+    type: Literal["women_only"]
+    note: str = ""
+
+
+class SeniorsOnlyDTO(_Strict):
+    type: Literal["seniors_only"]
+    min_age: int = 60
+
+
+class SchoolReservedDTO(_Strict):
+    type: Literal["school_reserved"]
+
+
+class ClubReservedDTO(_Strict):
+    type: Literal["club_reserved"]
+    club: str = ""
+
+
+AccessDTO = Annotated[
+    PublicDTO
+    | LaneSwimDTO
+    | FamilyDTO
+    | WomenOnlyDTO
+    | SeniorsOnlyDTO
+    | SchoolReservedDTO
+    | ClubReservedDTO,
+    Field(discriminator="type"),
+]
+
+
+# --- schedule ---------------------------------------------------------------------
+
+
+class RuleDTO(_Strict):
+    weekdays: list[_Weekday]
+    start: time
+    end: time
+    access: AccessDTO
+    scope: _Scope = "always"
+
+
+class ResolvedSessionDTO(_Strict):
+    start: time
+    end: time
+    access: AccessDTO
+
+
+class ExceptionDTO(_Strict):
+    date: date
+    closed: bool = False
+    reason: str = ""
+    sessions: list[ResolvedSessionDTO] = []
+
+
+class ClosureDTO(_Strict):
+    start: date
+    end: date
+    reason: str = ""
+
+
+class BasinDTO(_Strict):
+    basin_id: str
+    name: str
+    rules: list[RuleDTO]
+    exceptions: list[ExceptionDTO] = []
+    length_m: int | None = None
+
+
+# --- pricing ----------------------------------------------------------------------
+
+
+class PriceEntryDTO(_Strict):
+    category: _PriceCategory
+    amount_chf: Decimal
+    display: str
+
+
+class PriceTableDTO(_Strict):
+    entries: list[PriceEntryDTO]
+    valid_as_of: date | None = None
+    source_url: str | None = None
+
+
+# --- geo --------------------------------------------------------------------------
+
+
+class GeoDTO(_Strict):
+    lat: float
+    lon: float
+
+
+# --- facility ---------------------------------------------------------------------
+
+
+class FacilityDTO(_Strict):
+    facility_id: str
+    address: str
+    source: str
+    valid_as_of: date | None = None
+    geo: GeoDTO | None = None
+    amenities: list[str] = Field(default_factory=list)
+    public_holiday_policy: _HolidayPolicy = "normal"
+    prices: PriceTableDTO | None = None
+    closures: list[ClosureDTO] = []
+    basins: list[BasinDTO]
+
+
+# --- registry & calendar ----------------------------------------------------------
+
+
+class IdentityDTO(_Strict):
+    facility_id: str
+    name: str
+    kind: _PoolKind
+    geo_sport_id: str | None = None
+    crowdmonitor_keys: list[str] = Field(default_factory=list)
+    aliases: list[str] = Field(default_factory=list)
+
+
+class RegistryDTO(_Strict):
+    facilities: list[IdentityDTO]
+
+
+class PublicHolidayDTO(_Strict):
+    date: date
+    name: str
+
+
+class SchoolHolidayDTO(_Strict):
+    name: str
+    start: date
+    end: date
+
+
+class CalendarDTO(_Strict):
+    known_years: list[int]
+    public_holidays: list[PublicHolidayDTO]
+    school_holidays: list[SchoolHolidayDTO]

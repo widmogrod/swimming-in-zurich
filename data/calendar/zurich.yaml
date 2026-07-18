@@ -1,0 +1,29 @@
+# Zürich calendar overlays — public holidays and school holidays (Ferien).
+#
+# These drive future-date schedule resolution (term vs holiday, holiday closures).
+# Dates are approximate for illustration and MUST be verified against official sources
+# before relying on them; school-holiday weeks in particular shift year to year.
+#   - Public holidays (canton ZH): zh.ch
+#   - School holidays (Volksschule Stadt Zürich): stadt-zuerich.ch / schulferien.org
+# valid_as_of: 2026-07-18
+
+known_years: [2026]
+
+public_holidays:
+  - { date: "2026-01-01", name: "Neujahr" }
+  - { date: "2026-01-02", name: "Berchtoldstag" }
+  - { date: "2026-04-03", name: "Karfreitag" }
+  - { date: "2026-04-06", name: "Ostermontag" }
+  - { date: "2026-05-01", name: "Tag der Arbeit" }
+  - { date: "2026-05-14", name: "Auffahrt" }
+  - { date: "2026-05-25", name: "Pfingstmontag" }
+  - { date: "2026-08-01", name: "Bundesfeier" }
+  - { date: "2026-12-25", name: "Weihnachten" }
+  - { date: "2026-12-26", name: "Stephanstag" }
+
+school_holidays:
+  - { name: "Sportferien", start: "2026-02-09", end: "2026-02-20" }
+  - { name: "Frühlingsferien", start: "2026-04-20", end: "2026-05-01" }
+  - { name: "Sommerferien", start: "2026-07-13", end: "2026-08-14" }
+  - { name: "Herbstferien", start: "2026-10-05", end: "2026-10-16" }
+  - { name: "Weihnachtsferien", start: "2026-12-21", end: "2026-12-31" }

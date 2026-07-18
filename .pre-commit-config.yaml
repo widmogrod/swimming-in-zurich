@@ -1,0 +1,48 @@
+# Local hooks that shell out to the project's uv environment, so hook and CLI versions
+# never drift. Fast checks (ruff, mypy) run on commit; slow ones (pytest, CRAP) on push.
+#
+# Install both hook types once:  uv run pre-commit install --install-hooks
+default_install_hook_types: [pre-commit, pre-push]
+
+repos:
+  - repo: local
+    hooks:
+      - id: ruff-check
+        name: ruff check
+        entry: uv run ruff check .
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-commit]
+
+      - id: ruff-format
+        name: ruff format --check
+        entry: uv run ruff format --check .
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-commit]
+
+      - id: mypy
+        name: mypy (strict)
+        entry: uv run mypy .
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-commit]
+
+      - id: pytest
+        name: pytest (+ coverage floor)
+        entry: uv run pytest
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-push]
+
+      - id: crap
+        name: CRAP gate (runs after pytest)
+        entry: uv run python scripts/crap.py
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-push]

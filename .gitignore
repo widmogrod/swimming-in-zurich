@@ -1,0 +1,32 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+*.egg-info/
+build/
+dist/
+
+# uv
+.uv/
+
+# tooling caches
+.pytest_cache/
+.ruff_cache/
+.pyright/
+.mypy_cache/
+
+# coverage artifacts (crap.py consumes coverage.json at runtime; it's regenerated)
+.coverage
+coverage.json
+htmlcov/
+
+# project artifacts
+*.sqlite
+*.db
+/data/raw/
+
+# IDE / editor
+.idea/
+.vscode/
+*.swp
+.DS_Store

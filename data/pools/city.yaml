@@ -1,0 +1,54 @@
+# Hallenbad City — CURATED, ILLUSTRATIVE DATA.
+#
+# Schedules/prices below are plausible but NOT verified against the official timetable.
+# They demonstrate the model (term vs holiday scope, seniors/women/school access, a
+# Sunday-schedule public holiday, a summer closure). Verify against stadt-zuerich.ch and
+# update `valid_as_of` before relying on any answer.
+
+facility_id: "city"
+address: "Sihlstrasse 71, 8001 Zürich"
+source: "stadt-zuerich.ch/hallenbaeder/city (curated, illustrative)"
+valid_as_of: "2026-07-18"
+geo: { lat: 47.3739, lon: 8.5320 }
+amenities: ["50m", "sauna"]
+public_holiday_policy: "sunday_schedule"
+
+prices:
+  valid_as_of: "2026-07-18"
+  source_url: "https://www.stadt-zuerich.ch/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/hallenbaeder/city.html"
+  entries:
+    - { category: "adult", amount_chf: "8.00", display: "Erwachsene CHF 8.00" }
+    - { category: "youth", amount_chf: "6.00", display: "Jugendliche CHF 6.00" }
+    - { category: "child", amount_chf: "4.00", display: "Kinder CHF 4.00" }
+    - { category: "senior", amount_chf: "6.00", display: "Senioren CHF 6.00" }
+
+closures:
+  - { start: "2026-07-04", end: "2026-08-07", reason: "Sommerpause / Revision" }
+
+basins:
+  - basin_id: "city-50m"
+    name: "50m-Becken"
+    length_m: 50
+    rules:
+      # Weekday partition (school term): lane -> seniors -> public
+      - { weekdays: ["mon", "tue", "wed", "thu", "fri"], start: "06:30", end: "09:00", access: { type: "lane_swim" } }
+      - { weekdays: ["mon", "tue", "wed", "thu", "fri"], start: "09:00", end: "11:00", access: { type: "seniors_only", min_age: 60 }, scope: "school_term" }
+      # During school holidays that 09:00–11:00 slot is open to the public instead:
+      - { weekdays: ["mon", "tue", "wed", "thu", "fri"], start: "09:00", end: "11:00", access: { type: "public" }, scope: "school_holiday" }
+      - { weekdays: ["mon", "tue", "wed", "thu", "fri"], start: "11:00", end: "22:00", access: { type: "public" } }
+      # Weekend (also used as the Sunday-schedule fallback on public holidays):
+      - { weekdays: ["sat", "sun"], start: "08:00", end: "20:00", access: { type: "public" } }
+    exceptions:
+      - { date: "2026-12-24", closed: true, reason: "Heiligabend" }
+
+  - basin_id: "city-lehrbecken"
+    name: "Lehrschwimmbecken"
+    length_m: 20
+    rules:
+      # School term: reserved for schools during the day, public in the evening.
+      - { weekdays: ["mon", "tue", "wed", "thu", "fri"], start: "08:00", end: "16:00", access: { type: "school_reserved" }, scope: "school_term" }
+      # During school holidays the daytime block opens to the public:
+      - { weekdays: ["mon", "tue", "wed", "thu", "fri"], start: "08:00", end: "16:00", access: { type: "public" }, scope: "school_holiday" }
+      - { weekdays: ["mon", "tue", "wed", "thu", "fri"], start: "16:00", end: "20:00", access: { type: "public" } }
+      # Monday evening women-only session:
+      - { weekdays: ["mon"], start: "20:00", end: "22:00", access: { type: "women_only", note: "Frauenschwimmen" } }

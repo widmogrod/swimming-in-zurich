@@ -1,0 +1,52 @@
+# Canonical pool identity registry + crosswalk into other data sources' namespaces.
+#
+# This is the single source of canonical facility IDs. Providers resolve external names
+# into these IDs by LOOKUP (see domain/registry.py) — never by fuzzy matching. Facilities
+# listed here without a curated pool file under data/pools/ are reported as "uncurated"
+# (identity known, schedule not yet curated) — distinct from "closed".
+#
+# geo_sport_id values are placeholders (null) until wired from the geo_sport provider.
+
+facilities:
+  # --- curated (have a schedule file under data/pools/) ---
+  - facility_id: "city"
+    name: "Hallenbad City"
+    kind: "indoor"
+    geo_sport_id: null
+    crowdmonitor_keys: ["City", "Hallenbad City", "Sportbad City"]
+    aliases: ["City", "Sportbad City"]
+
+  - facility_id: "oerlikon"
+    name: "Hallenbad Oerlikon"
+    kind: "indoor"
+    geo_sport_id: null
+    crowdmonitor_keys: ["Oerlikon", "Hallenbad Oerlikon"]
+    aliases: ["Oerlikon"]
+
+  - facility_id: "bungertwies"
+    name: "Hallenbad Bungertwies"
+    kind: "indoor"
+    geo_sport_id: null
+    crowdmonitor_keys: ["Bungertwies", "Hallenbad Bungertwies"]
+    aliases: ["Bungertwies"]
+
+  # --- known but not yet curated (identity only) ---
+  - facility_id: "altstetten"
+    name: "Hallenbad Altstetten"
+    kind: "indoor"
+    aliases: ["Altstetten"]
+
+  - facility_id: "blaesi"
+    name: "Hallenbad Bläsi"
+    kind: "indoor"
+    aliases: ["Bläsi", "Blaesi"]
+
+  - facility_id: "leimbach"
+    name: "Hallenbad Leimbach"
+    kind: "indoor"
+    aliases: ["Leimbach"]
+
+  - facility_id: "kaeferberg"
+    name: "Wärmebad Käferberg"
+    kind: "thermal"
+    aliases: ["Käferberg", "Kaeferberg", "Wärmebad Käferberg"]

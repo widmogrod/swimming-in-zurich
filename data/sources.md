@@ -1,0 +1,21 @@
+# Data sources — legal register
+
+One row per source we use or intend to use. Track license, terms, and refresh cadence so a
+stale-but-typed wrong answer is a tracked risk, not a surprise. **Owner action noted below:
+email Open Data Zürich to ask whether machine-readable schedules exist — that could remove
+the need to scrape entirely.**
+
+| Source | What we take | License / terms | Machine-readable? | Refresh cadence | Status |
+|--------|--------------|-----------------|-------------------|-----------------|--------|
+| `geo_sport` (data.stadt-zuerich.ch, CKAN) | Pool locations, facility metadata, geo | **CC0** (open) | ✅ JSON/GeoJSON | Rare (yearly-ish) | Planned (milestone 3) |
+| stadt-zuerich.ch Hallenbäder pages | Opening hours, public-swim/women-only/senior/school slots, prices, closures | ⚠️ Not open data; HTML/PDF; copyright-in-compilation unclear under Swiss law | ❌ HTML/PDF only | Per season / term | **v1 avoids scraping — hand-curated into `data/pools/*.yaml`** |
+| CrowdMonitor (occupancy) — vendor = countee.ch | Live occupancy (indoor+outdoor) | ❌ Commercial; ToS unclear; surfaced via city "Badi aktuell" pages | ~JSON (semi-open) | 1–5 min | **Deferred** until vendor terms verified (milestone 5, behind a flag) |
+| Baditicker API (stadt-zuerich.ch OGD) | Outdoor water temp + open/closed | Open (OGD) | ✅ JSON | Seasonal (off in winter) | Out of scope (outdoor only) |
+| Zürich school-holiday / public-holiday dates | Calendar overlays | Public info (zh.ch, stadt-zuerich.ch) | Partially | ~Yearly | Curated into `data/calendar/zurich.yaml` (verify dates) |
+
+## Open actions
+- [ ] Email Open Data Zürich / OGD team: are indoor-pool **opening hours & public-swim
+      schedules** available in any machine-readable form? (Could eliminate scraping.)
+- [ ] Identify the exact CrowdMonitor vendor endpoint + terms before consuming occupancy.
+- [ ] Verify the 2026 school-holiday and public-holiday dates in `data/calendar/zurich.yaml`.
+- [ ] Verify each curated pool's hours/prices against its official page; update `valid_as_of`.

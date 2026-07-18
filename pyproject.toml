@@ -1,0 +1,87 @@
+[project]
+name = "swimzh"
+version = "0.1.0"
+description = "Typed data core for answering 'where can I go swimming in Zurich indoor pools?'"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "httpx>=0.27",
+    "tenacity>=9.0",
+    "pydantic>=2.7",
+    "pyyaml>=6.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/swimzh"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "S", "SIM", "TRY", "RUF"]
+ignore = [
+    # We use typographic dashes (– —) deliberately in prose/comments; don't flag them.
+    "RUF001", "RUF002", "RUF003",
+    # TRY003: we intentionally pass informative messages to domain exceptions
+    # (ValueError in validators, httpx exceptions in test doubles); this rule fights that.
+    "TRY003",
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S101"]
+# Vendored QA gate script legitimately shells out to `radon` by name.
+"scripts/**" = ["S603", "S607"]
+
+# Canonical type checker for the QA chain is mypy strict (below). The pyright config is
+# kept because the codebase was authored against it and it also passes; both agree.
+[tool.pyright]
+include = ["src", "tests"]
+pythonVersion = "3.12"
+typeCheckingMode = "strict"
+reportMissingTypeStubs = false
+
+[tool.mypy]
+strict = true
+python_version = "3.12"
+files = ["src", "tests"]
+# The vendored CRAP gate script is a tool, not project source; don't type-check it.
+exclude = ["^scripts/"]
+
+[tool.pytest.ini_options]
+addopts = ["-q", "--cov=swimzh", "--cov-report=term-missing", "--cov-report=json"]
+testpaths = ["tests"]
+
+[tool.coverage.run]
+source = ["src"]
+branch = true
+
+[tool.coverage.report]
+# Calibrated to current coverage (91.91%) rounded down, as a no-regression floor;
+# ratchet up as coverage grows.
+fail_under = 91
+
+[tool.crap]
+threshold = 30.0
+min-complexity = 5
+
+[dependency-groups]
+dev = [
+    "mypy>=2.3.0",
+    "pre-commit>=4.6.0",
+    "pyright>=1.1.411",
+    "pytest>=9.1.1",
+    "pytest-cov>=7.1.0",
+    "pytest-recording>=0.13.4",
+    "radon>=6.0.1",
+    "ruff>=0.15.22",
+    "types-pyyaml>=6.0.12.20260518",
+    "vcrpy>=8.3.0",
+]
+# pytest-recording: never touch the network during replay unless explicitly re-recording.
+# (record mode is opt-in via --record-mode=once on first capture)
