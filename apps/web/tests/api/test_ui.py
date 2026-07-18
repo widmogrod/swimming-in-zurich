@@ -10,4 +10,5 @@ def test_index_serves_html_page() -> None:
         response = client.get("/")
     assert response.status_code == 200
     assert "text/html" in response.headers["content-type"]
-    assert "Where can I swim" in response.text
+    assert "Swimming in Zürich" in response.text
+    assert "All pools" in response.text  # the browse-all tab

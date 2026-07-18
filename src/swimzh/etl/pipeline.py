@@ -13,6 +13,7 @@ from pathlib import Path
 from swimzh.core.errors import ProviderError
 from swimzh.core.http import HttpClient
 from swimzh.core.result import Err, Ok, Result
+from swimzh.domain.models import PoolKind
 from swimzh.etl import raw as raw_stage
 from swimzh.etl.gold import write_gold
 from swimzh.etl.silver import reconcile
@@ -41,7 +42,7 @@ def run(
     if raw_dir is not None:
         raw_stage.write_raw(raw_dir, artifact)
 
-    pools_result = parse_pools(artifact.content)
+    pools_result = parse_pools(artifact.content, PoolKind.INDOOR)
     if isinstance(pools_result, Err):
         return pools_result
 

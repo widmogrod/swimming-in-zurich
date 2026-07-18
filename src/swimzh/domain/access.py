@@ -64,6 +64,77 @@ type SessionAccess = (
 
 
 @dataclass(frozen=True, slots=True)
+class AccessInfo:
+    """A human-readable explanation of an access type (for a UI legend / API)."""
+
+    key: str
+    label: str
+    description: str
+
+
+def access_info(access: SessionAccess) -> AccessInfo:
+    """Explain what an access type means, for the specific session."""
+    match access:
+        case PublicSwim():
+            return AccessInfo(
+                "public",
+                "Public swim",
+                "Open public swimming — anyone may enter during these hours.",
+            )
+        case LaneSwim():
+            return AccessInfo(
+                "lane-swim",
+                "Lane swim",
+                "Lane swimming (Bahnenschwimmen) — public, organised into lanes for laps/training.",
+            )
+        case FamilyTime():
+            return AccessInfo(
+                "family",
+                "Family time",
+                "Family/children session — public, oriented to families and kids.",
+            )
+        case WomenOnly():
+            return AccessInfo(
+                "women-only",
+                "Women only",
+                "Women-only session (Frauenbad / Frauenschwimmen) — reserved for women.",
+            )
+        case SeniorsOnly(min_age):
+            return AccessInfo(
+                "seniors-only",
+                "Seniors only",
+                f"Seniors session — reserved for guests aged {min_age} and over.",
+            )
+        case SchoolReserved():
+            return AccessInfo(
+                "school-reserved",
+                "School reserved",
+                "Reserved for school classes — not open to the public.",
+            )
+        case ClubReserved(club):
+            who = f" ({club})" if club else ""
+            return AccessInfo(
+                "club-reserved",
+                "Club reserved",
+                f"Reserved for a club/association{who} — not open to the public.",
+            )
+        case _ as unreachable:
+            assert_never(unreachable)
+
+
+# One representative instance of every access type, for a UI legend / the /access-types API.
+ACCESS_TYPES: tuple[AccessInfo, ...] = (
+    access_info(PublicSwim()),
+    access_info(LaneSwim()),
+    access_info(FamilyTime()),
+    access_info(WomenOnly()),
+    access_info(SeniorsOnly()),
+    access_info(SchoolReserved()),
+    access_info(ClubReserved()),
+)
+
+
+@dataclass(frozen=True, slots=True)
 class EligibilityResult:
     allowed: bool
     rule: str

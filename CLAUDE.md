@@ -31,14 +31,19 @@ returns eligibility-annotated options + statuses + warnings. Follows the
 `python-dev:fastapi-service` conventions; deviations recorded in
 `docs/concepts/fastapi-service-integration.md`.
 
-Data source is chosen at startup by the `SwimData` port: if `SWIMZH_GOLD_DB` points at a
-populated gold store it serves from SQLite, else it falls back to the curated dataset
-(always available, offline). Build the gold store from the live WFS with:
+Endpoints: `/swim` (query), `/pools` (list all ~57 pools from the catalog, `?kind=` filter),
+`/access-types` (explanations), `/health`, `/` (UI: find tab + all-pools browser).
 
-```sh
-uv run python -m swimzh.cli build-gold --db gold.sqlite
-SWIMZH_GOLD_DB=gold.sqlite uv run uvicorn apps.web.main:app --reload
-```
+Data sources:
+- **Catalog** (all pools, every category): committed `data/catalog.json`, generated from the
+  WFS. Regenerate with `uv run python -m swimzh.cli build-catalog --out data/catalog.json`.
+- **Schedules** (`/swim`): the `SwimData` port — `SWIMZH_GOLD_DB` (SQLite gold store) if set
+  and present, else the curated dataset (offline default). Build gold with:
+  ```sh
+  uv run python -m swimzh.cli build-gold --db gold.sqlite
+  SWIMZH_GOLD_DB=gold.sqlite uv run uvicorn apps.web.main:app --reload
+  ```
+Note: the WFS has locations but not opening hours (`n.a.`); schedules are curated/scraped.
 
 ## Engineering conventions
 
