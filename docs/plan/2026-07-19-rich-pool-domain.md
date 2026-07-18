@@ -299,10 +299,27 @@ Appended by /dev:implement after each slice — never rewritten. Newest row last
 
 | date | slice | status | divergence from plan | tech debt created | human review? |
 |------|-------|--------|----------------------|-------------------|---------------|
+| 2026-07-19 | S1 | done | parser shape (see Decisions); YAML migration also added `kind:` | depth-phrase misread risk; parser unwired; mapping-table parity untested | yes |
 
 ## Decisions & divergences
 
 Substantive choices made during implementation, with the why. Each entry dated.
+
+- **2026-07-19 / S1 — parser returns `ParsedBasinPhysical`, not `Basin`.**
+  `parse_infrastruktur(text) -> tuple[ParsedBasinPhysical, ...]` (provider-local
+  record) + `apply_physicals(basin, parsed)` which enriches a scheduled `Basin`
+  and stamps `PARSED_PROSE`. Reason: `Basin` requires `basin_id` + schedule
+  rules the prose cannot supply; fabricated schedule-less Basins could leak
+  "always closed" rows into the resolver. Parser is total (returns a tuple,
+  not `Result`) matching the `parse_notices` precedent. Critic reviewed and
+  approved the divergence.
+- **2026-07-19 / S1 — critic suggestions recorded as follow-ups** (tech debt,
+  not blocking): (1) enum-parity test `set(_BASIN_KIND_TO) == set(BasinKind)`
+  in `mapping.py` — closes the same trap class as the `ACCESS_TYPES` test;
+  (2) depth-word guard (`Tiefe|tief`) + real-WFS fixture when the parser gets
+  wired to the pipeline. Also discovered: `geo_sport._clean` strips `;` from
+  descriptions — pipeline wiring must feed the parser the UNCLEANED
+  `infrastruktur` field.
 
 ## Rejected (record so we don't relitigate)
 

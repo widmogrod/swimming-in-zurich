@@ -12,6 +12,7 @@ from zoneinfo import ZoneInfo
 import pytest
 
 from swimzh.core.result import Ok
+from swimzh.domain.models import BasinKind
 from swimzh.domain.person import Gender, Person
 from swimzh.domain.query import QueryResult, SwimQuery, find_swim_options
 from swimzh.providers.curated import Dataset, load_dataset
@@ -67,6 +68,18 @@ def test_evening_public_swim_is_open_and_eligible(dataset: Dataset) -> None:
     assert city[0].price.display == "Erwachsene CHF 8.00"
     assert city[0].provenance.curated is True
     assert city[0].provenance.valid_as_of is not None
+
+
+def test_options_carry_basin_physicals(dataset: Dataset) -> None:
+    # Tuesday 18:00: the City 50m option surfaces the basin's kind; facts the curated
+    # data does not state (lanes, nominal temp) stay None — never invented.
+    result = _query(dataset, datetime(2026, 3, 10, 18, 0, tzinfo=ZURICH))
+    city_50m = [o for o in result.options if str(o.basin_id) == "city-50m"]
+    assert city_50m, "expected the City 50m basin among Tuesday-evening options"
+    option = city_50m[0]
+    assert option.basin_kind is BasinKind.LAP
+    assert option.lanes is None
+    assert option.water_temp_c is None
 
 
 def test_good_friday_oerlikon_closed_city_open(dataset: Dataset) -> None:

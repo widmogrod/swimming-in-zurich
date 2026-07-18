@@ -25,7 +25,8 @@ closures:
 basins:
   - basin_id: "bungertwies-25m"
     name: "25m-Becken"
-    length_m: 25
+    kind: "lap"
+    dimensions: { length_m: "25" }
     rules:
       - { weekdays: ["mon", "tue", "thu", "fri"], start: "07:00", end: "21:00", access: { type: "public" } }
       # Wednesday partitioned around the family afternoon:

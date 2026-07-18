@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import date, datetime
+from decimal import Decimal
 from enum import Enum
 from typing import NewType
 
@@ -86,13 +87,46 @@ class Occupancy:
     source: str
 
 
+class BasinKind(Enum):
+    """What kind of swimmable water a basin holds — parsed from `infrastruktur` prose."""
+
+    LAP = "lap"  # Schwimmerbecken
+    NON_SWIMMER = "non_swimmer"  # Nichtschwimmerbecken
+    DIVING = "diving"  # Sprung-/Tauchbecken
+    VARIO = "vario"  # Variobecken (Hubboden)
+    TEACHING = "teaching"  # Lehrschwimmbecken
+    CHILDREN = "children"  # Kinderbecken
+    OUTDOOR = "outdoor"  # Aussenbecken
+    OTHER = "other"
+
+
+class BasinSource(Enum):
+    """Honesty signal for a basin's physical attributes: hand-verified vs prose-scraped."""
+
+    CURATED = "curated"  # hand-verified YAML
+    PARSED_PROSE = "parsed_prose"  # extracted from `infrastruktur` free text
+
+
+@dataclass(frozen=True, slots=True)
+class Dimensions:
+    """Basin surface dimensions. `Decimal` because prose dimensions are fractional
+    (e.g. "10,5 x 7 m", "16,66 m")."""
+
+    length_m: Decimal
+    width_m: Decimal | None = None
+
+
 @dataclass(frozen=True, slots=True)
 class Basin:
     basin_id: BasinId
     name: str
     rules: tuple[ScheduleRule, ...]
     exceptions: tuple[ScheduleException, ...] = field(default_factory=tuple)
-    length_m: int | None = None
+    kind: BasinKind = BasinKind.OTHER
+    dimensions: Dimensions | None = None
+    lanes: int | None = None  # "(6 Bahnen)"
+    nominal_temp_c: Decimal | None = None  # "28°C" — a design target, NOT a live reading
+    physical_source: BasinSource = BasinSource.CURATED
 
 
 @dataclass(frozen=True, slots=True)

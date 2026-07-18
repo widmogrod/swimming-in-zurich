@@ -28,7 +28,8 @@ closures:
 basins:
   - basin_id: "city-50m"
     name: "50m-Becken"
-    length_m: 50
+    kind: "lap"
+    dimensions: { length_m: "50" }
     rules:
       # Weekday partition (school term): lane -> seniors -> public
       - { weekdays: ["mon", "tue", "wed", "thu", "fri"], start: "06:30", end: "09:00", access: { type: "lane_swim" } }
@@ -43,7 +44,8 @@ basins:
 
   - basin_id: "city-lehrbecken"
     name: "Lehrschwimmbecken"
-    length_m: 20
+    kind: "teaching"
+    dimensions: { length_m: "20" }
     rules:
       # School term: reserved for schools during the day, public in the evening.
       - { weekdays: ["mon", "tue", "wed", "thu", "fri"], start: "08:00", end: "16:00", access: { type: "school_reserved" }, scope: "school_term" }

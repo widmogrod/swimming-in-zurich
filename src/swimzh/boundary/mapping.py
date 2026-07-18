@@ -18,6 +18,7 @@ from swimzh.boundary.curated_dto import (
     BasinDTO,
     ClosureDTO,
     ClubReservedDTO,
+    DimensionsDTO,
     ExceptionDTO,
     FamilyDTO,
     GeoDTO,
@@ -30,6 +31,8 @@ from swimzh.boundary.curated_dto import (
     SchoolReservedDTO,
     SeniorsOnlyDTO,
     WomenOnlyDTO,
+    _BasinKind,
+    _BasinSource,
     _PriceCategory,
     _Scope,
     _Weekday,
@@ -45,7 +48,7 @@ from swimzh.domain.access import (
     WomenOnly,
 )
 from swimzh.domain.geo import GeoPoint
-from swimzh.domain.models import Basin, BasinId
+from swimzh.domain.models import Basin, BasinId, BasinKind, BasinSource, Dimensions
 from swimzh.domain.pricing import PriceCategory, PriceEntry, PriceTable
 from swimzh.domain.schedule import (
     ClosureRange,
@@ -82,6 +85,22 @@ _CATEGORY_TO: dict[PriceCategory, _PriceCategory] = {
     PriceCategory.YOUTH: "youth",
     PriceCategory.ADULT: "adult",
     PriceCategory.SENIOR: "senior",
+}
+_BASIN_KIND_FROM: dict[str, BasinKind] = {k.value: k for k in BasinKind}
+_BASIN_KIND_TO: dict[BasinKind, _BasinKind] = {
+    BasinKind.LAP: "lap",
+    BasinKind.NON_SWIMMER: "non_swimmer",
+    BasinKind.DIVING: "diving",
+    BasinKind.VARIO: "vario",
+    BasinKind.TEACHING: "teaching",
+    BasinKind.CHILDREN: "children",
+    BasinKind.OUTDOOR: "outdoor",
+    BasinKind.OTHER: "other",
+}
+_BASIN_SOURCE_FROM: dict[str, BasinSource] = {s.value: s for s in BasinSource}
+_BASIN_SOURCE_TO: dict[BasinSource, _BasinSource] = {
+    BasinSource.CURATED: "curated",
+    BasinSource.PARSED_PROSE: "parsed_prose",
 }
 
 
@@ -190,13 +209,25 @@ def closure_to_dto(closure: ClosureRange) -> ClosureDTO:
     return ClosureDTO(start=closure.start, end=closure.end, reason=closure.reason)
 
 
+def dimensions_from_dto(dto: DimensionsDTO) -> Dimensions:
+    return Dimensions(length_m=dto.length_m, width_m=dto.width_m)
+
+
+def dimensions_to_dto(dims: Dimensions) -> DimensionsDTO:
+    return DimensionsDTO(length_m=dims.length_m, width_m=dims.width_m)
+
+
 def basin_from_dto(dto: BasinDTO) -> Basin:
     return Basin(
         basin_id=BasinId(dto.basin_id),
         name=dto.name,
         rules=tuple(rule_from_dto(r) for r in dto.rules),
         exceptions=tuple(exception_from_dto(e) for e in dto.exceptions),
-        length_m=dto.length_m,
+        kind=_BASIN_KIND_FROM[dto.kind],
+        dimensions=dimensions_from_dto(dto.dimensions) if dto.dimensions is not None else None,
+        lanes=dto.lanes,
+        nominal_temp_c=dto.nominal_temp_c,
+        physical_source=_BASIN_SOURCE_FROM[dto.physical_source],
     )
 
 
@@ -206,7 +237,11 @@ def basin_to_dto(basin: Basin) -> BasinDTO:
         name=basin.name,
         rules=[rule_to_dto(r) for r in basin.rules],
         exceptions=[exception_to_dto(e) for e in basin.exceptions],
-        length_m=basin.length_m,
+        kind=_BASIN_KIND_TO[basin.kind],
+        dimensions=dimensions_to_dto(basin.dimensions) if basin.dimensions is not None else None,
+        lanes=basin.lanes,
+        nominal_temp_c=basin.nominal_temp_c,
+        physical_source=_BASIN_SOURCE_TO[basin.physical_source],
     )
 
 

@@ -24,7 +24,8 @@ closures:
 basins:
   - basin_id: "oerlikon-50m"
     name: "50m-Becken"
-    length_m: 50
+    kind: "lap"
+    dimensions: { length_m: "50" }
     rules:
       - { weekdays: ["mon", "tue", "wed", "thu", "fri"], start: "06:00", end: "08:00", access: { type: "lane_swim" } }
       - { weekdays: ["mon", "tue", "wed", "thu", "fri"], start: "08:00", end: "21:30", access: { type: "public" } }
@@ -32,6 +33,7 @@ basins:
 
   - basin_id: "oerlikon-sprungbecken"
     name: "Sprungbecken"
+    kind: "diving"
     rules:
       - { weekdays: ["wed"], start: "17:00", end: "19:00", access: { type: "family", note: "Kinder-Springen" } }
       - { weekdays: ["sat"], start: "10:00", end: "16:00", access: { type: "family" } }

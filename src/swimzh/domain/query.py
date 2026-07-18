@@ -16,12 +16,20 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import datetime
+from decimal import Decimal
 from zoneinfo import ZoneInfo
 
 from swimzh.domain.access import EligibilityResult, eligibility
 from swimzh.domain.calendar import ZurichCalendar
 from swimzh.domain.geo import GeoPoint, haversine_km
-from swimzh.domain.models import BasinId, Facility, FacilityId, Occupancy, Provenance
+from swimzh.domain.models import (
+    BasinId,
+    BasinKind,
+    Facility,
+    FacilityId,
+    Occupancy,
+    Provenance,
+)
 from swimzh.domain.person import Person
 from swimzh.domain.pricing import PriceEntry, price_for
 from swimzh.domain.registry import Registry
@@ -45,6 +53,9 @@ class SwimOption:
     facility_name: str
     basin_id: BasinId
     basin_name: str
+    basin_kind: BasinKind
+    lanes: int | None
+    water_temp_c: Decimal | None  # the basin's nominal (design) temperature, not live
     session: ResolvedSession
     eligibility: EligibilityResult
     open_at_query_time: bool
@@ -141,6 +152,9 @@ def find_swim_options(
                                 facility_name=facility.identity.name,
                                 basin_id=basin.basin_id,
                                 basin_name=basin.name,
+                                basin_kind=basin.kind,
+                                lanes=basin.lanes,
+                                water_temp_c=basin.nominal_temp_c,
                                 session=session,
                                 eligibility=eligibility(query.person, session.access),
                                 open_at_query_time=session.time.contains(now_time),

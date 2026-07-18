@@ -18,6 +18,10 @@ _Scope = Literal["always", "school_term", "school_holiday"]
 _HolidayPolicy = Literal["normal", "sunday_schedule", "closed"]
 _PoolKind = Literal["indoor", "outdoor", "river", "lake", "school", "paddling", "thermal"]
 _PriceCategory = Literal["child", "youth", "adult", "senior"]
+_BasinKind = Literal[
+    "lap", "non_swimmer", "diving", "vario", "teaching", "children", "outdoor", "other"
+]
+_BasinSource = Literal["curated", "parsed_prose"]
 
 
 class _Strict(BaseModel):
@@ -102,12 +106,21 @@ class ClosureDTO(_Strict):
     reason: str = ""
 
 
+class DimensionsDTO(_Strict):
+    length_m: Decimal
+    width_m: Decimal | None = None
+
+
 class BasinDTO(_Strict):
     basin_id: str
     name: str
     rules: list[RuleDTO]
     exceptions: list[ExceptionDTO] = []
-    length_m: int | None = None
+    kind: _BasinKind = "other"
+    dimensions: DimensionsDTO | None = None
+    lanes: int | None = None
+    nominal_temp_c: Decimal | None = None
+    physical_source: _BasinSource = "curated"
 
 
 # --- pricing ----------------------------------------------------------------------
