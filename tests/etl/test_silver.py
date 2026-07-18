@@ -11,7 +11,7 @@ import pytest
 from swimzh.core.errors import SchemaMismatch
 from swimzh.core.result import Err, Ok
 from swimzh.domain.geo import GeoPoint
-from swimzh.domain.models import FacilityId
+from swimzh.domain.models import FacilityId, PoolKind
 from swimzh.etl.silver import reconcile
 from swimzh.providers.curated import Dataset, load_dataset
 from swimzh.providers.geo_sport import GeoPool
@@ -32,10 +32,13 @@ def _pool(source_id: str, name: str, lat: float, lon: float) -> GeoPool:
         source_id=source_id,
         poi_id=None,
         name=name,
+        kind=PoolKind.INDOOR,
         address="",
         geo=GeoPoint(lat=lat, lon=lon),
         url=None,
         category=None,
+        description=None,
+        phone=None,
     )
 
 

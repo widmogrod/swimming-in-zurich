@@ -10,8 +10,10 @@ import httpx
 import pytest
 from apps.web.services.gold_store import GoldSwimData
 
-from swimzh.cli import build_gold, main
+from swimzh.cli import build_catalog_file, build_gold, main
 from swimzh.core.http import HttpClient, RetryPolicy
+from swimzh.providers.geo_sport import POOL_LAYERS
+from swimzh.storage import catalog_json
 
 DATA_DIR = Path(__file__).resolve().parents[1] / "data"
 ZURICH = ZoneInfo("Europe/Zurich")
@@ -61,6 +63,34 @@ def test_build_gold_reports_failure(tmp_path: Path) -> None:
     client = HttpClient(bad, source="geo_sport", retry=RetryPolicy(max_attempts=1))
     code = build_gold(db_path=db, data_dir=DATA_DIR, client=client, fetched_at=FETCHED_AT)
     assert code == 1
+
+
+def _layer_handler(request: httpx.Request) -> httpx.Response:
+    typename = request.url.params.get("TYPENAME", "")
+    fc = {
+        "type": "FeatureCollection",
+        "features": [
+            {
+                "type": "Feature",
+                "id": f"{typename}.1",
+                "geometry": {"type": "Point", "coordinates": [8.5, 47.3]},
+                "properties": {"name": f"Pool {typename}"},
+            }
+        ],
+    }
+    return httpx.Response(200, json=fc)
+
+
+def test_build_catalog_writes_all_layers(tmp_path: Path) -> None:
+    out = tmp_path / "catalog.json"
+    inner = httpx.Client(transport=httpx.MockTransport(_layer_handler))
+    client = HttpClient(inner, source="geo_sport", retry=RetryPolicy(max_attempts=1))
+    code = build_catalog_file(out=out, client=client, generated_at=FETCHED_AT)
+    assert code == 0
+
+    entries = catalog_json.loads(out.read_text(encoding="utf-8"))
+    assert len(entries) == len(POOL_LAYERS)  # one feature per layer
+    assert {e.kind.value for e in entries} == {k.value for k in POOL_LAYERS.values()}
 
 
 def test_main_requires_a_subcommand() -> None:

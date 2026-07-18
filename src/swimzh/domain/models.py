@@ -28,8 +28,12 @@ BasinId = NewType("BasinId", str)
 
 class PoolKind(Enum):
     INDOOR = "indoor"  # Hallenbad
+    OUTDOOR = "outdoor"  # Freibad
+    RIVER = "river"  # Flussbad
+    LAKE = "lake"  # Seebad
+    SCHOOL = "school"  # Schulschwimmanlage
+    PADDLING = "paddling"  # Planschbecken
     THERMAL = "thermal"  # Wärmebad
-    SCHOOL = "school"  # Schulschwimmanlage with public hours
 
 
 @dataclass(frozen=True, slots=True)

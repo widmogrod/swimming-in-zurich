@@ -28,8 +28,11 @@ class PropertiesDTO(BaseModel):
     plz: str | None = None
     ort: str | None = None
     www: str | None = None
+    tel: str | None = None
     poi_id: str | None = None
     kategorie: str | None = None
+    infrastruktur: str | None = None  # prose: basin sizes/temps, sauna, etc.
+    bemerkung: str | None = None
 
 
 class FeatureDTO(BaseModel):

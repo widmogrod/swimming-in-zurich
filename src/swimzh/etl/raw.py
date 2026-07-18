@@ -25,8 +25,8 @@ class RawArtifact:
 
 
 def capture_geo(client: HttpClient, fetched_at: datetime) -> Result[RawArtifact, ProviderError]:
-    """Fetch the geo_sport GeoJSON bytes and wrap them with provenance."""
-    match geo_sport.fetch_raw(client):
+    """Fetch the indoor-pool GeoJSON bytes and wrap them with provenance."""
+    match geo_sport.fetch_raw(client, geo_sport.INDOOR_LAYER):
         case Err(error):
             return Err(error)
         case Ok(content):

@@ -33,8 +33,12 @@ from swimzh.domain.schedule import HolidayPolicy
 
 _KIND_TO: dict[PoolKind, _PoolKind] = {
     PoolKind.INDOOR: "indoor",
-    PoolKind.THERMAL: "thermal",
+    PoolKind.OUTDOOR: "outdoor",
+    PoolKind.RIVER: "river",
+    PoolKind.LAKE: "lake",
     PoolKind.SCHOOL: "school",
+    PoolKind.PADDLING: "paddling",
+    PoolKind.THERMAL: "thermal",
 }
 _KIND_FROM: dict[str, PoolKind] = {k.value: k for k in PoolKind}
 

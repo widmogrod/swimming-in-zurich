@@ -16,7 +16,7 @@ from pydantic import BaseModel, ConfigDict, Field
 _Weekday = Literal["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
 _Scope = Literal["always", "school_term", "school_holiday"]
 _HolidayPolicy = Literal["normal", "sunday_schedule", "closed"]
-_PoolKind = Literal["indoor", "thermal", "school"]
+_PoolKind = Literal["indoor", "outdoor", "river", "lake", "school", "paddling", "thermal"]
 _PriceCategory = Literal["child", "youth", "adult", "senior"]
 
 
