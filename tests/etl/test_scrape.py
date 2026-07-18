@@ -5,6 +5,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from datetime import datetime
+from decimal import Decimal
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
@@ -15,6 +16,7 @@ from swimzh.domain.access import WomenOnly
 from swimzh.domain.catalog import PoolCatalogEntry
 from swimzh.domain.geo import GeoPoint
 from swimzh.domain.models import PoolKind
+from swimzh.domain.pricing import PriceCategory, PriceEntry, PriceTable
 from swimzh.etl.scrape import scrape_indoor_facilities
 
 FIXTURE = Path(__file__).resolve().parents[1] / "providers" / "fixtures" / "hallenbad_city.html"
@@ -55,6 +57,31 @@ def test_builds_indoor_facilities_with_real_rules() -> None:
     assert facility.provenance.curated is False
     rules = facility.basins[0].rules
     assert any(isinstance(r.access, WomenOnly) for r in rules)
+
+
+def test_attaches_notices_closures_and_prices() -> None:
+    body = FIXTURE.read_bytes()  # City page: has a Revision closure notice
+    # A stadt-zuerich.ch URL so the shared price table is applied.
+    catalog = (
+        _entry(
+            "hallenbad-city",
+            "Hallenbad City",
+            PoolKind.INDOOR,
+            "https://www.stadt-zuerich.ch/.../city.html",
+        ),
+    )
+    prices = PriceTable(
+        entries=(PriceEntry(PriceCategory.ADULT, Decimal("8.00"), "Erwachsene Fr. 8.00"),),
+        valid_as_of=FETCHED.date(),
+        source_url="https://example.test/prices",
+    )
+    report = scrape_indoor_facilities(
+        _client(lambda _r: httpx.Response(200, content=body)), catalog, FETCHED, prices=prices
+    )
+    facility = report.facilities[0]
+    assert facility.notices and "Revision" in facility.notices[0].text
+    assert facility.closures  # derived from the closure notice
+    assert facility.prices is not None  # stadt-zuerich host → shared tariff applied
 
 
 def test_skips_unparseable_pages() -> None:

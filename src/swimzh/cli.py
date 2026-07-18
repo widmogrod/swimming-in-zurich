@@ -22,6 +22,7 @@ from swimzh.etl.catalog import build_catalog
 from swimzh.etl.gold import write_gold
 from swimzh.etl.scrape import scrape_indoor_facilities
 from swimzh.providers import geo_sport
+from swimzh.providers.price_scraper import scrape_prices
 from swimzh.storage import catalog_json
 from swimzh.storage.sqlite_repo import open_db
 
@@ -61,12 +62,15 @@ def scrape_gold(
         print(f"catalog not found at {catalog_path}; run build-catalog first", file=sys.stderr)
         return 1
     catalog = catalog_json.loads(catalog_path.read_text(encoding="utf-8"))
-    report = scrape_indoor_facilities(client, catalog, fetched_at)
+    prices_result = scrape_prices(client, fetched_at.date())
+    prices = prices_result.value if isinstance(prices_result, Ok) else None
+    report = scrape_indoor_facilities(client, catalog, fetched_at, prices=prices)
     if not report.facilities:
         print("no schedules could be scraped", file=sys.stderr)
         return 1
     write_gold(open_db(db_path), report.facilities)
     msg = f"scraped {len(report.facilities)} indoor pools into {db_path}"
+    msg += " (with prices)" if prices is not None else " (prices unavailable)"
     if report.skipped:
         msg += f"; skipped {len(report.skipped)}: {', '.join(report.skipped)}"
     print(msg)

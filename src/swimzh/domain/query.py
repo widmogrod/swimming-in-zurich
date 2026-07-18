@@ -66,10 +66,20 @@ class FacilityStatus:
 
 
 @dataclass(frozen=True, slots=True)
+class FacilityNotice:
+    """A pool alert active on the queried date (e.g. a maintenance closure)."""
+
+    facility_id: FacilityId
+    facility_name: str
+    text: str
+
+
+@dataclass(frozen=True, slots=True)
 class QueryResult:
     options: tuple[SwimOption, ...]
     statuses: tuple[FacilityStatus, ...] = field(default_factory=tuple)
     warnings: tuple[str, ...] = field(default_factory=tuple)
+    notices: tuple[FacilityNotice, ...] = field(default_factory=tuple)
 
     def eligible_options(self) -> tuple[SwimOption, ...]:
         return tuple(o for o in self.options if o.eligibility.allowed)
@@ -101,12 +111,18 @@ def find_swim_options(
 
     options: list[SwimOption] = []
     statuses: list[FacilityStatus] = []
+    notices: list[FacilityNotice] = []
 
     for facility in facilities:
         distance = _distance_km(query, facility)
         if query.radius_km is not None and distance is not None and distance > query.radius_km:
             continue
 
+        notices.extend(
+            FacilityNotice(facility.identity.facility_id, facility.identity.name, notice.text)
+            for notice in facility.notices
+            if notice.active_on(day)
+        )
         price = price_for(facility.prices, query.person.age) if facility.prices else None
         facility_closed_reason: str | None = None
         produced = False
@@ -158,6 +174,7 @@ def find_swim_options(
         options=tuple(options),
         statuses=tuple(statuses),
         warnings=tuple(warnings),
+        notices=tuple(notices),
     )
 
 

@@ -25,7 +25,13 @@ class StatusOut(BaseModel):
     detail: str
 
 
+class NoticeOut(BaseModel):
+    facility: str
+    text: str
+
+
 class AnswerOut(BaseModel):
     options: list[OptionOut]
     statuses: list[StatusOut]
     warnings: list[str]
+    notices: list[NoticeOut]
