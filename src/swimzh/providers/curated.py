@@ -4,100 +4,32 @@ Curated YAML is a first-class provider — the same `Result[..., ProviderError]`
 any network adapter. For v1 it is the *only* source of schedules/prices (we deliberately do
 not scrape), so it is where the product's accuracy lives. Every facility carries provenance
 (`valid_as_of`, `curated=True`) so downstream answers can be honest about freshness.
+
+DTO↔domain mapping lives in `swimzh.boundary.mapping` (shared with the gold codec); this
+module handles YAML I/O, validation, and the facility-level assembly that needs the registry.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import time
 from pathlib import Path
-from typing import assert_never
 
 import yaml
-from pydantic import ValidationError
+from pydantic import TypeAdapter, ValidationError
 
-from swimzh.boundary.curated_dto import (
-    AccessDTO,
-    BasinDTO,
-    CalendarDTO,
-    ClubReservedDTO,
-    FacilityDTO,
-    FamilyDTO,
-    LaneSwimDTO,
-    PublicDTO,
-    RegistryDTO,
-    RuleDTO,
-    SchoolReservedDTO,
-    SeniorsOnlyDTO,
-    WomenOnlyDTO,
-)
+from swimzh.boundary import mapping
+from swimzh.boundary.curated_dto import CalendarDTO, FacilityDTO, RegistryDTO
 from swimzh.core.errors import ParseError, ProviderError, SchemaMismatch
 from swimzh.core.result import Err, Ok, Result
-from swimzh.domain.access import (
-    ClubReserved,
-    FamilyTime,
-    LaneSwim,
-    PublicSwim,
-    SchoolReserved,
-    SeniorsOnly,
-    SessionAccess,
-    WomenOnly,
-)
 from swimzh.domain.calendar import HolidayRange, ZurichCalendar
-from swimzh.domain.models import (
-    Basin,
-    BasinId,
-    Facility,
-    FacilityId,
-    PoolIdentity,
-    PoolKind,
-    Provenance,
-)
-from swimzh.domain.pricing import PriceCategory, PriceEntry, PriceTable
+from swimzh.domain.models import Facility, FacilityId, PoolIdentity, PoolKind, Provenance
 from swimzh.domain.registry import Registry
-from swimzh.domain.schedule import (
-    ClosureRange,
-    DayScope,
-    HolidayPolicy,
-    ResolvedSession,
-    ScheduleException,
-    ScheduleRule,
-    TimeRange,
-    Weekday,
-)
+from swimzh.domain.schedule import HolidayPolicy
 
 _SOURCE = "curated"
 
-_WEEKDAYS: dict[str, Weekday] = {
-    "mon": Weekday.MONDAY,
-    "tue": Weekday.TUESDAY,
-    "wed": Weekday.WEDNESDAY,
-    "thu": Weekday.THURSDAY,
-    "fri": Weekday.FRIDAY,
-    "sat": Weekday.SATURDAY,
-    "sun": Weekday.SUNDAY,
-}
-_SCOPES: dict[str, DayScope] = {
-    "always": DayScope.ALWAYS,
-    "school_term": DayScope.SCHOOL_TERM,
-    "school_holiday": DayScope.SCHOOL_HOLIDAY,
-}
-_POLICIES: dict[str, HolidayPolicy] = {
-    "normal": HolidayPolicy.NORMAL,
-    "sunday_schedule": HolidayPolicy.SUNDAY_SCHEDULE,
-    "closed": HolidayPolicy.CLOSED,
-}
-_KINDS: dict[str, PoolKind] = {
-    "indoor": PoolKind.INDOOR,
-    "thermal": PoolKind.THERMAL,
-    "school": PoolKind.SCHOOL,
-}
-_CATEGORIES: dict[str, PriceCategory] = {
-    "child": PriceCategory.CHILD,
-    "youth": PriceCategory.YOUTH,
-    "adult": PriceCategory.ADULT,
-    "senior": PriceCategory.SENIOR,
-}
+_POLICIES: dict[str, HolidayPolicy] = {p.value: p for p in HolidayPolicy}
+_KINDS: dict[str, PoolKind] = {k.value: k for k in PoolKind}
 
 
 @dataclass(frozen=True, slots=True)
@@ -135,103 +67,23 @@ def _load_yaml(path: Path) -> object:
 
 
 def _validate[T](model: type[T], data: object, where: str) -> T:
-    from pydantic import TypeAdapter
-
     try:
         return TypeAdapter(model).validate_python(data)
     except ValidationError as exc:
         raise _CuratedError(SchemaMismatch(source=_SOURCE, detail=f"{where}: {exc}")) from exc
 
 
-def _map_access(dto: AccessDTO) -> SessionAccess:
-    match dto:
-        case PublicDTO():
-            return PublicSwim()
-        case LaneSwimDTO(note=note):
-            return LaneSwim(note=note)
-        case FamilyDTO(note=note):
-            return FamilyTime(note=note)
-        case WomenOnlyDTO(note=note):
-            return WomenOnly(note=note)
-        case SeniorsOnlyDTO(min_age=min_age):
-            return SeniorsOnly(min_age=min_age)
-        case SchoolReservedDTO():
-            return SchoolReserved()
-        case ClubReservedDTO(club=club):
-            return ClubReserved(club=club)
-        case _ as unreachable:
-            assert_never(unreachable)
-
-
-def _time_range(start: time, end: time, where: str) -> TimeRange:
-    try:
-        return TimeRange(start=start, end=end)
-    except ValueError as exc:
-        raise _CuratedError(SchemaMismatch(source=_SOURCE, detail=f"{where}: {exc}")) from exc
-
-
-def _map_rule(dto: RuleDTO, where: str) -> ScheduleRule:
-    return ScheduleRule(
-        weekdays=frozenset(_WEEKDAYS[w] for w in dto.weekdays),
-        time=_time_range(dto.start, dto.end, where),
-        access=_map_access(dto.access),
-        scope=_SCOPES[dto.scope],
-    )
-
-
-def _map_basin(dto: BasinDTO, facility_id: str) -> Basin:
-    where = f"{facility_id}/{dto.basin_id}"
-    rules = tuple(_map_rule(r, where) for r in dto.rules)
-    exceptions = tuple(
-        ScheduleException(
-            date=e.date,
-            closed=e.closed,
-            reason=e.reason,
-            sessions=tuple(
-                ResolvedSession(
-                    time=_time_range(s.start, s.end, where), access=_map_access(s.access)
-                )
-                for s in e.sessions
-            ),
-        )
-        for e in dto.exceptions
-    )
-    return Basin(
-        basin_id=BasinId(dto.basin_id),
-        name=dto.name,
-        rules=rules,
-        exceptions=exceptions,
-        length_m=dto.length_m,
-    )
-
-
-def _map_prices(dto: FacilityDTO) -> PriceTable | None:
-    if dto.prices is None:
-        return None
-    entries = tuple(
-        PriceEntry(category=_CATEGORIES[e.category], amount_chf=e.amount_chf, display=e.display)
-        for e in dto.prices.entries
-    )
-    return PriceTable(
-        entries=entries, valid_as_of=dto.prices.valid_as_of, source_url=dto.prices.source_url
-    )
-
-
 def _map_facility(dto: FacilityDTO, identity: PoolIdentity) -> Facility:
-    from swimzh.domain.geo import GeoPoint
-
-    geo = GeoPoint(lat=dto.geo.lat, lon=dto.geo.lon) if dto.geo is not None else None
-    closures = tuple(ClosureRange(start=c.start, end=c.end, reason=c.reason) for c in dto.closures)
     return Facility(
         identity=identity,
         address=dto.address,
         provenance=Provenance(source=dto.source, curated=True, valid_as_of=dto.valid_as_of),
-        basins=tuple(_map_basin(b, dto.facility_id) for b in dto.basins),
-        geo=geo,
+        basins=tuple(mapping.basin_from_dto(b) for b in dto.basins),
+        geo=mapping.geo_from_dto(dto.geo) if dto.geo is not None else None,
         amenities=frozenset(dto.amenities),
-        closures=closures,
+        closures=tuple(mapping.closure_from_dto(c) for c in dto.closures),
         public_holiday_policy=_POLICIES[dto.public_holiday_policy],
-        prices=_map_prices(dto),
+        prices=mapping.price_table_from_dto(dto.prices) if dto.prices is not None else None,
     )
 
 
@@ -289,9 +141,14 @@ def load_dataset(data_dir: Path) -> Result[Dataset, ProviderError]:
             facilities.append(_map_facility(facility_dto, identity))
     except _CuratedError as exc:
         return Err(exc.error)
+    except ValueError as exc:
+        # Domain construction (e.g. an invalid TimeRange) rejected the validated data.
+        return Err(SchemaMismatch(source=_SOURCE, detail=str(exc)))
 
     return Ok(
         Dataset(
-            calendar=_build_calendar(calendar_dto), registry=registry, facilities=tuple(facilities)
+            calendar=_build_calendar(calendar_dto),
+            registry=registry,
+            facilities=tuple(facilities),
         )
     )
