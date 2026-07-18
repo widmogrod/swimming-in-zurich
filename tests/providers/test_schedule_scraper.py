@@ -16,7 +16,9 @@ from swimzh.domain.access import PublicSwim, WomenOnly
 from swimzh.domain.schedule import TimeRange, Weekday
 from swimzh.providers.schedule_scraper import parse_schedule, scrape_schedule
 
-FIXTURE = Path(__file__).resolve().parent / "fixtures" / "hallenbad_city.html"
+FIXTURES = Path(__file__).resolve().parent / "fixtures"
+FIXTURE = FIXTURES / "hallenbad_city.html"
+FIXTURE_ALTSTETTEN = FIXTURES / "hallenbad_altstetten.html"
 
 
 def test_parses_real_city_page() -> None:
@@ -38,6 +40,30 @@ def test_parses_real_city_page() -> None:
         and r.weekdays == frozenset({Weekday.FRIDAY, Weekday.SATURDAY, Weekday.SUNDAY})
     )
     assert fri_sun.time == TimeRange(time(8, 0), time(22, 0))
+
+
+def test_parses_altstetten_html_table() -> None:
+    # A different site (bad-altstetten.ch, WordPress) with a plain <table> schedule and no
+    # category column — handled by the generic HTML-table parser, not the stadt-zuerich one.
+    result = parse_schedule(FIXTURE_ALTSTETTEN.read_text(encoding="utf-8"))
+    assert isinstance(result, Ok), result
+    rules = result.value.rules
+
+    mon_wed_fri = next(
+        r
+        for r in rules
+        if r.weekdays == frozenset({Weekday.MONDAY, Weekday.WEDNESDAY, Weekday.FRIDAY})
+    )
+    assert mon_wed_fri.time == TimeRange(time(6, 0), time(21, 0))
+    assert isinstance(mon_wed_fri.access, PublicSwim)
+
+    assert any(
+        r.weekdays == frozenset({Weekday.SATURDAY, Weekday.SUNDAY})
+        and r.time == TimeRange(time(8, 0), time(18, 0))
+        for r in rules
+    )
+    # This site publishes no women-only sessions.
+    assert all(not isinstance(r.access, WomenOnly) for r in rules)
 
 
 def _client(handler: Callable[[httpx.Request], httpx.Response]) -> HttpClient:

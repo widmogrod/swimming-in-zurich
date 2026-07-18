@@ -1,15 +1,18 @@
-"""Scrape opening-hours schedules from stadt-zuerich.ch pool pages.
+"""Scrape opening-hours schedules from pool web pages into domain `ScheduleRule`s.
 
-These pages embed the timetable as an HTML-entity-encoded JSON table — rows of
-``[day, hours, category]`` (e.g. ``["Dienstag", "8–14 Uhr<br>14–22 Uhr", "Frauen<br>gemischt"]``).
-We decode, extract the hours rows, and parse the German day/time/category cells into domain
-`ScheduleRule`s.
+Two page formats are supported, tried in order (a parser registry — add a format, no host
+branching):
 
-This is inherently brittle: the page format is not a contract. So parsing is defensive
-(unparseable cells are skipped, a table with no usable rows is a `ParseError`), tests pin it
-against a saved real page, and every failure surfaces as a typed `ProviderError` value.
-Scraped rules use `DayScope.ALWAYS` — the pages do not encode term/holiday variants; annual
-`Revision` closures are handled separately (curated `ClosureRange`s).
+  1. **stadt-zuerich.ch** — the timetable is an HTML-entity-encoded JSON table of rows
+     ``[day, hours, category]`` (e.g. ``["Dienstag", "8–14 Uhr<br>14–22 Uhr", "Frauen"]``).
+  2. **generic HTML `<table>`** — a plain ``<tr><td>day</td><td>time</td></tr>`` schedule
+     (e.g. bad-altstetten.ch: ``<td>Mo/Mi/Fr</td><td>06:00 – 21:00</td>``). No category column,
+     so sessions are public.
+
+Both share the German day/time cell parsers below. Scraping is inherently brittle (page
+formats are not contracts): parsing is defensive (unparseable cells skipped, no usable rows →
+`ParseError`), pinned by saved-page fixtures, and every failure is a typed `ProviderError`.
+Scraped rules use `DayScope.ALWAYS`; annual `Revision` closures are out of scope here.
 """
 
 from __future__ import annotations
@@ -17,6 +20,7 @@ from __future__ import annotations
 import html
 import json
 import re
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import time
 
@@ -28,7 +32,7 @@ from swimzh.domain.schedule import ScheduleRule, TimeRange, Weekday
 
 _SOURCE = "schedule_scraper"
 
-_DAYS: dict[str, Weekday] = {
+_DAYS_FULL: dict[str, Weekday] = {
     "montag": Weekday.MONDAY,
     "dienstag": Weekday.TUESDAY,
     "mittwoch": Weekday.WEDNESDAY,
@@ -37,8 +41,21 @@ _DAYS: dict[str, Weekday] = {
     "samstag": Weekday.SATURDAY,
     "sonntag": Weekday.SUNDAY,
 }
+_DAYS_ABBR: dict[str, Weekday] = {
+    "mo": Weekday.MONDAY,
+    "di": Weekday.TUESDAY,
+    "mi": Weekday.WEDNESDAY,
+    "do": Weekday.THURSDAY,
+    "fr": Weekday.FRIDAY,
+    "sa": Weekday.SATURDAY,
+    "so": Weekday.SUNDAY,
+}
 
 _ROW_RE = re.compile(r'\[\{"value":"(?:[^"\\]|\\.)*"\}(?:,\{"value":"(?:[^"\\]|\\.)*"\})*\]')
+_TABLE_RE = re.compile(r"<table[^>]*>(.*?)</table>", re.IGNORECASE | re.DOTALL)
+_TR_RE = re.compile(r"<tr[^>]*>(.*?)</tr>", re.IGNORECASE | re.DOTALL)
+_TD_RE = re.compile(r"<t[dh][^>]*>(.*?)</t[dh]>", re.IGNORECASE | re.DOTALL)
+_TIME_RE = re.compile(r"\d{1,2}[.:]\d{2}\s*[–-]\s*\d{1,2}[.:]\d{2}")
 
 
 @dataclass(frozen=True, slots=True)
@@ -46,15 +63,25 @@ class ScrapedSchedule:
     rules: tuple[ScheduleRule, ...]
 
 
+# --- shared cell parsers -----------------------------------------------------------
+
+
+def _lookup_day(token: str) -> Weekday | None:
+    key = token.strip().lower()
+    if key in _DAYS_FULL:
+        return _DAYS_FULL[key]
+    return _DAYS_ABBR.get(key)
+
+
 def _parse_days(cell: str) -> frozenset[Weekday]:
     text = cell.strip().lower()
     span = re.match(r"([a-zäöü]+)\s*[–-]\s*([a-zäöü]+)$", text)
-    if span and span.group(1) in _DAYS and span.group(2) in _DAYS:
-        start, end = _DAYS[span.group(1)], _DAYS[span.group(2)]
-        if start <= end:
+    if span:
+        start, end = _lookup_day(span.group(1)), _lookup_day(span.group(2))
+        if start is not None and end is not None and start <= end:
             return frozenset(w for w in Weekday if start <= w <= end)
-    parts = re.split(r"[,/]", text)
-    return frozenset(_DAYS[p.strip()] for p in parts if p.strip() in _DAYS)
+    days = {d for part in re.split(r"[,/]", text) if (d := _lookup_day(part)) is not None}
+    return frozenset(days)
 
 
 def _parse_clock(token: str) -> time:
@@ -66,8 +93,7 @@ def _parse_clock(token: str) -> time:
 
 
 def _parse_time_range(cell: str) -> TimeRange | None:
-    cleaned = cell.replace("Uhr", "").strip()
-    parts = re.split(r"[–-]", cleaned)
+    parts = re.split(r"[–-]", cell.replace("Uhr", "").strip())
     if len(parts) != 2:
         return None
     try:
@@ -100,46 +126,73 @@ def _slots(hours_cell: str, category_cell: str | None) -> list[tuple[TimeRange, 
     return out
 
 
-def _extract_rows(decoded_html: str) -> list[list[str]]:
-    rows: list[list[str]] = []
-    for match in _ROW_RE.findall(decoded_html):
-        try:
-            cells = json.loads(match)
-        except json.JSONDecodeError:
-            continue
-        rows.append([c["value"] for c in cells])
-    return rows
-
-
-def parse_schedule(page_html: str) -> Result[ScrapedSchedule, ProviderError]:
-    """Parse a pool page's HTML into schedule rules (public/women/seniors/school sessions)."""
-    decoded = html.unescape(page_html)
-    hours_rows = [r for r in _extract_rows(decoded) if len(r) >= 2 and "Uhr" in r[1]]
-    if not hours_rows:
-        return Err(
-            ParseError(
-                source=_SOURCE, detail="no opening-hours table found", raw_snippet=decoded[:200]
-            )
-        )
-
+def _rules_from_rows(rows: list[list[str]]) -> list[ScheduleRule]:
     rules: list[ScheduleRule] = []
-    for row in hours_rows:
+    for row in rows:
         days = _parse_days(row[0])
         if not days:
             continue
         category_cell = row[2] if len(row) >= 3 else None
         for time_range, access in _slots(row[1], category_cell):
             rules.append(ScheduleRule(weekdays=days, time=time_range, access=access))
+    return rules
 
+
+# --- format 1: stadt-zuerich.ch embedded JSON --------------------------------------
+
+
+def _parse_stadtzurich(decoded_html: str) -> Result[ScrapedSchedule, ProviderError]:
+    rows: list[list[str]] = []
+    for match in _ROW_RE.findall(decoded_html):
+        try:
+            rows.append([c["value"] for c in json.loads(match)])
+        except json.JSONDecodeError:
+            continue
+    hours_rows = [r for r in rows if len(r) >= 2 and "Uhr" in r[1]]
+    rules = _rules_from_rows(hours_rows)
     if not rules:
-        return Err(
-            ParseError(
-                source=_SOURCE,
-                detail="hours table had no parseable rows",
-                raw_snippet=decoded[:200],
-            )
-        )
+        return Err(ParseError(source=_SOURCE, detail="no stadt-zuerich timetable", raw_snippet=""))
     return Ok(ScrapedSchedule(rules=tuple(rules)))
+
+
+# --- format 2: generic HTML <table> ------------------------------------------------
+
+
+def _text(cell_html: str) -> str:
+    return re.sub(r"\s+", " ", re.sub(r"<[^>]+>", " ", cell_html)).strip()
+
+
+def _parse_html_table(decoded_html: str) -> Result[ScrapedSchedule, ProviderError]:
+    for table in _TABLE_RE.findall(decoded_html):
+        rows = [[_text(td) for td in _TD_RE.findall(tr)] for tr in _TR_RE.findall(table)]
+        # A schedule table: the day cell resolves AND a later cell holds a time range.
+        hours_rows = [
+            r for r in rows if len(r) >= 2 and _parse_days(r[0]) and _TIME_RE.search(r[1])
+        ]
+        rules = _rules_from_rows(hours_rows)
+        if rules:  # first schedule-like table wins
+            return Ok(ScrapedSchedule(rules=tuple(rules)))
+    return Err(ParseError(source=_SOURCE, detail="no HTML schedule table", raw_snippet=""))
+
+
+_PARSERS: tuple[Callable[[str], Result[ScrapedSchedule, ProviderError]], ...] = (
+    _parse_stadtzurich,
+    _parse_html_table,
+)
+
+
+def parse_schedule(page_html: str) -> Result[ScrapedSchedule, ProviderError]:
+    """Parse a pool page into schedule rules, trying each supported format in order."""
+    decoded = html.unescape(page_html)
+    last: Result[ScrapedSchedule, ProviderError] = Err(
+        ParseError(source=_SOURCE, detail="no parser matched", raw_snippet=decoded[:200])
+    )
+    for parser in _PARSERS:
+        result = parser(decoded)
+        if isinstance(result, Ok):
+            return result
+        last = result
+    return last
 
 
 def fetch_page(client: HttpClient, url: str) -> Result[bytes, ProviderError]:
