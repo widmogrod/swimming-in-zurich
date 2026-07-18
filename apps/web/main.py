@@ -16,13 +16,23 @@ from apps.web.api.swim.router import router as swim_router
 from apps.web.api.ui.router import router as ui_router
 from apps.web.config import Config
 from apps.web.services.curated_store import CuratedSwimData
+from apps.web.services.gold_store import GoldSwimData
+from apps.web.services.ports import SwimData
+
+
+def _load_swim_data(config: Config) -> SwimData:
+    """Serve from the gold store when one is configured and present; otherwise fall back to
+    the always-available curated dataset."""
+    if config.gold_db is not None and config.gold_db.exists():
+        return GoldSwimData.open(config.gold_db, config.data_dir)
+    return CuratedSwimData.load(config.data_dir)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     config = Config.from_env()
     app.state.config = config
-    app.state.swim_data = CuratedSwimData.load(config.data_dir)
+    app.state.swim_data = _load_swim_data(config)
     yield
 
 
