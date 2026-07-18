@@ -1,0 +1,119 @@
+interactions:
+- request:
+    body: ''
+    headers:
+      accept:
+      - '*/*'
+      accept-encoding:
+      - gzip, deflate
+      connection:
+      - keep-alive
+      host:
+      - www.ogd.stadt-zuerich.ch
+      user-agent:
+      - python-httpx/0.28.1
+    method: GET
+    uri: https://www.ogd.stadt-zuerich.ch/wfs/geoportal/Sport?SERVICE=WFS&REQUEST=GetFeature&VERSION=1.1.0&TYPENAME=poi_hallenbad_view&OUTPUTFORMAT=application%2Fjson
+  response:
+    body:
+      string: "{\"type\": \"FeatureCollection\",\n \"bbox\": [ 8.478657, 47.326038,
+        8.560946, 47.411151],\n \"features\": [\n  {\"geometry\":{\"coordinates\":[8.560139,47.372039],\"type\":\"Point\"},\"id\":\"poi_hallenbad_view.1\",\"properties\":{\"adr_inter\":\"\",\"adresse\":\"Hofstrasse
+        56\",\"adrzus_int\":\"\",\"behindertenparkplatz\":\"-1\",\"bemerkung\":\"Telefonische
+        oder schriftliche Ausk\xFCnfte \xFCber Fundsachen sind leider nicht m\xF6glich.
+        Bitte wenden Sie sich m\xF6glichst umgehend an unser Personal im Bad.\",\"ccmail\":null,\"da\":\"Sportamt\",\"datum\":\"202607060851\",\"datum_cms\":null,\"dep\":\"Schul-
+        und Sportdepartement (SSD)\",\"editor\":\"imorap\",\"erforderlichedokumente\":null,\"fax\":null,\"geometrie_gdo\":null,\"hausnummer\":\"56\",\"hindernisfreiheit\":\"0__https://www.ginto.guide/entries/2ee11bef-fb94-4e33-a230-3c997bbb5c5c\",\"infrastruktur\":\";25m
+        Mehrzweckbecken mit Hubboden und Sprungbrett 1m, Sonnenterrasse\",\"isbetriebsferien_gebaeude\":\"0\",\"isbetriebsferien_schalter\":\"0\",\"kategorie\":\"Hallenbad\",\"mail\":\"badeanlagen@zuerich.ch\",\"name\":\"Hallenbad
+        Bungertwies\",\"namenzus\":null,\"objectid\":1,\"oeffnungszeiten_gebaeude_di\":\"n.a.\",\"oeffnungszeiten_gebaeude_do\":\"n.a.\",\"oeffnungszeiten_gebaeude_fr\":\"n.a.\",\"oeffnungszeiten_gebaeude_mi\":\"n.a.\",\"oeffnungszeiten_gebaeude_mo\":\"n.a.\",\"oeffnungszeiten_gebaeude_sa\":\"n.a.\",\"oeffnungszeiten_gebaeude_so\":\"n.a.\",\"oeffnungszeiten_schalter_di\":\"n.a.\",\"oeffnungszeiten_schalter_do\":\"n.a.\",\"oeffnungszeiten_schalter_fr\":\"n.a.\",\"oeffnungszeiten_schalter_mi\":\"n.a.\",\"oeffnungszeiten_schalter_mo\":\"n.a.\",\"oeffnungszeiten_schalter_sa\":\"n.a.\",\"oeffnungszeiten_schalter_so\":\"n.a.\",\"ort\":\"Z\xFCrich\",\"plz\":\"8032\",\"poi_id\":\"hb002\",\"postadresse\":\"\",\"publish_internet\":\"1\",\"strasse\":\"Hofstrasse\",\"suchen\":\"Hallenb\xE4der,
+        Bad, B\xE4der, Schwimmbad, Schwimmb\xE4der, Badeanlage\",\"tel\":\"+41 44
+        413 55 70\",\"tel2\":null,\"www\":\"https://www.stadt-zuerich.ch/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/hallenbaeder/bungertwies.html\",\"zahlungsmittel_internet\":\"NULL;NULL;\",\"zahlungsmittel_schalter\":\"NULL;NULL;\",\"zahlungsmittel_telefon\":\"NULL;NULL;\",\"zvv_label\":\"Hofstrasse
+        56\",\"zvv_link\":\"https://www.zvv.ch/de/fahrplan-und-informationen/fahrplan.html?tolat=47.3720358449829&tolon=8.5601377036509&toname=Z\xFCrich,
+        Hofstrasse 56\"},\"type\":\"Feature\"}\n ,{\"geometry\":{\"coordinates\":[8.532973,47.372282],\"type\":\"Point\"},\"id\":\"poi_hallenbad_view.2\",\"properties\":{\"adr_inter\":\"\",\"adresse\":\"Sihlstrasse
+        71\",\"adrzus_int\":\"\",\"behindertenparkplatz\":\"-1\",\"bemerkung\":\"Telefonische
+        oder schriftliche Ausk\xFCnfte \xFCber Fundsachen sind leider nicht m\xF6glich.
+        Bitte wenden Sie sich m\xF6glichst umgehend an unser Personal im Bad.\",\"ccmail\":null,\"da\":\"Sportamt\",\"datum\":\"202607060902\",\"datum_cms\":null,\"dep\":\"Schul-
+        und Sportdepartement (SSD)\",\"editor\":\"imorap\",\"erforderlichedokumente\":null,\"fax\":null,\"geometrie_gdo\":null,\"hausnummer\":\"71\",\"hindernisfreiheit\":\"0__https://www.ginto.guide/entries/bcb26821-a99b-4830-83b0-664e8ad43516\",\"infrastruktur\":\";Schwimmerbecken
+        50 x 15 m (6 Bahnen) 28\xB0C, Nichtschwimmerbecken 10,5 x 7 m 30\xB0C, Variobecken
+        mit Hubboden 16,66 x 8 m (4 Bahnen) 30\xB0C, Turnhalle 44 x 12 m, trennbar
+        in 2 gleiche H\xE4lften, gemischte Sauna 8 - 22 Uhr, Eintritt Fr. 10.-\",\"isbetriebsferien_gebaeude\":\"0\",\"isbetriebsferien_schalter\":\"1\",\"kategorie\":\"Hallenbad\",\"mail\":\"badeanlagen@zuerich.ch\",\"name\":\"Hallenbad
+        City\",\"namenzus\":null,\"objectid\":2,\"oeffnungszeiten_gebaeude_di\":\"n.a.\",\"oeffnungszeiten_gebaeude_do\":\"n.a.\",\"oeffnungszeiten_gebaeude_fr\":\"n.a.\",\"oeffnungszeiten_gebaeude_mi\":\"n.a.\",\"oeffnungszeiten_gebaeude_mo\":\"n.a.\",\"oeffnungszeiten_gebaeude_sa\":\"n.a.\",\"oeffnungszeiten_gebaeude_so\":\"n.a.\",\"oeffnungszeiten_schalter_di\":\"n.a.\",\"oeffnungszeiten_schalter_do\":\"n.a.\",\"oeffnungszeiten_schalter_fr\":\"n.a.\",\"oeffnungszeiten_schalter_mi\":\"n.a.\",\"oeffnungszeiten_schalter_mo\":\"n.a.\",\"oeffnungszeiten_schalter_sa\":\"n.a.\",\"oeffnungszeiten_schalter_so\":\"n.a.\",\"ort\":\"Z\xFCrich\",\"plz\":\"8001\",\"poi_id\":\"hb001\",\"postadresse\":\"\",\"publish_internet\":\"1\",\"strasse\":\"Sihlstrasse\",\"suchen\":\"Hallenb\xE4der,
+        Bad, B\xE4der, Schwimmbad, Schwimmb\xE4der, Badeanlage\",\"tel\":\"+41 44
+        413 56 00\",\"tel2\":null,\"www\":\"https://www.stadt-zuerich.ch/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/hallenbaeder/city.html\",\"zahlungsmittel_internet\":\"NULL;NULL;\",\"zahlungsmittel_schalter\":\"NULL;NULL;\",\"zahlungsmittel_telefon\":\"NULL;NULL;\",\"zvv_label\":\"Sihlstrasse
+        71\",\"zvv_link\":\"https://www.zvv.ch/de/fahrplan-und-informationen/fahrplan.html?tolat=47.3722783733413&tolon=8.53297181922162&toname=Z\xFCrich,
+        Sihlstrasse 71\"},\"type\":\"Feature\"}\n ,{\"geometry\":{\"coordinates\":[8.501733,47.401322],\"type\":\"Point\"},\"id\":\"poi_hallenbad_view.3\",\"properties\":{\"adr_inter\":\"\",\"adresse\":\"Limmattalstrasse
+        154\",\"adrzus_int\":\"\",\"behindertenparkplatz\":\"-1\",\"bemerkung\":\"Telefonische
+        oder schriftliche Ausk\xFCnfte \xFCber Fundsachen sind leider nicht m\xF6glich.
+        Bitte wenden Sie sich m\xF6glichst umgehend an unser Personal im Bad.\",\"ccmail\":null,\"da\":\"Sportamt\",\"datum\":\"202603041716\",\"datum_cms\":null,\"dep\":\"Schul-
+        und Sportdepartement (SSD)\",\"editor\":\"skzsag\",\"erforderlichedokumente\":null,\"fax\":null,\"geometrie_gdo\":null,\"hausnummer\":\"154\",\"hindernisfreiheit\":\"0__https://www.ginto.guide/entries/01de47ac-47b1-4e30-b36f-5c42a52c2955\",\"infrastruktur\":\";NULL\",\"isbetriebsferien_gebaeude\":\"0\",\"isbetriebsferien_schalter\":\"0\",\"kategorie\":\"Hallenbad\",\"mail\":\"badeanlagen@zuerich.ch\",\"name\":\"Hallenbad
+        Bl\xE4si\",\"namenzus\":null,\"objectid\":3,\"oeffnungszeiten_gebaeude_di\":\"n.a.\",\"oeffnungszeiten_gebaeude_do\":\"n.a.\",\"oeffnungszeiten_gebaeude_fr\":\"n.a.\",\"oeffnungszeiten_gebaeude_mi\":\"n.a.\",\"oeffnungszeiten_gebaeude_mo\":\"n.a.\",\"oeffnungszeiten_gebaeude_sa\":\"n.a.\",\"oeffnungszeiten_gebaeude_so\":\"n.a.\",\"oeffnungszeiten_schalter_di\":\"n.a.\",\"oeffnungszeiten_schalter_do\":\"n.a.\",\"oeffnungszeiten_schalter_fr\":\"n.a.\",\"oeffnungszeiten_schalter_mi\":\"n.a.\",\"oeffnungszeiten_schalter_mo\":\"n.a.\",\"oeffnungszeiten_schalter_sa\":\"n.a.\",\"oeffnungszeiten_schalter_so\":\"n.a.\",\"ort\":\"Z\xFCrich\",\"plz\":\"8049\",\"poi_id\":\"hb005\",\"postadresse\":\"\",\"publish_internet\":\"1\",\"strasse\":\"Limmattalstrasse\",\"suchen\":\"Hallenb\xE4der,
+        Bad, B\xE4der, Schwimmbad, Schwimmb\xE4der, Badeanlage\",\"tel\":\"+41 44
+        413 55 80\",\"tel2\":null,\"www\":\"https://www.stadt-zuerich.ch/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/hallenbaeder/blaesi.html\",\"zahlungsmittel_internet\":\"NULL;NULL;\",\"zahlungsmittel_schalter\":\"NULL;NULL;\",\"zahlungsmittel_telefon\":\"NULL;NULL;\",\"zvv_label\":\"Limmattalstrasse
+        154\",\"zvv_link\":\"https://www.zvv.ch/de/fahrplan-und-informationen/fahrplan.html?tolat=47.4013183376849&tolon=8.50173225835392&toname=Z\xFCrich,
+        Limmattalstrasse 154\"},\"type\":\"Feature\"}\n ,{\"geometry\":{\"coordinates\":[8.513445,47.326473],\"type\":\"Point\"},\"id\":\"poi_hallenbad_view.4\",\"properties\":{\"adr_inter\":\"\",\"adresse\":\"Klebestrasse
+        3\",\"adrzus_int\":\"\",\"behindertenparkplatz\":\"-1\",\"bemerkung\":\"Telefonische
+        oder schriftliche Ausk\xFCnfte \xFCber Fundsachen sind leider nicht m\xF6glich.
+        Bitte wenden Sie sich m\xF6glichst umgehend an unser Personal im Bad.\",\"ccmail\":null,\"da\":\"Sportamt\",\"datum\":\"202603051150\",\"datum_cms\":null,\"dep\":\"Schul-
+        und Sportdepartement (SSD)\",\"editor\":\"ssdprs\",\"erforderlichedokumente\":null,\"fax\":null,\"geometrie_gdo\":null,\"hausnummer\":\"3\",\"hindernisfreiheit\":\"0__https://www.ginto.guide/entries/20dfe001-9cc2-4e4b-95a2-1fc5f17560e9\",\"infrastruktur\":\";NULL\",\"isbetriebsferien_gebaeude\":\"0\",\"isbetriebsferien_schalter\":\"0\",\"kategorie\":\"Hallenbad\",\"mail\":\"badeanlagen@zuerich.ch\",\"name\":\"Hallenbad
+        Leimbach\",\"namenzus\":null,\"objectid\":4,\"oeffnungszeiten_gebaeude_di\":\"n.a.\",\"oeffnungszeiten_gebaeude_do\":\"n.a.\",\"oeffnungszeiten_gebaeude_fr\":\"n.a.\",\"oeffnungszeiten_gebaeude_mi\":\"n.a.\",\"oeffnungszeiten_gebaeude_mo\":\"n.a.\",\"oeffnungszeiten_gebaeude_sa\":\"n.a.\",\"oeffnungszeiten_gebaeude_so\":\"n.a.\",\"oeffnungszeiten_schalter_di\":\"n.a.\",\"oeffnungszeiten_schalter_do\":\"n.a.\",\"oeffnungszeiten_schalter_fr\":\"n.a.\",\"oeffnungszeiten_schalter_mi\":\"n.a.\",\"oeffnungszeiten_schalter_mo\":\"n.a.\",\"oeffnungszeiten_schalter_sa\":\"n.a.\",\"oeffnungszeiten_schalter_so\":\"n.a.\",\"ort\":\"Z\xFCrich\",\"plz\":\"8041\",\"poi_id\":\"hb006\",\"postadresse\":\"Klebestrasse
+        3<br>8041 Z\xFCrich\",\"publish_internet\":\"1\",\"strasse\":\"Klebestrasse\",\"suchen\":\"Hallenb\xE4der,
+        Bad, B\xE4der, Schwimmbad, Schwimmb\xE4der, Badeanlage\",\"tel\":\"+41 44
+        413 55 50\",\"tel2\":null,\"www\":\"https://www.stadt-zuerich.ch/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/hallenbaeder/leimbach.html\",\"zahlungsmittel_internet\":\"NULL;NULL;\",\"zahlungsmittel_schalter\":\"NULL;NULL;\",\"zahlungsmittel_telefon\":\"NULL;NULL;\",\"zvv_label\":\"Klebestrasse
+        3\",\"zvv_link\":\"https://www.zvv.ch/de/fahrplan-und-informationen/fahrplan.html?tolat=47.3264692174871&tolon=8.51344467253367&toname=Z\xFCrich,
+        Klebestrasse 3\"},\"type\":\"Feature\"}\n ,{\"geometry\":{\"coordinates\":[8.556733,47.410437],\"type\":\"Point\"},\"id\":\"poi_hallenbad_view.5\",\"properties\":{\"adr_inter\":\"\",\"adresse\":\"Wallisellenstrasse
+        100\",\"adrzus_int\":\"\",\"behindertenparkplatz\":\"-1\",\"bemerkung\":\"Telefonische
+        oder schriftliche Ausk\xFCnfte \xFCber Fundsachen sind leider nicht m\xF6glich.
+        Bitte wenden Sie sich m\xF6glichst umgehend an unser Personal im Bad.\",\"ccmail\":null,\"da\":\"Sportamt\",\"datum\":\"202603051312\",\"datum_cms\":null,\"dep\":\"Schul-
+        und Sportdepartement (SSD)\",\"editor\":\"ssdprs\",\"erforderlichedokumente\":null,\"fax\":null,\"geometrie_gdo\":null,\"hausnummer\":\"100\",\"hindernisfreiheit\":\"0__https://www.ginto.guide/entries/88744a9d-5a13-4204-b950-99bd566eec89\",\"infrastruktur\":\";NULL\",\"isbetriebsferien_gebaeude\":\"0\",\"isbetriebsferien_schalter\":\"0\",\"kategorie\":\"Hallenbad\",\"mail\":\"badeanlagen@zuerich.ch\",\"name\":\"Hallenbad
+        Oerlikon\",\"namenzus\":null,\"objectid\":5,\"oeffnungszeiten_gebaeude_di\":\"n.a.\",\"oeffnungszeiten_gebaeude_do\":\"n.a.\",\"oeffnungszeiten_gebaeude_fr\":\"n.a.\",\"oeffnungszeiten_gebaeude_mi\":\"n.a.\",\"oeffnungszeiten_gebaeude_mo\":\"n.a.\",\"oeffnungszeiten_gebaeude_sa\":\"n.a.\",\"oeffnungszeiten_gebaeude_so\":\"n.a.\",\"oeffnungszeiten_schalter_di\":\"n.a.\",\"oeffnungszeiten_schalter_do\":\"n.a.\",\"oeffnungszeiten_schalter_fr\":\"n.a.\",\"oeffnungszeiten_schalter_mi\":\"n.a.\",\"oeffnungszeiten_schalter_mo\":\"n.a.\",\"oeffnungszeiten_schalter_sa\":\"n.a.\",\"oeffnungszeiten_schalter_so\":\"n.a.\",\"ort\":\"Z\xFCrich\",\"plz\":\"8050\",\"poi_id\":\"hb004\",\"postadresse\":\"\",\"publish_internet\":\"1\",\"strasse\":\"Wallisellenstrasse\",\"suchen\":\"Hallenb\xE4der,
+        Bad, B\xE4der, Schwimmbad, Schwimmb\xE4der, Badeanlage\",\"tel\":\"+41 44
+        413 55 00\",\"tel2\":null,\"www\":\"https://www.stadt-zuerich.ch/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/hallenbaeder/oerlikon.html\",\"zahlungsmittel_internet\":\"NULL;NULL;\",\"zahlungsmittel_schalter\":\"NULL;NULL;\",\"zahlungsmittel_telefon\":\"NULL;NULL;\",\"zvv_label\":\"Wallisellenstrasse
+        100\",\"zvv_link\":\"https://www.zvv.ch/de/fahrplan-und-informationen/fahrplan.html?tolat=47.4104332033727&tolon=8.5567320737019&toname=Z\xFCrich,
+        Wallisellenstrasse 100\"},\"type\":\"Feature\"}\n ,{\"geometry\":{\"coordinates\":[8.479864,47.38864],\"type\":\"Point\"},\"id\":\"poi_hallenbad_view.6\",\"properties\":{\"adr_inter\":\"\",\"adresse\":\"Dachslernstrasse
+        35\",\"adrzus_int\":\"\",\"behindertenparkplatz\":\"-1\",\"bemerkung\":null,\"ccmail\":null,\"da\":\"Sportamt\",\"datum\":\"202607060841\",\"datum_cms\":null,\"dep\":\"Schul-
+        und Sportdepartement (SSD)\",\"editor\":\"imorap\",\"erforderlichedokumente\":null,\"fax\":null,\"geometrie_gdo\":null,\"hausnummer\":\"35\",\"hindernisfreiheit\":\"0__https://www.ginto.guide/entries/0967dd75-9006-46f3-a556-ce6fc9e30768\",\"infrastruktur\":\";25
+        m Schwimmbecken, W\xE4rme-Innenbad mit Sprudelliegen und Massaged\xFCsen,
+        W\xE4rme-Aussenbad mit Sprudelliegen und Massaged\xFCsen, Nichtschwimmerbecken,
+        Sprungbecken 1/3/5m, Rutschbahn 110m, Gartensauna, Dampfbad, Aussenanlage
+        mit ruhiger Liegewiese_\",\"isbetriebsferien_gebaeude\":\"0\",\"isbetriebsferien_schalter\":\"0\",\"kategorie\":\"Hallenbad\",\"mail\":\"info@bad-altstetten.ch\",\"name\":\"Hallenbad
+        Altstetten\",\"namenzus\":null,\"objectid\":6,\"oeffnungszeiten_gebaeude_di\":\"n.a.\",\"oeffnungszeiten_gebaeude_do\":\"n.a.\",\"oeffnungszeiten_gebaeude_fr\":\"n.a.\",\"oeffnungszeiten_gebaeude_mi\":\"n.a.\",\"oeffnungszeiten_gebaeude_mo\":\"n.a.\",\"oeffnungszeiten_gebaeude_sa\":\"n.a.\",\"oeffnungszeiten_gebaeude_so\":\"n.a.\",\"oeffnungszeiten_schalter_di\":\"n.a.\",\"oeffnungszeiten_schalter_do\":\"n.a.\",\"oeffnungszeiten_schalter_fr\":\"n.a.\",\"oeffnungszeiten_schalter_mi\":\"n.a.\",\"oeffnungszeiten_schalter_mo\":\"n.a.\",\"oeffnungszeiten_schalter_sa\":\"n.a.\",\"oeffnungszeiten_schalter_so\":\"n.a.\",\"ort\":\"Z\xFCrich\",\"plz\":\"8048\",\"poi_id\":\"hb003\",\"postadresse\":\"\",\"publish_internet\":\"1\",\"strasse\":\"Dachslernstrasse\",\"suchen\":\"Hallenb\xE4der,
+        Bad, B\xE4der, Schwimmbad, Schwimmb\xE4der, Badeanlage\",\"tel\":\"+41 44
+        431 77 44\",\"tel2\":null,\"www\":\"http://www.bad-altstetten.ch\",\"zahlungsmittel_internet\":\"NULL;NULL;\",\"zahlungsmittel_schalter\":\"NULL;NULL;\",\"zahlungsmittel_telefon\":\"NULL;NULL;\",\"zvv_label\":\"Dachslernstrasse
+        35\",\"zvv_link\":\"https://www.zvv.ch/de/fahrplan-und-informationen/fahrplan.html?tolat=47.3886365144605&tolon=8.47986329178373&toname=Z\xFCrich,
+        Dachslernstrasse 35\"},\"type\":\"Feature\"}\n ,{\"geometry\":{\"coordinates\":[8.518032,47.399543],\"type\":\"Point\"},\"id\":\"poi_hallenbad_view.7\",\"properties\":{\"adr_inter\":\"\",\"adresse\":\"Emil-Kl\xF6ti-Strasse
+        17\",\"adrzus_int\":\"\",\"behindertenparkplatz\":\"-1\",\"bemerkung\":\"Telefonische
+        oder schriftliche Ausk\xFCnfte \xFCber Fundsachen sind leider nicht m\xF6glich.
+        Bitte wenden Sie sich m\xF6glichst umgehend an unser Personal im Bad.\",\"ccmail\":null,\"da\":\"Sportamt\",\"datum\":\"202603051313\",\"datum_cms\":null,\"dep\":\"Schul-
+        und Sportdepartement (SSD)\",\"editor\":\"ssdprs\",\"erforderlichedokumente\":null,\"fax\":null,\"geometrie_gdo\":null,\"hausnummer\":\"17\",\"hindernisfreiheit\":\"0__https://www.ginto.guide/entries/5a0c3ef8-193a-4a9d-acf5-408bafe0fdda\",\"infrastruktur\":\";NULL\",\"isbetriebsferien_gebaeude\":\"1\",\"isbetriebsferien_schalter\":\"0\",\"kategorie\":\"Hallenbad\",\"mail\":\"badeanlagen@zuerich.ch\",\"name\":\"W\xE4rmebad
+        K\xE4ferberg\",\"namenzus\":null,\"objectid\":7,\"oeffnungszeiten_gebaeude_di\":\"n.a.\",\"oeffnungszeiten_gebaeude_do\":\"n.a.\",\"oeffnungszeiten_gebaeude_fr\":\"n.a.\",\"oeffnungszeiten_gebaeude_mi\":\"n.a.\",\"oeffnungszeiten_gebaeude_mo\":\"n.a.\",\"oeffnungszeiten_gebaeude_sa\":\"n.a.\",\"oeffnungszeiten_gebaeude_so\":\"n.a.\",\"oeffnungszeiten_schalter_di\":\"n.a.\",\"oeffnungszeiten_schalter_do\":\"n.a.\",\"oeffnungszeiten_schalter_fr\":\"n.a.\",\"oeffnungszeiten_schalter_mi\":\"n.a.\",\"oeffnungszeiten_schalter_mo\":\"n.a.\",\"oeffnungszeiten_schalter_sa\":\"n.a.\",\"oeffnungszeiten_schalter_so\":\"n.a.\",\"ort\":\"Z\xFCrich\",\"plz\":\"8037\",\"poi_id\":\"hb007\",\"postadresse\":\"\",\"publish_internet\":\"1\",\"strasse\":\"Emil-Kl\xF6ti-Strasse\",\"suchen\":\"Hallenb\xE4der,
+        Bad, B\xE4der, Schwimmbad, Schwimmb\xE4der, Badeanlage\",\"tel\":\"+41 44
+        413 55 90\",\"tel2\":null,\"www\":\"https://www.stadt-zuerich.ch/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/hallenbaeder/kaeferberg.html\",\"zahlungsmittel_internet\":\"NULL;NULL;\",\"zahlungsmittel_schalter\":\"NULL;NULL;\",\"zahlungsmittel_telefon\":\"NULL;NULL;\",\"zvv_label\":\"Emil-Kl\xF6ti-Strasse
+        17\",\"zvv_link\":\"https://www.zvv.ch/de/fahrplan-und-informationen/fahrplan.html?tolat=47.3995391826171&tolon=8.51803143731028&toname=Z\xFCrich,
+        Emil-Kl\xF6ti-Strasse 17\"},\"type\":\"Feature\"}\n ]\n}"
+    headers:
+      access-control-allow-origin:
+      - '*'
+      connection:
+      - Keep-Alive
+      content-type:
+      - application/vnd.geo+json; charset=utf-8
+      date:
+      - Sat, 18 Jul 2026 19:12:02 GMT
+      keep-alive:
+      - timeout=5, max=100
+      server:
+      - Server
+      strict-transport-security:
+      - max-age=31536000; includeSubdomains
+      transfer-encoding:
+      - chunked
+      x-content-type-options:
+      - nosniff
+      x-frame-options:
+      - sameorigin
+      x-permitted-cross-domain-policies:
+      - none
+      x-xss-protection:
+      - 1; mode=block
+    status:
+      code: 200
+      message: OK
+version: 1
