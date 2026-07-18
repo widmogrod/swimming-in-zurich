@@ -19,8 +19,11 @@ from swimzh.core.http import HttpClient
 from swimzh.core.result import Err, Ok
 from swimzh.etl import pipeline
 from swimzh.etl.catalog import build_catalog
+from swimzh.etl.gold import write_gold
+from swimzh.etl.scrape import scrape_indoor_facilities
 from swimzh.providers import geo_sport
 from swimzh.storage import catalog_json
+from swimzh.storage.sqlite_repo import open_db
 
 _ZURICH = ZoneInfo("Europe/Zurich")
 
@@ -50,6 +53,26 @@ def build_catalog_file(*, out: Path, client: HttpClient, generated_at: datetime)
             return 1
 
 
+def scrape_gold(
+    *, db_path: Path, catalog_path: Path, client: HttpClient, fetched_at: datetime
+) -> int:
+    """Scrape indoor-pool schedules into a gold store the web app can serve from. Exit code."""
+    if not catalog_path.exists():
+        print(f"catalog not found at {catalog_path}; run build-catalog first", file=sys.stderr)
+        return 1
+    catalog = catalog_json.loads(catalog_path.read_text(encoding="utf-8"))
+    report = scrape_indoor_facilities(client, catalog, fetched_at)
+    if not report.facilities:
+        print("no schedules could be scraped", file=sys.stderr)
+        return 1
+    write_gold(open_db(db_path), report.facilities)
+    msg = f"scraped {len(report.facilities)} indoor pools into {db_path}"
+    if report.skipped:
+        msg += f"; skipped {len(report.skipped)}: {', '.join(report.skipped)}"
+    print(msg)
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="swimzh")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -60,6 +83,12 @@ def main(argv: list[str] | None = None) -> int:
 
     catalog = subparsers.add_parser("build-catalog", help="build the pool catalog from the WFS")
     catalog.add_argument("--out", default="data/catalog.json", help="catalog JSON to write")
+
+    scrape = subparsers.add_parser(
+        "scrape-gold", help="scrape indoor-pool schedules into a gold store"
+    )
+    scrape.add_argument("--db", required=True, help="path to the gold SQLite file to write")
+    scrape.add_argument("--catalog", default="data/catalog.json", help="catalog JSON to read")
 
     args = parser.parse_args(argv)
 
@@ -73,6 +102,13 @@ def main(argv: list[str] | None = None) -> int:
         if args.command == "build-gold":
             return build_gold(
                 db_path=Path(args.db), data_dir=Path(args.data), client=client, fetched_at=now
+            )
+        if args.command == "scrape-gold":
+            return scrape_gold(
+                db_path=Path(args.db),
+                catalog_path=Path(args.catalog),
+                client=client,
+                fetched_at=now,
             )
         return build_catalog_file(out=Path(args.out), client=client, generated_at=now)
 

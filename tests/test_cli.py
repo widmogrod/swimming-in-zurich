@@ -10,10 +10,15 @@ import httpx
 import pytest
 from apps.web.services.gold_store import GoldSwimData
 
-from swimzh.cli import build_catalog_file, build_gold, main
+from swimzh.cli import build_catalog_file, build_gold, main, scrape_gold
 from swimzh.core.http import HttpClient, RetryPolicy
+from swimzh.domain.catalog import PoolCatalogEntry
+from swimzh.domain.geo import GeoPoint
+from swimzh.domain.models import PoolKind
 from swimzh.providers.geo_sport import POOL_LAYERS
 from swimzh.storage import catalog_json
+
+FIXTURE_HTML = Path(__file__).resolve().parent / "providers" / "fixtures" / "hallenbad_city.html"
 
 DATA_DIR = Path(__file__).resolve().parents[1] / "data"
 ZURICH = ZoneInfo("Europe/Zurich")
@@ -91,6 +96,33 @@ def test_build_catalog_writes_all_layers(tmp_path: Path) -> None:
     entries = catalog_json.loads(out.read_text(encoding="utf-8"))
     assert len(entries) == len(POOL_LAYERS)  # one feature per layer
     assert {e.kind.value for e in entries} == {k.value for k in POOL_LAYERS.values()}
+
+
+def test_scrape_gold_writes_store_from_catalog(tmp_path: Path) -> None:
+    catalog_file = tmp_path / "catalog.json"
+    entry = PoolCatalogEntry(
+        pool_id="hallenbad-city",
+        name="Hallenbad City",
+        kind=PoolKind.INDOOR,
+        address="Sihlstrasse 71",
+        geo=GeoPoint(lat=47.37, lon=8.53),
+        url="https://example.test/city.html",
+        description=None,
+        phone=None,
+    )
+    catalog_file.write_text(catalog_json.dumps((entry,), FETCHED_AT), encoding="utf-8")
+
+    body = FIXTURE_HTML.read_bytes()
+    inner = httpx.Client(
+        transport=httpx.MockTransport(lambda _r: httpx.Response(200, content=body))
+    )
+    client = HttpClient(inner, source="schedule_scraper", retry=RetryPolicy(max_attempts=1))
+
+    db = tmp_path / "gold.sqlite"
+    code = scrape_gold(db_path=db, catalog_path=catalog_file, client=client, fetched_at=FETCHED_AT)
+    assert code == 0
+    data = GoldSwimData.open(db, DATA_DIR)
+    assert len(data.facilities()) == 1
 
 
 def test_main_requires_a_subcommand() -> None:

@@ -38,12 +38,16 @@ Data sources:
 - **Catalog** (all pools, every category): committed `data/catalog.json`, generated from the
   WFS. Regenerate with `uv run python -m swimzh.cli build-catalog --out data/catalog.json`.
 - **Schedules** (`/swim`): the `SwimData` port — `SWIMZH_GOLD_DB` (SQLite gold store) if set
-  and present, else the curated dataset (offline default). Build gold with:
+  and present, else the curated dataset (offline default). Build gold two ways:
   ```sh
-  uv run python -m swimzh.cli build-gold --db gold.sqlite
+  uv run python -m swimzh.cli scrape-gold --db gold.sqlite   # REAL schedules scraped from
+                                                             #   each indoor pool's page
+  uv run python -m swimzh.cli build-gold  --db gold.sqlite   # curated 3 pools + geo merge
   SWIMZH_GOLD_DB=gold.sqlite uv run uvicorn apps.web.main:app --reload
   ```
-Note: the WFS has locations but not opening hours (`n.a.`); schedules are curated/scraped.
+The WFS has locations but not opening hours (`n.a.`). `scrape-gold` parses the timetable
+JSON embedded in stadt-zuerich.ch pool pages (`providers/schedule_scraper.py`) — brittle,
+best-effort (unparseable pages are skipped and reported), pinned by a saved-page fixture test.
 
 ## Engineering conventions
 

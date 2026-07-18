@@ -8,7 +8,7 @@ the need to scrape entirely.**
 | Source | What we take | License / terms | Machine-readable? | Refresh cadence | Status |
 |--------|--------------|-----------------|-------------------|-----------------|--------|
 | `geo_sport` (data.stadt-zuerich.ch, CKAN) | Pool locations, facility metadata, geo | **CC0** (open) | ✅ JSON/GeoJSON | Rare (yearly-ish) | Planned (milestone 3) |
-| stadt-zuerich.ch Hallenbäder pages | Opening hours, public-swim/women-only/senior/school slots, prices, closures | ⚠️ Not open data; HTML/PDF; copyright-in-compilation unclear under Swiss law | ❌ HTML/PDF only | Per season / term | **v1 avoids scraping — hand-curated into `data/pools/*.yaml`** |
+| stadt-zuerich.ch Hallenbäder pages | Opening hours + public-swim/women-only/senior slots | ⚠️ Not open data; copyright-in-compilation unclear under Swiss law | ⚠️ Timetable embedded as entity-encoded JSON in the HTML | Per season / term | **Scraped** by `providers/schedule_scraper.py` (`scrape-gold`); read-only of public pages, best-effort, 6/7 indoor pools parse. Prefer asking OGD for a feed (below). |
 | CrowdMonitor (occupancy) — vendor = countee.ch | Live occupancy (indoor+outdoor) | ❌ Commercial; ToS unclear; surfaced via city "Badi aktuell" pages | ~JSON (semi-open) | 1–5 min | **Deferred** until vendor terms verified (milestone 5, behind a flag) |
 | Baditicker API (stadt-zuerich.ch OGD) | Outdoor water temp + open/closed | Open (OGD) | ✅ JSON | Seasonal (off in winter) | Out of scope (outdoor only) |
 | Zürich school-holiday / public-holiday dates | Calendar overlays | Public info (zh.ch, stadt-zuerich.ch) | Partially | ~Yearly | Curated into `data/calendar/zurich.yaml` (verify dates) |
