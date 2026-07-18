@@ -12,10 +12,33 @@ intent and design decisions, and `README.md` for orientation.
 - `src/swimzh/domain/` — pure domain: schedule **resolver** (the correctness core),
   eligibility, registry, query surface. No I/O.
 - `src/swimzh/boundary/` — pydantic v2 DTOs (ingest boundary).
-- `src/swimzh/providers/` — adapters returning `Result[..., ProviderError]` (`curated`
-  today; `geo_sport`, occupancy later).
+- `src/swimzh/providers/` — adapters returning `Result[..., ProviderError]` (`curated`,
+  `geo_sport`; occupancy later).
+- `src/swimzh/etl/` + `src/swimzh/storage/` — medallion raw→silver→gold (pure functions)
+  into the SQLite gold store; `find_swim_options` reads from `GoldRepository`.
+- `apps/web/` — FastAPI service + minimal HTML UI over the swim data (see below).
 - `data/` — curated YAML (pools, registry, calendar) + `sources.md` legal register.
-- `tests/` — mirrors `src/swimzh/` (`tests/core/`, `tests/domain/`, …).
+- `tests/` — mirrors `src/swimzh/`; `apps/web/tests/` mirrors the service.
+
+## Web UI / API
+
+```sh
+uv run uvicorn apps.web.main:app --reload      # http://127.0.0.1:8000  (UI at /, API at /swim)
+```
+
+`GET /swim?at=<ISO datetime>&gender=female|male|diverse&age=<int>&lat=&lon=&radius_km=&eligible_only=true`
+returns eligibility-annotated options + statuses + warnings. Follows the
+`python-dev:fastapi-service` conventions; deviations recorded in
+`docs/concepts/fastapi-service-integration.md`.
+
+## Engineering conventions
+
+This project follows the agentic-engineering conventions. When implementing code here,
+consult these skills first:
+- `python-dev:fastapi-service` — for anything under `apps/web/` (composition root, ports as
+  Protocols, thin routers, env only in `config.py`).
+
+Plans live in `docs/plan/`, durable decisions in `docs/concepts/` and `docs/entities/`.
 
 ## QA chain (run in this exact order)
 

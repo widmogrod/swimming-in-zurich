@@ -21,7 +21,7 @@ packages = ["src/swimzh"]
 [tool.ruff]
 line-length = 100
 target-version = "py312"
-src = ["src", "tests"]
+src = ["src", "tests", "apps"]
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "UP", "B", "S", "SIM", "TRY", "RUF"]
@@ -35,6 +35,9 @@ ignore = [
 
 [tool.ruff.lint.per-file-ignores]
 "tests/**" = ["S101"]
+"apps/**/tests/**" = ["S101"]
+# The UI page is one self-contained HTML/CSS/JS string; long lines are expected.
+"apps/web/api/ui/router.py" = ["E501"]
 # Vendored QA gate script legitimately shells out to `radon` by name.
 "scripts/**" = ["S603", "S607"]
 
@@ -49,16 +52,22 @@ reportMissingTypeStubs = false
 [tool.mypy]
 strict = true
 python_version = "3.12"
-files = ["src", "tests"]
+files = ["src", "tests", "apps"]
 # The vendored CRAP gate script is a tool, not project source; don't type-check it.
 exclude = ["^scripts/"]
 
 [tool.pytest.ini_options]
-addopts = ["-q", "--cov=swimzh", "--cov-report=term-missing", "--cov-report=json"]
-testpaths = ["tests"]
+addopts = [
+    "-q",
+    "--cov=swimzh",
+    "--cov=apps",
+    "--cov-report=term-missing",
+    "--cov-report=json",
+]
+testpaths = ["tests", "apps/web/tests"]
 
 [tool.coverage.run]
-source = ["src"]
+source = ["src", "apps"]
 branch = true
 
 [tool.coverage.report]
@@ -72,6 +81,7 @@ min-complexity = 5
 
 [dependency-groups]
 dev = [
+    "fastapi>=0.139.2",
     "mypy>=2.3.0",
     "pre-commit>=4.6.0",
     "pyright>=1.1.411",
@@ -81,6 +91,7 @@ dev = [
     "radon>=6.0.1",
     "ruff>=0.15.22",
     "types-pyyaml>=6.0.12.20260518",
+    "uvicorn>=0.51.0",
     "vcrpy>=8.3.0",
 ]
 # pytest-recording: never touch the network during replay unless explicitly re-recording.
