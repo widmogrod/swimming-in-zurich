@@ -22,12 +22,13 @@ import json
 import re
 from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import time
+from datetime import date, time
 
 from swimzh.core.errors import ParseError, ProviderError
 from swimzh.core.http import HttpClient
 from swimzh.core.result import Err, Ok, Result
 from swimzh.domain.access import PublicSwim, SchoolReserved, SeniorsOnly, SessionAccess, WomenOnly
+from swimzh.domain.models import Notice
 from swimzh.domain.schedule import ScheduleRule, TimeRange, Weekday
 
 _SOURCE = "schedule_scraper"
@@ -193,6 +194,52 @@ def parse_schedule(page_html: str) -> Result[ScrapedSchedule, ProviderError]:
             return result
         last = result
     return last
+
+
+# --- notices / alerts (stadt-zuerich.ch <stzh-disturber>) ---------------------------
+
+_SHOW_RE = re.compile(r"<stzh-show\b([^>]*)>(.*?)</stzh-show>", re.IGNORECASE | re.DOTALL)
+_LABEL_RE = re.compile(
+    r'<stzh-clamp[^>]*slot="label"[^>]*>(.*?)</stzh-clamp>', re.IGNORECASE | re.DOTALL
+)
+
+
+def _attr(attrs: str, name: str) -> str | None:
+    match = re.search(name + r'="([^"]*)"', attrs)
+    return match.group(1) if match else None
+
+
+def _iso_date(value: str | None) -> date | None:
+    if not value:
+        return None
+    try:
+        return date.fromisoformat(value[:10])
+    except ValueError:
+        return None
+
+
+def parse_notices(page_html: str) -> tuple[Notice, ...]:
+    """Extract alert/notice banners (text + active period) from the page's disturber slots."""
+    decoded = html.unescape(page_html)
+    seen: set[tuple[str, date | None, date | None]] = set()
+    notices: list[Notice] = []
+    for attrs, inner in _SHOW_RE.findall(decoded):
+        label = _LABEL_RE.search(inner)
+        if label is None:
+            continue
+        text = _text(label.group(1))
+        if not text:
+            continue
+        notice = Notice(
+            text=text,
+            active_from=_iso_date(_attr(attrs, "show-from-date")),
+            active_to=_iso_date(_attr(attrs, "hide-from-date")),
+        )
+        key = (notice.text, notice.active_from, notice.active_to)
+        if key not in seen:
+            seen.add(key)
+            notices.append(notice)
+    return tuple(notices)
 
 
 def fetch_page(client: HttpClient, url: str) -> Result[bytes, ProviderError]:

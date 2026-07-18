@@ -25,6 +25,7 @@ from swimzh.boundary.curated_dto import (
 from swimzh.domain.models import (
     Facility,
     FacilityId,
+    Notice,
     PoolIdentity,
     PoolKind,
     Provenance,
@@ -50,6 +51,13 @@ _POLICY_TO: dict[HolidayPolicy, _HolidayPolicy] = {
 _POLICY_FROM: dict[str, HolidayPolicy] = {p.value: p for p in HolidayPolicy}
 
 
+class _NoticeDTO(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    text: str
+    active_from: date | None
+    active_to: date | None
+
+
 class StoredFacilityDTO(BaseModel):
     """The full gold representation of a facility (identity + provenance + schedule tree)."""
 
@@ -72,6 +80,7 @@ class StoredFacilityDTO(BaseModel):
     prices: PriceTableDTO | None
     closures: list[ClosureDTO]
     basins: list[BasinDTO]
+    notices: list[_NoticeDTO]
 
 
 def to_stored(facility: Facility) -> StoredFacilityDTO:
@@ -95,6 +104,10 @@ def to_stored(facility: Facility) -> StoredFacilityDTO:
         prices=mapping.price_table_to_dto(facility.prices) if facility.prices is not None else None,
         closures=[mapping.closure_to_dto(c) for c in facility.closures],
         basins=[mapping.basin_to_dto(b) for b in facility.basins],
+        notices=[
+            _NoticeDTO(text=n.text, active_from=n.active_from, active_to=n.active_to)
+            for n in facility.notices
+        ],
     )
 
 
@@ -122,6 +135,10 @@ def from_stored(stored: StoredFacilityDTO) -> Facility:
         closures=tuple(mapping.closure_from_dto(c) for c in stored.closures),
         public_holiday_policy=_POLICY_FROM[stored.public_holiday_policy],
         prices=mapping.price_table_from_dto(stored.prices) if stored.prices is not None else None,
+        notices=tuple(
+            Notice(text=n.text, active_from=n.active_from, active_to=n.active_to)
+            for n in stored.notices
+        ),
     )
 
 

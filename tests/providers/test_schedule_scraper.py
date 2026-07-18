@@ -4,7 +4,7 @@ the fetch seam via MockTransport."""
 from __future__ import annotations
 
 from collections.abc import Callable
-from datetime import time
+from datetime import date, time
 from pathlib import Path
 
 import httpx
@@ -14,7 +14,7 @@ from swimzh.core.http import HttpClient, RetryPolicy
 from swimzh.core.result import Err, Ok
 from swimzh.domain.access import PublicSwim, WomenOnly
 from swimzh.domain.schedule import TimeRange, Weekday
-from swimzh.providers.schedule_scraper import parse_schedule, scrape_schedule
+from swimzh.providers.schedule_scraper import parse_notices, parse_schedule, scrape_schedule
 
 FIXTURES = Path(__file__).resolve().parent / "fixtures"
 FIXTURE = FIXTURES / "hallenbad_city.html"
@@ -64,6 +64,15 @@ def test_parses_altstetten_html_table() -> None:
     )
     # This site publishes no women-only sessions.
     assert all(not isinstance(r.access, WomenOnly) for r in rules)
+
+
+def test_parse_notices_extracts_closure_with_dates() -> None:
+    notices = parse_notices(FIXTURE.read_text(encoding="utf-8"))
+    assert notices
+    closure = notices[0]
+    assert "Revision" in closure.text
+    assert closure.active_from == date(2026, 7, 4)
+    assert closure.active_to == date(2026, 8, 7)
 
 
 def _client(handler: Callable[[httpx.Request], httpx.Response]) -> HttpClient:

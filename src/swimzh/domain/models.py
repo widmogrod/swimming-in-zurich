@@ -60,6 +60,21 @@ class PoolIdentity:
 
 
 @dataclass(frozen=True, slots=True)
+class Notice:
+    """A scraped alert/notice about a pool (e.g. a maintenance closure), with the period it
+    is active. Surfaced to users; closure-type notices also drive a `ClosureRange`."""
+
+    text: str
+    active_from: date | None = None
+    active_to: date | None = None
+
+    def active_on(self, day: date) -> bool:
+        after_start = self.active_from is None or day >= self.active_from
+        before_end = self.active_to is None or day <= self.active_to
+        return after_start and before_end
+
+
+@dataclass(frozen=True, slots=True)
 class Occupancy:
     """A live occupancy reading (attached only when the query time is ~now)."""
 
@@ -91,3 +106,4 @@ class Facility:
     closures: tuple[ClosureRange, ...] = field(default_factory=tuple)
     public_holiday_policy: HolidayPolicy = HolidayPolicy.NORMAL
     prices: PriceTable | None = None
+    notices: tuple[Notice, ...] = field(default_factory=tuple)

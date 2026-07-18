@@ -9,7 +9,7 @@ from __future__ import annotations
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
-from apps.web.api.swim.model import AnswerOut, OptionOut, StatusOut
+from apps.web.api.swim.model import AnswerOut, NoticeOut, OptionOut, StatusOut
 from apps.web.services.ports import SwimData
 from swimzh.domain.geo import GeoPoint
 from swimzh.domain.person import Gender, Person
@@ -58,4 +58,5 @@ def build_answer(
             for s in result.statuses
         ],
         warnings=list(result.warnings),
+        notices=[NoticeOut(facility=n.facility_name, text=n.text) for n in result.notices],
     )

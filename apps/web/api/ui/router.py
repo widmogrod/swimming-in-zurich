@@ -94,7 +94,8 @@ f.addEventListener('submit', async e => {
   const r = await fetch('/swim?' + p);
   if (!r.ok) { findOut.innerHTML = '<p class="warn">' + (await r.json()).detail + '</p>'; return; }
   const a = await r.json();
-  let h = a.warnings.map(w => '<p class="warn">⚠ ' + w + '</p>').join('');
+  let h = a.notices.map(n => '<p class="warn">📣 <strong>' + n.facility + '</strong>: ' + n.text + '</p>').join('');
+  h += a.warnings.map(w => '<p class="warn">⚠ ' + w + '</p>').join('');
   if (!a.options.length) h += '<p>No open, eligible sessions for that moment.</p>';
   else {
     h += '<table><thead><tr><th>Pool</th><th>Basin</th><th>Time</th><th>Access</th><th>Price</th><th></th></tr></thead><tbody>';
