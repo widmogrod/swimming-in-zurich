@@ -1,8 +1,20 @@
+---
+type: plan
+status: in-progress      # draft -> approved -> in-progress -> done (approved by owner 2026-07-19: all 4 slices, pause_after S1)
+created: 2026-07-19
+feature: rich-pool-domain
+gates:
+  qa: full               # make qa — ruff, format, mypy strict, pytest+coverage floor, CRAP
+  review: adversarial    # critic subagent must find no blocking issues
+pause_after: [S1]        # model+migration+parser is the riskiest slice — human review before fan-out
+links: ["[[basin]]", "[[locker-option]]", "[[feature]]"]
+---
+
 # Plan — Rich pool domain model (lanes, basins, temps, lockers, occupancy, notices, website)
 
-Status: **Design approved-for-implementation pending owner sign-off.** Not yet implemented.
-Produced by: 2 design sub-agents (purist + pragmatic) → 2 critic agents (YAGNI/complexity +
-type-rigor/serialization) → this synthesis.
+Design produced by 2 design sub-agents (purist + pragmatic) → 2 critic agents
+(YAGNI/complexity + type-rigor/serialization) → this synthesis. Crystallized into
+the plan contract for /dev:implement.
 
 ## Context
 
@@ -30,7 +42,7 @@ gold via a pydantic codec, tz-aware Europe/Zurich).
 | 6 | `length_m: int → Decimal` | **Yes, via a `Dimensions(Decimal, …)` field** | Prose dimensions are fractional (`10,5`, `16,66 m`) — int is lossy. No committed gold snapshots exist, so the JSON number→string flip risk Critic 2 flagged does not apply here; migrate the 3 curated YAMLs. |
 | 7 | Per-field provenance/confidence | **Reject; one `BasinSource(CURATED \| PARSED_PROSE)` per basin** | Carries the only honesty signal that pays rent (hand-verified vs prose-scraped) without a second provenance system next to facility-level `Provenance`. |
 
-## Final model (synthesized)
+## Design (signature altitude)
 
 New/changed types. Plain `| None` unless noted. Every field annotated with **source** and
 **static** (stored in gold) vs **live** (query-time only).
@@ -218,18 +230,79 @@ class OccupancyProvider(Protocol):
   **facility-detail** view (`/pools/{id}` or an expanded `/pools` row), **not** on every
   per-session `SwimOption` (avoid fanning static facility data across session rows).
 
-## Implementation phases (suggested)
+## Out of scope
 
-1. **Physical basins** — `BasinKind`, `Dimensions`, `lanes`, `nominal_temp_c`, `BasinSource`
-   + `infrastruktur` prose parser (new `providers/infrastruktur.py`, returns partial data) +
-   codec + curated-YAML migration. Surface temp/lanes/kind in `SwimOption`.
-2. **Features + lockers** — `Feature`, `LockerOption` + pool-page scrapers + facility-detail
-   API/UI.
-3. **`AdultsOnly` + school public windows** — access arm (+ `ACCESS_TYPES` test) + curate/scrape
-   a school pool's public hours as the proof case.
-4. **Live occupancy** — investigate the CrowdMonitor endpoint (ToS check in `data/sources.md`
-   first), build `OccupancyProvider`, `LiveOccupancy`/`OccupancyUnavailable`, attach at query
-   time, `dumps` guard. Real-time, out of gold.
+- Any UI work beyond the query surface (facility-detail rendering is a later plan).
+- Per-field provenance/confidence (`Fact[T]`) — rejected, see Decisions #1/#7.
+- CrowdMonitor scraping without a ToS check recorded in `data/sources.md` first.
+- Re-scraping infrastructure beyond the new `infrastruktur` prose parser.
+
+## Slices
+
+### S1 — Physical basins (model + codec + YAML migration + prose parser)
+
+- **Goal**: `Basin` carries kind/dimensions/lanes/nominal-temp/source, round-trips
+  through the codec, and an `infrastruktur` prose parser extracts partial physicals.
+- **Touches**: `domain/models.py` (`BasinKind`, `BasinSource`, `Dimensions`, `Basin`),
+  `boundary/curated_dto.py` + `mapping.py` + `storage/codec.py`,
+  `providers/infrastruktur.py` (new), `data/pools/*.yaml` (3 files, `length_m` →
+  `dimensions`), `domain/query.py` (`SwimOption.basin_kind/lanes/water_temp_c`).
+- **Acceptance**:
+  - Codec round-trip test covers every new field; no `length_m` reference remains.
+  - Parser test: the real sample prose ("Schwimmerbecken 50 x 15 m (6 Bahnen) 28°C,
+    Nichtschwimmerbecken 10,5 x 7 m 30°C, …") yields the expected partial basins
+    (fractional dims as `Decimal`, missing facts stay `None`,
+    `physical_source=PARSED_PROSE`).
+  - `make qa` green.
+- **Depends on**: —
+
+### S2 — Features + lockers (facility-level statics)
+
+- **Goal**: `Facility` carries `website`, `features`, `lockers`; all three round-trip
+  through the codec; curated YAML can express them.
+- **Touches**: `domain/models.py` (`FeatureKind`, `Feature`), `domain/lockers.py` (new),
+  DTO/mapping/codec, curated YAML schema (+ at least one real curated example),
+  facility-detail query function (not UI).
+- **Acceptance**: locker mapping test covers the three real-row shapes from the Design
+  (free+deposit / fee+period / fee+deposit); feature hours reuse `ScheduleRule` and
+  resolve via the existing resolver ("sauna open now?" test); codec round-trip extended;
+  `make qa` green.
+- **Depends on**: S1 (shares DTO/codec surface).
+
+### S3 — AdultsOnly access arm + school-pool proof case
+
+- **Goal**: `AdultsOnly` is a first-class `SessionAccess` arm flowing through
+  eligibility, with a curated school-pool public-window proof case.
+- **Touches**: `domain/access.py`, the 4 `match`/`assert_never` sites, `AccessDTO`
+  union + mapping, one curated school-pool YAML entry.
+- **Acceptance**: `ACCESS_TYPES` completeness test (`{type(a) for a in ACCESS_TYPES}` ==
+  all `SessionAccess` members) — the trap from the critics; eligibility test: a child
+  querying an `AdultsOnly` window is rejected with the right reason; `make qa` green.
+- **Depends on**: — (independent of S1/S2).
+
+### S4 — Live occupancy (provider port + query-time attach)
+
+- **Goal**: `find_swim_options` can attach `LiveOccupancy | OccupancyUnavailable` from
+  an `OccupancyProvider` port when querying ~now.
+- **Touches**: `domain/query.py` (`LiveOccupancy`, `OccupancyUnavailable`,
+  `OccupancyResult`, `SwimOption.live_occupancy`), provider port + fake in tests;
+  real CrowdMonitor adapter ONLY if the ToS check recorded in `data/sources.md` allows.
+- **Acceptance**: attach logic tested with a fake provider (now vs future query;
+  provider error → `OccupancyUnavailable(reason=describe(err))`); the anti-leak guard
+  (`"occupancy" not in codec.dumps(facility)`); staleness derived, not stored;
+  `make qa` green.
+- **Depends on**: S1 (SwimOption surface).
+
+## Ledger
+
+Appended by /dev:implement after each slice — never rewritten. Newest row last.
+
+| date | slice | status | divergence from plan | tech debt created | human review? |
+|------|-------|--------|----------------------|-------------------|---------------|
+
+## Decisions & divergences
+
+Substantive choices made during implementation, with the why. Each entry dated.
 
 ## Rejected (record so we don't relitigate)
 
@@ -240,3 +313,8 @@ class OccupancyProvider(Protocol):
   free-usage-plus-deposit or a rental period simultaneously.
 - Stored `freshness` enum + `age_s` on occupancy — derive from `measured_at` instead.
 - `length_m: int → Decimal` as a standalone change — do it only bundled into `Dimensions`.
+
+## Summary
+
+Written when the plan reaches `done`; then distilled into
+`docs/summaries/rich-pool-domain.md`.
