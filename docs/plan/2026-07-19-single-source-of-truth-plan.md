@@ -121,6 +121,7 @@ Appended by /dev:implement after each slice — never rewritten. Newest row last
 
 | date | slice | status | divergence from plan | tech debt created | human review? |
 |------|-------|--------|----------------------|-------------------|---------------|
+| 2026-07-19 | S1 | done | none on contract; calendar stored as one JSON `singleton` row (plan allowed either); `load_calendar` raises `LookupError` when absent (S3 owns the app fail-fast) | `calendar_codec` + 2 new tests read `ZurichCalendar` private attrs → +12 pyright `reportPrivateUsage` (mypy gate green). Pyright is **already** broken on `main` pre-S1 (`test_belegungsplan.py`, `catalog_json.py`), so CLAUDE.md's "both checkers pass" is stale. Minimal fix: add read accessors to `ZurichCalendar` | yes |
 
 ## Decisions & divergences
 
@@ -130,6 +131,21 @@ Appended by /dev:implement after each slice — never rewritten. Newest row last
   fast); scrapers/geo are enrichment on top.
 - **Single store, not single table.** Catalog (all pools) and facilities (few, with schedules)
   stay separate tables; "single source of truth" = one SQLite file the app reads.
+
+### 2026-07-19 — S1 (Gold DB holds catalog + calendar)
+- Added a `catalog` table (one row per entry + queryable columns + `doc` JSON) and a `calendar`
+  table (single JSON `singleton` row) to the gold schema (`CREATE TABLE IF NOT EXISTS`;
+  `open_db` now `executescript`, so existing DBs gain the tables transparently). New
+  `write_catalog`/`load_catalog`/`write_calendar`/`load_calendar` + `storage/calendar_codec.py`
+  (reuses the boundary `CalendarDTO`). No app/etl/provider change (S2/S3).
+- **Critic verdict: approve.** The pyright regression is non-blocking: the QA gate is mypy
+  strict (green), and pyright's "both agree" invariant is *already* violated on `main` by
+  pre-existing code — S1 follows the same established codec/test private-access convention.
+- **Recommended follow-up (human review):** add read-only accessors to `ZurichCalendar`
+  (`public_holidays` / `school_holidays` / `known_years`) + an `__eq__`/frozen dataclass, have
+  the codec + tests read those, and restore pyright green (also clears the pre-existing
+  `catalog_json.py` / `test_belegungsplan.py` pyright debt). Correct CLAUDE.md's stale "both
+  checkers pass" line. Could fold into S4 (docs) or a dedicated cleanup.
 
 ## Summary
 

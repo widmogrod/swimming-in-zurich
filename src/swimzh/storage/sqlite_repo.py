@@ -11,9 +11,14 @@ from __future__ import annotations
 import sqlite3
 from pathlib import Path
 
+from swimzh.domain.calendar import ZurichCalendar
+from swimzh.domain.catalog import PoolCatalogEntry
 from swimzh.domain.models import Facility, FacilityId
-from swimzh.storage import codec
+from swimzh.storage import calendar_codec, catalog_json, codec
 
+# One store, three tables: `facility` (with schedules), `catalog` (every known pool), and
+# `calendar` (the Zürich overlay as a single JSON row). All `CREATE TABLE IF NOT EXISTS`, so
+# opening a pre-existing facility-only DB is backward-compatible — the new tables are added.
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS facility (
     facility_id   TEXT PRIMARY KEY,
@@ -25,13 +30,28 @@ CREATE TABLE IF NOT EXISTS facility (
     fetched_at    TEXT,
     doc           TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS catalog (
+    pool_id       TEXT PRIMARY KEY,
+    name          TEXT NOT NULL,
+    kind          TEXT NOT NULL,
+    lat           REAL,
+    lon           REAL,
+    url           TEXT,
+    doc           TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS calendar (
+    id            TEXT PRIMARY KEY,
+    doc           TEXT NOT NULL
+);
 """
+
+_CALENDAR_ROW_ID = "singleton"
 
 
 def open_db(path: str | Path) -> sqlite3.Connection:
     """Open (creating if needed) a gold database with the schema applied."""
     conn = sqlite3.connect(path)
-    conn.execute(_SCHEMA)
+    conn.executescript(_SCHEMA)
     conn.commit()
     return conn
 
@@ -58,6 +78,52 @@ def write_facilities(conn: sqlite3.Connection, facilities: tuple[Facility, ...])
         rows,
     )
     conn.commit()
+
+
+def write_catalog(conn: sqlite3.Connection, entries: tuple[PoolCatalogEntry, ...]) -> None:
+    """Upsert catalog entries into the gold store (idempotent on pool_id)."""
+    rows = [
+        (
+            e.pool_id,
+            e.name,
+            e.kind.value,
+            e.geo.lat if e.geo is not None else None,
+            e.geo.lon if e.geo is not None else None,
+            e.url,
+            catalog_json.entry_dumps(e),
+        )
+        for e in entries
+    ]
+    conn.executemany(
+        "INSERT OR REPLACE INTO catalog (pool_id, name, kind, lat, lon, url, doc) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?)",
+        rows,
+    )
+    conn.commit()
+
+
+def load_catalog(conn: sqlite3.Connection) -> tuple[PoolCatalogEntry, ...]:
+    """Rehydrate every catalog entry from the gold store, ordered by pool_id."""
+    cursor = conn.execute("SELECT doc FROM catalog ORDER BY pool_id")
+    return tuple(catalog_json.entry_loads(row[0]) for row in cursor.fetchall())
+
+
+def write_calendar(conn: sqlite3.Connection, calendar: ZurichCalendar) -> None:
+    """Persist the Zürich calendar as the store's single `calendar` row (idempotent)."""
+    conn.execute(
+        "INSERT OR REPLACE INTO calendar (id, doc) VALUES (?, ?)",
+        (_CALENDAR_ROW_ID, calendar_codec.dumps(calendar)),
+    )
+    conn.commit()
+
+
+def load_calendar(conn: sqlite3.Connection) -> ZurichCalendar:
+    """Rehydrate the Zürich calendar; raise if the store has none (build it first)."""
+    cursor = conn.execute("SELECT doc FROM calendar WHERE id = ?", (_CALENDAR_ROW_ID,))
+    row = cursor.fetchone()
+    if row is None:
+        raise LookupError("gold store has no calendar row; build the store first")
+    return calendar_codec.loads(row[0])
 
 
 class GoldRepository:
