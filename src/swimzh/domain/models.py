@@ -15,6 +15,7 @@ from enum import Enum
 from typing import NewType
 
 from swimzh.domain.geo import GeoPoint
+from swimzh.domain.lockers import LockerOption
 from swimzh.domain.pricing import PriceTable
 from swimzh.domain.schedule import (
     ClosureRange,
@@ -129,6 +130,32 @@ class Basin:
     physical_source: BasinSource = BasinSource.CURATED
 
 
+class FeatureKind(Enum):
+    """A non-swim amenity kind. Deliberately NOT a `BasinKind`: features cannot host
+    swim sessions, and folding them into basins would leak non-swim rows into
+    `find_swim_options` (see docs/entities/feature.md)."""
+
+    SAUNA = "sauna"
+    STEAM_BATH = "steam_bath"
+    WELLNESS = "wellness"
+    SLIDE = "slide"
+    HOT_TUB = "hot_tub"
+
+
+@dataclass(frozen=True, slots=True)
+class Feature:
+    """A non-swim amenity on a facility — static. `hours` reuses `ScheduleRule`, so
+    "is the sauna open now?" resolves through the existing resolver; empty means the
+    feature has no separately stated hours."""
+
+    kind: FeatureKind
+    name: str
+    hours: tuple[ScheduleRule, ...] = ()
+    surcharge_chf: Decimal | None = None  # "Eintritt Fr. 10.-"
+    temp_c: Decimal | None = None
+    note: str = ""
+
+
 @dataclass(frozen=True, slots=True)
 class Facility:
     identity: PoolIdentity
@@ -141,3 +168,6 @@ class Facility:
     public_holiday_policy: HolidayPolicy = HolidayPolicy.NORMAL
     prices: PriceTable | None = None
     notices: tuple[Notice, ...] = field(default_factory=tuple)
+    website: str | None = None  # static (WFS `www` / official pool page)
+    features: tuple[Feature, ...] = field(default_factory=tuple)
+    lockers: tuple[LockerOption, ...] = field(default_factory=tuple)

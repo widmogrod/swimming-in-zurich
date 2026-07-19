@@ -31,8 +31,8 @@ from swimzh.domain.schedule import (
 )
 
 
-def _find_exception(basin: Basin, d: date) -> ScheduleException | None:
-    return next((e for e in basin.exceptions if e.date == d), None)
+def _find_exception(exceptions: tuple[ScheduleException, ...], d: date) -> ScheduleException | None:
+    return next((e for e in exceptions if e.date == d), None)
 
 
 def _scope_applies(scope: DayScope, ctx: DayContext) -> bool:
@@ -57,9 +57,16 @@ def _sessions_for_weekday(
     return tuple(matched)
 
 
-def resolve_basin(
-    facility: Facility, basin: Basin, d: date, calendar: ZurichCalendar
+def resolve_hours(
+    facility: Facility,
+    rules: tuple[ScheduleRule, ...],
+    exceptions: tuple[ScheduleException, ...],
+    d: date,
+    calendar: ZurichCalendar,
 ) -> DaySchedule:
+    """Resolve any facility-scoped schedule (a basin's, or a `Feature`'s hours) for a
+    concrete date. Facility closures and holiday policy apply either way — the sauna is
+    shut during the Revision too."""
     # 1. Facility-wide closures win over everything.
     for closure in facility.closures:
         if closure.contains(d):
@@ -67,7 +74,7 @@ def resolve_basin(
             return ClosedDay(reason=reason)
 
     # 2. A one-off exception for this exact date overrides the recurring pattern.
-    exception = _find_exception(basin, d)
+    exception = _find_exception(exceptions, d)
     if exception is not None:
         if exception.closed:
             return ClosedDay(reason=exception.reason or "closed (special)")
@@ -88,7 +95,13 @@ def resolve_basin(
                 pass
 
     # 4. Recurring rules for the effective weekday and calendar scope.
-    sessions = _sessions_for_weekday(basin.rules, effective_weekday, ctx)
+    sessions = _sessions_for_weekday(rules, effective_weekday, ctx)
     if not sessions:
         return ClosedDay(reason="no sessions scheduled")
     return OpenDay(sessions=sessions)
+
+
+def resolve_basin(
+    facility: Facility, basin: Basin, d: date, calendar: ZurichCalendar
+) -> DaySchedule:
+    return resolve_hours(facility, basin.rules, basin.exceptions, d, calendar)

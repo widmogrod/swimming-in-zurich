@@ -300,6 +300,7 @@ Appended by /dev:implement after each slice — never rewritten. Newest row last
 | date | slice | status | divergence from plan | tech debt created | human review? |
 |------|-------|--------|----------------------|-------------------|---------------|
 | 2026-07-19 | S1 | done | parser shape (see Decisions); YAML migration also added `kind:` | depth-phrase misread risk; parser unwired; mapping-table parity untested | yes |
+| 2026-07-19 | S2 | done | TOKEN→CHIP rename; resolve_hours extraction; FeatureStatus/FacilityDetail shapes (see Decisions) | facility_detail uncalled outside tests; Feature has no exceptions axis; coverage ratchet 91→93 possible (owner call) | no |
 
 ## Decisions & divergences
 
@@ -320,6 +321,21 @@ Substantive choices made during implementation, with the why. Each entry dated.
   wired to the pipeline. Also discovered: `geo_sport._clean` strips `;` from
   descriptions — pipeline wiring must feed the parser the UNCLEANED
   `infrastruktur` field.
+- **2026-07-19 / S2 — `LockerMechanism.TOKEN` renamed `CHIP = "chip"`.** Ruff
+  S105 flags `TOKEN = "<string>"` as a hardcoded credential; noqa and lint-config
+  edits are gate-weakening and forbidden. Critic reproduced the S105 firing
+  experimentally and approved the rename. Wire value is `"chip"`.
+- **2026-07-19 / S2 — `resolve_hours` extracted in resolver.py** (outside S2's
+  touches, flagged): pure parameter-threading refactor so `Feature.hours`
+  resolve through the SAME code path as basins (`resolve_basin` delegates,
+  behavior unchanged — critic diff-verified). Facility closures shut features
+  too, by construction.
+- **2026-07-19 / S2 — facility-detail query shapes invented** (plan gave no
+  signature): `FeatureStatus.open_at_query_time: bool | None` — tri-state,
+  unknown-hours ≠ closed, per house rule. `FacilityDetail` mirrors `SwimOption`
+  field style.
+- **2026-07-19 / S2 — S1 debt repaid**: `test_token_tables_cover_their_enums`
+  covers ALL mapping token tables including S1's `_BASIN_KIND_TO`/`_BASIN_SOURCE_TO`.
 
 ## Rejected (record so we don't relitigate)
 

@@ -12,6 +12,24 @@ valid_as_of: "2026-07-18"
 geo: { lat: 47.3739, lon: 8.5320 }
 amenities: ["50m", "sauna"]
 public_holiday_policy: "sunday_schedule"
+website: "https://www.stadt-zuerich.ch/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/hallenbaeder/city.html"
+
+# Non-swim amenities. The sauna hours/surcharge follow the WFS `infrastruktur` prose
+# ("gemischte Sauna 8-22 Uhr Eintritt Fr. 10.-"); hours reuse the schedule rules, so
+# "is the sauna open now?" resolves through the ordinary resolver (incl. closures).
+features:
+  - kind: "sauna"
+    name: "Gemischte Sauna"
+    surcharge_chf: "10.00"
+    hours:
+      - { weekdays: ["mon", "tue", "wed", "thu", "fri", "sat", "sun"], start: "08:00", end: "22:00", access: { type: "public" } }
+
+# Locker offerings (pool-page rows). Cost axes are orthogonal: a row can be free to
+# use yet require a refundable deposit, or carry a fee plus a rental period.
+lockers:
+  - { category: "wardrobe", deposit_chf: "5.00", raw: "Garderobenkasten gratis, plus Depot Fr. 5.–" }
+  - { category: "valuables", deposit_chf: "2.00", raw: "Wertsachenfach gratis, plus Depot Fr. 2.–" }
+  - { category: "laundry", fee_chf: "400.00", period: "1 Jahr", raw: "Wäschefach (1 Jahr) Fr. 400.–" }
 
 prices:
   valid_as_of: "2026-07-18"

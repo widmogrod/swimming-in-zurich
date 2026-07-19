@@ -17,7 +17,9 @@ from swimzh.boundary import mapping
 from swimzh.boundary.curated_dto import (
     BasinDTO,
     ClosureDTO,
+    FeatureDTO,
     GeoDTO,
+    LockerOptionDTO,
     PriceTableDTO,
     _HolidayPolicy,
     _PoolKind,
@@ -81,6 +83,9 @@ class StoredFacilityDTO(BaseModel):
     closures: list[ClosureDTO]
     basins: list[BasinDTO]
     notices: list[_NoticeDTO]
+    website: str | None
+    features: list[FeatureDTO]
+    lockers: list[LockerOptionDTO]
 
 
 def to_stored(facility: Facility) -> StoredFacilityDTO:
@@ -108,6 +113,9 @@ def to_stored(facility: Facility) -> StoredFacilityDTO:
             _NoticeDTO(text=n.text, active_from=n.active_from, active_to=n.active_to)
             for n in facility.notices
         ],
+        website=facility.website,
+        features=[mapping.feature_to_dto(f) for f in facility.features],
+        lockers=[mapping.locker_to_dto(lo) for lo in facility.lockers],
     )
 
 
@@ -139,6 +147,9 @@ def from_stored(stored: StoredFacilityDTO) -> Facility:
             Notice(text=n.text, active_from=n.active_from, active_to=n.active_to)
             for n in stored.notices
         ),
+        website=stored.website,
+        features=tuple(mapping.feature_from_dto(f) for f in stored.features),
+        lockers=tuple(mapping.locker_from_dto(lo) for lo in stored.lockers),
     )
 
 

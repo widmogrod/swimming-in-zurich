@@ -22,6 +22,9 @@ _BasinKind = Literal[
     "lap", "non_swimmer", "diving", "vario", "teaching", "children", "outdoor", "other"
 ]
 _BasinSource = Literal["curated", "parsed_prose"]
+_FeatureKind = Literal["sauna", "steam_bath", "wellness", "slide", "hot_tub"]
+_LockerCategory = Literal["wardrobe", "valuables", "laundry"]
+_LockerMechanism = Literal["coin", "key", "chip", "wristband", "other"]
 
 
 class _Strict(BaseModel):
@@ -123,6 +126,27 @@ class BasinDTO(_Strict):
     physical_source: _BasinSource = "curated"
 
 
+# --- features & lockers (facility-level statics) ----------------------------------
+
+
+class FeatureDTO(_Strict):
+    kind: _FeatureKind
+    name: str
+    hours: list[RuleDTO] = []
+    surcharge_chf: Decimal | None = None
+    temp_c: Decimal | None = None
+    note: str = ""
+
+
+class LockerOptionDTO(_Strict):
+    category: _LockerCategory
+    fee_chf: Decimal | None = None
+    deposit_chf: Decimal | None = None
+    period: str | None = None
+    mechanism: _LockerMechanism | None = None
+    raw: str = ""
+
+
 # --- pricing ----------------------------------------------------------------------
 
 
@@ -160,6 +184,9 @@ class FacilityDTO(_Strict):
     prices: PriceTableDTO | None = None
     closures: list[ClosureDTO] = []
     basins: list[BasinDTO]
+    website: str | None = None
+    features: list[FeatureDTO] = []
+    lockers: list[LockerOptionDTO] = []
 
 
 # --- registry & calendar ----------------------------------------------------------

@@ -21,8 +21,10 @@ from swimzh.boundary.curated_dto import (
     DimensionsDTO,
     ExceptionDTO,
     FamilyDTO,
+    FeatureDTO,
     GeoDTO,
     LaneSwimDTO,
+    LockerOptionDTO,
     PriceEntryDTO,
     PriceTableDTO,
     PublicDTO,
@@ -33,6 +35,9 @@ from swimzh.boundary.curated_dto import (
     WomenOnlyDTO,
     _BasinKind,
     _BasinSource,
+    _FeatureKind,
+    _LockerCategory,
+    _LockerMechanism,
     _PriceCategory,
     _Scope,
     _Weekday,
@@ -48,7 +53,16 @@ from swimzh.domain.access import (
     WomenOnly,
 )
 from swimzh.domain.geo import GeoPoint
-from swimzh.domain.models import Basin, BasinId, BasinKind, BasinSource, Dimensions
+from swimzh.domain.lockers import LockerCategory, LockerMechanism, LockerOption
+from swimzh.domain.models import (
+    Basin,
+    BasinId,
+    BasinKind,
+    BasinSource,
+    Dimensions,
+    Feature,
+    FeatureKind,
+)
 from swimzh.domain.pricing import PriceCategory, PriceEntry, PriceTable
 from swimzh.domain.schedule import (
     ClosureRange,
@@ -101,6 +115,28 @@ _BASIN_SOURCE_FROM: dict[str, BasinSource] = {s.value: s for s in BasinSource}
 _BASIN_SOURCE_TO: dict[BasinSource, _BasinSource] = {
     BasinSource.CURATED: "curated",
     BasinSource.PARSED_PROSE: "parsed_prose",
+}
+_FEATURE_KIND_FROM: dict[str, FeatureKind] = {k.value: k for k in FeatureKind}
+_FEATURE_KIND_TO: dict[FeatureKind, _FeatureKind] = {
+    FeatureKind.SAUNA: "sauna",
+    FeatureKind.STEAM_BATH: "steam_bath",
+    FeatureKind.WELLNESS: "wellness",
+    FeatureKind.SLIDE: "slide",
+    FeatureKind.HOT_TUB: "hot_tub",
+}
+_LOCKER_CATEGORY_FROM: dict[str, LockerCategory] = {c.value: c for c in LockerCategory}
+_LOCKER_CATEGORY_TO: dict[LockerCategory, _LockerCategory] = {
+    LockerCategory.WARDROBE: "wardrobe",
+    LockerCategory.VALUABLES: "valuables",
+    LockerCategory.LAUNDRY: "laundry",
+}
+_LOCKER_MECHANISM_FROM: dict[str, LockerMechanism] = {m.value: m for m in LockerMechanism}
+_LOCKER_MECHANISM_TO: dict[LockerMechanism, _LockerMechanism] = {
+    LockerMechanism.COIN: "coin",
+    LockerMechanism.KEY: "key",
+    LockerMechanism.CHIP: "chip",
+    LockerMechanism.WRISTBAND: "wristband",
+    LockerMechanism.OTHER: "other",
 }
 
 
@@ -242,6 +278,53 @@ def basin_to_dto(basin: Basin) -> BasinDTO:
         lanes=basin.lanes,
         nominal_temp_c=basin.nominal_temp_c,
         physical_source=_BASIN_SOURCE_TO[basin.physical_source],
+    )
+
+
+# --- features & lockers -------------------------------------------------------------
+
+
+def feature_from_dto(dto: FeatureDTO) -> Feature:
+    return Feature(
+        kind=_FEATURE_KIND_FROM[dto.kind],
+        name=dto.name,
+        hours=tuple(rule_from_dto(r) for r in dto.hours),
+        surcharge_chf=dto.surcharge_chf,
+        temp_c=dto.temp_c,
+        note=dto.note,
+    )
+
+
+def feature_to_dto(feature: Feature) -> FeatureDTO:
+    return FeatureDTO(
+        kind=_FEATURE_KIND_TO[feature.kind],
+        name=feature.name,
+        hours=[rule_to_dto(r) for r in feature.hours],
+        surcharge_chf=feature.surcharge_chf,
+        temp_c=feature.temp_c,
+        note=feature.note,
+    )
+
+
+def locker_from_dto(dto: LockerOptionDTO) -> LockerOption:
+    return LockerOption(
+        category=_LOCKER_CATEGORY_FROM[dto.category],
+        fee_chf=dto.fee_chf,
+        deposit_chf=dto.deposit_chf,
+        period=dto.period,
+        mechanism=_LOCKER_MECHANISM_FROM[dto.mechanism] if dto.mechanism is not None else None,
+        raw=dto.raw,
+    )
+
+
+def locker_to_dto(locker: LockerOption) -> LockerOptionDTO:
+    return LockerOptionDTO(
+        category=_LOCKER_CATEGORY_TO[locker.category],
+        fee_chf=locker.fee_chf,
+        deposit_chf=locker.deposit_chf,
+        period=locker.period,
+        mechanism=_LOCKER_MECHANISM_TO[locker.mechanism] if locker.mechanism is not None else None,
+        raw=locker.raw,
     )
 
 

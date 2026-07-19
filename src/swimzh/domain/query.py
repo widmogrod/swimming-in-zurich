@@ -22,19 +22,22 @@ from zoneinfo import ZoneInfo
 from swimzh.domain.access import EligibilityResult, eligibility
 from swimzh.domain.calendar import ZurichCalendar
 from swimzh.domain.geo import GeoPoint, haversine_km
+from swimzh.domain.lockers import LockerOption
 from swimzh.domain.models import (
+    Basin,
     BasinId,
     BasinKind,
     Facility,
     FacilityId,
+    Feature,
     Occupancy,
     Provenance,
 )
 from swimzh.domain.person import Person
 from swimzh.domain.pricing import PriceEntry, price_for
 from swimzh.domain.registry import Registry
-from swimzh.domain.resolver import resolve_basin
-from swimzh.domain.schedule import ClosedDay, OpenDay, ResolvedSession
+from swimzh.domain.resolver import resolve_basin, resolve_hours
+from swimzh.domain.schedule import ClosedDay, DaySchedule, OpenDay, ResolvedSession
 
 _ZURICH = ZoneInfo("Europe/Zurich")
 
@@ -189,6 +192,65 @@ def find_swim_options(
         statuses=tuple(statuses),
         warnings=tuple(warnings),
         notices=tuple(notices),
+    )
+
+
+@dataclass(frozen=True, slots=True)
+class FeatureStatus:
+    """A facility feature with its schedule resolved for the queried day.
+
+    `schedule`/`open_at_query_time` are `None` when the feature has no separately
+    stated hours (assume facility opening hours) — unknown, never conflated with
+    closed."""
+
+    feature: Feature
+    schedule: DaySchedule | None
+    open_at_query_time: bool | None
+
+
+@dataclass(frozen=True, slots=True)
+class FacilityDetail:
+    """Facility-level statics for a detail view (`/pools/{id}`-shaped, not per-session):
+    website, features (with hours resolved via the schedule resolver), lockers, and the
+    basins with their physical attributes."""
+
+    facility_id: FacilityId
+    facility_name: str
+    address: str
+    website: str | None
+    basins: tuple[Basin, ...]
+    features: tuple[FeatureStatus, ...]
+    lockers: tuple[LockerOption, ...]
+    provenance: Provenance
+
+
+def _feature_status(
+    facility: Facility, feature: Feature, at_local: datetime, calendar: ZurichCalendar
+) -> FeatureStatus:
+    if not feature.hours:
+        return FeatureStatus(feature=feature, schedule=None, open_at_query_time=None)
+    schedule = resolve_hours(facility, feature.hours, (), at_local.date(), calendar)
+    match schedule:
+        case OpenDay(sessions):
+            open_now = any(s.time.contains(at_local.time()) for s in sessions)
+        case ClosedDay():
+            open_now = False
+    return FeatureStatus(feature=feature, schedule=schedule, open_at_query_time=open_now)
+
+
+def facility_detail(facility: Facility, at: datetime, calendar: ZurichCalendar) -> FacilityDetail:
+    """Assemble the static facility-level answer ("what does this pool offer?") with each
+    feature's hours resolved for the queried moment via the existing resolver."""
+    at_local = at.astimezone(_ZURICH) if at.tzinfo is not None else at
+    return FacilityDetail(
+        facility_id=facility.identity.facility_id,
+        facility_name=facility.identity.name,
+        address=facility.address,
+        website=facility.website,
+        basins=facility.basins,
+        features=tuple(_feature_status(facility, f, at_local, calendar) for f in facility.features),
+        lockers=facility.lockers,
+        provenance=facility.provenance,
     )
 
 

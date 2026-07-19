@@ -14,7 +14,15 @@ import pytest
 from pydantic import ValidationError
 
 from swimzh.core.result import Ok
-from swimzh.domain.models import BasinKind, BasinSource, Dimensions, Facility
+from swimzh.domain.lockers import LockerCategory, LockerMechanism, LockerOption
+from swimzh.domain.models import (
+    BasinKind,
+    BasinSource,
+    Dimensions,
+    Facility,
+    Feature,
+    FeatureKind,
+)
 from swimzh.providers.curated import load_dataset
 from swimzh.storage import codec
 
@@ -81,6 +89,52 @@ def test_roundtrip_covers_every_physical_basin_field(facilities: tuple[Facility,
     assert first.lanes == 6
     assert first.nominal_temp_c == Decimal("30.5")
     assert first.physical_source is BasinSource.PARSED_PROSE
+
+
+def test_curated_city_carries_facility_level_statics(facilities: tuple[Facility, ...]) -> None:
+    # The curated YAML schema expresses website/features/lockers, and the all-facilities
+    # round-trip above already proves they survive the codec on real data.
+    city = next(f for f in facilities if str(f.identity.facility_id) == "city")
+    assert city.website is not None
+    assert {f.kind for f in city.features} == {FeatureKind.SAUNA}
+    assert city.features[0].hours, "sauna hours should be curated as ScheduleRules"
+    assert {lo.category for lo in city.lockers} == set(LockerCategory)
+
+
+def test_roundtrip_covers_every_facility_level_static_field(
+    facilities: tuple[Facility, ...],
+) -> None:
+    # Populate every new Facility field — feature hours, surcharge/temp/note, and all
+    # locker axes at once (incl. mechanism) — and prove the codec stays an exact inverse.
+    base = facilities[0]
+    facility = replace(
+        base,
+        website="https://example.org/hallenbad",
+        features=(
+            Feature(
+                kind=FeatureKind.STEAM_BATH,
+                name="Dampfbad",
+                hours=base.basins[0].rules[:1],
+                surcharge_chf=Decimal("10.00"),
+                temp_c=Decimal("45.5"),
+                note="gemischt",
+            ),
+        ),
+        lockers=(
+            LockerOption(
+                category=LockerCategory.VALUABLES,
+                fee_chf=Decimal("3.00"),
+                deposit_chf=Decimal("20.00"),
+                period="Saison",
+                mechanism=LockerMechanism.COIN,
+                raw="Badetuch Fr. 3.–, plus Depot Fr. 20.–",
+            ),
+        ),
+    )
+    back = codec.loads(codec.dumps(facility))
+    assert back == facility
+    assert back.features[0].hours == base.basins[0].rules[:1]
+    assert back.lockers[0].mechanism is LockerMechanism.COIN
 
 
 def test_legacy_basin_level_length_m_is_rejected(facilities: tuple[Facility, ...]) -> None:
