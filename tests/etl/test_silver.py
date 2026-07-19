@@ -22,7 +22,7 @@ from swimzh.domain.models import (
     PoolKind,
     Provenance,
 )
-from swimzh.etl.silver import attach_lane_plans, drop_curated_duplicates, reconcile
+from swimzh.etl.silver import attach_lane_plans, reconcile
 from swimzh.providers.belegungsplan import ParsedPlan
 from swimzh.providers.curated import Dataset, load_dataset
 from swimzh.providers.geo_sport import GeoPool
@@ -158,50 +158,6 @@ def test_attach_lane_plan_unmatched_hint_is_reported_not_fatal(dataset: Dataset)
     assert result.value.unmatched == ("Hallenbad Nonexistent Schwimmerbecken",)
     # nothing attached
     assert all(b.lane_plan is None for f in result.value.facilities for b in f.basins)
-
-
-# --- curated-wins deduplication (scrape-gold must not double a curated pool) ---------
-
-
-def _scraped(facility_id: str, name: str) -> Facility:
-    return Facility(
-        identity=PoolIdentity(facility_id=FacilityId(facility_id), name=name, kind=PoolKind.INDOOR),
-        address="",
-        provenance=Provenance(source="scrape", curated=False, valid_as_of=date(2026, 7, 18)),
-        basins=(),
-    )
-
-
-def test_drop_curated_duplicates_drops_scraped_match_keeps_scraped_only() -> None:
-    # A scraped 'hallenbad-city' duplicates the curated 'city' (same name) -> dropped.
-    # A scraped-only 'hallenbad-altstetten' has no curated counterpart -> kept.
-    curated = _facility(
-        PoolIdentity(FacilityId("city"), "Hallenbad City", PoolKind.INDOOR), (), date(2026, 1, 1)
-    )
-    scraped = (
-        _scraped("hallenbad-city", "Hallenbad City"),
-        _scraped("hallenbad-altstetten", "Hallenbad Altstetten"),
-    )
-    kept, dropped = drop_curated_duplicates(scraped, (curated,))
-    assert dropped == ("Hallenbad City",)
-    assert tuple(f.identity.facility_id for f in kept) == (FacilityId("hallenbad-altstetten"),)
-
-
-def test_drop_curated_duplicates_matches_name_case_insensitively() -> None:
-    curated = _facility(
-        PoolIdentity(FacilityId("city"), "Hallenbad City", PoolKind.INDOOR), (), date(2026, 1, 1)
-    )
-    scraped = (_scraped("hallenbad-city", "  hallenbad   CITY "),)
-    kept, dropped = drop_curated_duplicates(scraped, (curated,))
-    assert dropped == ("  hallenbad   CITY ",) and kept == ()
-
-
-def test_drop_curated_duplicates_no_curated_keeps_everything() -> None:
-    # An existing scraped-only store (nothing curated) never drops anything.
-    existing = (_scraped("hallenbad-altstetten", "Hallenbad Altstetten"),)
-    scraped = (_scraped("hallenbad-city", "Hallenbad City"),)
-    kept, dropped = drop_curated_duplicates(scraped, existing)
-    assert dropped == () and kept == scraped
 
 
 def test_attach_lane_plan_ambiguous_hint_is_loud_failure() -> None:

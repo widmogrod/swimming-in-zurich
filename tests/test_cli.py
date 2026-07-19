@@ -107,7 +107,7 @@ def test_build_catalog_writes_all_layers(tmp_path: Path) -> None:
     assert {e.kind.value for e in entries} == {k.value for k in POOL_LAYERS.values()}
 
 
-def test_scrape_gold_writes_store_from_catalog(tmp_path: Path) -> None:
+def _city_catalog_file(tmp_path: Path) -> Path:
     catalog_file = tmp_path / "catalog.json"
     entry = PoolCatalogEntry(
         pool_id="hallenbad-city",
@@ -120,17 +120,96 @@ def test_scrape_gold_writes_store_from_catalog(tmp_path: Path) -> None:
         phone=None,
     )
     catalog_file.write_text(catalog_json.dumps((entry,), FETCHED_AT), encoding="utf-8")
+    return catalog_file
 
+
+def _city_scrape_client() -> HttpClient:
     body = FIXTURE_HTML.read_bytes()
     inner = httpx.Client(
         transport=httpx.MockTransport(lambda _r: httpx.Response(200, content=body))
     )
-    client = HttpClient(inner, source="schedule_scraper", retry=RetryPolicy(max_attempts=1))
+    return HttpClient(inner, source="schedule_scraper", retry=RetryPolicy(max_attempts=1))
 
+
+def test_scrape_gold_composes_onto_built_store(tmp_path: Path) -> None:
+    # scrape-gold now layers onto an already-built spine: it resolves the scraped WFS name to a
+    # canonical id by lookup and composes, rather than minting a second (long-slug) row.
     db = tmp_path / "gold.sqlite"
-    code = scrape_gold(db_path=db, catalog_path=catalog_file, client=client, fetched_at=FETCHED_AT)
+    assert build(db_path=db, data_dir=DATA_DIR) == 0
+
+    code = scrape_gold(
+        db_path=db,
+        catalog_path=_city_catalog_file(tmp_path),
+        client=_city_scrape_client(),
+        fetched_at=FETCHED_AT,
+    )
     assert code == 0
-    assert len(GoldRepository(open_db(db)).load_all()) == 1
+    # No second row for City: the scrape composed onto the curated pool (still 4 curated).
+    facilities = GoldRepository(open_db(db)).load_all()
+    assert len(facilities) == 4
+
+
+def test_scrape_gold_requires_a_built_store(tmp_path: Path) -> None:
+    # Without a prior `build` the spine is absent, so there is no id namespace to resolve into —
+    # scrape-gold refuses rather than opening a second door to a gold row.
+    code = scrape_gold(
+        db_path=tmp_path / "absent.sqlite",
+        catalog_path=_city_catalog_file(tmp_path),
+        client=_city_scrape_client(),
+        fetched_at=FETCHED_AT,
+    )
+    assert code == 1
+
+
+def test_scrape_gold_unreconcilable_name_is_reported_not_silently_written(tmp_path: Path) -> None:
+    # A scraped pool whose name is in no alias -> a loud typed Err; the store is untouched (never
+    # a silent wrong-pool write).
+    db = tmp_path / "gold.sqlite"
+    assert build(db_path=db, data_dir=DATA_DIR) == 0
+    before = {f.identity.facility_id for f in GoldRepository(open_db(db)).load_all()}
+
+    catalog_file = tmp_path / "catalog.json"
+    entry = PoolCatalogEntry(
+        pool_id="hallenbad-nonexistent",
+        name="Hallenbad Nonexistent",  # in no pool_alias row
+        kind=PoolKind.INDOOR,
+        address="",
+        geo=GeoPoint(lat=47.37, lon=8.53),
+        url="https://example.test/city.html",
+        description=None,
+        phone=None,
+    )
+    catalog_file.write_text(catalog_json.dumps((entry,), FETCHED_AT), encoding="utf-8")
+
+    code = scrape_gold(
+        db_path=db, catalog_path=catalog_file, client=_city_scrape_client(), fetched_at=FETCHED_AT
+    )
+    assert code == 1
+    # The store's facility set is unchanged — nothing was attached to a guessed pool.
+    after = {f.identity.facility_id for f in GoldRepository(open_db(db)).load_all()}
+    assert after == before
+
+
+def test_build_and_scrape_gold_share_one_id_namespace(tmp_path: Path) -> None:
+    # The acceptance: build and scrape-gold write into the SAME id namespace. Every facility row
+    # id (the /swim read path) is a real pool PK — no long-vs-short split-brain.
+    db = tmp_path / "gold.sqlite"
+    assert build(db_path=db, data_dir=DATA_DIR) == 0
+    assert (
+        scrape_gold(
+            db_path=db,
+            catalog_path=_city_catalog_file(tmp_path),
+            client=_city_scrape_client(),
+            fetched_at=FETCHED_AT,
+        )
+        == 0
+    )
+
+    conn = open_db(db)
+    pool_ids = {row[0] for row in conn.execute("SELECT id FROM pool").fetchall()}
+    facility_ids = {str(f.identity.facility_id) for f in GoldRepository(conn).load_all()}
+    assert facility_ids  # non-empty
+    assert facility_ids <= pool_ids  # every scheduled facility id is a canonical pool PK
 
 
 def _pdf_client(handler: Callable[[httpx.Request], httpx.Response]) -> HttpClient:

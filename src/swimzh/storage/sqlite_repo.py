@@ -152,6 +152,25 @@ def write_pools(conn: sqlite3.Connection, spine: PoolSpine) -> None:
     conn.commit()
 
 
+def load_alias_rows(conn: sqlite3.Connection) -> tuple[tuple[str, str], ...]:
+    """Project ``pool_alias`` to plain ``(norm, pool_id)`` pairs — the reconcile-lookup input.
+
+    Returns strings, not ``PoolId``s: minting the canonical id from these rows is
+    ``build.reconcile``'s job (``crosswalk_from_rows``), keeping the two allowed minting seams.
+    """
+    cursor = conn.execute("SELECT norm, pool_id FROM pool_alias")
+    return tuple((str(norm), str(pool_id)) for norm, pool_id in cursor.fetchall())
+
+
+def load_xref_rows(conn: sqlite3.Connection) -> tuple[tuple[str, str, str], ...]:
+    """Project ``pool_xref`` to ``(namespace, ext_id, pool_id)`` string triples (not ids)."""
+    cursor = conn.execute("SELECT namespace, ext_id, pool_id FROM pool_xref")
+    return tuple(
+        (str(namespace), str(ext_id), str(pool_id))
+        for namespace, ext_id, pool_id in cursor.fetchall()
+    )
+
+
 def load_catalog(conn: sqlite3.Connection) -> tuple[PoolCatalogEntry, ...]:
     """Rehydrate the full pool roster from the ``pool`` spine, ordered by canonical id.
 

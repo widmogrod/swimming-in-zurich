@@ -22,47 +22,15 @@ from dataclasses import dataclass, replace
 from datetime import date, datetime
 
 from swimzh.build.normalize import normalize as _normalise
+from swimzh.build.reconcile import BASIN_KIND_WORDS
 from swimzh.core.errors import ProviderError, SchemaMismatch
 from swimzh.core.result import Err, Ok, Result
-from swimzh.domain.models import Basin, BasinId, BasinKind, Facility, FacilityId
+from swimzh.domain.models import Basin, BasinId, Facility, FacilityId
 from swimzh.providers.belegungsplan import ParsedPlan
 from swimzh.providers.curated import Dataset
 from swimzh.providers.geo_sport import GeoPool
 
 _SOURCE = "silver"
-
-# German basin-type words used to build a lane-plan hint index. Mirrors the `BasinKind`
-# prose the PDF headers use ("… Schwimmerbecken"); `OTHER` has no meaningful word and is
-# deliberately absent so it never seeds an over-broad key.
-_BASIN_KIND_WORDS: dict[BasinKind, str] = {
-    BasinKind.LAP: "Schwimmerbecken",
-    BasinKind.NON_SWIMMER: "Nichtschwimmerbecken",
-    BasinKind.DIVING: "Sprungbecken",
-    BasinKind.VARIO: "Variobecken",
-    BasinKind.TEACHING: "Lehrschwimmbecken",
-    BasinKind.CHILDREN: "Kinderbecken",
-    BasinKind.OUTDOOR: "Aussenbecken",
-}
-
-
-def drop_curated_duplicates(
-    scraped: Sequence[Facility], existing: Sequence[Facility]
-) -> tuple[tuple[Facility, ...], tuple[str, ...]]:
-    """Curated-wins: drop scraped facilities that duplicate an already-curated pool.
-
-    A best-effort scraped facility (keyed by the long catalog slug, e.g. ``hallenbad-city``)
-    for a pool that already has a hand-curated schedule — its authoritative short id and lane
-    plans, e.g. ``city`` — would otherwise land as a *second* row for the same pool, so the
-    app surfaces it twice. Match by normalised facility name against the curated facilities
-    already in the store; return the scraped facilities to keep and the names dropped in
-    favour of curated data. Scraped-only pools (no curated counterpart) are always kept.
-    """
-    curated = {_normalise(f.identity.name) for f in existing if f.provenance.curated}
-    kept = tuple(f for f in scraped if _normalise(f.identity.name) not in curated)
-    dropped = tuple(
-        sorted({f.identity.name for f in scraped if _normalise(f.identity.name) in curated})
-    )
-    return kept, dropped
 
 
 def reconcile(
@@ -137,7 +105,7 @@ def _basin_hint_index(
         for basin in facility.basins:
             ref: _BasinRef = (facility.identity.facility_id, basin.basin_id)
             basin_terms = [basin.name]
-            kind_word = _BASIN_KIND_WORDS.get(basin.kind)
+            kind_word = BASIN_KIND_WORDS.get(basin.kind)
             if kind_word is not None:
                 basin_terms.append(kind_word)
             for facility_name in facility_names:

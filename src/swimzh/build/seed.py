@@ -21,24 +21,12 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from swimzh.build.normalize import normalize
-from swimzh.build.reconcile import Crosswalk, PoolId
+from swimzh.build.reconcile import Crosswalk, PoolId, build_basin_hint_index
 from swimzh.domain.catalog import PoolCatalogEntry
 from swimzh.domain.geo import GeoPoint
-from swimzh.domain.models import BasinKind, Facility, FacilityId, PoolKind
+from swimzh.domain.models import Facility, FacilityId, PoolKind
 from swimzh.domain.registry import Registry
 from swimzh.storage import codec
-
-# German basin-type words used to build the lane-plan hint index (mirrors the PDF headers'
-# prose, e.g. "… Schwimmerbecken"). `OTHER` has no meaningful word and is deliberately absent.
-_BASIN_KIND_WORDS: dict[BasinKind, str] = {
-    BasinKind.LAP: "Schwimmerbecken",
-    BasinKind.NON_SWIMMER: "Nichtschwimmerbecken",
-    BasinKind.DIVING: "Sprungbecken",
-    BasinKind.VARIO: "Variobecken",
-    BasinKind.TEACHING: "Lehrschwimmbecken",
-    BasinKind.CHILDREN: "Kinderbecken",
-    BasinKind.OUTDOOR: "Aussenbecken",
-}
 
 CURATED = "curated"
 UNCURATED = "uncurated"
@@ -162,36 +150,7 @@ def build_crosswalk(spine: PoolSpine, facilities: tuple[Facility, ...]) -> Cross
     """The lookup tables ``reconcile.resolve`` consults, built from the spine + curated basins."""
     xref = {(x.namespace, x.ext_id): x.pool_id for x in spine.xrefs}
     alias = {a.norm: a.pool_id for a in spine.aliases}
-    basin_hint, ambiguous = _basin_hint_index(facilities)
+    basin_hint, ambiguous = build_basin_hint_index(facilities)
     return Crosswalk(
         xref=xref, alias=alias, basin_hint=basin_hint, ambiguous_hints=frozenset(ambiguous)
     )
-
-
-def _basin_hint_index(
-    facilities: tuple[Facility, ...],
-) -> tuple[dict[str, PoolId], set[str]]:
-    """Build a normalized ``basin_hint -> PoolId`` index (facility name/alias × basin word).
-
-    A key that would map to two *different* pools is recorded as ambiguous and never used to
-    resolve — a hint can only ever land on a single, unambiguous pool.
-    """
-    index: dict[str, PoolId] = {}
-    ambiguous: set[str] = set()
-    for facility in facilities:
-        pool_id = PoolId(str(facility.identity.facility_id))
-        facility_names = (facility.identity.name, *facility.identity.aliases)
-        for basin in facility.basins:
-            terms = [basin.name]
-            word = _BASIN_KIND_WORDS.get(basin.kind)
-            if word is not None:
-                terms.append(word)
-            for facility_name in facility_names:
-                for term in terms:
-                    key = normalize(f"{facility_name} {term}")
-                    existing = index.get(key)
-                    if existing is not None and existing != pool_id:
-                        ambiguous.add(key)
-                    else:
-                        index[key] = pool_id
-    return index, ambiguous

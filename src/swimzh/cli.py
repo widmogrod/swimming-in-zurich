@@ -15,6 +15,8 @@ from datetime import datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
+from swimzh.build.compose import compose
+from swimzh.build.reconcile import crosswalk_from_rows, resolve_all
 from swimzh.core.errors import describe
 from swimzh.core.http import HttpClient
 from swimzh.core.result import Err, Ok
@@ -24,11 +26,16 @@ from swimzh.etl.catalog import build_catalog
 from swimzh.etl.gold import write_gold
 from swimzh.etl.lane_plans import CITY_BELEGUNGSPLAN_URLS, scrape_lane_plans
 from swimzh.etl.scrape import scrape_indoor_facilities
-from swimzh.etl.silver import attach_lane_plans, drop_curated_duplicates
+from swimzh.etl.silver import attach_lane_plans
 from swimzh.providers import geo_sport
 from swimzh.providers.price_scraper import scrape_prices
 from swimzh.storage import catalog_json
-from swimzh.storage.sqlite_repo import GoldRepository, open_db
+from swimzh.storage.sqlite_repo import (
+    GoldRepository,
+    load_alias_rows,
+    load_xref_rows,
+    open_db,
+)
 
 _ZURICH = ZoneInfo("Europe/Zurich")
 
@@ -75,30 +82,46 @@ def build_catalog_file(*, out: Path, client: HttpClient, generated_at: datetime)
 def scrape_gold(
     *, db_path: Path, catalog_path: Path, client: HttpClient, fetched_at: datetime
 ) -> int:
-    """Scrape indoor-pool schedules into a gold store the web app can serve from. Exit code."""
+    """Scrape indoor-pool schedules and compose them onto an already-built gold store. Exit code.
+
+    Runs the ONE builder path: scrape emits identity-free ``(SourceRef, aspects)`` extracts;
+    ``reconcile`` resolves each ``SourceRef`` to a canonical id against the store's spine (an
+    unreconcilable name is a loud typed ``Err``, never a silent wrong-pool write); ``compose``
+    folds the scraped aspects onto the curated pool (curated-wins per aspect — a curated pool
+    keeps its schedule AND gains a scraped price). There is no second door into a gold row.
+    """
     if not catalog_path.exists():
         print(f"catalog not found at {catalog_path}; run build-catalog first", file=sys.stderr)
+        return 1
+    if not db_path.exists():
+        print(f"gold store not found at {db_path}; run `swimzh build` first", file=sys.stderr)
         return 1
     catalog = catalog_json.loads(catalog_path.read_text(encoding="utf-8"))
     prices_result = scrape_prices(client, fetched_at.date())
     prices = prices_result.value if isinstance(prices_result, Ok) else None
     report = scrape_indoor_facilities(client, catalog, fetched_at, prices=prices)
-    if not report.facilities:
+    if not report.extracts:
         print("no schedules could be scraped", file=sys.stderr)
         return 1
+
     conn = open_db(db_path)
-    # Curated-wins: a scraped facility (long catalog slug) for an already-curated pool would
-    # otherwise land as a second row for the same pool. Keep the hand-curated schedule + lanes.
-    kept, dropped = drop_curated_duplicates(report.facilities, GoldRepository(conn).load_all())
-    write_gold(conn, kept)
-    msg = f"scraped {len(report.facilities)} indoor pools into {db_path}"
-    msg += " (with prices)" if prices is not None else " (prices unavailable)"
-    if dropped:
-        msg += f"; kept curated for {len(dropped)}: {', '.join(dropped)}"
-    if report.skipped:
-        msg += f"; skipped {len(report.skipped)}: {', '.join(report.skipped)}"
-    print(msg)
-    return 0
+    curated = GoldRepository(conn).load_all()
+    crosswalk = crosswalk_from_rows(load_alias_rows(conn), load_xref_rows(conn), curated)
+    match resolve_all(report.extracts, crosswalk):
+        case Err(error):
+            print(f"scrape reconcile failed: {describe(error)}", file=sys.stderr)
+            return 1
+        case Ok(keyed):
+            composition = compose(curated, keyed)
+            write_gold(conn, composition.facilities)
+            msg = f"scraped {len(report.extracts)} indoor pools into {db_path}"
+            msg += " (with prices)" if prices is not None else " (prices unavailable)"
+            for note in composition.notes:
+                msg += f"; {note}"
+            if report.skipped:
+                msg += f"; skipped {len(report.skipped)}: {', '.join(report.skipped)}"
+            print(msg)
+            return 0
 
 
 def scrape_lanes(
