@@ -48,9 +48,14 @@ uv run python -m swimzh.cli build-gold    --db gold.sqlite   # curated 3 pools +
 uv run python -m swimzh.cli scrape-gold   --db gold.sqlite   # REAL schedules scraped per pool
 uv run python -m swimzh.cli scrape-lanes  --db gold.sqlite   # per-basin Belegungsplan lane plans
 
-# 3. Run the app against the DB (UI at /, API at /swim).
-SWIMZH_GOLD_DB=gold.sqlite uv run uvicorn apps.web.main:app --reload   # http://127.0.0.1:8000
+# 3. Run the app against the DB (UI at /, API at /swim). Missing/empty DB -> clean
+#    one-line fail-fast (no ASGI traceback). SWIMZH_RELOAD=0 disables auto-reload.
+SWIMZH_GOLD_DB=gold.sqlite uv run python -m apps.web.main   # http://127.0.0.1:8000
 ```
+
+`python -m apps.web.main` is the clean dev entrypoint (preflights the store, then serves via
+uvicorn). `uvicorn apps.web.main:app` still works and still fails fast without a DB, but reports
+through uvicorn's lifespan traceback rather than the one-liner.
 
 `swimzh build` assembles `facility` + `catalog` + `calendar` into one store from the committed
 inputs alone (offline); the network commands **layer onto** an already-built store. The curated
