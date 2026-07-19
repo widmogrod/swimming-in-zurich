@@ -95,11 +95,13 @@ _BasinRef = tuple[FacilityId, BasinId]
 
 @dataclass(frozen=True, slots=True)
 class LanePlanAttachment:
-    """The result of attaching parsed lane plans: the augmented facilities plus any
-    non-fatal staleness warnings (a plan older than the schedule it refines)."""
+    """The result of attaching parsed lane plans: the augmented facilities, any non-fatal
+    staleness warnings (a plan older than the schedule it refines), and the hints that matched
+    no curated basin (reported, not fatal — e.g. an uncurated basin/pool)."""
 
     facilities: tuple[Facility, ...]
     warnings: tuple[str, ...]
+    unmatched: tuple[str, ...] = ()
 
 
 def _basin_hint_index(
@@ -151,24 +153,31 @@ def attach_lane_plans(
     fetched_at: datetime,
 ) -> Result[LanePlanAttachment, ProviderError]:
     """Reconcile each parsed plan's `basin_hint` to a `Basin` and attach it, stamping the
-    run's `fetched_at`. Unmatched or ambiguous hints are a loud failure naming them."""
+    run's `fetched_at`.
+
+    An **ambiguous** hint (matches more than one basin) is a loud failure — attaching it could
+    put a plan on the wrong basin. A hint that matches **no** basin (an uncurated basin/pool)
+    is reported in `LanePlanAttachment.unmatched`, not fatal: a batch scrape of every published
+    PDF should still attach the ones it can, not abort because one basin isn't curated."""
     index, ambiguous = _basin_hint_index(facilities)
 
     resolved: dict[_BasinRef, ParsedPlan] = {}
     unmatched: list[str] = []
+    ambiguous_hits: list[str] = []
     for parsed in parsed_plans:
         key = _normalise(parsed.basin_hint)
-        ref = index.get(key)
-        if ref is None or key in ambiguous:
-            unmatched.append(parsed.basin_hint)
-        else:
+        if key in ambiguous:
+            ambiguous_hits.append(parsed.basin_hint)
+        elif (ref := index.get(key)) is not None:
             resolved[ref] = parsed
+        else:
+            unmatched.append(parsed.basin_hint)
 
-    if unmatched:
+    if ambiguous_hits:
         return Err(
             SchemaMismatch(
                 source=_SOURCE,
-                detail=f"unresolved belegungsplan basin hints: {sorted(unmatched)}",
+                detail=f"ambiguous belegungsplan basin hints: {sorted(ambiguous_hits)}",
             )
         )
 
@@ -190,4 +199,10 @@ def attach_lane_plans(
             new_basins.append(replace(basin, lane_plan=plan))
         merged.append(replace(facility, basins=tuple(new_basins)) if changed else facility)
 
-    return Ok(LanePlanAttachment(facilities=tuple(merged), warnings=tuple(warnings)))
+    return Ok(
+        LanePlanAttachment(
+            facilities=tuple(merged),
+            warnings=tuple(warnings),
+            unmatched=tuple(sorted(unmatched)),
+        )
+    )

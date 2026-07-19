@@ -110,16 +110,24 @@ def scrape_lanes(
             print(f"lane-plan reconcile failed: {describe(error)}", file=sys.stderr)
             return 1
         case Ok(attachment):
-            write_gold(conn, attachment.facilities)
             attached = sum(
                 1 for f in attachment.facilities for b in f.basins if b.lane_plan is not None
             )
+            if attachment.unmatched:
+                print(
+                    f"unmatched (no curated basin): {', '.join(attachment.unmatched)}",
+                    file=sys.stderr,
+                )
+            for warning in attachment.warnings:
+                print(f"warning: {warning}", file=sys.stderr)
+            if attached == 0:
+                print("no lane plan reconciled to a curated basin", file=sys.stderr)
+                return 1
+            write_gold(conn, attachment.facilities)
             msg = f"attached {attached} lane plan(s) into {db_path}"
             if report.skipped:
                 msg += f"; skipped {len(report.skipped)}: {', '.join(report.skipped)}"
             print(msg)
-            for warning in attachment.warnings:
-                print(f"warning: {warning}", file=sys.stderr)
             return 0
 
 
