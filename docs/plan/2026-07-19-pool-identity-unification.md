@@ -1,6 +1,6 @@
 ---
 type: plan
-status: in-progress      # /dev:implement executing on main (worktree retired — see Decisions 2026-07-19)
+status: done             # all 4 slices merged on main 2026-07-20; see Summary
 created: 2026-07-19
 feature: pool-identity-unification
 gates:
@@ -198,5 +198,43 @@ Substantive choices made during implementation, with the why. Each entry dated.
 
 ## Summary
 
-Written when the plan reaches `done`; then distilled into
-`docs/summaries/pool-identity-unification.md` (what EXISTS now, not what was intended).
+**Done — the split-brain is cured and made unrepresentable by construction.** All 4 slices landed on
+`main` (commits `ec3829b` S1, `400502e` S2, `6f5e860` S3, `4a896be` S4); 331 tests, 95.36% coverage,
+mypy strict + CRAP green throughout.
+
+What exists now (verified live: `build` → `scrape-gold` → `scrape-lanes`):
+- **One canonical id namespace.** `pool.id = slug(name)`; the curated data was re-keyed to it (S1) with
+  every legacy short id preserved as a lossless alias.
+- **DB-enforced identity spine** (S2): one `pool` table IS the registry (all 57 pools, `curation_status`
+  DERIVED → 4 curated / 53 uncurated), plus `pool_alias(UNIQUE norm)` + `pool_xref(UNIQUE namespace,
+  ext_id)` STRICT tables (FK `ON DELETE CASCADE`). A second id claiming one pool is a write-time
+  `IntegrityError` (proven by real colliding-insert tests). The `catalog` table is retired.
+- **One id-minting seam** (S2/S4): the `build/` package — `normalize` (the one cleaning home),
+  `reconcile` (`SourceRef` union + `resolve`/`resolve_all` as the SOLE `PoolId` producer, by lookup, loud
+  on miss), `seed` (builds the spine), `compose` (declarative `_ASPECTS` curated-wins merge). A falsifiable
+  grep-guard forbids `PoolId(...)` outside `reconcile`/`seed`; the enforcement is stated honestly as
+  **DB UNIQUE + grep**, not "the compiler forbids it".
+- **`uncurated` live + `/swim` ↔ `/pools` joined** (S3): `SwimStore` roster; `find_swim_options` emits
+  `uncurated` as `roster − scheduled` (~53 pools); the UI reads the derived `curated` flag from the API,
+  not by name; the three states stay un-merged.
+- **The scrape hole is closed** (S4): providers emit `(SourceRef, payload)` (no id-minting); `scrape-gold`
+  routes through `reconcile` + `compose`; `drop_curated_duplicates` is deleted. **City is no longer
+  duplicated** and keeps its curated schedule AND gains the scraped price — the per-aspect merge the old
+  whole-row filter dropped.
+
+**Open tech debt (backlog — carried, not regressions):**
+1. **Transitional `facility` table.** The composed schedule blob lives in both `pool.facility_doc` and
+   `facility.doc`; the `/swim` read path still uses `facility`. Collapsing it is future work.
+2. **Backwards layer dependency.** `domain`/`etl` import `build.normalize`. No cycle, but the direction is
+   wrong — relocate `normalize` to `core/` or add an import-direction guard.
+3. **`scrape-gold` whole-batch abort** on one unmatched WFS name discards all ~30 scrapes (a
+   partial-with-report mode may be worth it).
+4. **`scrape-gold` doesn't update `pool.curation_status`** — a scraped-only pool gains a `/swim` schedule
+   while the roster still marks it `uncurated`.
+5. **`Global` `SourceRef` vestigial** — the shared price is fanned out at scrape time by host-match, not in
+   `compose`. Behaviour is correct; the concept-doc note was corrected.
+6. **Deferred to follow-up plans:** full row-normalization of the schedule/price/basin blob
+   (`schedule-schema-normalization`), committed snapshots + `refresh`/`verify`, and any DAG framework.
+
+**Process note:** implemented on `main` (the `/dev:implement` worktree was retired — sub-agent working
+directories pinned to the main checkout; no concurrent sessions were active). No merge-back step.
