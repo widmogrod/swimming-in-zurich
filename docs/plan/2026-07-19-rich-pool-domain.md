@@ -1,6 +1,6 @@
 ---
 type: plan
-status: in-progress      # draft -> approved -> in-progress -> done (approved by owner 2026-07-19: all 4 slices, pause_after S1)
+status: done             # approved by owner 2026-07-19 (all 4 slices, pause_after S1); completed 2026-07-19
 created: 2026-07-19
 feature: rich-pool-domain
 gates:
@@ -379,5 +379,26 @@ Substantive choices made during implementation, with the why. Each entry dated.
 
 ## Summary
 
-Written when the plan reaches `done`; then distilled into
-`docs/summaries/rich-pool-domain.md`.
+All 4 slices done 2026-07-19 (commits 9362b8a, 20deb87, 1a4db9a, 7d50d89);
+distilled into `docs/summaries/rich-pool-domain.md`. What exists now:
+
+- `Basin` carries kind/dimensions(Decimal)/lanes/nominal_temp_c/physical_source;
+  `providers/infrastruktur.py` parses WFS prose into partial
+  `ParsedBasinPhysical` records + `apply_physicals` enrichment (NOT wired into
+  ETL yet). 3 curated YAMLs migrated off flat `length_m`.
+- `Facility` carries website/features/lockers; feature hours resolve through
+  the shared `resolve_hours` path (facility closures shut features too);
+  `facility_detail()` query surface with tri-state `open_at_query_time`.
+- `AdultsOnly` is a first-class `SessionAccess` arm; `ACCESS_TYPES` is derived
+  from `REPRESENTATIVE_ACCESS` with a union-completeness test; aemtler.yaml is
+  the (ILLUSTRATIVE) school-pool proof case.
+- Live occupancy: `OccupancyProvider` port (consumer-owned, errors-as-values),
+  `LiveOccupancy | OccupancyUnavailable` attached at query time within 30 min
+  of now; never serialized to gold (guard test). Real CrowdMonitor adapter
+  deferred pending ToS.
+
+Open tech-debt backlog (from ledger): wire prose parser into ETL (feed it the
+UNCLEANED infrastruktur field; add depth-word guard + real-WFS fixture);
+verify aemtler timetable; Feature lacks an exceptions axis; facility_detail
+has no caller yet; find_swim_options CC 21 — extraction candidate; coverage
+ratchet 91→93 owner call; duplicate-representative one-line assert.
