@@ -100,6 +100,19 @@ through QA + adversarial-review gates before the next. Presentation-only; no dom
   the tab and record the decision instead. Tests: one shared context bar drives all tabs; footer
   consolidated; whatever IA decision is made is asserted.
 
+## Decisions & divergences
+
+**2026-07-19 — concurrent-session incident (S5).** While S5 was implemented but still
+*uncommitted* in the working tree (paused for an owner decision), a **separate `/dev:implement`
+session running the `lane-reservations` plan** committed its own work and did a `git reset`
+(reflog `HEAD@{4}: reset: moving to HEAD`), which **discarded the uncommitted S5 changes** to
+`router.py` + `test_ui.py`. My S1–S4 commits were unaffected (they sit in history under the three
+`lane-reservations` commits). S5 was re-applied from the implementer's retained context and
+committed **immediately** (ahead of the adversarial review) to protect it from a repeat reset;
+the critic then reviewed the committed state. **Lesson / hazard:** two `/dev:implement` loops on
+one repo/worktree contend on the index and can wipe each other's uncommitted work — commit each
+slice promptly, and prefer worktree isolation when running concurrent implement loops.
+
 ## Ledger
 
 | date | slice | status | divergence | tech debt | human review? |
