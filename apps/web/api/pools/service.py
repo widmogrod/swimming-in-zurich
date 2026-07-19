@@ -15,7 +15,7 @@ from apps.web.api.pools.model import (
     PublicWindowOut,
 )
 from swimzh.domain.access import PublicSwim
-from swimzh.domain.catalog import PoolCatalogEntry
+from swimzh.domain.catalog import RosterEntry
 from swimzh.domain.lane_plan import (
     ClubSlot,
     LanePanel,
@@ -27,7 +27,8 @@ from swimzh.domain.query import BasinLanePanel, FacilityDetail
 from swimzh.domain.schedule import TimeRange
 
 
-def _pool_out(entry: PoolCatalogEntry) -> PoolOut:
+def _pool_out(row: RosterEntry) -> PoolOut:
+    entry = row.entry
     return PoolOut(
         pool_id=entry.pool_id,
         name=entry.name,
@@ -38,14 +39,15 @@ def _pool_out(entry: PoolCatalogEntry) -> PoolOut:
         url=entry.url,
         description=entry.description,
         phone=entry.phone,
+        curated=row.curated,
     )
 
 
-def list_pools(catalog: tuple[PoolCatalogEntry, ...], kind: str | None) -> PoolsOut:
-    items = [e for e in catalog if kind is None or e.kind.value == kind]
-    items.sort(key=lambda e: (e.kind.value, e.name))
-    kinds = sorted({e.kind.value for e in catalog})
-    return PoolsOut(count=len(items), kinds=kinds, pools=[_pool_out(e) for e in items])
+def list_pools(roster: tuple[RosterEntry, ...], kind: str | None) -> PoolsOut:
+    items = [r for r in roster if kind is None or r.entry.kind.value == kind]
+    items.sort(key=lambda r: (r.entry.kind.value, r.entry.name))
+    kinds = sorted({r.entry.kind.value for r in roster})
+    return PoolsOut(count=len(items), kinds=kinds, pools=[_pool_out(r) for r in items])
 
 
 def _hhmm(t: TimeRange) -> tuple[str, str]:

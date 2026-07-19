@@ -15,6 +15,7 @@ import pytest
 from swimzh.core.errors import ProviderError, Timeout, describe
 from swimzh.core.result import Err, Ok, Result
 from swimzh.domain.access import ClubReserved, PublicSwim
+from swimzh.domain.catalog import PoolCatalogEntry, RosterEntry
 from swimzh.domain.lane_plan import (
     LaneAvailability,
     LanePlan,
@@ -68,12 +69,34 @@ def test_dataset_loads_four_curated_pools(dataset: Dataset) -> None:
     assert len(dataset.registry.identities) == 8
 
 
+def _roster(dataset: Dataset) -> tuple[RosterEntry, ...]:
+    """The roster the app feeds `find_swim_options`, here derived from the curated dataset's
+    registry (8 known pools) so the three-state `uncurated = roster − scheduled` answer is
+    exercised without a gold DB."""
+    return tuple(
+        RosterEntry(
+            entry=PoolCatalogEntry(
+                pool_id=str(identity.facility_id),
+                name=identity.name,
+                kind=identity.kind,
+                address="",
+                geo=None,
+                url=None,
+                description=None,
+                phone=None,
+            ),
+            curated=False,
+        )
+        for identity in dataset.registry.identities.values()
+    )
+
+
 def _query(dataset: Dataset, when: datetime, person: Person = ADULT) -> QueryResult:
     return find_swim_options(
         SwimQuery(person=person, at=when),
         dataset.facilities,
         dataset.calendar,
-        registry=dataset.registry,
+        _roster(dataset),
     )
 
 

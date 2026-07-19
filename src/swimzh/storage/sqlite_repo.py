@@ -19,7 +19,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from swimzh.domain.calendar import ZurichCalendar
-from swimzh.domain.catalog import PoolCatalogEntry
+from swimzh.domain.catalog import PoolCatalogEntry, RosterEntry
 from swimzh.domain.geo import GeoPoint
 from swimzh.domain.models import Facility, FacilityId
 from swimzh.storage import calendar_codec, codec
@@ -162,6 +162,28 @@ def load_catalog(conn: sqlite3.Connection) -> tuple[PoolCatalogEntry, ...]:
         "SELECT id, name, kind, address, lat, lon, url, description, phone FROM pool ORDER BY id"
     )
     return tuple(_catalog_entry(row) for row in cursor.fetchall())
+
+
+def load_roster(conn: sqlite3.Connection) -> tuple[RosterEntry, ...]:
+    """Rehydrate the full roster (all ~57 pools) from the ``pool`` spine, ordered by canonical
+    id, each carrying its **derived** ``curation_status`` as a ``curated`` flag.
+
+    This is the single read that backs both ``/pools`` (catalog + schedule indicator) and the
+    runtime ``uncurated = roster − scheduled`` computation — one store, joinable by ``pool.id``.
+    """
+    cursor = conn.execute(
+        "SELECT id, name, kind, address, lat, lon, url, description, phone, curation_status "
+        "FROM pool ORDER BY id"
+    )
+    return tuple(_roster_entry(row) for row in cursor.fetchall())
+
+
+def _roster_entry(row: tuple[Any, ...]) -> RosterEntry:
+    *catalog_cols, curation_status = row
+    return RosterEntry(
+        entry=_catalog_entry(tuple(catalog_cols)),
+        curated=str(curation_status) == "curated",
+    )
 
 
 def _catalog_entry(row: tuple[Any, ...]) -> PoolCatalogEntry:

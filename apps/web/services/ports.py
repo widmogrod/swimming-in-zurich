@@ -7,13 +7,20 @@ from __future__ import annotations
 from typing import Protocol
 
 from swimzh.domain.calendar import ZurichCalendar
+from swimzh.domain.catalog import RosterEntry
 from swimzh.domain.models import Facility
 
 
-class SwimData(Protocol):
-    """The facilities + calendar the query surface needs, however they are sourced
-    (curated YAML today, the SQLite gold store tomorrow)."""
+class SwimStore(Protocol):
+    """The one gold store the app reads: curated facilities (schedules), the full pool roster
+    (all ~57 pools with their derived curation status), one pool's schedule by canonical id,
+    and the Zürich calendar — all joinable on `pool.id`. However sourced (the SQLite gold store
+    today), `/swim` and `/pools` share this single read surface."""
 
     def facilities(self) -> tuple[Facility, ...]: ...
 
     def calendar(self) -> ZurichCalendar: ...
+
+    def roster(self) -> tuple[RosterEntry, ...]: ...
+
+    def facility(self, facility_id: str) -> Facility | None: ...

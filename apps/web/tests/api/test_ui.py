@@ -579,31 +579,27 @@ def test_s5_all_pools_fetches_pools_once_via_the_memoized_path() -> None:
     # The single memoization site remains; no other raw /pools fetch exists.
     assert "if (!poolsPromise) poolsPromise = fetch('/pools')" in page
     assert page.count("fetch('/pools')") == 1
-    # loadPools consumes the memoized catalog, not a fresh fetch.
+    # loadPools consumes the memoized catalog, not a fresh fetch (and no longer a second
+    # /swim call to guess the scheduled set — S3 retired that name-join).
     assert "async function loadPools()" in page
-    assert "await Promise.all([loadPoolsData(), loadScheduledFacilities()])" in page
+    assert "const a = await loadPoolsData();" in page
 
 
-def test_s5_schedule_indicator_marks_which_pools_have_a_timetable() -> None:
-    """S5 #11: each All-pools row carries a schedule indicator. The scheduled set is the /swim
-    facilities that have a timetable — options OR `closed` statuses — with `uncurated` pools
-    deliberately EXCLUDED, so a pool without a timetable reads "location only — no timetable
-    yet" (honest per invariant #1), never "closed"."""
+def test_s5_schedule_indicator_reads_curation_from_the_api_not_by_name() -> None:
+    """S3: each All-pools row carries a schedule indicator read from the API's `curated` flag
+    (the store's derived curation_status on /pools), NOT guessed by name-matching a second /swim
+    call. The retired name-join (`loadScheduledFacilities`/`scheduledPools`) is gone; a pool
+    without a timetable reads "location only — no timetable yet" (honest per invariant #1),
+    never "closed"."""
     with TestClient(app) as client:
         page = client.get("/").text
-    # A memoized /swim call builds the scheduled-facility set.
-    assert "function loadScheduledFacilities()" in page
-    assert "let scheduledPools = new Set();" in page
-    # options ∪ closed statuses; uncurated is NOT counted as scheduled (scoped to the helper body).
-    helper = page[
-        page.index("function loadScheduledFacilities") : page.index("function poolNameHTML")
-    ]
-    assert "(a.options || []).map(o => o.facility)" in helper
-    assert "(a.statuses || []).filter(s => s.status === 'closed').map(s => s.facility)" in helper
-    # only `closed` counts as scheduled; no-timetable (uncurated) pools are excluded
-    assert "uncurated" not in helper
+    # The name-join workaround is retired entirely — no /swim call, no name-matched set.
+    assert "loadScheduledFacilities" not in page
+    assert "scheduledPools" not in page
+    # Curation is read straight from the /pools record's `curated` flag.
+    assert "const scheduled = p.curated;" in page
+    assert "scheduledCount = (a.pools || []).filter(p => p.curated).length;" in page
     # The row renders the two honest states — ✓ schedule vs. location-only (never "closed").
-    assert "const scheduled = scheduledPools.has(p.name);" in page
     assert "✓ schedule" in page
     assert "location only — no timetable yet" in page
     assert "<th>Schedule</th>" in page
@@ -719,8 +715,9 @@ def test_s6_footer_is_consolidated_and_coverage_line_is_neutral_not_amber() -> N
     assert '<div class="coverage muted">' in page
     assert "which is not the same as closed." in page
     assert ".coverage { margin-top:" in page  # its own neutral style exists
-    # It reuses the REAL counts, not a hardcoded number.
-    assert "${scheduledPools.size} of ~${catalogCount}" in page
+    # It reuses the REAL counts, not a hardcoded number — the curated-timetable count and the
+    # catalog size, both from the one /pools read (no second /swim name-join).
+    assert "${scheduledCount} of ~${catalogCount}" in page
     assert "if (catalogCount == null) return '';" in page
     # The old amber "Only 7 of ~57 …" .warn banner is gone.
     assert "Only 7 of ~57" not in page

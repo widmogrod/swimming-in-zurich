@@ -1,7 +1,7 @@
 """The swim use-case: turn a parsed request into a domain query and shape the answer.
 
 HTTP parsing/validation stays in router.py; this module works with domain types and the
-`SwimData` port, so it is unit-testable without the web layer.
+`SwimStore` port, so it is unit-testable without the web layer.
 """
 
 from __future__ import annotations
@@ -16,7 +16,7 @@ from apps.web.api.swim.model import (
     OptionOut,
     StatusOut,
 )
-from apps.web.services.ports import SwimData
+from apps.web.services.ports import SwimStore
 from swimzh.domain.geo import GeoPoint
 from swimzh.domain.lane_plan import LaneAvailability
 from swimzh.domain.person import Gender, Person
@@ -62,7 +62,7 @@ def _option_out(option: SwimOption) -> OptionOut:
 
 
 def build_answer(
-    data: SwimData,
+    data: SwimStore,
     *,
     gender: Gender | None,
     age: int | None,
@@ -75,7 +75,9 @@ def build_answer(
     query = SwimQuery(
         person=Person(gender=gender, age=age), at=at_local, near=near, radius_km=radius_km
     )
-    result = find_swim_options(query, data.facilities(), data.calendar())
+    # Pass the full roster so `uncurated` statuses go live (roster − scheduled) — the backend
+    # emits them at runtime; the UI no longer guesses schedule status by name.
+    result = find_swim_options(query, data.facilities(), data.calendar(), data.roster())
     options = result.eligible_options() if eligible_only else result.options
     return AnswerOut(
         options=[_option_out(o) for o in options],

@@ -15,6 +15,7 @@ class PoolOut(BaseModel):
     url: str | None
     description: str | None
     phone: str | None
+    curated: bool  # True = a curated timetable exists (derived); False = location only
 
 
 class PoolsOut(BaseModel):

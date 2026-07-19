@@ -8,8 +8,8 @@ with *explainable* eligibility, price, distance, and provenance.
 It deliberately distinguishes three outcomes so an empty answer is never ambiguous:
   * an option (open, with eligibility),
   * a facility that is **closed** that day (with reason), and
-  * a facility whose schedule is **not yet curated** (unknown, via the registry) —
-    never conflated with "closed".
+  * a facility whose schedule is **not yet curated** (unknown — identity known via the pool
+    roster, schedule not curated) — never conflated with "closed".
 """
 
 from __future__ import annotations
@@ -24,6 +24,7 @@ from swimzh.core.errors import ProviderError, describe
 from swimzh.core.result import Err, Ok, Result
 from swimzh.domain.access import EligibilityResult, eligibility
 from swimzh.domain.calendar import ZurichCalendar
+from swimzh.domain.catalog import RosterEntry
 from swimzh.domain.geo import GeoPoint, haversine_km
 from swimzh.domain.lane_plan import LaneAvailability, LanePanel, lane_availability_at, lane_panel
 from swimzh.domain.lockers import LockerOption
@@ -40,7 +41,6 @@ from swimzh.domain.models import (
 )
 from swimzh.domain.person import Person
 from swimzh.domain.pricing import PriceEntry, price_for
-from swimzh.domain.registry import Registry
 from swimzh.domain.resolver import resolve_basin, resolve_hours
 from swimzh.domain.schedule import ClosedDay, DaySchedule, OpenDay, ResolvedSession, Weekday
 
@@ -201,8 +201,8 @@ def find_swim_options(
     query: SwimQuery,
     facilities: tuple[Facility, ...],
     calendar: ZurichCalendar,
+    roster: tuple[RosterEntry, ...] = (),
     *,
-    registry: Registry | None = None,
     occupancy: OccupancyProvider | None = None,
 ) -> QueryResult:
     at_local = query.at.astimezone(_ZURICH) if query.at.tzinfo is not None else query.at
@@ -292,8 +292,11 @@ def find_swim_options(
                 )
             )
 
-    if registry is not None:
-        statuses.extend(_uncurated_statuses(facilities, registry))
+    # The three-state answer goes live: every roster pool whose schedule is not among the
+    # curated facilities we just resolved is `uncurated` (roster − scheduled) — never merged
+    # with `closed`. An empty roster yields no uncurated rows (callers that only exercise
+    # options pass none), so this stays a single uniform path, not a `registry is None` branch.
+    statuses.extend(_uncurated_statuses(facilities, roster))
 
     options.sort(
         key=lambda o: (
@@ -394,18 +397,19 @@ def facility_detail(facility: Facility, at: datetime, calendar: ZurichCalendar) 
 
 
 def _uncurated_statuses(
-    facilities: tuple[Facility, ...], registry: Registry
+    facilities: tuple[Facility, ...], roster: tuple[RosterEntry, ...]
 ) -> list[FacilityStatus]:
-    curated_ids = {f.identity.facility_id for f in facilities}
-    uncurated: list[FacilityStatus] = []
-    for fid, identity in registry.identities.items():
-        if fid not in curated_ids:
-            uncurated.append(
-                FacilityStatus(
-                    facility_id=fid,
-                    facility_name=identity.name,
-                    status="uncurated",
-                    detail="schedule not yet curated",
-                )
-            )
-    return uncurated
+    """`uncurated = roster − scheduled`: every roster pool whose canonical id is not among the
+    curated facilities resolved this query. Identity is known (the roster), the schedule is
+    not — so it is `uncurated`, distinct from a curated pool that is `closed` today."""
+    scheduled_ids = {str(f.identity.facility_id) for f in facilities}
+    return [
+        FacilityStatus(
+            facility_id=FacilityId(row.entry.pool_id),
+            facility_name=row.entry.name,
+            status="uncurated",
+            detail="schedule not yet curated",
+        )
+        for row in roster
+        if row.entry.pool_id not in scheduled_ids
+    ]

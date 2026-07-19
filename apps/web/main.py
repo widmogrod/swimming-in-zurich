@@ -19,10 +19,8 @@ from apps.web.api.pools.router import router as pools_router
 from apps.web.api.swim.router import router as swim_router
 from apps.web.api.ui.router import router as ui_router
 from apps.web.config import Config
-from apps.web.services.gold_store import GoldSwimData
-from apps.web.services.ports import SwimData
-from swimzh.domain.catalog import PoolCatalogEntry
-from swimzh.storage.sqlite_repo import load_catalog, open_db
+from apps.web.services.gold_store import GoldSwimStore
+from apps.web.services.ports import SwimStore
 
 
 def _missing_db_message(gold_db: Path) -> str:
@@ -48,20 +46,17 @@ def startup_error(config: Config) -> str | None:
     if not config.gold_db.exists():
         return _missing_db_message(config.gold_db)
     try:
-        GoldSwimData.open(config.gold_db)
+        GoldSwimStore.open(config.gold_db)
     except RuntimeError as exc:  # empty / unreadable store
         return str(exc)
     return None
 
 
-def _load_swim_data(config: Config) -> SwimData:
-    """Serve facilities + calendar from the gold store (fail-fast if empty)."""
-    return GoldSwimData.open(config.gold_db)
+def _load_swim_data(config: Config) -> SwimStore:
+    """Open the one gold store — facilities, roster, and calendar (fail-fast if empty).
 
-
-def _load_catalog(config: Config) -> tuple[PoolCatalogEntry, ...]:
-    """Read the pool catalog from the gold store's `catalog` table (same store as `/swim`)."""
-    return load_catalog(open_db(config.gold_db))
+    `/swim` and `/pools` both read this single store, joined on the canonical `pool.id`."""
+    return GoldSwimStore.open(config.gold_db)
 
 
 @asynccontextmanager
@@ -70,7 +65,6 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     _require_gold_db(config.gold_db)
     app.state.config = config
     app.state.swim_data = _load_swim_data(config)
-    app.state.catalog = _load_catalog(config)
     yield
 
 

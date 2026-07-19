@@ -303,47 +303,27 @@ function rerunActiveTab() {
 ctx.addEventListener('change', rerunActiveTab);
 
 // --- Pool catalog join: the facility as a first-class, actionable object ---
-// /swim carries only the facility NAME; /pools carries url/phone/address/lat/lon per pool.
-// Join key = the facility display name (verified: every /swim facility matches a /pools name).
-// Fetch /pools ONCE (memoized, shared by every tab) into a name->record map, so a card can
-// link its pool and show contact/route detail. Helpers degrade to plain text / '' when a
-// facility has no catalog match — never a broken or empty href.
+// /swim carries only the facility NAME; /pools carries url/phone/address/lat/lon per pool AND
+// its derived `curated` flag (the pool table's curation_status). Join key = the facility
+// display name (verified: every /swim facility matches a /pools name). Fetch /pools ONCE
+// (memoized, shared by every tab) into a name->record map, so a card can link its pool, show
+// contact/route detail, and know whether a pool has a curated timetable — WITHOUT a second
+// /swim call. Helpers degrade to plain text / '' when a facility has no catalog match.
 let poolsPromise = null;   // in-flight/settled /pools fetch, shared so it runs at most once
-let poolMap = new Map();   // facility name -> { url, phone, address, lat, lon, ... }
+let poolMap = new Map();   // facility name -> { url, phone, address, lat, lon, curated, ... }
+let scheduledCount = 0;    // how many catalog pools carry a curated timetable (from /pools)
 function loadPoolsData() {
   if (!poolsPromise) poolsPromise = fetch('/pools')
     .then(r => r.ok ? r.json() : { count: 0, kinds: [], pools: [] })
     .then(a => { poolMap = new Map((a.pools || []).map(p => [p.name, p]));
       if (catalogCount === null) catalogCount = a.count;  // shared: the coverage footer reuses it
+      // Which catalog pools HAVE a curated timetable is read straight from /pools' `curated`
+      // flag (the store's derived curation_status) — never guessed by name-matching a /swim call.
+      scheduledCount = (a.pools || []).filter(p => p.curated).length;
       return a; });
   return poolsPromise;
 }
 function poolInfo(name) { return poolMap.get(name) || null; }  // the catalog record, or null
-
-// Which catalog pools actually HAVE a curated timetable (S5 #11)? /swim answers it: a facility
-// appears in `options` (it produced sessions) or in `statuses` as `closed` (it has a schedule but
-// is shut that day) IFF it is curated/scheduled. `uncurated` statuses are pools with NO timetable
-// — deliberately EXCLUDED, so the All-pools row honestly reads "no timetable yet", never "closed"
-// (honesty invariant #1). One representative no-location call (verified to enumerate the full
-// scheduled set on any day) is memoized so it runs at most once.
-let scheduledPromise = null;
-let scheduledPools = new Set();  // facility names that have a schedule the app can show
-function loadScheduledFacilities() {
-  if (!scheduledPromise) {
-    const t = new Date(); t.setSeconds(0, 0);
-    const at = new Date(t.getTime() - t.getTimezoneOffset()*60000).toISOString().slice(0, 16);
-    scheduledPromise = fetch('/swim?' + new URLSearchParams({ at, eligible_only: 'false' }))
-      .then(r => r.ok ? r.json() : { options: [], statuses: [] })
-      .then(a => {
-        scheduledPools = new Set([
-          ...(a.options || []).map(o => o.facility),
-          ...(a.statuses || []).filter(s => s.status === 'closed').map(s => s.facility),
-        ]);
-        return scheduledPools;
-      });
-  }
-  return scheduledPromise;
-}
 
 // The facility name as a link (only when a catalog url exists; else plain, escaped text).
 function poolNameHTML(name) {
@@ -552,11 +532,12 @@ function provStamp(options) {
 // #10: ONE consolidated footer per tab. The trailing meta used to be a stack (provenance stamp
 // + a separate amber hardcoded-count .warn banner). footerHTML folds them into a single footer:
 // the ⓘ provenance stamp, then a NEUTRAL data-coverage line built from the REAL counts — the
-// memoized catalog size (catalogCount, from /pools) and the scheduled-facility set (from /swim) —
-// stating the same honest fact (few verified timetables; unknown ≠ closed) calmly, not in alarm red.
+// memoized catalog size (catalogCount) and the curated-timetable count (scheduledCount), both
+// from the one /pools read — stating the same honest fact (few verified timetables; unknown ≠
+// closed) calmly, not in alarm red.
 function coverageHTML() {
   if (catalogCount == null) return '';
-  return `<div class="coverage muted">Timetables verified for ${scheduledPools.size} of ~${catalogCount} Zürich pools so far — the rest are listed as locations and show as “unknown”, which is not the same as closed.</div>`;
+  return `<div class="coverage muted">Timetables verified for ${scheduledCount} of ~${catalogCount} Zürich pools so far — the rest are listed as locations and show as “unknown”, which is not the same as closed.</div>`;
 }
 function footerHTML(options) { return provStamp(options) + coverageHTML(); }
 
@@ -576,8 +557,7 @@ f.addEventListener('submit', async e => {
   const r = await fetch('/swim?' + p);
   if (!r.ok) { findOut.innerHTML = '<p class="warn">' + esc((await r.json()).detail) + '</p>'; return; }
   const a = await r.json();
-  await loadPoolsData();  // memoized /pools — so every card can link its pool + show detail
-  await loadScheduledFacilities();  // memoized /swim — for the consolidated coverage footer
+  await loadPoolsData();  // memoized /pools — link each card + read the curated-timetable counts
   let h = a.notices.map(n => '<p class="warn">📣 <strong>' + esc(n.facility) + '</strong>: ' + esc(n.text) + '</p>').join('');
   h += a.warnings.map(w => '<p class="warn">⚠ ' + esc(w) + '</p>').join('');
   if (!a.options.length) h += '<p>No open, eligible sessions for that moment.</p>';
@@ -692,8 +672,7 @@ async function runVisit() {
   const r = await fetch('/swim?' + p);
   if (!r.ok) { visitOut.innerHTML = '<p class="warn">' + esc((await r.json()).detail) + '</p>'; return; }
   const a = await r.json();
-  await loadPoolsData();  // memoized /pools — link each starter pool + its contact/route detail
-  await loadScheduledFacilities();  // memoized /swim — for the consolidated coverage footer
+  await loadPoolsData();  // memoized /pools — link each starter pool + read the coverage counts
   renderPrimer(a.options);  // keep the glossary keyed to the kinds these results actually contain
   let h = '<h3>Starter pools near you</h3>';
   const marks = ['①', '②', '③'];
@@ -906,14 +885,15 @@ function renderPlan() {
 }
 
 // --- All pools: a navigation HUB, not a dead-end (S5) ---
-// One /pools fetch TOTAL: fold onto the memoized loadPoolsData() (S3 left this tab
-// double-fetching). A second, distinct call — the memoized /swim scheduled set — tells each row
-// whether it has a timetable. Rows WITH a schedule get a "Plan ›" jump; rows WITHOUT read
-// "location only — no timetable yet" (honest, never "closed"). A name-filter box narrows the 57.
+// One /pools fetch TOTAL (the memoized loadPoolsData()). Each /pools row carries a `curated`
+// flag — the store's derived curation_status — so each row knows whether it has a timetable
+// WITHOUT a second /swim call and WITHOUT name-matching. Rows WITH a schedule get a "Plan ›"
+// jump; rows WITHOUT read "location only — no timetable yet" (honest, never "closed"). A
+// name-filter box narrows the 57.
 let allLoaded = false, currentKind = null, nameFilter = '', allPools = [];
 async function loadPools() {
   allLoaded = true;
-  const [a] = await Promise.all([loadPoolsData(), loadScheduledFacilities()]);
+  const a = await loadPoolsData();
   allPools = a.pools || [];
   $('#kinds').innerHTML = ['<button class="chip active" data-kind="">all (' + a.count + ')</button>']
     .concat(a.kinds.map(k => `<button class="chip" data-kind="${esc(k)}">${esc(k)}</button>`)).join('');
@@ -936,7 +916,7 @@ function renderPools() {
   let h = `<p class="muted">${items.length} pools</p><table><thead><tr>`
     + '<th>Name</th><th>Kind</th><th>Schedule</th><th>Address</th><th></th></tr></thead><tbody>';
   for (const p of items) {
-    const scheduled = scheduledPools.has(p.name);
+    const scheduled = p.curated;  // read from /pools (derived curation_status), never guessed by name
     // #11: a schedule indicator + a "Plan ›" jump for pools we can actually plan; the rest are
     // honestly "location only — no timetable yet" (NOT closed — invariant #1).
     const schedCell = scheduled

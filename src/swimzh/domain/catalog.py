@@ -35,3 +35,18 @@ class PoolCatalogEntry:
     url: str | None
     description: str | None
     phone: str | None
+
+
+@dataclass(frozen=True, slots=True)
+class RosterEntry:
+    """One row of the pool roster: the catalog metadata for a pool plus whether its schedule
+    is curated (the **derived** `curation_status` from the gold `pool` table).
+
+    The roster is the full set of ~57 published pools; `curated` distinguishes the handful with
+    a curated timetable from the majority that are locations only. `find_swim_options` subtracts
+    the actually-scheduled facilities from the roster to emit the three-state `uncurated` answer,
+    and `/pools` surfaces `curated` so the UI reads schedule status from the store, never by name.
+    """
+
+    entry: PoolCatalogEntry
+    curated: bool

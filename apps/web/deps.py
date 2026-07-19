@@ -6,15 +6,9 @@ from __future__ import annotations
 
 from fastapi import Request
 
-from apps.web.services.ports import SwimData
-from swimzh.domain.catalog import PoolCatalogEntry
+from apps.web.services.ports import SwimStore
 
 
-def get_swim_data(request: Request) -> SwimData:
-    data: SwimData = request.app.state.swim_data
+def get_swim_data(request: Request) -> SwimStore:
+    data: SwimStore = request.app.state.swim_data
     return data
-
-
-def get_catalog(request: Request) -> tuple[PoolCatalogEntry, ...]:
-    catalog: tuple[PoolCatalogEntry, ...] = request.app.state.catalog
-    return catalog
