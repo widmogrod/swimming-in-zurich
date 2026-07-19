@@ -93,6 +93,9 @@ _PAGE = """<!doctype html>
     letter-spacing: .03em; }
   .primer dt .muted { font-weight: 400; }
   .primer dd { margin: .1rem 0 .2rem; opacity: .85; }
+  .primer .primerlead { margin: .1rem 0; font-weight: 600; }
+  .primer .primerdetails { margin-top: .5rem; }
+  .primer .primerdetails summary { cursor: pointer; opacity: .8; font-size: .85rem; }
   .card .decode { font-size: .82rem; opacity: .85; margin-top: .3rem; }
   .card .decode b { font-weight: 600; }
 
@@ -200,8 +203,8 @@ FOR YOU  ✓ in     ✗ not you   ? unknown          BUSY  [fc] forecast — not
     </label>
     <button type="submit">Show me starter pools</button>
   </form>
-  <div class="primer" id="primer"></div>
   <div id="visitOut"></div>
+  <div class="primer" id="primer"></div>
 </section>
 
 <section id="all">
@@ -344,29 +347,35 @@ const DECODE = {
 const decodeAccess = a => { const d = DECODE[a]; return d ? d[0] + ' — ' + d[1] : accessLabel(a); };
 
 let visitLoaded = false;
+let visitAccess = null;  // /access-types glossary, fetched once and reused by renderPrimer
 async function loadVisit() {
   visitLoaded = true;
-  // Pool-type gloss is keyed off the catalog's kinds; the slot glossary is the /access-types data.
-  const [pools, access] = await Promise.all([
-    fetch('/pools').then(r => r.json()),
-    fetch('/access-types').then(r => r.json()),
-  ]);
-  const types = pools.kinds.map(k => {
+  // The slot glossary is the /access-types data; POOL TYPES is keyed off the kinds actually
+  // present in the results (see renderPrimer), so no /pools fetch is needed here.
+  visitAccess = await fetch('/access-types').then(r => r.json());
+  vf.dispatchEvent(new Event('submit'));  // show starter pools immediately with defaults
+}
+
+// The primer is deliberately small: one always-visible line (the only thing a newcomer must
+// know to get in the water) + a default-closed <details> holding the glossary. POOL TYPES is
+// keyed to the `kind`s actually present in these results (not all 7 catalog categories), so a
+// tourist looking at indoor pools does not wade through river/lake/thermal glosses.
+function renderPrimer(options) {
+  const kinds = [...new Set(options.map(o => o.kind).filter(Boolean))];
+  const types = kinds.map(k => {
     const t = POOL_TYPES[k];
     return t
       ? `<dt>${esc(t[0])} <span class="muted">(${esc(k)})</span></dt><dd>${esc(t[1])}</dd>`
       : `<dt>${esc(k)}</dt><dd>a Zürich pool category</dd>`;
   }).join('');
-  const slots = access.types.map(t =>
+  const slots = (visitAccess ? visitAccess.types : []).map(t =>
     `<dt>${esc(t.label)}</dt><dd>${esc(t.description)}</dd>`).join('');
   $('#primer').innerHTML =
-    '<h3>First time here?</h3><dl>'
+    '<p class="primerlead">Just walk in and pay in CHF at the door — no booking, no card.</p>'
+    + '<details class="primerdetails"><summary>New here? What the words mean</summary><dl>'
     + '<dt>POOL TYPES</dt><dd>Zürich names its water by kind:</dd>' + types
-    + '<dt>TO ENTER</dt><dd>Walk in and pay in CHF at the door. No booking, no membership card needed.</dd>'
-    + '<dt>TO BRING</dt><dd>Swimsuit and towel. Lockers are on site.</dd>'
     + '<dt>THE SLOTS</dt><dd>What each kind of session lets you do:</dd>' + slots
-    + '</dl>';
-  vf.dispatchEvent(new Event('submit'));  // show starter pools immediately with defaults
+    + '</dl></details>';
 }
 
 // A starter-pool card: the S1 badge + orthogonal glyph axes, jargon decoded inline, km only.
@@ -411,9 +420,17 @@ vf.addEventListener('submit', async e => {
   const r = await fetch('/swim?' + p);
   if (!r.ok) { visitOut.innerHTML = '<p class="warn">' + esc((await r.json()).detail) + '</p>'; return; }
   const a = await r.json();
+  renderPrimer(a.options);  // keep the glossary keyed to the kinds these results actually contain
   let h = '<h3>Starter pools near you</h3>';
   const marks = ['①', '②', '③'];
-  const starters = a.options.slice(0, 3);  // 2–3 distance-ranked (the service sorts by distance)
+  // Distinct FACILITIES, not sessions: slicing raw sessions showed the same pool (e.g.
+  // Oerlikon) twice, reading as ~one pool. Options are distance-then-time ordered, so the
+  // FIRST session seen per facility is its earliest/next window — the best representative for
+  // "here's a pool you can go to". Keep the first (set only when the key is absent, since a
+  // Map built from entries would otherwise keep the LAST, i.e. the day's latest session).
+  const byFacility = new Map();
+  for (const o of a.options) if (!byFacility.has(o.facility)) byFacility.set(o.facility, o);
+  const starters = [...byFacility.values()].slice(0, 3);
   if (!starters.length)
     h += '<p class="muted">No open sessions at this minute — the pools below are not shut, just unscheduled or closed for now.</p>';
   else h += starters.map((o, i) => starterCard(o, marks[i] || (i+1))).join('');

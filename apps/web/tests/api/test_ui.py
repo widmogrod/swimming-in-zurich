@@ -57,16 +57,19 @@ def test_badge_renders_lane_count_subline_conditionally() -> None:
 
 
 def test_tourist_tab_renders_primer_and_glossary() -> None:
-    """S3: the newcomer tab leads with a plain-language primer — pool types keyed off the
-    catalog `kind`, a how-to-enter section, and a slot glossary sourced from /access-types."""
+    """S1/S3: the newcomer tab leads with a plain-language primer — one always-visible
+    how-to-enter line, then a glossary (pool types keyed off `kind`, slots from
+    /access-types) tucked into a default-closed <details>."""
     with TestClient(app) as client:
         page = client.get("/").text
     # A distinct nav tab + its own section for the newcomer.
     assert 'data-tab="visit"' in page
     assert "First time here?" in page
     assert 'id="visit"' in page
-    # The primer's teaching sections.
-    assert "POOL TYPES" in page and "TO ENTER" in page and "THE SLOTS" in page
+    # The one always-visible how-to-enter line (replaces the old ~19-row TO ENTER block).
+    assert "Just walk in and pay in CHF at the door" in page
+    # The collapsed glossary's teaching sections.
+    assert "POOL TYPES" in page and "THE SLOTS" in page
     # Pool types are keyed off `kind`; the slot glossary is sourced from /access-types.
     assert "POOL_TYPES" in page  # the kind -> plain-language map
     assert "fetch('/access-types')" in page
@@ -84,8 +87,9 @@ def test_tourist_starter_pools_keep_closed_pools_visible() -> None:
     assert "NOT necessarily shut" in page
     # It reuses the shared honesty language: the provenance stamp over the same options.
     assert "provStamp(a.options)" in page
-    # Starter pools are the distance-ranked options (the service sorts by distance).
-    assert "a.options.slice(0, 3)" in page
+    # Starter pools are distinct FACILITIES taken from the distance-ordered options.
+    assert "if (!byFacility.has(o.facility)) byFacility.set(o.facility, o)" in page
+    assert "[...byFacility.values()].slice(0, 3)" in page
 
 
 def test_tourist_tab_shows_distance_only_never_walk_time() -> None:
@@ -202,3 +206,67 @@ def test_week_planner_is_read_only_no_routine_persistence() -> None:
     assert "method: 'POST'" not in page
     # The read-only intent is stated to the user.
     assert "Read-only" in page or "read-only" in page.lower()
+
+
+def test_tourist_starters_are_distinct_facilities_not_sessions() -> None:
+    """S1 #1: slicing raw sessions surfaced the same pool twice (Oerlikon appeared as two of
+    the three "starter pools"). Options are distance-then-time ordered, so keeping the FIRST
+    (earliest) session per facility and taking three yields three DISTINCT pools — never the
+    old ``a.options.slice(0, 3)`` on sessions."""
+    with TestClient(app) as client:
+        page = client.get("/").text
+    # Dedupe by facility, keeping the FIRST session seen per pool (earliest/next window). A
+    # Map built from entries keeps the LAST, so we guard on `.has` before setting.
+    assert "if (!byFacility.has(o.facility)) byFacility.set(o.facility, o)" in page
+    assert "[...byFacility.values()].slice(0, 3)" in page
+    # The old session-level slice is gone.
+    assert "a.options.slice(0, 3)" not in page
+
+
+def test_tourist_primer_is_a_default_closed_details() -> None:
+    """S1 #3: the oversized (~19-row) always-open primer collapses to one always-visible
+    how-to-enter line plus a default-closed <details> for the POOL TYPES / THE SLOTS
+    glossary — so the starter pools, not a glossary wall, are what a newcomer meets first."""
+    with TestClient(app) as client:
+        page = client.get("/").text
+    # One always-visible line carries the essential how-to-enter fact.
+    assert "primerlead" in page
+    assert "Just walk in and pay in CHF at the door" in page
+    # The glossary lives in a <details> that is NOT force-opened (no `open` attribute).
+    assert '<details class="primerdetails">' in page
+    assert '<details class="primerdetails" open' not in page
+    # POOL TYPES / THE SLOTS are inside that collapsed block.
+    assert "POOL TYPES" in page and "THE SLOTS" in page
+
+
+def test_tourist_primer_pool_types_keyed_to_present_kinds_not_all_seven() -> None:
+    """S1 #3: POOL TYPES is built from the kinds actually present in the results
+    (``a.options``), not the full 7-category catalog — a tourist browsing indoor pools does
+    not read river/lake/thermal glosses."""
+    with TestClient(app) as client:
+        page = client.get("/").text
+    # The type list is derived from the options' distinct kinds, not pools.kinds.
+    assert "new Set(options.map(o => o.kind)" in page
+    # And the primer is rendered from the /swim options, driven by the results.
+    assert "renderPrimer(a.options)" in page
+
+
+def test_tourist_starter_pools_render_above_the_primer() -> None:
+    """S1 #3: starter pools move above the fold — the ``#visitOut`` results container is
+    placed before the collapsed ``#primer`` in document order."""
+    with TestClient(app) as client:
+        page = client.get("/").text
+    assert '<div id="visitOut"></div>' in page
+    assert '<div class="primer" id="primer"></div>' in page
+    assert page.index('<div id="visitOut"></div>') < page.index(
+        '<div class="primer" id="primer"></div>'
+    )
+
+
+def test_tourist_primer_keeps_inline_decode_on_starter_cards() -> None:
+    """S1 keeps the good model: the inline decode-at-point-of-need line on each starter card
+    (``This slot is <b>…</b>``) survives the primer collapse."""
+    with TestClient(app) as client:
+        page = client.get("/").text
+    assert "This slot is <b>" in page
+    assert "decodeAccess(o.access)" in page

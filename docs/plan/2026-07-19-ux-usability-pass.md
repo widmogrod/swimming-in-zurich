@@ -104,4 +104,4 @@ through QA + adversarial-review gates before the next. Presentation-only; no dom
 
 | date | slice | status | divergence | tech debt | human review? |
 |------|-------|--------|------------|-----------|---------------|
-| —    | —     | —      | —          | —         | —             |
+| 2026-07-19 | S1 | done | TO ENTER/TO BRING rows folded into the single always-on line (plan directed collapsing ~19 rows); critic caught that JS `Map`-from-entries keeps LAST not first — dedupe changed to an explicit `.has`-guarded first-wins loop so each starter shows the pool's earliest/next session | none | no |
