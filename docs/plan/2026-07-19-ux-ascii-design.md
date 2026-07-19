@@ -1,6 +1,6 @@
 ---
 type: plan
-status: in-progress      # draft -> approved -> in-progress -> done (owner approved 2026-07-19: all 4 slices, no pause)
+status: done             # draft -> approved -> in-progress -> done (owner approved 2026-07-19: all 4 slices, no pause; completed 2026-07-19)
 created: 2026-07-19
 feature: ux-presentation
 gates:
@@ -261,3 +261,41 @@ lacks (lane count), the slice **degrades gracefully** and the gap is deferred to
   `eligible-to-me`) are client-side display toggles; the mockup's aspirational "re-rank pools by
   usable recurring slots" was not built — the switcher stays distance-sorted (the literal S4
   deliverable, and invariant #2 bars a busyness-based sort anyway).
+
+## Summary — what exists now
+
+All four slices shipped 2026-07-19 through the full QA + adversarial-review gates
+(final chain: 143 tests, coverage 93.79% ≥ 91 floor, mypy strict clean, CRAP clean).
+Everything is **presentation-only** in `apps/web/api/ui/router.py` (one self-contained
+static HTML page) plus a thin widening of the swim DTO — no new domain fields were invented.
+
+- **Unified visual language (S1)** — the "Find a swim" results are ranked cards: a fat
+  length badge, an access-glyph axis (`≈◇⌂WSX·`) kept **orthogonal** to an eligibility axis
+  (`✓✗?`), the three never-merged terminal states (open `·closes` / closed-with-reason /
+  uncurated), and a `ⓘ valid_as_of · source` provenance stamp with a shared legend. Backed by
+  four new `OptionOut` fields (`kind`, `length_m`, `source`, `curated`) surfaced through
+  `SwimOption` from `facility.identity.kind`, `basin.dimensions.length_m`, and provenance.
+- **Lane badge (S2)** — the domain's existing `Basin.lanes` (prose-parsed by
+  [[rich-pool-domain]]) is carried to `OptionOut.lanes` and rendered as an `N lane` sub-line,
+  degrading to length-only when unknown. Real data, rendered plain (not bracketed).
+- **Tourist tab (S3)** — "First time here?": a plain-language primer (pool types by `kind`,
+  how-to-enter, a slot glossary sourced live from `/access-types`) + 2–3 distance-ranked
+  starter pools with jargon decoded inline; closed pools stay visible; walk-time is never
+  rendered (km only). Location is a 3-landmark preset dropdown (no geocoder in the domain).
+- **Week grid (S4)** — "Plan my week": a days×time read-only grid for the nearest pool with
+  the unified glyph axes, a distance-sorted pool switcher, and a bracketed `[fc]` busyness
+  placeholder. Assembled from 7 client-side `/swim` calls (Option A — no API change).
+
+**Open backlog (this plan's tech debt + gaps, prioritized):**
+1. **Live occupancy wiring** (gap #1) — every busyness element is a `[fc]` placeholder; the
+   `[fc]`/`~` seams are where it attaches. Contract designed in [[rich-pool-domain]].
+2. **Registry not wired at runtime** — the UNCURATED state renders but `build_answer` calls
+   `find_swim_options` without a registry, so it is never produced live. Makes invariant #1
+   only half-observable; worth a dedicated wiring slice.
+3. **Structured eligibility tri-state** — `?` is detected by JS reason-substring match
+   (correct today, fragile); a `determinable` flag on `EligibilityResult` would decouple it.
+4. **Resolver closed-without-reason vs no-data** (new, from S4) — some genuinely-closed days
+   render as `?` unknown; a structured distinction would tighten invariant #1.
+5. **`Routine` entity** (gap #5) — the week grid's pick-3/save tray is deferred until it exists.
+6. Per-lane reservation granularity (gap #3), routing/walk-time (gap #4), per-time-of-day
+   busyness curve (gap #6), and curated lane-count backfill for pools other than City.
