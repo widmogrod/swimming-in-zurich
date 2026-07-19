@@ -57,3 +57,18 @@ SWIMZH_GOLD_DB=gold.sqlite uv run uvicorn apps.web.main:app --reload
 The files under `data/` (pools/registry/calendar YAML + `catalog.json`) are **ETL inputs** —
 the curated source of truth, built into the gold DB by `swimzh build`. The app never reads
 `data/` at runtime; the gold `.sqlite` (git-ignored) is the only runtime source.
+
+### Use cases
+
+| I want to… | Command |
+|---|---|
+| Try it offline (curated pools only, no network) | `swimzh build --db gold.sqlite` |
+| Get real schedules + lane plans (network) | `build` then `scrape-gold` + `scrape-lanes` on the same `--db` |
+| Refresh geo / merge WFS locations (network) | `build-gold --db gold.sqlite` |
+| Regenerate the pool catalog from the WFS | `build-catalog --out data/catalog.json` (an ETL input; then re-`build`) |
+| Serve the UI + API | `SWIMZH_GOLD_DB=gold.sqlite uvicorn apps.web.main:app` |
+| Ask "where can I swim now/later?" | `GET /swim?at=<ISO>&gender=female\|male\|diverse&age=<int>&lat=&lon=&radius_km=&eligible_only=true` |
+| Browse all ~57 pools | `GET /pools?kind=indoor` · access rules at `/access-types` |
+
+(All CLI commands are `uv run python -m swimzh.cli <cmd>`. Enrichment layers onto an
+already-built DB; re-run any step to refresh that layer.)
