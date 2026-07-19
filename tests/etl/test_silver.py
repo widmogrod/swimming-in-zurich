@@ -137,12 +137,27 @@ def test_attach_lane_plan_no_warning_when_current(dataset: Dataset) -> None:
     assert result.value.warnings == ()
 
 
-def test_attach_lane_plan_unmatched_hint_is_loud_failure(dataset: Dataset) -> None:
+def test_attach_lane_plan_batch_attaches_matched_reports_unmatched(dataset: Dataset) -> None:
+    # A real batch: one hint reconciles (City Schwimmerbecken → the lap basin), one does not.
+    # The matched plan attaches; the unmatched hint is reported; the run does not abort.
+    matched = ParsedPlan(basin_hint="Hallenbad City Schwimmerbecken", plan=_plan(None))
+    unmatched = ParsedPlan(basin_hint="Hallenbad City Variobecken", plan=_plan(None))
+    result = attach_lane_plans(dataset.facilities, [matched, unmatched], FETCHED_AT)
+    assert isinstance(result, Ok)
+    assert result.value.unmatched == ("Hallenbad City Variobecken",)
+    attached = [b for f in result.value.facilities for b in f.basins if b.lane_plan is not None]
+    assert len(attached) == 1 and attached[0].kind is BasinKind.LAP
+
+
+def test_attach_lane_plan_unmatched_hint_is_reported_not_fatal(dataset: Dataset) -> None:
+    # A hint matching NO curated basin (uncurated basin/pool) is reported in `unmatched`, not a
+    # fatal error — a batch scrape should still attach the plans it can. (Ambiguous stays loud.)
     parsed = ParsedPlan(basin_hint="Hallenbad Nonexistent Schwimmerbecken", plan=_plan(None))
     result = attach_lane_plans(dataset.facilities, [parsed], FETCHED_AT)
-    assert isinstance(result, Err)
-    assert isinstance(result.error, SchemaMismatch)
-    assert "Hallenbad Nonexistent Schwimmerbecken" in result.error.detail
+    assert isinstance(result, Ok)
+    assert result.value.unmatched == ("Hallenbad Nonexistent Schwimmerbecken",)
+    # nothing attached
+    assert all(b.lane_plan is None for f in result.value.facilities for b in f.basins)
 
 
 def test_attach_lane_plan_ambiguous_hint_is_loud_failure() -> None:

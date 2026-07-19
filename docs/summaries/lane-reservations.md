@@ -46,10 +46,22 @@ via a `/swim` badge and `GET /pools/{id}` + a UI lane-schedule panel.
 - Reuse `SessionAccess`; per-owner `LaneReservation` rows (not per-lane / dense grid).
 - Availability derived per query (works for future dates), never stored.
 
+## Wired to live data (2026-07-19 follow-up)
+
+`CITY_BELEGUNGSPLAN_URLS` now holds verified real PDF URLs; `scrape-lanes` populates **City's
+50m-Becken** lane plan end-to-end (build-gold → scrape-lanes → `/swim` badge shows "4/6 lanes
+public · reserved by ASVZ, Swimatic" on real data). `attach_lane_plans` was refined so a hint
+matching **no** curated basin is *reported* (`LanePlanAttachment.unmatched`), not fatal —
+**ambiguous** hints stay a loud error (mis-attach risk); a batch now attaches what it can.
+
 ## Not done / backlog
 
-Real per-pool Belegungsplan URLs unverified (only a pinned City fixture drives tests — no
-curated pool carries a plan in production yet); `scrape-lanes` needs a `build-gold` (curated)
-store, not a `scrape-gold` one; the general `/pools/{id}` route surfaces only the lane panel so
-far (features/lockers/website from `facility_detail()` still unwired); owner label-vs-known-set
-reconciliation. See the plan ledger for per-slice detail.
+- **`GridSpec` is calibrated to City's PDF layout only** — Oerlikon/Bungertwies/etc. PDFs
+  parse-fail (reported as skipped); each needs layout re-tuning (or auto-detected tolerances).
+- **Variobecken + uncurated pools/basins** have no curated basin to attach to (reported as
+  unmatched); needs curated basins or the two gold-build paths unified.
+- **Availability is computed at the session *start*, not the query minute** — lanes-free varies
+  through the day, so a 12:00 and an 18:00 query in the same public window report the same
+  number. A worthwhile S3 refinement.
+- `scrape-lanes` needs a `build-gold` (curated-basin) store; the `/pools/{id}` route still
+  surfaces only the lane panel; owner label-vs-known-set reconciliation. See the plan ledger.
