@@ -32,6 +32,24 @@ def test_pools_invalid_kind_is_400() -> None:
     assert response.status_code == 400
 
 
+def test_pool_detail_unknown_facility_is_404() -> None:
+    with TestClient(app) as client:
+        response = client.get("/pools/does-not-exist")
+    assert response.status_code == 404
+
+
+def test_pool_detail_has_no_lane_panels_without_a_plan() -> None:
+    # The curated app carries no lane plans yet: the detail resolves (200) but its lane-panel
+    # list is empty — never an invented panel.
+    with TestClient(app) as client:
+        response = client.get("/pools/city", params={"at": "2026-09-15T07:00"})
+    assert response.status_code == 200
+    body = response.json()
+    assert body["facility_id"] == "city"
+    assert body["facility_name"] == "Hallenbad City"
+    assert body["lane_panels"] == []
+
+
 def test_access_types_explained() -> None:
     with TestClient(app) as client:
         response = client.get("/access-types")

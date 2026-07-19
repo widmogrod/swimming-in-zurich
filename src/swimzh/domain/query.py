@@ -25,7 +25,7 @@ from swimzh.core.result import Err, Ok, Result
 from swimzh.domain.access import EligibilityResult, eligibility
 from swimzh.domain.calendar import ZurichCalendar
 from swimzh.domain.geo import GeoPoint, haversine_km
-from swimzh.domain.lane_plan import LaneAvailability, lane_availability_at
+from swimzh.domain.lane_plan import LaneAvailability, LanePanel, lane_availability_at, lane_panel
 from swimzh.domain.lockers import LockerOption
 from swimzh.domain.models import (
     Basin,
@@ -324,10 +324,22 @@ class FeatureStatus:
 
 
 @dataclass(frozen=True, slots=True)
+class BasinLanePanel:
+    """A basin's lane panel for the facility-detail view — the basin's identity paired with
+    the pure `LanePanel` derivation of its stored `LanePlan` (only basins with a plan)."""
+
+    basin_id: BasinId
+    basin_name: str
+    panel: LanePanel
+
+
+@dataclass(frozen=True, slots=True)
 class FacilityDetail:
     """Facility-level statics for a detail view (`/pools/{id}`-shaped, not per-session):
     website, features (with hours resolved via the schedule resolver), lockers, and the
-    basins with their physical attributes."""
+    basins with their physical attributes. `lane_panels` carries, for each basin that has a
+    parsed Belegungsplan, the per-lane day timeline / best-time / roster derivations for the
+    queried weekday (empty when no basin has a plan)."""
 
     facility_id: FacilityId
     facility_name: str
@@ -337,6 +349,7 @@ class FacilityDetail:
     features: tuple[FeatureStatus, ...]
     lockers: tuple[LockerOption, ...]
     provenance: Provenance
+    lane_panels: tuple[BasinLanePanel, ...] = field(default_factory=tuple)
 
 
 def _feature_status(
@@ -357,6 +370,16 @@ def facility_detail(facility: Facility, at: datetime, calendar: ZurichCalendar) 
     """Assemble the static facility-level answer ("what does this pool offer?") with each
     feature's hours resolved for the queried moment via the existing resolver."""
     at_local = at.astimezone(_ZURICH) if at.tzinfo is not None else at
+    weekday = Weekday(at_local.date().weekday())
+    lane_panels = tuple(
+        BasinLanePanel(
+            basin_id=basin.basin_id,
+            basin_name=basin.name,
+            panel=lane_panel(basin.lane_plan, weekday),
+        )
+        for basin in facility.basins
+        if basin.lane_plan is not None
+    )
     return FacilityDetail(
         facility_id=facility.identity.facility_id,
         facility_name=facility.identity.name,
@@ -366,6 +389,7 @@ def facility_detail(facility: Facility, at: datetime, calendar: ZurichCalendar) 
         features=tuple(_feature_status(facility, f, at_local, calendar) for f in facility.features),
         lockers=facility.lockers,
         provenance=facility.provenance,
+        lane_panels=lane_panels,
     )
 
 

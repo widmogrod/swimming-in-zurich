@@ -104,3 +104,41 @@ def test_lane_availability_badge_surfaces_through_the_swim_endpoint(
     assert badge["partial"] is False
     # Every other option (no plan) degrades to None, never an invented badge.
     assert any(o["lane_availability"] is None for o in options)
+
+
+def test_facility_detail_lane_panel_surfaces_through_pools_endpoint(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """S4: the /pools/{id} facility-detail response carries a per-basin lane panel — the
+    per-lane day timeline, the best public window, and the club roster — for basins with a
+    parsed Belegungsplan."""
+    dataset = load_dataset(DATA_DIR)
+    assert isinstance(dataset, Ok)
+    db = tmp_path / "gold.sqlite"
+    write_facilities(open_db(db), _attach_lane_plan(dataset.value.facilities))
+
+    monkeypatch.setenv("SWIMZH_GOLD_DB", str(db))
+    with TestClient(app) as client:
+        # 2026-09-15 is a Tuesday; the plan is every-day, so the panel resolves.
+        response = client.get("/pools/city", params={"at": "2026-09-15T07:00"})
+    assert response.status_code == 200
+    body = response.json()
+    panels = {p["basin_name"]: p for p in body["lane_panels"]}
+    assert "50m-Becken" in panels  # the basin we gave a plan
+    panel = panels["50m-Becken"]["panel"]
+
+    # Best public time: lanes 3–6 are public (4 lanes) all day.
+    assert panel["best_public"]["public_lanes"] == 4
+    # Day timeline: one strip per lane; lane 1 is held by ASVZ (reserved, not public).
+    day = panel["day_view"]
+    assert day["lane_count"] == 6
+    assert day["weekday"] == 1  # Tuesday
+    lane1 = next(s for s in day["strips"] if s["lane"] == 1)
+    assert lane1["segments"][0]["access"] == "ClubReserved"
+    assert lane1["segments"][0]["owner"] == "ASVZ"
+    lane3 = next(s for s in day["strips"] if s["lane"] == 3)
+    assert lane3["segments"][0]["access"] == "PublicSwim"
+    assert lane3["segments"][0]["owner"] is None  # public lanes carry no owner label
+    # Club roster: ASVZ holds lanes 1–2, public is excluded.
+    assert {r["club"] for r in panel["roster"]} == {"ASVZ"}
+    assert next(r for r in panel["roster"] if r["club"] == "ASVZ")["lanes"] == [1, 2]

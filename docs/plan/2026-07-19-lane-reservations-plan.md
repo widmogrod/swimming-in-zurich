@@ -167,6 +167,7 @@ change (delegates basins). **Serialize both frozensets sorted** or the round-tri
 | 2026-07-19 | S1 | done | Orchestrator reverted out-of-scope `apps/web` UI changes the implementer introduced (unrelated "all-pools hub"); parser derives grid rows (32 filled slots) instead of assuming; `fetched_at` stamped in S2 | unknown-owner-label warning string not surfaced (query-time, S3); `GridSpec` tolerances calibrated to City layout only; label-vs-known-set reconciliation not implemented (code-absent-from-legend triggers unresolved, not a garbled label) | yes |
 | 2026-07-19 | S2 | done | none on contract; reconcile index model-derived (not hardcoded ids); best-effort fetch/parse skip vs loud-Err on unreconcilable parsed hint; geo reconcile untouched | `CITY_BELEGUNGSPLAN_URLS` is a single unverified/guessed URL — real per-pool URLs need verifying before live use; `scrape-lanes` needs a `build-gold` store (curated `BasinKind`/names), won't reconcile against a `scrape-gold` "Hauptbecken/OTHER" store; duplicate hints resolving to the same basin overwrite silently (no warning) | yes |
 | 2026-07-19 | S3 | done | `lane_availability` attached **ungated** (not ~now) — the adjudicated-correct reading, since the plan is recurring and applies to any query time; plan #4's "~now gating" wording is loose | `find_swim_options` complexity rising (CRAP=23, CC=23, still < 30); `partial` is plan-level approximate (`unresolved_lanes` has no per-slot time → conservative over-flag, never under-flag); UI badge test asserts JS source substrings, not rendered output | no |
+| 2026-07-19 | S4 | done | Added `GET /pools/{facility_id}` general facility-detail route despite plan's "no new route" — no facility-detail HTTP surface existed (`facility_detail()` was never wired); critic confirmed it's the general detail route (extensible to full detail), NOT the rejected `/pools/{id}/lanes` | Facility-detail route currently projects only `lane_panels` (website/features/lockers/basins from `facility_detail()` still unsurfaced — follow-up slice); `best_public_time` CC=16; detail endpoint accepts naive `at` (weekday only); UI verified via JS-source substrings | yes |
 
 ## Decisions & divergences
 
@@ -197,3 +198,16 @@ change (delegates basins). **Serialize both frozensets sorted** or the round-tri
 - Tech debt (see ledger): real per-pool Belegungsplan URLs unverified; `scrape-lanes` needs a
   `build-gold` (curated) store — the `scrape-gold` path's single `Hauptbecken/OTHER` basins
   won't reconcile. Unifying the two gold-build paths is out of S2 scope.
+
+### 2026-07-19 — S4 (facility-detail rich views)
+- Pure derivations `lane_day_view` / `club_roster` / `best_public_time` (+ result types)
+  added to `domain/lane_plan.py`; `query.py` `FacilityDetail` gains `lane_panels`. No codec /
+  stored-type change — the "derived never stored" invariant holds (guard still green).
+- **Divergence (critic-approved):** the plan assumed an existing `/pools/{id}` detail route to
+  fold into; none existed (`facility_detail()` was never HTTP-wired). Added `GET
+  /pools/{facility_id}` — the *general* detail route (extensible to the full `FacilityDetail`),
+  explicitly not the rejected dedicated `/pools/{id}/lanes` endpoint. UI: a lazy-loaded "Lane
+  schedule this week" expander (timeline strips + best-time badge + club roster).
+- Discovered: the rich-pool-domain `facility_detail()` (website/features/lockers/physicals)
+  still has no HTTP/UI surface — only the lane panel is exposed. A follow-up slice can
+  serialize the full detail through the now-existing route + response model.

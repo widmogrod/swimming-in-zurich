@@ -104,6 +104,24 @@ _PAGE = """<!doctype html>
     padding: .04rem .4rem; background: #16a34a22; color: #15803d; border: 1px solid #16a34a55; }
   .lanebadge .lpub { font-weight: 600; }
   .lanebadge .lpartial { opacity: .8; font-style: italic; }
+  /* --- facility-detail lane panel (Belegungsplan): per-lane timeline, best time, roster --- */
+  .lanesched { margin-top: .4rem; }
+  .lanesched > summary { cursor: pointer; font-size: .82rem; opacity: .85; }
+  .lanepanel { margin: .5rem 0 .2rem; font-size: .82rem; }
+  .lanepanel .lptitle { font-weight: 600; margin: .5rem 0 .2rem; opacity: .8; }
+  .besttime { display: inline-block; font-size: .78rem; border-radius: .3rem; padding: .1rem .5rem;
+    background: #16a34a22; color: #15803d; border: 1px solid #16a34a55; margin: .2rem 0; }
+  .lanestrips { font-family: var(--mono); font-size: .74rem; }
+  .lanestrip { display: flex; gap: .4rem; align-items: baseline; padding: .1rem 0; }
+  .lanestrip .lslane { opacity: .7; min-width: 3.2rem; white-space: nowrap; }
+  .lseg { display: inline-block; border-radius: .25rem; padding: 0 .35rem; margin: .05rem .2rem .05rem 0;
+    border: 1px solid #8886; white-space: nowrap; }
+  .lseg.public { background: #16a34a22; color: #15803d; border-color: #16a34a55; }
+  .lseg.reserved { background: #8882; }
+  .lsempty { opacity: .5; }
+  .roster { margin-top: .3rem; }
+  .roster .rrow { padding: .1rem 0; }
+  .roster .rclub { font-weight: 600; }
   .card .metaline { font-size: .85rem; opacity: .85; margin-top: .2rem; }
   .card .reason { font-size: .8rem; opacity: .65; margin-top: .2rem; }
   /* pool-as-object detail line: address · tel · official ↗ · directions ↗ */
@@ -414,6 +432,64 @@ function laneBadgeHTML(o) {
   const partial = la.partial ? ' <span class="lpartial">partial</span>' : '';
   return `<span class="lanebadge"><span class="lpub">${esc(la.public_lanes)}/${esc(la.lane_count)}</span> lanes public${until}${partial}</span>`;
 }
+// --- Facility-detail lane panel (Belegungsplan derivations) -----------------------------
+// A basin whose OptionOut carries lane_availability has a parsed plan, so its /pools/{id}
+// facility detail carries a per-basin lane panel: the "best time to come" window, the per-
+// lane day timeline, and the club roster. Rendered lazily inside a <details> on first open.
+const DAY_NAMES = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+const dayName = i => DAY_NAMES[i] || ('day ' + i);
+// One lane's day as a row of colored segments (public = green, reserved shows its owner);
+// an empty lane reads "—" (no session), never a blank that would imply "public".
+function laneStripHTML(strip) {
+  if (!strip.segments.length)
+    return `<div class="lanestrip"><span class="lslane">lane ${esc(strip.lane)}</span><span class="lsempty">—</span></div>`;
+  const segs = strip.segments.map(s => {
+    const pub = s.owner == null;
+    const label = pub ? 'public' : s.owner;
+    return `<span class="lseg ${pub ? 'public' : 'reserved'}">${esc(s.start)}–${esc(s.end)} ${esc(label)}</span>`;
+  }).join('');
+  return `<div class="lanestrip"><span class="lslane">lane ${esc(strip.lane)}</span><span>${segs}</span></div>`;
+}
+// The club roster: who holds which lanes, when. One row per (owner, weekday).
+function rosterHTML(roster) {
+  if (!roster.length) return '<div class="muted">No club or school reservations this week — all public.</div>';
+  return '<div class="roster">' + roster.map(r =>
+    `<div class="rrow"><span class="rclub">${esc(r.club)}</span>: ${esc(dayName(r.weekday))} ${esc(r.start)}–${esc(r.end)}, lanes ${esc(r.lanes.join(', '))}</div>`
+  ).join('') + '</div>';
+}
+// One basin's panel: best-time badge, then the per-lane timeline, then the roster.
+function basinPanelHTML(bp) {
+  const p = bp.panel, dv = p.day_view;
+  const best = p.best_public
+    ? `<div class="besttime">Best time to come (${esc(dayName(dv.weekday))}): ${esc(p.best_public.start)}–${esc(p.best_public.end)} · ${esc(p.best_public.public_lanes)}/${esc(dv.lane_count)} lanes public</div>`
+    : '<div class="muted">No public lanes scheduled this day.</div>';
+  const strips = '<div class="lanestrips">' + dv.strips.map(laneStripHTML).join('') + '</div>';
+  return `<div class="lanepanel"><div class="lptitle">${esc(bp.basin_name)} — ${esc(dayName(dv.weekday))} lane plan</div>`
+    + best
+    + '<div class="lptitle">Per-lane timeline</div>' + strips
+    + '<div class="lptitle">Club roster (this week)</div>' + rosterHTML(p.roster)
+    + '</div>';
+}
+// Fetch /pools/{facility_id} once per <details> and render its lane panels. The `at` moment
+// selects the weekday shown; we pass the Find form's "When" so the panel matches the search.
+async function loadLanePanel(el) {
+  if (el.dataset.loaded) return;
+  el.dataset.loaded = '1';
+  const id = el.dataset.facilityId, at = el.dataset.at;
+  const box = el.querySelector('.lanepanel-slot');
+  box.innerHTML = '<p class="muted">Loading lane plan…</p>';
+  const r = await fetch('/pools/' + encodeURIComponent(id) + (at ? '?at=' + encodeURIComponent(at) : ''));
+  if (!r.ok) { box.innerHTML = '<p class="muted">Lane plan unavailable.</p>'; return; }
+  const d = await r.json();
+  box.innerHTML = d.lane_panels.length
+    ? d.lane_panels.map(basinPanelHTML).join('')
+    : '<p class="muted">No lane plan for this pool yet.</p>';
+}
+// Wire every lane-schedule <details> in a container to lazy-load on first open.
+function wireLanePanels(container) {
+  container.querySelectorAll('details.lanesched').forEach(d =>
+    d.addEventListener('toggle', () => { if (d.open) loadLanePanel(d); }));
+}
 // Visual hierarchy (S4 #7): the eye lands on the ANSWER, not the filter — facility name (big,
 // the S3 link) → bold status pill + eligibility WORD → distance/price → length demoted to a
 // small tag. The redundant `indoor` kind is dropped (every Find result is indoor).
@@ -435,7 +511,17 @@ function optionCard(o) {
     </div>
     <div class="reason">${esc(o.reason)}</div>
     ${poolDetailHTML(o.facility)}
+    ${laneSchedHTML(o)}
   </article>`;
+}
+
+// A default-closed lane-schedule expander for basins WITH a parsed plan (o.lane_availability
+// present). It lazy-loads the /pools/{id} facility-detail panel on first open (see
+// wireLanePanels). Absent when the basin has no plan, so most cards stay unchanged.
+function laneSchedHTML(o) {
+  if (!o.lane_availability) return '';
+  return `<details class="lanesched" data-facility-id="${esc(o.facility_id)}" data-at="${esc(f.at.value)}">`
+    + '<summary>Lane schedule this week ›</summary><div class="lanepanel-slot"></div></details>';
 }
 
 // The three terminal states are never merged: closed-with-reason and uncurated are
@@ -501,6 +587,7 @@ f.addEventListener('submit', async e => {
        + a.statuses.map(statusLine).join('') + '</div>';
   h += footerHTML(a.options);
   findOut.innerHTML = h;
+  wireLanePanels(findOut);  // lazy-load each card's Belegungsplan lane panel on first open
 });
 
 // access legend

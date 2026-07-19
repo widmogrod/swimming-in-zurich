@@ -82,6 +82,28 @@ def test_lane_availability_badge_renders_conditionally() -> None:
     assert ".lanebadge" in page
 
 
+def test_facility_detail_lane_panel_renders_conditionally() -> None:
+    """S4: the facility-detail lane panel (per-lane timeline, best public time, club roster) is
+    an expander shown only on cards whose basin has a parsed plan (o.lane_availability present).
+    It lazy-loads the /pools/{id} facility detail on first open."""
+    with TestClient(app) as client:
+        page = client.get("/").text
+    # The expander is gated on a parsed plan and carries the facility id for the fetch.
+    assert "function laneSchedHTML(o)" in page
+    assert "if (!o.lane_availability) return ''" in page
+    assert "Lane schedule this week" in page
+    assert "data-facility-id" in page
+    # It fetches the facility-detail endpoint and renders the three derivations.
+    assert "'/pools/' + encodeURIComponent(id)" in page
+    assert "function basinPanelHTML(bp)" in page
+    assert "Best time to come" in page
+    assert "Per-lane timeline" in page
+    assert "Club roster" in page
+    assert "function rosterHTML(roster)" in page
+    # Its own panel classes exist in the stylesheet.
+    assert ".lanepanel" in page and ".besttime" in page and ".lanestrip" in page
+
+
 def test_tourist_tab_renders_primer_and_glossary() -> None:
     """S1/S3: the newcomer tab leads with a plain-language primer — one always-visible
     how-to-enter line, then a glossary (pool types keyed off `kind`, slots from

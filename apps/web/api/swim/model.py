@@ -18,6 +18,7 @@ class LaneAvailabilityOut(BaseModel):
 
 class OptionOut(BaseModel):
     facility: str
+    facility_id: str  # stable id for the facility-detail (/pools/{id}) lane-panel fetch
     kind: str  # facility kind (indoor/outdoor/…), for the glance badge context
     basin: str
     length_m: float | None  # basin length — the fat left badge; None degrades gracefully

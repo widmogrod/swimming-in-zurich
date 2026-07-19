@@ -41,6 +41,7 @@ def _option_out(option: SwimOption) -> OptionOut:
     valid = option.provenance.valid_as_of
     return OptionOut(
         facility=option.facility_name,
+        facility_id=str(option.facility_id),
         kind=option.facility_kind.value,
         basin=option.basin_name,
         length_m=float(option.basin_length_m) if option.basin_length_m is not None else None,
