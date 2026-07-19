@@ -1,6 +1,6 @@
 ---
 type: plan
-status: in-progress      # owner approved full backlog in-chat 2026-07-19 ("Everything: full backlog")
+status: done             # owner approved full backlog 2026-07-19; all 6 slices shipped + gated 2026-07-19
 created: 2026-07-19
 feature: ux-usability-pass
 gates:
@@ -123,3 +123,50 @@ slice promptly, and prefer worktree isolation when running concurrent implement 
 | 2026-07-19 | S4 | done | length badge kept its `lenbadge` class name (restyled small) rather than being renamed — preserves KEEP-invariant intent, avoids churning S1/S2 badge tests; `.celltime` is always visible (stronger than "wider viewports only") | none — but note: a stale `.mypy_cache` produces phantom errors in `catalog_store.py`; `rm -rf .mypy_cache` before mypy clears them (recurring env quirk, not a code defect) | yes |
 | 2026-07-19 | S5 | done | scheduled set = catalog names ∩ (`/swim` options ∪ **closed** statuses); `uncurated` statuses EXCLUDED so no-timetable pools honestly read "location only — no timetable yet", never "closed" (invariant #1). Single `Plan ›` jump only (Find form has no pool selector to preselect). **Uncommitted S5 was wiped once by a concurrent `/dev:implement` session's `git reset` (see "Decisions & divergences") and re-applied.** | `jumpToPlan` preselects only if the pool is within the Plan tab's current place/radius (HB 10 km covers all 4 central scheduled pools today); out-of-radius pool lands on nearest instead | yes |
 | 2026-07-19 | S6 | done | **#15 decision: KEEP the tourist tab** (do NOT demote to a Find panel) — it carries onboarding Find lacks (primer, deduped starters, inline decode, kept-visible closed pools, `eligible_only=false` mode); demotion was not a net win. **Find is now location-scoped** (consumes the shared place/radius) so its cards gain distance and results are radius-filtered — a genuine behavior change; clearing radius keeps distance without filtering. Single shared radius default = 10 km (was Plan 10 / Tourist 5). Plan+Tourist lost submit buttons (auto-run + re-run on context change) | shared-context re-run fires on `change` (blur), not `input` — a debounce would be nicer; Find issues one extra memoized `loadScheduledFacilities()` `/swim` purely for the coverage-footer count | yes |
+
+## Summary — what exists now
+
+All six slices shipped 2026-07-19 through the full QA + adversarial-review gates (final chain:
+205 tests, coverage 94.86% ≥ 91 floor, mypy strict clean, CRAP clean). Presentation-only —
+everything is in the single-file UI `apps/web/api/ui/router.py`; no domain/API/endpoint change.
+
+The five UX critics' core diagnosis — *the pool was not a first-class, actionable object* — is
+resolved, and each of the owner's four complaints is fixed:
+- **"tourist shows one pool" (a)** → S1 dedupes starters to distinct facilities (each pool's
+  earliest/next session), so distinct pools appear.
+- **"primer too big" (b)** → S1 collapses the ~19-row primer to one line + a default-closed
+  `<details>`; starter pools sit above the fold.
+- **"no pool-detail / website link" (c)** → S3 memoizes `/pools` into a `name→{url,phone,address,
+  lat,lon}` join map; every facility name is now a link with a one-line detail (address · `tel:` ·
+  `official ↗` · `🗺 directions ↗`), including on closed/uncurated status lines. S5 turns "All pools"
+  into a hub (schedule ✓/— column + `Plan ›` jump + name search).
+- **"too much unexplained jargon" (d)** → S2 renders access as English words, moves the glyph
+  legend into a closed `<details>`, kills dev vocabulary (`valid_as_of`→"Schedule last checked",
+  `UNCURATED`→"Hours not listed yet…", `curated/scraped`→plain source words), and drops the `[fc]`
+  column for one plain "Busyness: not available yet." S4 reorders the card so name→status+eligibility
+  *word*→distance/price lead and length is a small tag; the week grid scrolls on mobile with visible
+  times. S6 lifts place/gender/age/radius into one shared context bar (tabs continue the session) and
+  demotes the amber coverage banner to a neutral line.
+
+**Honesty invariants preserved throughout:** the three terminal states stay distinct (wording only
+changed), busyness is never faked, the length-badge concept survives (demoted, not deleted).
+
+**IA decision (#15):** the "First time here?" tab was KEPT (not demoted) — it carries onboarding the
+Find tab lacks. The nav is Now · Week · Visit · All-pools.
+
+**Open tech debt / follow-ups (backlog):**
+- Registry not wired at runtime (from the earlier plan) — the UNCURATED state and "location only"
+  rows depend on it; still the highest-leverage cross-cutting fix.
+- Find is now location-scoped (radius-filters) — confirm this matches intent; clearing radius is the
+  escape hatch. Single shared radius default 10 km (was Plan 10 / Tourist 5).
+- `jumpToPlan` only preselects within the Plan tab's current radius; inactive tabs show results from
+  the previous context until re-run (a "context changed — refresh" affordance would tighten it).
+- Shared-context re-run fires on `change` not `input` (a debounce on `input` would be nicer).
+- `esc()` doesn't neutralise `javascript:`/`data:` href schemes — non-exploitable today (trusted
+  committed catalog); an http(s) allowlist would harden it. UI tests assert served-HTML source
+  strings, not runtime DOM — a jsdom/Playwright harness would strengthen them.
+
+**Process note:** a concurrent `/dev:implement` session (the `lane-reservations` plan) ran on the
+same repo and its `git reset` wiped uncommitted S5 once (see Decisions & divergences). Slices S5/S6
+were committed immediately after passing to protect them. Lesson: use worktree isolation for
+concurrent implement loops.
