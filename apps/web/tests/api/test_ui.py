@@ -15,8 +15,10 @@ def test_index_serves_html_page() -> None:
 
 
 def test_page_renders_the_three_terminal_states_distinctly() -> None:
-    """S1 invariant #1: open / closed-with-reason / uncurated are never merged. The page's
-    render code must carry a distinct branch (and CSS class) for each."""
+    """S1/S2 invariant #1: open / closed-with-reason / uncurated are never merged. The page's
+    render code must carry a distinct branch (and CSS class) for each. S2 rewords the third
+    state in plain language ("Hours not listed yet") but MUST keep it a distinct branch/class,
+    never folded into "closed"."""
     with TestClient(app) as client:
         page = client.get("/").text
     # Open: closing-time treatment.
@@ -25,22 +27,31 @@ def test_page_renders_the_three_terminal_states_distinctly() -> None:
     # Closed: a reason, its own glyph + class.
     assert "CLOSED —" in page
     assert "status closed" in page
-    # Uncurated: explicitly "NOT closed", its own class — the never-conflated third state.
-    assert "UNCURATED" in page and "NOT closed" in page
+    # Uncurated third state: plain wording (no dev token "UNCURATED"), its own branch + class.
+    assert "UNCURATED" not in page  # dev vocabulary killed
+    assert "Hours not listed yet" in page
+    assert "may well be open, we just don't have its timetable" in page
     assert "status uncurated" in page
+    assert "s.status === 'uncurated'" in page  # still a distinct render branch
 
 
 def test_page_carries_the_unified_glyph_legend_and_badge() -> None:
     """S1: the shared legend (two orthogonal glyph axes), the length badge, and the
-    provenance stamp are part of the visual language."""
+    provenance stamp are part of the visual language. S2 keeps the glyph axes but rewords the
+    provenance stamp in plain language (no ``valid_as_of`` dev token)."""
     with TestClient(app) as client:
         page = client.get("/").text
     # Both orthogonal axes appear in the legend.
     assert "ACCESS" in page and "≈ lane" in page and "◇ public" in page
     assert "FOR YOU" in page and "✓ in" in page and "? unknown" in page
-    # Length badge + provenance stamp scaffolding.
+    # Length badge + provenance stamp scaffolding, now in plain words.
     assert "lenbadge" in page
-    assert "ⓘ" in page and "valid_as_of" in page
+    assert "ⓘ" in page
+    # The user-facing freshness phrase is plain; the old "valid as of" label is gone.
+    # (``o.valid_as_of`` still appears as an API property read in the inline script — that is
+    # the JSON contract field, not rendered label text.)
+    assert "valid as of" not in page
+    assert "Schedule last checked" in page
 
 
 def test_badge_renders_lane_count_subline_conditionally() -> None:
@@ -142,15 +153,18 @@ def test_week_planner_cells_use_both_orthogonal_glyph_axes() -> None:
     assert "one glyph pair per cell" in page
 
 
-def test_week_planner_busyness_is_bracketed_forecast_placeholder() -> None:
-    """S4 / invariant #2: busyness is un-wired, so it may only appear as a bracketed [fc]
-    forecast caption — never a plain value and never a top sort key."""
+def test_week_planner_busyness_is_a_single_plain_line_no_column() -> None:
+    """S2 #8 / invariant #2: busyness is un-wired. The old ``[fc]`` grid column and its two
+    captions are gone, replaced by a single plain line "Busyness: not available yet." — the
+    honesty invariant satisfied with words, the grid column reclaimed."""
     with TestClient(app) as client:
         page = client.get("/").text
-    assert "[fc]" in page
-    # It is explicitly captioned as a forecast, not a live count.
-    assert "live occupancy is not wired" in page
-    assert "forecast" in page.lower()
+    # The bracketed dev placeholder and its column are gone everywhere.
+    assert "[fc]" not in page
+    assert 'class="fc"' not in page
+    assert ".weekgrid td.fc" not in page  # dead CSS rule removed too
+    # A single plain honesty line replaces the column + captions.
+    assert "Busyness: not available yet." in page
 
 
 def test_week_planner_pool_switcher_is_distance_sorted() -> None:
@@ -270,3 +284,50 @@ def test_tourist_primer_keeps_inline_decode_on_starter_cards() -> None:
         page = client.get("/").text
     assert "This slot is <b>" in page
     assert "decodeAccess(o.access)" in page
+
+
+def test_find_card_renders_the_english_access_word_not_only_a_glyph() -> None:
+    """S2 #4: a swim card's access must READ AS A WORD (via ``accessLabel``), not rely on the
+    bare glyph alone. The scannable glyph stays, but the word is rendered beside it."""
+    with TestClient(app) as client:
+        page = client.get("/").text
+    # The card body renders the access word from the helper, adjacent to the access glyph.
+    assert "accessLabel(o.access)" in page
+    assert "axis-access" in page  # the glyph is kept for the scannable grid/badge language
+    # The tourist starter card carries the word too, via the inline decode line.
+    assert "This slot is <b>" in page
+
+
+def test_glyph_legend_moved_below_results_into_closed_details_on_find_and_plan() -> None:
+    """S2 #4: the monospace glyph legend moves from ABOVE the results to BELOW them, tucked
+    into a default-closed "What do the symbols mean?" <details> on both the Find and Plan
+    tabs — so a first read meets the results, not a decoder wall."""
+    with TestClient(app) as client:
+        page = client.get("/").text
+    # The legend now sits inside a symbols expander, not force-open.
+    assert '<details class="symbols"><summary>What do the symbols mean?</summary>' in page
+    assert '<details class="symbols" open' not in page
+    # Two expanders — one per tab (Find + Plan).
+    assert page.count('<details class="symbols">') == 2
+    # On Find the legend follows the results container (below, not above).
+    assert page.index('<div id="findOut"></div>') < page.index('<details class="symbols">')
+    # On Plan the legend follows the grid output container.
+    assert page.index('<div id="planOut"></div>') < page.rindex('<details class="symbols">')
+    # The glyph legend content is still present (moved, not deleted).
+    assert '<pre class="glyphlegend">' in page
+
+
+def test_provenance_stamp_uses_plain_language_not_dev_tokens() -> None:
+    """S2 #5: the provenance stamp reports freshness + source in plain words. The developer
+    ``(curated)/(scraped)/(mixed)`` tokens become "official schedule" / "read from the pool's
+    website" / "mixed sources", and ``valid_as_of`` becomes "Schedule last checked {date}"."""
+    with TestClient(app) as client:
+        page = client.get("/").text
+    # Plain-language provenance phrases replace the raw curated/scraped/mixed tokens.
+    assert "official schedule" in page
+    assert "read from the pool's website" in page
+    assert "mixed sources" in page
+    # And the freshness wording is plain, not the API field name.
+    assert "Schedule last checked" in page
+    # The raw dev tokens no longer render as the provenance mode.
+    assert "(curated)" not in page and "(scraped)" not in page and "(mixed)" not in page

@@ -6,15 +6,18 @@ The "Plan my week" tab (Screen 2 in ``docs/plan/2026-07-19-ux-ascii-design.md``)
 read-only days×time grid for the nearest pool: it assembles seven ``/swim`` calls — one per
 weekday (Option A; ``find_swim_options`` returns a whole day's sessions per call) — into a
 grid whose cells carry the same orthogonal access (``≈◇⌂WSX·``) and eligibility (``✓✗?``)
-glyph axes, with busyness shown only as a bracketed ``[fc]`` forecast placeholder. Closed
-and unknown days are called out explicitly, never left as a blank that reads as "closed".
+glyph axes; busyness is un-wired, so the grid states plainly "Busyness: not available yet."
+Closed and unknown days are called out explicitly, never left as a blank that reads as "closed".
 
 The "Find a swim" results embody the unified monospace visual language (see
 ``docs/plan/2026-07-19-ux-ascii-design.md``): a fat length badge, orthogonal access
 (``≈◇⌂WSX·``) and eligibility (``✓✗?``) glyph axes, the three never-merged terminal
-states (open ``·closes`` / closed-with-reason / uncurated), a ``ⓘ valid_as_of · source``
-provenance stamp, and the shared legend. The badge carries a ``N lane`` sub-line under the
-length when the basin's lane count is known, degrading to length-only when it is not."""
+states (open ``·closes`` / closed-with-reason / "Hours not listed yet"), an
+``ⓘ Schedule last checked … · source`` provenance stamp in plain words, and — below the
+results in a default-closed "What do the symbols mean?" expander — the shared glyph legend.
+The access word (from ``accessLabel``) reads on each card, not just the bare glyph. The badge
+carries a ``N lane`` sub-line under the length when the basin's lane count is known,
+degrading to length-only when it is not."""
 
 from __future__ import annotations
 
@@ -55,7 +58,9 @@ _PAGE = """<!doctype html>
 
   /* --- unified monospace swim-card language --- */
   .glyphlegend { font-family: var(--mono); font-size: .8rem; white-space: pre; overflow-x: auto;
-    border: 1px solid #8886; border-radius: .4rem; padding: .6rem .8rem; margin: 1rem 0; opacity: .85; }
+    border: 1px solid #8886; border-radius: .4rem; padding: .6rem .8rem; margin: .4rem 0 1rem; opacity: .85; }
+  .symbols { margin: 1rem 0; }
+  .symbols summary { cursor: pointer; opacity: .8; font-size: .85rem; }
   .card { display: flex; gap: .8rem; align-items: stretch; border: 1px solid #8886;
     border-radius: .5rem; padding: .7rem; margin: .8rem 0; }
   .lenbadge { font-family: var(--mono); flex: 0 0 auto; min-width: 5.5rem; display: flex;
@@ -109,7 +114,6 @@ _PAGE = """<!doctype html>
   .weekgrid th, .weekgrid td { border: 1px solid #8884; padding: .3rem .45rem; text-align: center; }
   .weekgrid th { font-weight: 600; opacity: .85; }
   .weekgrid td.time { text-align: right; opacity: .8; white-space: nowrap; }
-  .weekgrid td.fc { text-align: left; opacity: .6; font-size: .82rem; white-space: nowrap; }
   .weekgrid td.closed-day { opacity: .45; }        /* no session at this slot (·) */
   .weekgrid td.unknown-day { color: #b45309; }     /* no data — ? , NEVER blank */
   .cell-elig.in { color: #15803d; } .cell-elig.out { color: #b91c1c; } .cell-elig.unk { color: #b45309; }
@@ -143,16 +147,18 @@ _PAGE = """<!doctype html>
     </label>
     <button type="submit">Find pools</button>
   </form>
+  <div id="findOut"></div>
+  <details class="symbols"><summary>What do the symbols mean?</summary>
   <pre class="glyphlegend">ACCESS   ≈ lane   ◇ public   ⌂ family   W women   S seniors   X reserved   · closed
 FOR YOU  ✓ in     ✗ not you   ? unknown
-STATUS   OPEN ·closes HH:MM     CLOSED ⊘ reason     UNCURATED ? schedule unknown
-PROV     ⓘ valid_as_of · source · (curated|scraped)</pre>
-  <div id="findOut"></div>
+STATUS   OPEN · closes HH:MM     CLOSED — reason     Hours not listed yet
+PROV     ⓘ Schedule last checked … · source · official / from the website / mixed</pre>
+  </details>
   <div class="legend"><h3>Access types</h3><dl id="legend"></dl></div>
 </section>
 
 <section id="plan">
-  <p class="muted">Plan recurring lap windows across the week near home. Read-only — a days×time grid for one nearby pool at a time. Busyness is a <b>[fc]</b> forecast placeholder, never live. (Saving a routine is not built yet.)</p>
+  <p class="muted">Plan recurring lap windows across the week near home. Read-only — a days×time grid for one nearby pool at a time. (Saving a routine is not built yet.)</p>
   <form id="pf">
     <label>Near
       <select name="place">
@@ -171,8 +177,6 @@ PROV     ⓘ valid_as_of · source · (curated|scraped)</pre>
     <label>Radius (km)<input type="number" name="radius_km" min="1" max="30" value="10"></label>
     <button type="submit">Show my week</button>
   </form>
-  <pre class="glyphlegend">ACCESS   ≈ lane   ◇ public   ⌂ family   W women   S seniors   X reserved   · no session
-FOR YOU  ✓ in     ✗ not you   ? unknown          BUSY  [fc] forecast — not live</pre>
   <div class="planfilters">
     <label><input type="checkbox" id="pf-lap" checked> lap only</label>
     <label><input type="checkbox" id="pf-reserved"> show reserved</label>
@@ -181,6 +185,10 @@ FOR YOU  ✓ in     ✗ not you   ? unknown          BUSY  [fc] forecast — not
   <div id="poolSwitch" class="chips"></div>
   <p id="planNote" class="muted"></p>
   <div id="planOut"></div>
+  <details class="symbols"><summary>What do the symbols mean?</summary>
+  <pre class="glyphlegend">ACCESS   ≈ lane   ◇ public   ⌂ family   W women   S seniors   X reserved   · no session
+FOR YOU  ✓ in     ✗ not you   ? unknown</pre>
+  </details>
 </section>
 
 <section id="visit">
@@ -277,7 +285,7 @@ function statusLine(s) {
   if (s.status === 'closed')
     return `<div class="status closed">⊘ ${esc(s.facility)} CLOSED — ${esc(s.detail)}</div>`;
   if (s.status === 'uncurated')
-    return `<div class="status uncurated">? ${esc(s.facility)} UNCURATED — schedule unknown, NOT closed</div>`;
+    return `<div class="status uncurated">? ${esc(s.facility)} — Hours not listed yet — may well be open, we just don't have its timetable.</div>`;
   return `<div class="status">${esc(s.facility)} — ${esc(s.detail)}</div>`;
 }
 
@@ -288,9 +296,10 @@ function provStamp(options) {
   const sources = [...new Set(options.map(o => o.source).filter(Boolean))];
   const allCurated = options.every(o => o.curated);
   const noneCurated = options.every(o => !o.curated);
-  const mode = allCurated ? 'curated' : noneCurated ? 'scraped' : 'mixed';
-  const asOf = dates.length ? 'valid as of ' + esc(dates[0]) + ' · ' : '';
-  return `<div class="prov">ⓘ schedules ${asOf}${esc(sources.join(', ') || 'unknown source')} (${mode})</div>`;
+  const provenance = allCurated ? 'official schedule'
+    : noneCurated ? "read from the pool's website" : 'mixed sources';
+  const asOf = dates.length ? 'Schedule last checked ' + esc(dates[0]) + ' · ' : '';
+  return `<div class="prov">ⓘ ${asOf}${esc(sources.join(', ') || 'unknown source')} · ${provenance}</div>`;
 }
 
 f.addEventListener('submit', async e => {
@@ -583,7 +592,7 @@ function renderPlan() {
 
   let h = `<div class="planhead">${badgePool}</div>`;
   h += '<table class="weekgrid"><thead><tr><th>time</th>'
-     + planWeek.map(d => `<th>${esc(d.label)}</th>`).join('') + '<th></th></tr></thead><tbody>';
+     + planWeek.map(d => `<th>${esc(d.label)}</th>`).join('') + '</tr></thead><tbody>';
   for (const t of times) {
     h += `<tr><td class="time">${esc(t)}</td>`;
     for (let i = 0; i < planWeek.length; i++) {
@@ -598,7 +607,7 @@ function renderPlan() {
       h += `<td title="${esc(title)}"><span class="glyph">${esc(accessGlyph(o.access))}</span>`
          + `<span class="glyph cell-elig ${el.cls}">${el.g}</span></td>`;
     }
-    h += '<td class="fc">[fc]</td></tr>';  // busyness placeholder — bracketed, forecast, not live
+    h += '</tr>';
   }
   h += '</tbody></table>';
 
@@ -610,7 +619,7 @@ function renderPlan() {
     return '';
   }).filter(Boolean).join('');
   h += notes;
-  h += '<p class="muted">Busyness columns show <b>[fc]</b> only — live occupancy is not wired; nothing here is a live count.</p>';
+  h += '<p class="muted">Busyness: not available yet.</p>';
   h += provStamp(planWeek.flatMap(d => d.answer.options.filter(o => o.facility === planSelected)));
   planOut.innerHTML = h;
 }

@@ -105,3 +105,4 @@ through QA + adversarial-review gates before the next. Presentation-only; no dom
 | date | slice | status | divergence | tech debt | human review? |
 |------|-------|--------|------------|-----------|---------------|
 | 2026-07-19 | S1 | done | TO ENTER/TO BRING rows folded into the single always-on line (plan directed collapsing ~19 rows); critic caught that JS `Map`-from-entries keeps LAST not first — dedupe changed to an explicit `.has`-guarded first-wins loop so each starter shows the pool's earliest/next session | none | no |
+| 2026-07-19 | S2 | done | `o.valid_as_of` remains as an API-property READ in the script (JSON contract field), so tests assert the display phrase "valid as of" is gone + "Schedule last checked" present, not the raw token's absence | grid day-notes still say terse "NOT closed" (honest, not a dev token) — could align to the new voice in S4; `accessLabel()` returns upper-case (LANE/PUBLIC) — S4 hierarchy pass can sentence-case | no |
