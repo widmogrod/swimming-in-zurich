@@ -121,7 +121,8 @@ Appended by /dev:implement after each slice — never rewritten. Newest row last
 
 | date | slice | status | divergence from plan | tech debt created | human review? |
 |------|-------|--------|----------------------|-------------------|---------------|
-| 2026-07-19 | S1 | done | none on contract; calendar stored as one JSON `singleton` row (plan allowed either); `load_calendar` raises `LookupError` when absent (S3 owns the app fail-fast) | `calendar_codec` + 2 new tests read `ZurichCalendar` private attrs → +12 pyright `reportPrivateUsage` (mypy gate green). Pyright is **already** broken on `main` pre-S1 (`test_belegungsplan.py`, `catalog_json.py`), so CLAUDE.md's "both checkers pass" is stale. Minimal fix: add read accessors to `ZurichCalendar` | yes |
+| 2026-07-19 | S1 | done | none on contract; calendar stored as one JSON `singleton` row (plan allowed either); `load_calendar` raises `LookupError` when absent (S3 owns the app fail-fast) | `calendar_codec` + 2 new tests read `ZurichCalendar` private attrs → +12 pyright `reportPrivateUsage` (mypy gate green). Pyright is **already** broken on `main` pre-S1 (`test_belegungsplan.py`, `catalog_json.py`), so CLAUDE.md's "both checkers pass" is stale. Minimal fix: add read accessors to `ZurichCalendar`. **Owner: defer to backlog (2026-07-19).** | yes |
+| 2026-07-19 | S2 | done | none on contract; catalog read from `data_dir/catalog.json` (generalized to `--data`) | `build.py` SchemaMismatch/Err branches uncovered (floor still met); an offline-only `swimzh build` writes curated facilities **without WFS-merged geo** (the `catalog` table has geo for all 57; facility geo comes from `build-gold`/`scrape-gold`) — S3 must not assume facility geo | no |
 
 ## Decisions & divergences
 
@@ -146,6 +147,17 @@ Appended by /dev:implement after each slice — never rewritten. Newest row last
   the codec + tests read those, and restore pyright green (also clears the pre-existing
   `catalog_json.py` / `test_belegungsplan.py` pyright debt). Correct CLAUDE.md's stale "both
   checkers pass" line. Could fold into S4 (docs) or a dedicated cleanup.
+
+### 2026-07-19 — S2 (`swimzh build` offline gold DB)
+- `etl/build.py build_store(data_dir, db_path) -> Result` assembles facilities + catalog
+  (`data_dir/catalog.json`) + calendar into one gold DB, **offline** (critic empirically proved
+  no httpx client is created on the build path). New `build` CLI subcommand. Errors are values
+  (`ParseError`/`SchemaMismatch`). Network commands untouched and still enrich the store.
+- **Owner decision (2026-07-19):** the pyright regression from S1 is **deferred to backlog**;
+  mypy strict remains the enforced gate. (So S3/S4 will not spend a slice on it.)
+- Note for S3: a pure `swimzh build` yields curated facilities **without geo** on the `facility`
+  rows (geo lives on the `catalog` table + comes from `build-gold`/`scrape-gold`). S3's app must
+  tolerate facilities without lat/lon (distance/`near` filtering already treats geo as optional).
 
 ## Summary
 

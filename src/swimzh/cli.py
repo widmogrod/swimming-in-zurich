@@ -19,6 +19,7 @@ from swimzh.core.errors import describe
 from swimzh.core.http import HttpClient
 from swimzh.core.result import Err, Ok
 from swimzh.etl import pipeline
+from swimzh.etl.build import build_store
 from swimzh.etl.catalog import build_catalog
 from swimzh.etl.gold import write_gold
 from swimzh.etl.lane_plans import CITY_BELEGUNGSPLAN_URLS, scrape_lane_plans
@@ -40,6 +41,20 @@ def build_gold(*, db_path: Path, data_dir: Path, client: HttpClient, fetched_at:
             return 0
         case Err(error):
             print(f"ETL failed: {describe(error)}", file=sys.stderr)
+            return 1
+
+
+def build(*, db_path: Path, data_dir: Path) -> int:
+    """Assemble a complete, self-contained gold store from committed inputs, offline.
+
+    No network: curated facilities + calendar + the committed catalog are written into one
+    gold DB. Returns a process exit code."""
+    match build_store(data_dir, db_path):
+        case Ok(repo):
+            print(f"gold store built at {db_path} ({repo.count()} facilities)")
+            return 0
+        case Err(error):
+            print(f"build failed: {describe(error)}", file=sys.stderr)
             return 1
 
 
@@ -135,6 +150,12 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="swimzh")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
+    offline = subparsers.add_parser(
+        "build", help="assemble a complete gold store from committed inputs (offline)"
+    )
+    offline.add_argument("--db", required=True, help="path to the gold SQLite file to write")
+    offline.add_argument("--data", default="data", help="curated data directory (default: data)")
+
     gold = subparsers.add_parser("build-gold", help="build the SQLite gold store")
     gold.add_argument("--db", required=True, help="path to the gold SQLite file to write")
     gold.add_argument("--data", default="data", help="curated data directory (default: data)")
@@ -154,6 +175,10 @@ def main(argv: list[str] | None = None) -> int:
     lanes.add_argument("--db", required=True, help="path to the existing gold SQLite file")
 
     args = parser.parse_args(argv)
+
+    # `build` is fully offline — no network client needed.
+    if args.command == "build":
+        return build(db_path=Path(args.db), data_dir=Path(args.data))
 
     # The network wiring below is exercised live; the per-command functions are unit-tested
     # with an injected client.
