@@ -165,6 +165,7 @@ change (delegates basins). **Serialize both frozensets sorted** or the round-tri
 | date | slice | status | divergence | tech debt | human review? |
 |------|-------|--------|------------|-----------|---------------|
 | 2026-07-19 | S1 | done | Orchestrator reverted out-of-scope `apps/web` UI changes the implementer introduced (unrelated "all-pools hub"); parser derives grid rows (32 filled slots) instead of assuming; `fetched_at` stamped in S2 | unknown-owner-label warning string not surfaced (query-time, S3); `GridSpec` tolerances calibrated to City layout only; label-vs-known-set reconciliation not implemented (code-absent-from-legend triggers unresolved, not a garbled label) | yes |
+| 2026-07-19 | S2 | done | none on contract; reconcile index model-derived (not hardcoded ids); best-effort fetch/parse skip vs loud-Err on unreconcilable parsed hint; geo reconcile untouched | `CITY_BELEGUNGSPLAN_URLS` is a single unverified/guessed URL — real per-pool URLs need verifying before live use; `scrape-lanes` needs a `build-gold` store (curated `BasinKind`/names), won't reconcile against a `scrape-gold` "Hauptbecken/OTHER" store; duplicate hints resolving to the same basin overwrite silently (no warning) | yes |
 
 ## Decisions & divergences
 
@@ -181,3 +182,17 @@ change (delegates basins). **Serialize both frozensets sorted** or the round-tri
 - Non-blocking, deferred: the ⊆-bound invariant is present but a tautology for parser-built
   grids (the `Basin.lanes is None` skip belongs to S2/silver, which has the `Basin`);
   unrecognized-label warning strings surface at query time (S3).
+
+### 2026-07-19 — S2 (silver reconcile + gold + CLI)
+- `attach_lane_plans` reconciles the PDF `basin_hint` to a `Basin` via a model-derived index
+  (facility name/alias × basin name / `BasinKind` German word), exact-normalised; ambiguity or
+  no-match → loud `Err(SchemaMismatch)` naming the offender (never a wrong-basin attach). The
+  wrong-basin negative is tested (City "Schwimmerbecken" hint lands on the 50m basin; the
+  teaching basin stays `None`). The facility-level geo `reconcile` is untouched.
+- `fetched_at` stamped here (S1 left it `None`); staleness warning fires for the committed
+  fixture (Jan `valid_from` vs Jul schedule `valid_as_of`) — correct.
+- New `scrape-lanes` CLI: reads a gold store, best-effort fetches/parses per-basin PDFs,
+  reconciles loudly, rewrites gold. Critic verdict **approve** (QA independently reproduced).
+- Tech debt (see ledger): real per-pool Belegungsplan URLs unverified; `scrape-lanes` needs a
+  `build-gold` (curated) store — the `scrape-gold` path's single `Hauptbecken/OTHER` basins
+  won't reconcile. Unifying the two gold-build paths is out of S2 scope.

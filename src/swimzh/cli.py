@@ -2,6 +2,7 @@
 
   swimzh build-gold    --db gold.sqlite     # raw→silver→gold SQLite the web app serves from
   swimzh build-catalog --out data/catalog.json  # full pool catalog from the WFS (committed)
+  swimzh scrape-lanes  --db gold.sqlite     # attach per-basin Belegungsplan lane plans
 
 Run via: `uv run python -m swimzh.cli <command> ...`
 """
@@ -20,11 +21,13 @@ from swimzh.core.result import Err, Ok
 from swimzh.etl import pipeline
 from swimzh.etl.catalog import build_catalog
 from swimzh.etl.gold import write_gold
+from swimzh.etl.lane_plans import CITY_BELEGUNGSPLAN_URLS, scrape_lane_plans
 from swimzh.etl.scrape import scrape_indoor_facilities
+from swimzh.etl.silver import attach_lane_plans
 from swimzh.providers import geo_sport
 from swimzh.providers.price_scraper import scrape_prices
 from swimzh.storage import catalog_json
-from swimzh.storage.sqlite_repo import open_db
+from swimzh.storage.sqlite_repo import GoldRepository, open_db
 
 _ZURICH = ZoneInfo("Europe/Zurich")
 
@@ -77,6 +80,49 @@ def scrape_gold(
     return 0
 
 
+def scrape_lanes(
+    *,
+    db_path: Path,
+    client: HttpClient,
+    fetched_at: datetime,
+    urls: tuple[str, ...] = CITY_BELEGUNGSPLAN_URLS,
+) -> int:
+    """Fetch the per-basin Belegungsplan PDFs and attach the parsed lane plans onto the
+    matching basins of an existing gold store. Best-effort on fetch/parse; loud on a hint
+    that cannot be reconciled to a basin. Exit code."""
+    if not db_path.exists():
+        print(f"gold store not found at {db_path}; build it first", file=sys.stderr)
+        return 1
+    conn = open_db(db_path)
+    facilities = GoldRepository(conn).load_all()
+    if not facilities:
+        print(f"gold store {db_path} is empty; build it first", file=sys.stderr)
+        return 1
+
+    report = scrape_lane_plans(client, urls)
+    if not report.plans:
+        skipped = f"; skipped {len(report.skipped)}" if report.skipped else ""
+        print(f"no Belegungsplan PDFs could be parsed{skipped}", file=sys.stderr)
+        return 1
+
+    match attach_lane_plans(facilities, report.plans, fetched_at):
+        case Err(error):
+            print(f"lane-plan reconcile failed: {describe(error)}", file=sys.stderr)
+            return 1
+        case Ok(attachment):
+            write_gold(conn, attachment.facilities)
+            attached = sum(
+                1 for f in attachment.facilities for b in f.basins if b.lane_plan is not None
+            )
+            msg = f"attached {attached} lane plan(s) into {db_path}"
+            if report.skipped:
+                msg += f"; skipped {len(report.skipped)}: {', '.join(report.skipped)}"
+            print(msg)
+            for warning in attachment.warnings:
+                print(f"warning: {warning}", file=sys.stderr)
+            return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="swimzh")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -93,6 +139,11 @@ def main(argv: list[str] | None = None) -> int:
     )
     scrape.add_argument("--db", required=True, help="path to the gold SQLite file to write")
     scrape.add_argument("--catalog", default="data/catalog.json", help="catalog JSON to read")
+
+    lanes = subparsers.add_parser(
+        "scrape-lanes", help="attach per-basin Belegungsplan lane plans to a gold store"
+    )
+    lanes.add_argument("--db", required=True, help="path to the existing gold SQLite file")
 
     args = parser.parse_args(argv)
 
@@ -115,6 +166,8 @@ def main(argv: list[str] | None = None) -> int:
                 client=client,
                 fetched_at=now,
             )
+        if args.command == "scrape-lanes":
+            return scrape_lanes(db_path=Path(args.db), client=client, fetched_at=now)
         return build_catalog_file(out=Path(args.out), client=client, generated_at=now)
 
 

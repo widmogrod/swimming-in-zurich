@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from datetime import datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
@@ -10,15 +11,18 @@ import httpx
 import pytest
 from apps.web.services.gold_store import GoldSwimData
 
-from swimzh.cli import build_catalog_file, build_gold, main, scrape_gold
+from swimzh.cli import build_catalog_file, build_gold, main, scrape_gold, scrape_lanes
 from swimzh.core.http import HttpClient, RetryPolicy
 from swimzh.domain.catalog import PoolCatalogEntry
 from swimzh.domain.geo import GeoPoint
-from swimzh.domain.models import PoolKind
+from swimzh.domain.models import BasinId, FacilityId, PoolKind
 from swimzh.providers.geo_sport import POOL_LAYERS
 from swimzh.storage import catalog_json
+from swimzh.storage.sqlite_repo import GoldRepository, open_db
 
-FIXTURE_HTML = Path(__file__).resolve().parent / "providers" / "fixtures" / "hallenbad_city.html"
+_FIXTURES = Path(__file__).resolve().parent / "providers" / "fixtures"
+FIXTURE_HTML = _FIXTURES / "hallenbad_city.html"
+FIXTURE_PDF = _FIXTURES / "city-schwimmerbecken.pdf"
 
 DATA_DIR = Path(__file__).resolve().parents[1] / "data"
 ZURICH = ZoneInfo("Europe/Zurich")
@@ -123,6 +127,56 @@ def test_scrape_gold_writes_store_from_catalog(tmp_path: Path) -> None:
     assert code == 0
     data = GoldSwimData.open(db, DATA_DIR)
     assert len(data.facilities()) == 1
+
+
+def _pdf_client(handler: Callable[[httpx.Request], httpx.Response]) -> HttpClient:
+    inner = httpx.Client(transport=httpx.MockTransport(handler))
+    return HttpClient(inner, source="belegungsplan", retry=RetryPolicy(max_attempts=1))
+
+
+def test_scrape_lanes_attaches_plan_to_curated_basin(tmp_path: Path) -> None:
+    db = tmp_path / "gold.sqlite"
+    build_gold(db_path=db, data_dir=DATA_DIR, client=_client(), fetched_at=FETCHED_AT)
+
+    body = FIXTURE_PDF.read_bytes()
+    client = _pdf_client(lambda _r: httpx.Response(200, content=body))
+    code = scrape_lanes(
+        db_path=db, client=client, fetched_at=FETCHED_AT, urls=("https://example.test/city.pdf",)
+    )
+    assert code == 0
+
+    city = GoldRepository(open_db(db)).get(FacilityId("city"))
+    assert city is not None
+    lap = next(b for b in city.basins if b.basin_id == BasinId("city-50m"))
+    assert lap.lane_plan is not None
+    assert lap.lane_plan.lane_count == 6
+    assert lap.lane_plan.fetched_at == FETCHED_AT
+
+
+def test_scrape_lanes_missing_db_is_error(tmp_path: Path) -> None:
+    client = _pdf_client(lambda _r: httpx.Response(200, content=b""))
+    code = scrape_lanes(db_path=tmp_path / "absent.sqlite", client=client, fetched_at=FETCHED_AT)
+    assert code == 1
+
+
+def test_scrape_lanes_reports_when_no_pdf_parses(tmp_path: Path) -> None:
+    db = tmp_path / "gold.sqlite"
+    build_gold(db_path=db, data_dir=DATA_DIR, client=_client(), fetched_at=FETCHED_AT)
+    client = _pdf_client(lambda _r: httpx.Response(503, text="down"))
+    code = scrape_lanes(
+        db_path=db, client=client, fetched_at=FETCHED_AT, urls=("https://example.test/city.pdf",)
+    )
+    assert code == 1
+
+
+def test_scrape_lanes_empty_store_is_error(tmp_path: Path) -> None:
+    db = tmp_path / "empty.sqlite"
+    open_db(db)  # schema only, no facilities
+    client = _pdf_client(lambda _r: httpx.Response(200, content=FIXTURE_PDF.read_bytes()))
+    code = scrape_lanes(
+        db_path=db, client=client, fetched_at=FETCHED_AT, urls=("https://example.test/city.pdf",)
+    )
+    assert code == 1
 
 
 def test_main_requires_a_subcommand() -> None:
