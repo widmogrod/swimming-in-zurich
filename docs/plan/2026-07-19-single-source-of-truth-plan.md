@@ -123,6 +123,7 @@ Appended by /dev:implement after each slice — never rewritten. Newest row last
 |------|-------|--------|----------------------|-------------------|---------------|
 | 2026-07-19 | S1 | done | none on contract; calendar stored as one JSON `singleton` row (plan allowed either); `load_calendar` raises `LookupError` when absent (S3 owns the app fail-fast) | `calendar_codec` + 2 new tests read `ZurichCalendar` private attrs → +12 pyright `reportPrivateUsage` (mypy gate green). Pyright is **already** broken on `main` pre-S1 (`test_belegungsplan.py`, `catalog_json.py`), so CLAUDE.md's "both checkers pass" is stale. Minimal fix: add read accessors to `ZurichCalendar`. **Owner: defer to backlog (2026-07-19).** | yes |
 | 2026-07-19 | S2 | done | none on contract; catalog read from `data_dir/catalog.json` (generalized to `--data`) | `build.py` SchemaMismatch/Err branches uncovered (floor still met); an offline-only `swimzh build` writes curated facilities **without WFS-merged geo** (the `catalog` table has geo for all 57; facility geo comes from `build-gold`/`scrape-gold`) — S3 must not assume facility geo | no |
+| 2026-07-19 | S3 | done | removed `catalog_store.py` entirely (catalog read from the DB `catalog` table in the composition root) rather than "changing" it — matches plan intent; one justified cross-scope ripple in `tests/test_cli.py` (the `GoldSwimData.open` signature dropped `data_dir`) | none new | no |
 
 ## Decisions & divergences
 
@@ -158,6 +159,18 @@ Appended by /dev:implement after each slice — never rewritten. Newest row last
 - Note for S3: a pure `swimzh build` yields curated facilities **without geo** on the `facility`
   rows (geo lives on the `catalog` table + comes from `build-gold`/`scrape-gold`). S3's app must
   tolerate facilities without lat/lon (distance/`near` filtering already treats geo as optional).
+
+### 2026-07-19 — S3 (App reads only the gold DB)
+- The app now reads **only** the gold DB: `config` requires `SWIMZH_GOLD_DB` (default
+  `gold.sqlite`) and fails fast ("run `swimzh build`") if missing/empty; `GoldSwimData.open(
+  gold_db)` gets the calendar from `load_calendar(conn)`; `/pools` reads the DB `catalog` table.
+  `CuratedSwimData`, `services/curated_store.py`, and `services/catalog_store.py` are **deleted**.
+- A grep-assert test (critic mutation-verified) enforces the invariant: no runtime `apps/web/**`
+  module reads `data/*.yaml` / `catalog.json` / `load_dataset`. `SWIMZH_DATA_DIR` is no longer
+  read by the app (still used by the CLI/ETL).
+- Cross-scope ripple: `tests/test_cli.py` two assertions switched from `GoldSwimData.open(db,
+  DATA_DIR)` to `GoldRepository(open_db(db)).load_all()` (forced by the signature change; also
+  more correct — a `build-gold`/`scrape-gold` store has no `calendar` row).
 
 ## Summary
 

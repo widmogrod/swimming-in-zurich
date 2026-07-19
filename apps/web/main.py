@@ -1,13 +1,15 @@
 """Composition root — the only module that imports concrete adapters.
 
 Wiring happens in the lifespan context manager; dependencies are exposed via `app.state`
-(read back through `apps.web.deps`). The swim data is loaded fail-fast at startup.
+(read back through `apps.web.deps`). All data is read fail-fast at startup from the single
+gold SQLite store (built by `swimzh build`) — no curated `data/` files are read at runtime.
 """
 
 from __future__ import annotations
 
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI
 
@@ -17,26 +19,38 @@ from apps.web.api.pools.router import router as pools_router
 from apps.web.api.swim.router import router as swim_router
 from apps.web.api.ui.router import router as ui_router
 from apps.web.config import Config
-from apps.web.services.catalog_store import load_catalog
-from apps.web.services.curated_store import CuratedSwimData
 from apps.web.services.gold_store import GoldSwimData
 from apps.web.services.ports import SwimData
+from swimzh.domain.catalog import PoolCatalogEntry
+from swimzh.storage.sqlite_repo import load_catalog, open_db
+
+
+def _require_gold_db(gold_db: Path) -> None:
+    """Fail fast at startup when the gold store is missing — it is the single source of
+    truth and must be built first."""
+    if not gold_db.exists():
+        raise RuntimeError(
+            f"gold store {gold_db} not found; build it first (run `swimzh build --db {gold_db}`)"
+        )
 
 
 def _load_swim_data(config: Config) -> SwimData:
-    """Serve from the gold store when one is configured and present; otherwise fall back to
-    the always-available curated dataset."""
-    if config.gold_db is not None and config.gold_db.exists():
-        return GoldSwimData.open(config.gold_db, config.data_dir)
-    return CuratedSwimData.load(config.data_dir)
+    """Serve facilities + calendar from the gold store (fail-fast if empty)."""
+    return GoldSwimData.open(config.gold_db)
+
+
+def _load_catalog(config: Config) -> tuple[PoolCatalogEntry, ...]:
+    """Read the pool catalog from the gold store's `catalog` table (same store as `/swim`)."""
+    return load_catalog(open_db(config.gold_db))
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     config = Config.from_env()
+    _require_gold_db(config.gold_db)
     app.state.config = config
     app.state.swim_data = _load_swim_data(config)
-    app.state.catalog = load_catalog(config.data_dir)
+    app.state.catalog = _load_catalog(config)
     yield
 
 

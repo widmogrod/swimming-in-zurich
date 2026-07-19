@@ -16,10 +16,23 @@ from swimzh.domain.access import ClubReserved, PublicSwim
 from swimzh.domain.lane_plan import LanePlan, LaneReservation, PlanConfidence, PlanCoverage
 from swimzh.domain.models import Basin, Facility
 from swimzh.domain.schedule import TimeRange, Weekday
+from swimzh.etl.build import build_store
 from swimzh.providers.curated import load_dataset
 from swimzh.storage.sqlite_repo import open_db, write_facilities
 
 DATA_DIR = Path(__file__).resolve().parents[4] / "data"
+
+
+def _gold_db_with_lane_plan(tmp_path: Path) -> Path:
+    """A complete gold DB (facilities + catalog + calendar) whose City 50m basin carries a
+    lane plan, so a gold-backed query surfaces the availability badge."""
+    dataset = load_dataset(DATA_DIR)
+    assert isinstance(dataset, Ok)
+    db = tmp_path / "gold.sqlite"
+    assert isinstance(build_store(DATA_DIR, db), Ok)
+    # Overwrite the facility rows with lane-plan-attached copies (catalog + calendar stay).
+    write_facilities(open_db(db), _attach_lane_plan(dataset.value.facilities))
+    return db
 
 
 def _attach_lane_plan(facilities: tuple[Facility, ...]) -> tuple[Facility, ...]:
@@ -61,10 +74,8 @@ def _attach_lane_plan(facilities: tuple[Facility, ...]) -> tuple[Facility, ...]:
 
 
 def test_app_serves_from_gold_store(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    dataset = load_dataset(DATA_DIR)
-    assert isinstance(dataset, Ok)
     db = tmp_path / "gold.sqlite"
-    write_facilities(open_db(db), dataset.value.facilities)
+    assert isinstance(build_store(DATA_DIR, db), Ok)
 
     monkeypatch.setenv("SWIMZH_GOLD_DB", str(db))
     with TestClient(app) as client:
@@ -79,10 +90,7 @@ def test_app_serves_from_gold_store(tmp_path: Path, monkeypatch: pytest.MonkeyPa
 def test_lane_availability_badge_surfaces_through_the_swim_endpoint(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    dataset = load_dataset(DATA_DIR)
-    assert isinstance(dataset, Ok)
-    db = tmp_path / "gold.sqlite"
-    write_facilities(open_db(db), _attach_lane_plan(dataset.value.facilities))
+    db = _gold_db_with_lane_plan(tmp_path)
 
     monkeypatch.setenv("SWIMZH_GOLD_DB", str(db))
     with TestClient(app) as client:
@@ -112,10 +120,7 @@ def test_facility_detail_lane_panel_surfaces_through_pools_endpoint(
     """S4: the /pools/{id} facility-detail response carries a per-basin lane panel — the
     per-lane day timeline, the best public window, and the club roster — for basins with a
     parsed Belegungsplan."""
-    dataset = load_dataset(DATA_DIR)
-    assert isinstance(dataset, Ok)
-    db = tmp_path / "gold.sqlite"
-    write_facilities(open_db(db), _attach_lane_plan(dataset.value.facilities))
+    db = _gold_db_with_lane_plan(tmp_path)
 
     monkeypatch.setenv("SWIMZH_GOLD_DB", str(db))
     with TestClient(app) as client:

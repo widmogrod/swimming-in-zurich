@@ -9,7 +9,6 @@ from zoneinfo import ZoneInfo
 
 import httpx
 import pytest
-from apps.web.services.gold_store import GoldSwimData
 
 from swimzh.cli import build, build_catalog_file, build_gold, main, scrape_gold, scrape_lanes
 from swimzh.core.http import HttpClient, RetryPolicy
@@ -68,9 +67,8 @@ def test_build_gold_writes_readable_store(tmp_path: Path) -> None:
     assert code == 0
     assert db.exists()
 
-    # The written store is readable through the same SwimData port the app uses.
-    data = GoldSwimData.open(db, DATA_DIR)
-    assert len(data.facilities()) == 4
+    # The written store's facilities are readable through the gold read side.
+    assert len(GoldRepository(open_db(db)).load_all()) == 4
 
 
 def test_build_gold_reports_failure(tmp_path: Path) -> None:
@@ -132,8 +130,7 @@ def test_scrape_gold_writes_store_from_catalog(tmp_path: Path) -> None:
     db = tmp_path / "gold.sqlite"
     code = scrape_gold(db_path=db, catalog_path=catalog_file, client=client, fetched_at=FETCHED_AT)
     assert code == 0
-    data = GoldSwimData.open(db, DATA_DIR)
-    assert len(data.facilities()) == 1
+    assert len(GoldRepository(open_db(db)).load_all()) == 1
 
 
 def _pdf_client(handler: Callable[[httpx.Request], httpx.Response]) -> HttpClient:

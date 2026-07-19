@@ -12,17 +12,14 @@ from pathlib import Path
 
 @dataclass(frozen=True)
 class Config:
-    data_dir: Path
+    gold_db: Path  # the single runtime source of truth; built by `swimzh build`
     host: str
     port: int
-    gold_db: Path | None  # when set and present, the app serves from the gold store
 
     @staticmethod
     def from_env() -> Config:
-        gold = os.getenv("SWIMZH_GOLD_DB")
         return Config(
-            data_dir=Path(os.getenv("SWIMZH_DATA_DIR", "data")),
+            gold_db=Path(os.getenv("SWIMZH_GOLD_DB", "gold.sqlite")),
             host=os.getenv("SWIMZH_HOST", "127.0.0.1"),
             port=int(os.getenv("SWIMZH_PORT", "8000")),
-            gold_db=Path(gold) if gold else None,
         )
