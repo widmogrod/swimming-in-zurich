@@ -82,6 +82,9 @@ _PAGE = """<!doctype html>
   .state.upcoming { opacity: .8; }
   .card .metaline { font-size: .85rem; opacity: .8; margin-top: .2rem; }
   .card .reason { font-size: .8rem; opacity: .65; margin-top: .2rem; }
+  /* pool-as-object detail line: address · tel · official ↗ · directions ↗ */
+  .pooldetail { font-size: .8rem; opacity: .8; margin-top: .3rem; }
+  .status a { white-space: nowrap; }
   .notshown { margin-top: 1.2rem; }
   .notshown .sep { font-family: var(--mono); opacity: .6; font-size: .8rem;
     border-top: 1px dashed #8886; padding-top: .5rem; }
@@ -233,6 +236,60 @@ document.querySelectorAll('nav button').forEach(b => b.addEventListener('click',
   if (b.dataset.tab === 'plan' && !planLoaded) loadPlan();
 }));
 
+// --- Pool catalog join: the facility as a first-class, actionable object ---
+// /swim carries only the facility NAME; /pools carries url/phone/address/lat/lon per pool.
+// Join key = the facility display name (verified: every /swim facility matches a /pools name).
+// Fetch /pools ONCE (memoized, shared by every tab) into a name->record map, so a card can
+// link its pool and show contact/route detail. Helpers degrade to plain text / '' when a
+// facility has no catalog match — never a broken or empty href.
+let poolsPromise = null;   // in-flight/settled /pools fetch, shared so it runs at most once
+let poolMap = new Map();   // facility name -> { url, phone, address, lat, lon, ... }
+function loadPoolsData() {
+  if (!poolsPromise) poolsPromise = fetch('/pools')
+    .then(r => r.ok ? r.json() : { count: 0, kinds: [], pools: [] })
+    .then(a => { poolMap = new Map((a.pools || []).map(p => [p.name, p])); return a; });
+  return poolsPromise;
+}
+function poolInfo(name) { return poolMap.get(name) || null; }  // the catalog record, or null
+
+// The facility name as a link (only when a catalog url exists; else plain, escaped text).
+function poolNameHTML(name) {
+  const info = poolInfo(name);
+  return info && info.url
+    ? `<a href="${esc(info.url)}" target="_blank" rel="noopener">${esc(name)}</a>`
+    : esc(name);
+}
+// 🗺 directions link built from lat/lon (Google Maps directions); '' when geo is absent.
+function directionsHTML(info) {
+  return info && info.lat != null && info.lon != null
+    ? `<a href="https://www.google.com/maps/dir/?api=1&amp;destination=${esc(info.lat)},${esc(info.lon)}" target="_blank" rel="noopener">🗺 directions ↗</a>`
+    : '';
+}
+// A compact one-line pool detail: address · tel: phone · official ↗ · 🗺 directions ↗.
+// Returns '' when the facility has no catalog match (graceful degrade to just the card text).
+function poolDetailHTML(name) {
+  const info = poolInfo(name);
+  if (!info) return '';
+  const parts = [];
+  if (info.address) parts.push(esc(info.address));
+  if (info.phone) parts.push(`<a href="tel:${esc(info.phone.replaceAll(' ', ''))}">${esc(info.phone)}</a>`);
+  if (info.url) parts.push(`<a href="${esc(info.url)}" target="_blank" rel="noopener">official ↗</a>`);
+  const dir = directionsHTML(info);
+  if (dir) parts.push(dir);
+  return parts.length ? `<div class="pooldetail">${parts.join(' · ')}</div>` : '';
+}
+// The status-line variant: just the actionable links (official ↗ · 🗺 directions ↗), inline —
+// so "we don't know its hours" still resolves to "here's where to find out". '' when no match.
+function poolLinksHTML(name) {
+  const info = poolInfo(name);
+  if (!info) return '';
+  const parts = [];
+  if (info.url) parts.push(`<a href="${esc(info.url)}" target="_blank" rel="noopener">official ↗</a>`);
+  const dir = directionsHTML(info);
+  if (dir) parts.push(dir);
+  return parts.length ? ' · ' + parts.join(' · ') : '';
+}
+
 // --- Find a swim ---
 const f = $('#f'), findOut = $('#findOut');
 const now = new Date(); now.setSeconds(0, 0);
@@ -268,13 +325,14 @@ function optionCard(o) {
   return `<article class="card">
     <div class="lenbadge">${badge}${lanes}<span class="kind">${esc(o.kind)}</span></div>
     <div class="body">
-      <div class="head"><span class="name">${esc(o.facility)} · ${esc(o.basin)}</span>${state}</div>
+      <div class="head"><span class="name">${poolNameHTML(o.facility)} · ${esc(o.basin)}</span>${state}</div>
       <div class="metaline">
         <span class="glyph axis-access">${esc(accessGlyph(o.access))}</span> ${esc(accessLabel(o.access))}
         &nbsp; <span class="glyph axis-elig ${el.cls}">${el.g}</span>
         ${meta ? '&nbsp; ' + meta : ''}
       </div>
       <div class="reason">${esc(o.reason)}</div>
+      ${poolDetailHTML(o.facility)}
     </div>
   </article>`;
 }
@@ -282,11 +340,13 @@ function optionCard(o) {
 // The three terminal states are never merged: closed-with-reason and uncurated are
 // rendered distinctly here, below the open options.
 function statusLine(s) {
+  const name = poolNameHTML(s.facility);
+  const links = poolLinksHTML(s.facility);  // #6: "we don't know" resolves to "find out here"
   if (s.status === 'closed')
-    return `<div class="status closed">⊘ ${esc(s.facility)} CLOSED — ${esc(s.detail)}</div>`;
+    return `<div class="status closed">⊘ ${name} CLOSED — ${esc(s.detail)}${links}</div>`;
   if (s.status === 'uncurated')
-    return `<div class="status uncurated">? ${esc(s.facility)} — Hours not listed yet — may well be open, we just don't have its timetable.</div>`;
-  return `<div class="status">${esc(s.facility)} — ${esc(s.detail)}</div>`;
+    return `<div class="status uncurated">? ${name} — Hours not listed yet — may well be open, we just don't have its timetable.${links}</div>`;
+  return `<div class="status">${name} — ${esc(s.detail)}${links}</div>`;
 }
 
 // ⓘ provenance stamp aggregated across the shown options (freshness + source + curated).
@@ -310,6 +370,7 @@ f.addEventListener('submit', async e => {
   const r = await fetch('/swim?' + p);
   if (!r.ok) { findOut.innerHTML = '<p class="warn">' + esc((await r.json()).detail) + '</p>'; return; }
   const a = await r.json();
+  await loadPoolsData();  // memoized /pools — so every card can link its pool + show detail
   let h = a.notices.map(n => '<p class="warn">📣 <strong>' + esc(n.facility) + '</strong>: ' + esc(n.text) + '</p>').join('');
   h += a.warnings.map(w => '<p class="warn">⚠ ' + esc(w) + '</p>').join('');
   if (!a.options.length) h += '<p>No open, eligible sessions for that moment.</p>';
@@ -403,13 +464,14 @@ function starterCard(o, mark) {
   return `<article class="card">
     <div class="lenbadge"><span class="kind">${esc(mark)}</span>${badge}${lanes}</div>
     <div class="body">
-      <div class="head"><span class="name">${esc(o.facility)} · ${esc(o.basin)}</span>${state}</div>
+      <div class="head"><span class="name">${poolNameHTML(o.facility)} · ${esc(o.basin)}</span>${state}</div>
       <div class="metaline">
         <span class="glyph axis-access">${esc(accessGlyph(o.access))}</span>
         <span class="glyph axis-elig ${el.cls}">${el.g}</span>
         ${meta ? '&nbsp; ' + meta : ''}
       </div>
       <div class="decode">This slot is <b>${esc(decodeAccess(o.access))}</b>.</div>
+      ${poolDetailHTML(o.facility)}
     </div>
   </article>`;
 }
@@ -429,6 +491,7 @@ vf.addEventListener('submit', async e => {
   const r = await fetch('/swim?' + p);
   if (!r.ok) { visitOut.innerHTML = '<p class="warn">' + esc((await r.json()).detail) + '</p>'; return; }
   const a = await r.json();
+  await loadPoolsData();  // memoized /pools — link each starter pool + its contact/route detail
   renderPrimer(a.options);  // keep the glossary keyed to the kinds these results actually contain
   let h = '<h3>Starter pools near you</h3>';
   const marks = ['①', '②', '③'];
@@ -496,10 +559,10 @@ pf.addEventListener('submit', async e => {
     return r.ok ? r.json() : { options: [], statuses: [], warnings: [], notices: [] };
   }));
   planWeek = days.map((day, i) => ({ ...day, answer: answers[i] }));
-  if (catalogCount === null) {  // the "All pools" universe, for the honesty note below the switcher
-    const cr = await fetch('/pools');
-    if (cr.ok) catalogCount = (await cr.json()).count;
-  }
+  // Memoized /pools: the pool-detail map for the linked planhead + the catalog count for the
+  // honesty note below the switcher (the "All pools" universe). One shared fetch, not two.
+  const catalog = await loadPoolsData();
+  if (catalogCount === null) catalogCount = catalog.count;
 
   // Distance-sorted pool switcher: nearest facility (min distance across the week) first.
   const dist = new Map();
@@ -583,14 +646,15 @@ function renderPlan() {
     states.flatMap(s => s.state === 'open' ? s.sessions.filter(cellSession).map(o => o.start) : [])
   )].sort();
 
-  const badgePool = esc(planSelected);
+  const badgePool = poolNameHTML(planSelected);        // #2: the planned pool is a link
+  const poolDetail = poolDetailHTML(planSelected);     // address · tel · official ↗ · directions
   if (!times.length) {
-    planOut.innerHTML = `<div class="planhead">${badgePool}</div>`
+    planOut.innerHTML = `<div class="planhead">${badgePool}</div>` + poolDetail
       + '<p class="muted">No sessions match the current filters this week — try unchecking “lap only”.</p>';
     return;
   }
 
-  let h = `<div class="planhead">${badgePool}</div>`;
+  let h = `<div class="planhead">${badgePool}</div>` + poolDetail;
   h += '<table class="weekgrid"><thead><tr><th>time</th>'
      + planWeek.map(d => `<th>${esc(d.label)}</th>`).join('') + '</tr></thead><tbody>';
   for (const t of times) {

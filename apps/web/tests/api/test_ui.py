@@ -317,6 +317,102 @@ def test_glyph_legend_moved_below_results_into_closed_details_on_find_and_plan()
     assert '<pre class="glyphlegend">' in page
 
 
+def test_pool_catalog_is_fetched_once_and_memoized_into_a_join_map() -> None:
+    """S3 spine: /swim carries only the facility NAME; /pools carries url/phone/address/geo.
+    The page fetches /pools ONCE into a name->record map (shared by every tab) and exposes a
+    poolInfo(name) helper — stop discarding the array."""
+    with TestClient(app) as client:
+        page = client.get("/").text
+    # A single memoized fetch guarded so it runs at most once, building a name->record map.
+    assert "function loadPoolsData()" in page
+    assert "if (!poolsPromise) poolsPromise = fetch('/pools')" in page
+    assert "poolMap = new Map((a.pools || []).map(p => [p.name, p]))" in page
+    # The join helper returns the catalog record or null (never throws on a miss).
+    assert "function poolInfo(name) { return poolMap.get(name) || null; }" in page
+    # The Find and tourist renders await the memoized data before building cards.
+    assert page.count("await loadPoolsData();") >= 2
+    # The plan tab reuses the SAME memoized fetch for its catalog count (not a second /pools).
+    assert "const catalog = await loadPoolsData();" in page
+
+
+def test_facility_name_is_a_link_when_catalog_url_exists_else_plain_text() -> None:
+    """S3 #2: every facility name becomes an <a href> when the catalog carries a url, and
+    degrades to plain escaped text otherwise — never a broken or empty href."""
+    with TestClient(app) as client:
+        page = client.get("/").text
+    # The name helper: an anchor when a url exists, plain esc(name) when it does not.
+    assert "info && info.url" in page
+    assert '<a href="${esc(info.url)}" target="_blank" rel="noopener">${esc(name)}</a>' in page
+    assert ": esc(name);" in page  # graceful degrade branch
+    # Every card renderer routes its facility name through the link helper (Find, tourist, plan).
+    assert 'class="name">${poolNameHTML(o.facility)}' in page  # Find + tourist cards
+    assert "const badgePool = poolNameHTML(planSelected);" in page  # plan grid heading
+    # The old always-plain span is gone from the cards.
+    assert 'class="name">${esc(o.facility)}' not in page
+
+
+def test_card_carries_a_one_line_detail_address_tel_and_official_link() -> None:
+    """S3 #2: a compact one-line detail — address, a tel: phone link, and an official ↗ link —
+    rides under each card, sourced from the joined catalog record."""
+    with TestClient(app) as client:
+        page = client.get("/").text
+    assert "function poolDetailHTML(name)" in page
+    # Address, a tel: link (spaces stripped from the dialable number), and the official link.
+    assert "if (info.address) parts.push(esc(info.address));" in page
+    assert "<a href=\"tel:${esc(info.phone.replaceAll(' ', ''))}\">${esc(info.phone)}</a>" in page
+    assert "official ↗" in page
+    # A no-match facility yields '' (no detail line), never a broken row.
+    assert "if (!info) return '';" in page
+    # The detail line is emitted on Find, tourist, and plan renders.
+    assert page.count("${poolDetailHTML(o.facility)}") == 2  # Find + tourist cards
+    assert "poolDetailHTML(planSelected)" in page  # plan grid
+
+
+def test_closed_and_uncurated_status_lines_carry_an_official_link() -> None:
+    """S3 #6: the closed AND uncurated status lines join s.facility to the catalog and append
+    an official link, so "we don't know its hours" resolves to "here's where to find out"."""
+    with TestClient(app) as client:
+        page = client.get("/").text
+    # A links helper feeds both non-open status branches.
+    assert "function poolLinksHTML(name)" in page
+    assert "const links = poolLinksHTML(s.facility);" in page
+    # Both the closed and the uncurated branch interpolate the links.
+    assert 'status closed">⊘ ${name} CLOSED — ${esc(s.detail)}${links}' in page
+    assert "we just don't have its timetable.${links}" in page
+    # The status name itself is also linked (the pool is a first-class object here too).
+    assert "const name = poolNameHTML(s.facility);" in page
+
+
+def test_directions_link_is_built_from_lat_lon_and_omitted_without_geo() -> None:
+    """S3 #14: a 🗺 directions ↗ link is built from lat/lon (Google Maps directions), opening
+    in a new tab, and omitted when geo is absent."""
+    with TestClient(app) as client:
+        page = client.get("/").text
+    assert "function directionsHTML(info)" in page
+    # Built from lat/lon, only when both are present.
+    assert "info && info.lat != null && info.lon != null" in page
+    maps_url = (
+        "https://www.google.com/maps/dir/?api=1&amp;destination=${esc(info.lat)},${esc(info.lon)}"
+    )
+    assert maps_url in page
+    assert "🗺 directions ↗" in page
+    # New tab + safe rel, and an empty string when geo is missing (no broken link).
+    assert 'target="_blank" rel="noopener">🗺 directions ↗</a>' in page
+    assert "    : '';" in page
+
+
+def test_all_pool_object_links_are_new_tab_and_noopener_safe() -> None:
+    """S3 safety: every outbound pool link (name, official, directions) opens in a new tab with
+    rel=noopener, and dynamic values flow through esc()."""
+    with TestClient(app) as client:
+        page = client.get("/").text
+    # No target=_blank without a matching rel=noopener anywhere in the pool-object helpers.
+    assert 'target="_blank">' not in page  # every new-tab anchor must also carry rel=noopener
+    # The catalog url and geo are escaped at every interpolation.
+    assert "${esc(info.url)}" in page
+    assert "${esc(info.lat)},${esc(info.lon)}" in page
+
+
 def test_provenance_stamp_uses_plain_language_not_dev_tokens() -> None:
     """S2 #5: the provenance stamp reports freshness + source in plain words. The developer
     ``(curated)/(scraped)/(mixed)`` tokens become "official schedule" / "read from the pool's
