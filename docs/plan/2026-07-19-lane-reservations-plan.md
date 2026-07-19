@@ -1,6 +1,6 @@
 ---
 type: plan
-status: in-progress         # design→2 agents→2 critics→synthesis; executing via /dev:implement
+status: done                # design→2 agents→2 critics→synthesis; all 4 slices implemented 2026-07-19
 created: 2026-07-19
 feature: lane-reservations
 gates:
@@ -11,6 +11,36 @@ links: ["[[basin]]", "[[lane-plan]]", "[[schedule-rule]]"]
 ---
 
 # Plan — Lane reservations (Belegungsplan PDF → "how many lanes are free for the public")
+
+## Summary (completed 2026-07-19)
+
+All four slices landed green (final: 252 tests, 95.20% coverage, mypy strict / ruff / CRAP
+clean). What exists now:
+- **`domain/lane_plan.py`** — stored: `LaneReservation`/`PlanCoverage`/`LanePlan` (public
+  stored explicitly). Derived (never serialized): `LaneAvailability` + `lane_availability_at`
+  (glance); `lane_day_view` / `club_roster` / `best_public_time` (+ result types) for detail.
+- **`Basin.lane_plan`** persists through the codec (frozensets sorted; round-trip tested).
+- **`providers/belegungsplan.py`** — pdfplumber parser (optional `[pdf]` extra, lazy import →
+  `ProviderSpecific`); half-open disjointness + ⊆ invariants → `ParseError`; unreadable →
+  `ParseError`; layout drift → `SchemaMismatch`; low coverage → `Ok`+`PARTIAL`; unknown owner →
+  unresolved, never public. Pinned to the real City Schwimmerbecken PDF fixture.
+- **`etl/silver.py` `attach_lane_plans`** — basin-granular reconcile of the PDF `basin_hint`
+  (lookup-not-fuzzy, loud on ambiguity/no-match, never wrong-basin), stamps `fetched_at`, warns
+  on staleness; **`etl/lane_plans.py`** + **`scrape-lanes` CLI** (best-effort fetch/build).
+- **Query/API/UI** — `SwimOption.lane_availability` (ungated, recurring) + a `/swim` badge
+  ("N/M lanes public · until HH:MM"); `FacilityDetail.lane_panels` + `GET /pools/{id}` + a
+  lazy UI "Lane schedule this week" panel (timeline + best-time + roster).
+
+**Not yet wired to live data:** no curated pool carries a `lane_plan` (real per-pool
+Belegungsplan URLs unverified — see backlog); everything is proven via the pinned fixture and
+in-test gold stores. **Backlog / open tech debt:** verify & expand the real Belegungsplan URLs;
+unify the `build-gold` (curated basins) vs `scrape-gold` (`Hauptbecken/OTHER`) paths so
+`scrape-lanes` reconciles on scraped stores; surface the full `FacilityDetail`
+(website/features/lockers/physicals) through the new `/pools/{id}` route; label-vs-known-set
+owner reconciliation; `find_swim_options` complexity (CRAP 23). Rows flagged **human review**:
+S1 (reverted out-of-scope UI creep), S2 (unverified URLs / two gold paths), S4 (new route).
+
+
 
 Design by 2 design sub-agents (experience-max + clean-integration) → 2 critic agents
 (correctness/integration + complexity/experience) → this synthesis. Net verdict:
