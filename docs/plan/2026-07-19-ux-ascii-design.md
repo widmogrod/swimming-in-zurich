@@ -228,6 +228,7 @@ lacks (lane count), the slice **degrades gracefully** and the gap is deferred to
 | 2026-07-19 | S1 | done | added `OptionOut.source`/`.curated` beyond the two named fields — required to render the provenance stamp honestly (in-scope per S1's stamp deliverable) | uncurated state renders but `build_answer` calls `find_swim_options` without a registry, so it is never produced at runtime (honest scaffolding); `?` eligibility detected in JS by reason-substring match, not a structured flag | yes |
 | 2026-07-19 | S2 | done | field is the domain's existing `Basin.lanes` (parsed from prose by [[rich-pool-domain]]), not a new `lane_count` — exactly the plan's "wiring only" branch | only City's curated 50m basin carries a real lane count today; other curated basins degrade to length-only (data-curation backfill, not a code gap) | no |
 | 2026-07-19 | S3 | done | mockup's free-text "Staying near" realized as a 3-landmark preset dropdown (Zürich HB / Bellevue / Zürichhorn, real lat/lon) — no geocoder in the domain | location presets are hardcoded landmark coords (a geocoding port is future work); closed/uncurated pools come from `statuses` which carry no distance, so they stay visible but can't be distance-ranked | no |
+| 2026-07-19 | S4 | done | Option A: 7 client-side `/swim` calls (one per weekday) assemble the grid — no API change, verified a single call returns the whole day's sessions; "pick 3 / save routine" deferred to gap #5 as scoped; mockup's "re-rank pools by usable slots" not built (switcher stays distance-sorted per literal deliverable) | resolver can't distinguish "closed, reason unstated" from "no data" → some genuinely-closed days render as `?` unknown (safe: never falsely says "shut"); busyness is a static per-row `[fc]` placeholder; week fixed to current Mon–Sun (no navigation) | yes |
 
 ## Decisions & divergences
 
@@ -244,3 +245,19 @@ lacks (lane count), the slice **degrades gracefully** and the gap is deferred to
   change, touches the correctness core).
 - **Cosmetic legend drift:** code renders `CLOSED ⊘ reason` vs the plan mockup's `reason+reopen`;
   `AdultsOnly` maps to `◇` (public) glyph. Accepted as-is.
+
+**2026-07-19 — S4 (approved by critic):**
+- **Multi-day query via Option A (no API change).** `find_swim_options` returns *every* session of
+  the queried day (the `at` time-of-day only sets each option's `open_at_query_time` flag; eligibility
+  is time-independent), so the grid is assembled from 7 client-side `/swim` calls, one per weekday at
+  noon. Option B (new endpoint) was unnecessary. The single-moment `/swim` contract proved sufficient.
+- **Resolver ambiguity surfaced, not resolved.** When a curated pool yields no sessions *and* no
+  `closed` reason for a day (`query.py` `produced=False, reason=None`), the grid cannot tell
+  "closed, reason unstated" from "no data", so it renders `?` (unknown, "NOT closed"). This errs
+  safe — it never falsely tells a swimmer a pool is shut — but means some genuinely-closed days show
+  as unknown. A structured "closed-without-reason vs no-data" distinction in the resolver would tighten
+  invariant #1; it is a domain change, out of this presentation plan. **New follow-up.**
+- **Mockup filters not fully realized.** The Screen-2 filters (`lap only` / `show reserved` /
+  `eligible-to-me`) are client-side display toggles; the mockup's aspirational "re-rank pools by
+  usable recurring slots" was not built — the switcher stays distance-sorted (the literal S4
+  deliverable, and invariant #2 bars a busyness-based sort anyway).

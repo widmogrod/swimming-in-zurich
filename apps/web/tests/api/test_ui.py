@@ -97,3 +97,92 @@ def test_tourist_tab_shows_distance_only_never_walk_time() -> None:
     assert "o.distance_km + ' km'" in page
     assert "min walk" not in page.lower()
     assert "walk time" not in page.lower()
+
+
+def test_week_planner_tab_and_grid_scaffolding() -> None:
+    """S4: a distinct "Plan my week" nav tab + section carrying the days×time grid."""
+    with TestClient(app) as client:
+        page = client.get("/").text
+    assert 'data-tab="plan"' in page
+    assert "Plan my week" in page
+    assert 'id="plan"' in page
+    # The weekly grid table + its seven day columns.
+    assert "weekgrid" in page
+    assert "['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']" in page
+
+
+def test_week_planner_assembles_seven_swim_calls_option_a() -> None:
+    """S4 discovery (Option A): the grid needs 7 days but /swim takes one moment, so the
+    client issues one call per weekday (find_swim_options returns the whole day's sessions)
+    and assembles the week — no API change."""
+    with TestClient(app) as client:
+        page = client.get("/").text
+    # Seven weekday labels drive seven /swim requests, gathered with Promise.all.
+    assert "WEEKDAYS.map" in page or "days.map(async" in page
+    assert "Promise.all(days.map" in page
+    assert "fetch('/swim?'" in page
+    # The discovery rationale is documented in-code (Option A, no API change).
+    assert "Option A" in page
+
+
+def test_week_planner_cells_use_both_orthogonal_glyph_axes() -> None:
+    """S4: each grid cell carries the unified access glyph (≈◇⌂WSX·) plus a SEPARATE
+    eligibility axis (✓✗?), reusing the shared helpers — one glyph pair per cell."""
+    with TestClient(app) as client:
+        page = client.get("/").text
+    # Cells reuse the shared access-glyph map and the eligibility axis helper.
+    assert "accessGlyph(o.access)" in page
+    assert "eligAxis(o)" in page
+    assert "cell-elig" in page
+    # "One glyph pair per cell" — lane is preferred when a slot stacks sessions.
+    assert "one glyph pair per cell" in page
+
+
+def test_week_planner_busyness_is_bracketed_forecast_placeholder() -> None:
+    """S4 / invariant #2: busyness is un-wired, so it may only appear as a bracketed [fc]
+    forecast caption — never a plain value and never a top sort key."""
+    with TestClient(app) as client:
+        page = client.get("/").text
+    assert "[fc]" in page
+    # It is explicitly captioned as a forecast, not a live count.
+    assert "live occupancy is not wired" in page
+    assert "forecast" in page.lower()
+
+
+def test_week_planner_pool_switcher_is_distance_sorted() -> None:
+    """S4: the pool switcher lists nearby pools sorted by distance, nearest selected."""
+    with TestClient(app) as client:
+        page = client.get("/").text
+    assert 'id="poolSwitch"' in page
+    # Distance drives the ordering; the nearest pool is the default selection.
+    assert "distance_km ?? Infinity) - (b.distance_km ?? Infinity)" in page
+    assert "planSelected = planPools.length ? planPools[0].facility" in page
+
+
+def test_week_planner_never_blanks_closed_or_unknown_days() -> None:
+    """S4 invariant #1: the three terminal states stay un-merged in the grid — an OPEN day's
+    empty slot (·), a CLOSED day (· + reason), and an UNKNOWN day (?) are distinct, and a
+    day with no data is a ? (unknown), never a blank that reads as "closed"."""
+    with TestClient(app) as client:
+        page = client.get("/").text
+    # The day-state resolver distinguishes open / closed / unknown explicitly.
+    assert "state: 'open'" in page
+    assert "state: 'closed'" in page
+    assert "state: 'unknown'" in page
+    # Unknown days render a ? with its own class — never a silent blank.
+    assert "unknown-day" in page
+    assert "NOT closed" in page
+    # Closed days keep their reason surfaced below the grid.
+    assert "daynote closed" in page and "daynote unknown" in page
+
+
+def test_week_planner_is_read_only_no_routine_persistence() -> None:
+    """S4 scope: the grid is READ-ONLY. The "pick 3 / save routine" tray is deferred to
+    gap #5 (Routine entity) — there must be no persistence action wired in."""
+    with TestClient(app) as client:
+        page = client.get("/").text
+    # No save-routine control and no write request from the planner.
+    assert "save routine" not in page.lower()
+    assert "method: 'POST'" not in page
+    # The read-only intent is stated to the user.
+    assert "Read-only" in page or "read-only" in page.lower()

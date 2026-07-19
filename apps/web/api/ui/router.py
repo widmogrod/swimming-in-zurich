@@ -1,5 +1,13 @@
 """The UI endpoint: a single self-contained HTML page (no build step, no external assets)
-over the JSON API — a swim finder, an all-pools browser, and an access-type legend.
+over the JSON API — a swim finder, a weekly planner grid, a tourist primer, and an
+all-pools browser.
+
+The "Plan my week" tab (Screen 2 in ``docs/plan/2026-07-19-ux-ascii-design.md``) is a
+read-only days×time grid for the nearest pool: it assembles seven ``/swim`` calls — one per
+weekday (Option A; ``find_swim_options`` returns a whole day's sessions per call) — into a
+grid whose cells carry the same orthogonal access (``≈◇⌂WSX·``) and eligibility (``✓✗?``)
+glyph axes, with busyness shown only as a bracketed ``[fc]`` forecast placeholder. Closed
+and unknown days are called out explicitly, never left as a blank that reads as "closed".
 
 The "Find a swim" results embody the unified monospace visual language (see
 ``docs/plan/2026-07-19-ux-ascii-design.md``): a fat length badge, orthogonal access
@@ -87,6 +95,21 @@ _PAGE = """<!doctype html>
   .primer dd { margin: .1rem 0 .2rem; opacity: .85; }
   .card .decode { font-size: .82rem; opacity: .85; margin-top: .3rem; }
   .card .decode b { font-weight: 600; }
+
+  /* --- week planner grid (read-only) --- */
+  .planfilters { display: flex; flex-wrap: wrap; gap: 1rem; margin: .8rem 0; font-size: .88rem; }
+  .planfilters label { flex-direction: row; align-items: center; gap: .35rem; }
+  .planhead { font-family: var(--mono); font-size: .85rem; margin: .8rem 0 .3rem; }
+  .weekgrid { font-family: var(--mono); border-collapse: collapse; width: 100%; font-size: .9rem; }
+  .weekgrid th, .weekgrid td { border: 1px solid #8884; padding: .3rem .45rem; text-align: center; }
+  .weekgrid th { font-weight: 600; opacity: .85; }
+  .weekgrid td.time { text-align: right; opacity: .8; white-space: nowrap; }
+  .weekgrid td.fc { text-align: left; opacity: .6; font-size: .82rem; white-space: nowrap; }
+  .weekgrid td.closed-day { opacity: .45; }        /* no session at this slot (·) */
+  .weekgrid td.unknown-day { color: #b45309; }     /* no data — ? , NEVER blank */
+  .cell-elig.in { color: #15803d; } .cell-elig.out { color: #b91c1c; } .cell-elig.unk { color: #b45309; }
+  .daynote { font-family: var(--mono); font-size: .82rem; margin: .15rem 0; }
+  .daynote.closed { color: #b91c1c; } .daynote.unknown { color: #b45309; }
 </style>
 </head>
 <body>
@@ -95,6 +118,7 @@ _PAGE = """<!doctype html>
 
 <nav>
   <button data-tab="find" class="active">Find a swim</button>
+  <button data-tab="plan">Plan my week</button>
   <button data-tab="visit">First time here?</button>
   <button data-tab="all">All pools</button>
 </nav>
@@ -120,6 +144,37 @@ STATUS   OPEN ·closes HH:MM     CLOSED ⊘ reason     UNCURATED ? schedule unkn
 PROV     ⓘ valid_as_of · source · (curated|scraped)</pre>
   <div id="findOut"></div>
   <div class="legend"><h3>Access types</h3><dl id="legend"></dl></div>
+</section>
+
+<section id="plan">
+  <p class="muted">Plan recurring lap windows across the week near home. Read-only — a days×time grid for one nearby pool at a time. Busyness is a <b>[fc]</b> forecast placeholder, never live. (Saving a routine is not built yet.)</p>
+  <form id="pf">
+    <label>Near
+      <select name="place">
+        <option value="47.3779,8.5403">Zürich HB (main station)</option>
+        <option value="47.3671,8.5451">Bellevue</option>
+        <option value="47.3606,8.5510">Zürichhorn</option>
+      </select>
+    </label>
+    <label>Gender
+      <select name="gender">
+        <option value="">any</option><option value="female">female</option>
+        <option value="male">male</option><option value="diverse">diverse</option>
+      </select>
+    </label>
+    <label>Age<input type="number" name="age" min="0" max="120" placeholder="optional"></label>
+    <label>Radius (km)<input type="number" name="radius_km" min="1" max="30" value="10"></label>
+    <button type="submit">Show my week</button>
+  </form>
+  <pre class="glyphlegend">ACCESS   ≈ lane   ◇ public   ⌂ family   W women   S seniors   X reserved   · no session
+FOR YOU  ✓ in     ✗ not you   ? unknown          BUSY  [fc] forecast — not live</pre>
+  <div class="planfilters">
+    <label><input type="checkbox" id="pf-lap" checked> lap only</label>
+    <label><input type="checkbox" id="pf-reserved"> show reserved</label>
+    <label><input type="checkbox" id="pf-elig"> eligible-to-me only</label>
+  </div>
+  <div id="poolSwitch" class="chips"></div>
+  <div id="planOut"></div>
 </section>
 
 <section id="visit">
@@ -161,6 +216,7 @@ document.querySelectorAll('nav button').forEach(b => b.addEventListener('click',
   b.classList.add('active'); $('#' + b.dataset.tab).classList.add('active');
   if (b.dataset.tab === 'all' && !allLoaded) loadPools();
   if (b.dataset.tab === 'visit' && !visitLoaded) loadVisit();
+  if (b.dataset.tab === 'plan' && !planLoaded) loadPlan();
 }));
 
 // --- Find a swim ---
@@ -366,6 +422,155 @@ vf.addEventListener('submit', async e => {
   h += '<p class="warn">⚠ Only 7 of ~57 Zürich pools have verified timetables. The rest show as “unknown” — which is NOT the same as closed.</p>';
   visitOut.innerHTML = h;
 });
+
+// --- Plan my week (read-only weekly grid) ---
+// DISCOVERY (Option A): /swim takes a single `at` moment, but find_swim_options resolves
+// and returns EVERY session of that moment's DAY (each option carries its own start/end;
+// `open_now` is just a per-session flag), so 7 calls — one per weekday at a representative
+// noon — assemble the whole week with no API change. Eligibility (✓✗?) is per-session and
+// time-independent; only holiday-correct schedules need the real date, which each call has.
+const pf = $('#pf'), planOut = $('#planOut'), poolSwitch = $('#poolSwitch');
+const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+let planLoaded = false;
+let planWeek = null;      // [{ label, iso, answer }] for Mon..Sun
+let planPools = [];       // distance-sorted [{ facility, distance_km }]
+let planSelected = null;  // selected facility name
+
+function localISO(d) {
+  return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+}
+function mondayOf(d) {
+  const m = new Date(d); m.setHours(12, 0, 0, 0);
+  m.setDate(m.getDate() - ((m.getDay() + 6) % 7));  // ISO week: Monday = 0
+  return m;
+}
+
+async function loadPlan() { planLoaded = true; pf.dispatchEvent(new Event('submit')); }
+
+pf.addEventListener('submit', async e => {
+  e.preventDefault();
+  const [lat, lon] = pf.place.value.split(',');
+  const monday = mondayOf(new Date());
+  planOut.innerHTML = '<p class="muted">Resolving the week…</p>';
+  const days = WEEKDAYS.map((label, i) => {
+    const d = new Date(monday); d.setDate(monday.getDate() + i);
+    return { label, iso: localISO(d) };
+  });
+  // Option A: one /swim call per weekday (7), assembled client-side.
+  const answers = await Promise.all(days.map(async day => {
+    const p = new URLSearchParams({ at: day.iso, lat, lon, eligible_only: 'false' });
+    if (pf.radius_km.value) p.append('radius_km', pf.radius_km.value);
+    if (pf.age.value) p.append('age', pf.age.value);
+    if (pf.gender.value) p.append('gender', pf.gender.value);
+    const r = await fetch('/swim?' + p);
+    return r.ok ? r.json() : { options: [], statuses: [], warnings: [], notices: [] };
+  }));
+  planWeek = days.map((day, i) => ({ ...day, answer: answers[i] }));
+
+  // Distance-sorted pool switcher: nearest facility (min distance across the week) first.
+  const dist = new Map();
+  for (const { answer } of planWeek)
+    for (const o of answer.options) {
+      const cur = dist.get(o.facility);
+      if (cur === undefined || (o.distance_km != null && o.distance_km < cur))
+        dist.set(o.facility, o.distance_km != null ? o.distance_km : cur ?? null);
+    }
+  planPools = [...dist.entries()].map(([facility, distance_km]) => ({ facility, distance_km }))
+    .sort((a, b) => (a.distance_km ?? Infinity) - (b.distance_km ?? Infinity));
+  planSelected = planPools.length ? planPools[0].facility : null;  // nearest pool by default
+  renderPlan();
+});
+
+['pf-lap', 'pf-reserved', 'pf-elig'].forEach(id =>
+  $('#' + id).addEventListener('change', () => { if (planWeek) renderPlan(); }));
+
+function renderPoolSwitch() {
+  if (!planPools.length) { poolSwitch.innerHTML = ''; return; }
+  poolSwitch.innerHTML = planPools.map(p => {
+    const mark = p.facility === planSelected ? '●' : '○';
+    const km = p.distance_km != null ? ' ' + p.distance_km + 'km' : '';
+    const cls = p.facility === planSelected ? 'chip active' : 'chip';
+    return `<button class="${cls}" data-pool="${esc(p.facility)}">${mark} ${esc(p.facility)}${esc(km)}</button>`;
+  }).join('');
+  poolSwitch.querySelectorAll('.chip').forEach(c => c.addEventListener('click', () => {
+    planSelected = c.dataset.pool; renderPlan();
+  }));
+}
+
+// One session -> its filtered access glyph, or null if the filters hide it.
+function cellSession(o) {
+  const reserved = o.access === 'ClubReserved' || o.access === 'SchoolReserved';
+  if ($('#pf-lap').checked && o.access !== 'LaneSwim') return null;
+  if (!$('#pf-reserved').checked && reserved) return null;
+  if ($('#pf-elig').checked && !o.eligible) return null;
+  return o;
+}
+
+// Resolve the selected facility's state for one day. The three states are NEVER merged:
+//  - 'open'    : the pool produced sessions that day (some slots may still be empty '·')
+//  - 'closed'  : the pool is in `statuses` as closed that day (with reason)
+//  - 'unknown' : no options AND no closed status -> '?', never a blank that reads as closed
+function dayState(answer) {
+  const opts = answer.options.filter(o => o.facility === planSelected);
+  if (opts.length) return { state: 'open', sessions: opts };
+  const st = answer.statuses.find(s => s.facility === planSelected);
+  if (st && st.status === 'closed') return { state: 'closed', detail: st.detail };
+  if (st && st.status === 'uncurated') return { state: 'unknown', detail: 'schedule unknown, NOT closed' };
+  return { state: 'unknown', detail: 'no schedule data for this day, NOT closed' };
+}
+
+function renderPlan() {
+  renderPoolSwitch();
+  if (!planSelected) {
+    planOut.innerHTML = '<p class="muted">No pools with schedules near that spot — widen the radius.</p>';
+    return;
+  }
+  const states = planWeek.map(d => dayState(d.answer));
+  // Row set = union of visible session start times for the selected pool across the week.
+  const times = [...new Set(
+    states.flatMap(s => s.state === 'open' ? s.sessions.filter(cellSession).map(o => o.start) : [])
+  )].sort();
+
+  const badgePool = esc(planSelected);
+  if (!times.length) {
+    planOut.innerHTML = `<div class="planhead">${badgePool}</div>`
+      + '<p class="muted">No sessions match the current filters this week — try unchecking “lap only”.</p>';
+    return;
+  }
+
+  let h = `<div class="planhead">${badgePool}</div>`;
+  h += '<table class="weekgrid"><thead><tr><th>time</th>'
+     + planWeek.map(d => `<th>${esc(d.label)}</th>`).join('') + '<th></th></tr></thead><tbody>';
+  for (const t of times) {
+    h += `<tr><td class="time">${esc(t)}</td>`;
+    for (let i = 0; i < planWeek.length; i++) {
+      const s = states[i];
+      if (s.state === 'unknown') { h += '<td class="unknown-day" title="' + esc(s.detail) + '">?</td>'; continue; }
+      if (s.state === 'closed') { h += '<td class="closed-day" title="closed — ' + esc(s.detail) + '">·</td>'; continue; }
+      const here = s.sessions.filter(o => o.start === t).map(cellSession).filter(Boolean);
+      if (!here.length) { h += '<td class="closed-day" title="no session at this time">·</td>'; continue; }
+      const o = here.find(x => x.access === 'LaneSwim') || here[0];  // one glyph pair per cell
+      const el = eligAxis(o);
+      const title = here.map(x => x.start + '–' + x.end + ' ' + accessLabel(x.access)).join(' · ');
+      h += `<td title="${esc(title)}"><span class="glyph">${esc(accessGlyph(o.access))}</span>`
+         + `<span class="glyph cell-elig ${el.cls}">${el.g}</span></td>`;
+    }
+    h += '<td class="fc">[fc]</td></tr>';  // busyness placeholder — bracketed, forecast, not live
+  }
+  h += '</tbody></table>';
+
+  // Closed / unknown days are called out explicitly below the grid — never left as a silent blank.
+  const notes = planWeek.map((d, i) => {
+    const s = states[i];
+    if (s.state === 'closed') return `<div class="daynote closed">⊘ ${esc(d.label)} CLOSED — ${esc(s.detail)}</div>`;
+    if (s.state === 'unknown') return `<div class="daynote unknown">? ${esc(d.label)} — ${esc(s.detail)}</div>`;
+    return '';
+  }).filter(Boolean).join('');
+  h += notes;
+  h += '<p class="muted">Busyness columns show <b>[fc]</b> only — live occupancy is not wired; nothing here is a live count.</p>';
+  h += provStamp(planWeek.flatMap(d => d.answer.options.filter(o => o.facility === planSelected)));
+  planOut.innerHTML = h;
+}
 
 // --- All pools ---
 let allLoaded = false, currentKind = null;
