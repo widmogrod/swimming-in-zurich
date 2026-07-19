@@ -1,11 +1,12 @@
 ---
 type: plan
-status: draft            # draft -> approved -> in-progress -> done
+status: in-progress      # draft -> approved -> in-progress -> done (owner approved 2026-07-19: all 4 slices, no pause)
 created: 2026-07-19
 feature: ux-presentation
 gates:
-  qa: n/a                # design artifact — no code yet; QA applies to the UI slice that implements it
-  review: design         # owner picks a persona/screen to build first
+  qa: full               # make qa — ruff, format, mypy strict, pytest+coverage floor, CRAP
+  review: adversarial    # critic subagent must find no blocking issues
+pause_after: []          # owner chose to run S1..S4 back-to-back (2026-07-19)
 scope: presentation only # data model shapes live in [[rich-pool-domain]]; this plan maps data -> pixels
 links: ["[[rich-pool-domain]]", "[[basin]]", "[[feature]]", "[[fastapi-service-integration]]"]
 ---
@@ -187,12 +188,41 @@ Several are already in flight in [[rich-pool-domain]] — noted inline.
 6. **Per-time-of-day busyness curve** — detail sparklines imply a daily curve that doesn't
    exist even as forecast. Follow-on once historical occupancy (#1) accumulates.
 
-## Suggested build order
+## Slices
 
-1. Ship **Screen 1 (glance)** over the existing `/swim` response — it needs no new data, only
-   the honesty rules (states + `[fc]` bracket) and the length/lane badge (degrade lane count
-   gracefully per gap #2).
-2. Land gap #2 (typed lane count) — cheap, unblocks the hero badge across all three screens.
-3. **Screen 3 (tourist)** — mostly static teaching copy over current data; drop walk-time
-   (gap #4) until routing exists.
-4. **Screen 2 (week planner)** last — needs gap #5 (`Routine`) to be more than a read-only grid.
+Each slice is one vertical increment through the FastAPI service (`[[fastapi-service-integration]]`
+conventions) + its tests, taken fully through the QA + adversarial-review gates before the next.
+Presentation-only: no domain-model field is invented here — where the badge wants data the model
+lacks (lane count), the slice **degrades gracefully** and the gap is deferred to [[rich-pool-domain]].
+
+- **S1 — Glance screen: honest states + length badge + unified legend.** *(pause after)*
+  Surface `basin.length_m` and `facility.kind` through the swim service into `OptionOut` (the
+  only new plumbing — length exists on `Basin` but the API does not expose it). Rewrite the
+  "Find a swim" results as ranked cards: fat length badge, access glyph (`≈◇⌂WSX·`) + separate
+  eligibility axis (`✓✗?`), the three never-merged terminal states (open `·closes HH:MM` /
+  `closed` with reason / `uncurated`), the `ⓘ valid_as_of · source` provenance stamp, and the
+  shared legend. No busyness element yet (not in the `/swim` response — nothing to bracket).
+  Lane count degrades to length-only until S2. Tests: `test_swim` for the new fields; a UI
+  smoke test asserting the three states render distinctly.
+
+- **S2 — Typed lane count feeds the badge.** Add `Basin.lane_count: int | None` (parsed from
+  `description` prose), surface it to `OptionOut`, render `N lane` in the badge. **Coordinate
+  with [[rich-pool-domain]]** — if that plan lands lane count first, this slice becomes wiring
+  only. Closes gap #2.
+
+- **S3 — Tourist orientation screen.** New UI tab: the plain-language primer (pool types,
+  how-to-enter, slot glossary keyed off `/access-types`) + 2–3 distance-ranked starter pools
+  with jargon decoded inline and closed pools kept visible. Static teaching copy over current
+  data; **walk-time is not rendered** (gap #4 — km only) until routing exists.
+
+- **S4 — Week planner grid (read-only).** New UI tab: days×time grid for the nearest pool with
+  the unified access+eligibility glyphs, distance-sorted pool switcher, `[fc]` busyness caption
+  placeholder. Read-only — the "pick 3 / save routine" tray is **deferred** to gap #5
+  (`Routine` entity), out of scope for this presentation plan. May need a multi-day query path
+  (7× resolver) — flag as a discovery if `/swim`'s single-moment contract proves insufficient.
+
+## Ledger
+
+| date | slice | status | divergence | tech debt | human review? |
+|------|-------|--------|------------|-----------|---------------|
+| —    | —     | —      | —          | —         | —             |
