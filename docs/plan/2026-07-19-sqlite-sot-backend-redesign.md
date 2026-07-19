@@ -1,6 +1,6 @@
 ---
 type: plan
-status: draft            # PROPOSED design contract — pending owner decisions (§6) before it becomes an approved plan
+status: draft            # PROPOSED — REVISITED 2026-07-19 (see §0): SoT refactor landed; scope narrowed to the id/normalization delta; open-decisions #1/#2 settled
 created: 2026-07-19
 feature: sqlite-sot-backend-redesign
 origin: greenfield design panel (frame -> 3 independent architectures -> adversarial scoring -> synthesis)
@@ -21,6 +21,43 @@ links: ["[[2026-07-19-ux-usability-pass]]", "[[ux-presentation]]", "[[fastapi-se
 > contract builds on that (Phase 4 rebases onto it).
 
 # swimzh Backend Redesign — Target Design Contract
+
+## 0. REVISITED (2026-07-19) — current state after the SoT refactor landed
+
+The concurrent `single-source-of-truth` refactor has **shipped** and moved the runtime to one gold
+SQLite store. Re-scoping this contract against the *actual* code (README + a freshly-built DB):
+
+**Already done by the refactor (drop from this contract's scope):**
+- One runtime store; the app reads **only** the gold `.sqlite` (`GoldSwimData.load_all` + `load_catalog`
+  + `load_calendar`); `data/` is never read at runtime. → **crux #7 done.**
+- Offline `swimzh build` compiles committed `data/` YAML → the DB; `.db` git-ignored; fail-fast if
+  missing/empty. → **crux #1 (runtime SoT), #5 (read-only), open-decisions #1 (build-on-deploy) and
+  #2 (no write path) all effectively SETTLED.**
+- The DB now holds all ~57 pools (a `catalog` table) alongside curated/scraped `facility` rows.
+
+**NOT fixed — and arguably hardened (this is the remaining, valuable delta):**
+- **The split-brain is now two un-joinable tables in the one store.** Verified on a fresh build:
+  `facility.facility_id ∈ {aemtler, bungertwies, city, oerlikon}` (short) vs
+  `catalog.pool_id ∈ {hallenbad-city, flussbad-…}` (long); **intersection = ∅**. `city` and
+  `hallenbad-city` are the same pool in two rows sharing no key.
+- `/swim` (reads `facility`) and `/pools` (reads `catalog`) are **disjoint** — no id path from a
+  catalog pool to its schedule.
+- **`uncurated` still not produced at runtime.** The `SwimData` port is unchanged
+  (`facilities()`+`calendar()`, stale docstring); `find_swim_options` still gets no registry; the UI
+  derives "uncurated"/"location only" client-side by *name* (fragile).
+- **`scrape-gold` still bypasses `silver.reconcile`** (`cli.py` → `write_gold(...)` directly) and
+  writes *long* catalog ids into the short-id `facility` PK → the gold-internal PK split-brain is live.
+- Schema is still a **`doc` blob per row** (`facility.doc`, `catalog.doc`) — not normalized; that
+  opacity is exactly what lets two builders write incompatible ids into one PK.
+
+**Re-scoped target (the delta that carries the value):** collapse `facility`+`catalog` into ONE
+`pool` table that IS the registry — all ~57 pools under one canonical id, a **derived** `curation_status`,
+`pool_alias`/`pool_xref` for the legacy short/long ids — so `uncurated` becomes a `SELECT`, `/swim`↔`/pools`
+join, `scrape-gold` routes through one reconciling builder, and the blob is normalized away. Sections 1–5
+below still describe this target; **Phases 0–1 (id unification + normalized store) are now the critical
+path**, and Phase 4's "flip the app to read only SQLite" is largely **already done** — it reduces to
+wiring the unified `pool`/registry roster into `find_swim_options(..., uncurated=...)` and pointing
+`/pools` + `/swim` at the one table.
 
 ## 1. Recommendation
 
