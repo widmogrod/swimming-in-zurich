@@ -1,6 +1,6 @@
 ---
 type: plan
-status: approved         # draft -> approved -> in-progress -> done
+status: in-progress      # draft -> approved -> in-progress -> done
 created: 2026-07-19
 feature: single-source-of-truth
 gates:
