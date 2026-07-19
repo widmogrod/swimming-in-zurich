@@ -77,6 +77,16 @@ _PAGE = """<!doctype html>
   .status.uncurated { color: #b45309; }
   .prov { font-family: var(--mono); font-size: .8rem; opacity: .7; margin-top: 1rem;
     border-top: 1px solid #8884; padding-top: .5rem; }
+
+  /* --- tourist orientation primer --- */
+  .primer { border: 1px solid #8886; border-radius: .5rem; padding: .8rem 1rem; margin: 1rem 0; font-size: .9rem; }
+  .primer h3 { font-size: .95rem; margin: .2rem 0 .6rem; }
+  .primer dt { font-weight: 600; margin-top: .6rem; font-family: var(--mono); font-size: .82rem;
+    letter-spacing: .03em; }
+  .primer dt .muted { font-weight: 400; }
+  .primer dd { margin: .1rem 0 .2rem; opacity: .85; }
+  .card .decode { font-size: .82rem; opacity: .85; margin-top: .3rem; }
+  .card .decode b { font-weight: 600; }
 </style>
 </head>
 <body>
@@ -85,6 +95,7 @@ _PAGE = """<!doctype html>
 
 <nav>
   <button data-tab="find" class="active">Find a swim</button>
+  <button data-tab="visit">First time here?</button>
   <button data-tab="all">All pools</button>
 </nav>
 
@@ -111,6 +122,30 @@ PROV     ⓘ valid_as_of · source · (curated|scraped)</pre>
   <div class="legend"><h3>Access types</h3><dl id="legend"></dl></div>
 </section>
 
+<section id="visit">
+  <p class="muted">New to Zürich? Start here — the vocabulary you need, then a few pools to try. Closed pools stay on the list (a locked door is worse than a long word).</p>
+  <form id="vf">
+    <label>Staying near
+      <select name="place">
+        <option value="47.3779,8.5403">Zürich HB (main station)</option>
+        <option value="47.3671,8.5451">Bellevue</option>
+        <option value="47.3606,8.5510">Zürichhorn</option>
+      </select>
+    </label>
+    <label>Radius (km)<input type="number" name="radius_km" min="1" max="30" value="5"></label>
+    <label>Age<input type="number" name="age" min="0" max="120" placeholder="optional"></label>
+    <label>Gender
+      <select name="gender">
+        <option value="">any</option><option value="female">female</option>
+        <option value="male">male</option><option value="diverse">diverse</option>
+      </select>
+    </label>
+    <button type="submit">Show me starter pools</button>
+  </form>
+  <div class="primer" id="primer"></div>
+  <div id="visitOut"></div>
+</section>
+
 <section id="all">
   <div class="chips" id="kinds"></div>
   <div id="allOut"></div>
@@ -125,6 +160,7 @@ document.querySelectorAll('nav button').forEach(b => b.addEventListener('click',
   document.querySelectorAll('section').forEach(x => x.classList.remove('active'));
   b.classList.add('active'); $('#' + b.dataset.tab).classList.add('active');
   if (b.dataset.tab === 'all' && !allLoaded) loadPools();
+  if (b.dataset.tab === 'visit' && !visitLoaded) loadVisit();
 }));
 
 // --- Find a swim ---
@@ -217,6 +253,118 @@ f.addEventListener('submit', async e => {
 // access legend
 fetch('/access-types').then(r => r.json()).then(a => {
   $('#legend').innerHTML = a.types.map(t => `<dt>${esc(t.label)}</dt><dd>${esc(t.description)}</dd>`).join('');
+});
+
+// --- First time here? (tourist orientation) ---
+// Plain-language primer + a few distance-ranked starter pools with jargon decoded inline.
+// Reuses the shared /swim, /pools, /access-types responses and the unified card helpers
+// above — no new endpoints, no invented data.
+const vf = $('#vf'), visitOut = $('#visitOut');
+
+// Pool TYPES keyed off the catalog `kind` value → the German label + a plain-English gloss.
+const POOL_TYPES = {
+  indoor: ['Hallenbad', 'indoor pool — open all year, the reliable winter choice'],
+  outdoor: ['Freibad', 'outdoor pool — summer season only'],
+  river: ['Flussbad', 'river bath on the Limmat — summer only'],
+  lake: ['Seebad', 'lake bath on the Zürichsee — summer only'],
+  school: ['Schulschwimmanlage', 'school pool — limited public hours'],
+  paddling: ['Planschbecken', 'shallow paddling pool for small children'],
+  thermal: ['Wärmebad', 'warm / thermal pool'],
+};
+// A session's access type decoded for a newcomer: German term → what it lets YOU do.
+const DECODE = {
+  PublicSwim: ['Öffentlich', 'public swim — anyone may enter'],
+  LaneSwim: ['Bahnenschwimmen', 'lap swimming — public, organised into lanes'],
+  FamilyTime: ['Familienbad', 'family time — public, family-focused'],
+  WomenOnly: ['Frauenbad', 'women only'],
+  SeniorsOnly: ['Seniorenschwimmen', 'seniors only'],
+  SchoolReserved: ['Schule', 'school-reserved — not open to the public'],
+  ClubReserved: ['Verein', 'club-reserved — not open to the public'],
+  AdultsOnly: ['Erwachsene', 'adults only'],
+};
+const decodeAccess = a => { const d = DECODE[a]; return d ? d[0] + ' — ' + d[1] : accessLabel(a); };
+
+let visitLoaded = false;
+async function loadVisit() {
+  visitLoaded = true;
+  // Pool-type gloss is keyed off the catalog's kinds; the slot glossary is the /access-types data.
+  const [pools, access] = await Promise.all([
+    fetch('/pools').then(r => r.json()),
+    fetch('/access-types').then(r => r.json()),
+  ]);
+  const types = pools.kinds.map(k => {
+    const t = POOL_TYPES[k];
+    return t
+      ? `<dt>${esc(t[0])} <span class="muted">(${esc(k)})</span></dt><dd>${esc(t[1])}</dd>`
+      : `<dt>${esc(k)}</dt><dd>a Zürich pool category</dd>`;
+  }).join('');
+  const slots = access.types.map(t =>
+    `<dt>${esc(t.label)}</dt><dd>${esc(t.description)}</dd>`).join('');
+  $('#primer').innerHTML =
+    '<h3>First time here?</h3><dl>'
+    + '<dt>POOL TYPES</dt><dd>Zürich names its water by kind:</dd>' + types
+    + '<dt>TO ENTER</dt><dd>Walk in and pay in CHF at the door. No booking, no membership card needed.</dd>'
+    + '<dt>TO BRING</dt><dd>Swimsuit and towel. Lockers are on site.</dd>'
+    + '<dt>THE SLOTS</dt><dd>What each kind of session lets you do:</dd>' + slots
+    + '</dl>';
+  vf.dispatchEvent(new Event('submit'));  // show starter pools immediately with defaults
+}
+
+// A starter-pool card: the S1 badge + orthogonal glyph axes, jargon decoded inline, km only.
+// Walk/transit time is deliberately never shown — there is no routing model (gap #4).
+function starterCard(o, mark) {
+  const badge = o.length_m != null
+    ? `<span class="len">${esc(o.length_m)} m</span>`
+    : `<span class="len">pool</span>`;
+  const lanes = o.lanes != null ? `<span class="lanes">${esc(o.lanes)} lane</span>` : '';
+  const state = o.open_now
+    ? `<span class="state open">OPEN · closes ${esc(o.end)}</span>`
+    : `<span class="state upcoming">${esc(o.start)}–${esc(o.end)} today</span>`;
+  const el = eligAxis(o);
+  const meta = [o.distance_km != null ? o.distance_km + ' km' : null, o.price]
+    .filter(Boolean).map(esc).join(' · ');
+  return `<article class="card">
+    <div class="lenbadge"><span class="kind">${esc(mark)}</span>${badge}${lanes}</div>
+    <div class="body">
+      <div class="head"><span class="name">${esc(o.facility)} · ${esc(o.basin)}</span>${state}</div>
+      <div class="metaline">
+        <span class="glyph axis-access">${esc(accessGlyph(o.access))}</span>
+        <span class="glyph axis-elig ${el.cls}">${el.g}</span>
+        ${meta ? '&nbsp; ' + meta : ''}
+      </div>
+      <div class="decode">This slot is <b>${esc(decodeAccess(o.access))}</b>.</div>
+    </div>
+  </article>`;
+}
+
+vf.addEventListener('submit', async e => {
+  e.preventDefault();
+  const now = new Date(); now.setSeconds(0, 0);
+  const [lat, lon] = vf.place.value.split(',');
+  const p = new URLSearchParams();
+  p.append('at', new Date(now.getTime() - now.getTimezoneOffset()*60000).toISOString().slice(0,16));
+  p.append('lat', lat); p.append('lon', lon);
+  if (vf.radius_km.value) p.append('radius_km', vf.radius_km.value);
+  if (vf.age.value) p.append('age', vf.age.value);
+  if (vf.gender.value) p.append('gender', vf.gender.value);
+  p.append('eligible_only', 'false');  // a newcomer sees every nearby option, ✓/✗/? and all
+  visitOut.innerHTML = '<p class="muted">Finding pools near you…</p>';
+  const r = await fetch('/swim?' + p);
+  if (!r.ok) { visitOut.innerHTML = '<p class="warn">' + esc((await r.json()).detail) + '</p>'; return; }
+  const a = await r.json();
+  let h = '<h3>Starter pools near you</h3>';
+  const marks = ['①', '②', '③'];
+  const starters = a.options.slice(0, 3);  // 2–3 distance-ranked (the service sorts by distance)
+  if (!starters.length)
+    h += '<p class="muted">No open sessions at this minute — the pools below are not shut, just unscheduled or closed for now.</p>';
+  else h += starters.map((o, i) => starterCard(o, marks[i] || (i+1))).join('');
+  // Closed / uncurated pools are ALWAYS kept visible for a newcomer — never hidden.
+  if (a.statuses.length)
+    h += '<div class="notshown"><div class="sep">also nearby — not open right now, but NOT necessarily shut</div>'
+       + a.statuses.map(statusLine).join('') + '</div>';
+  h += provStamp(a.options);
+  h += '<p class="warn">⚠ Only 7 of ~57 Zürich pools have verified timetables. The rest show as “unknown” — which is NOT the same as closed.</p>';
+  visitOut.innerHTML = h;
 });
 
 // --- All pools ---

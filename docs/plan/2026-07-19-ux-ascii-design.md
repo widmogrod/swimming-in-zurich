@@ -227,6 +227,7 @@ lacks (lane count), the slice **degrades gracefully** and the gap is deferred to
 |------|-------|--------|------------|-----------|---------------|
 | 2026-07-19 | S1 | done | added `OptionOut.source`/`.curated` beyond the two named fields — required to render the provenance stamp honestly (in-scope per S1's stamp deliverable) | uncurated state renders but `build_answer` calls `find_swim_options` without a registry, so it is never produced at runtime (honest scaffolding); `?` eligibility detected in JS by reason-substring match, not a structured flag | yes |
 | 2026-07-19 | S2 | done | field is the domain's existing `Basin.lanes` (parsed from prose by [[rich-pool-domain]]), not a new `lane_count` — exactly the plan's "wiring only" branch | only City's curated 50m basin carries a real lane count today; other curated basins degrade to length-only (data-curation backfill, not a code gap) | no |
+| 2026-07-19 | S3 | done | mockup's free-text "Staying near" realized as a 3-landmark preset dropdown (Zürich HB / Bellevue / Zürichhorn, real lat/lon) — no geocoder in the domain | location presets are hardcoded landmark coords (a geocoding port is future work); closed/uncurated pools come from `statuses` which carry no distance, so they stay visible but can't be distance-ranked | no |
 
 ## Decisions & divergences
 

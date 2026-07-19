@@ -54,3 +54,46 @@ def test_badge_renders_lane_count_subline_conditionally() -> None:
     assert "lane</span>" in page
     # Its own badge sub-line class exists in the stylesheet.
     assert ".lenbadge .lanes" in page
+
+
+def test_tourist_tab_renders_primer_and_glossary() -> None:
+    """S3: the newcomer tab leads with a plain-language primer — pool types keyed off the
+    catalog `kind`, a how-to-enter section, and a slot glossary sourced from /access-types."""
+    with TestClient(app) as client:
+        page = client.get("/").text
+    # A distinct nav tab + its own section for the newcomer.
+    assert 'data-tab="visit"' in page
+    assert "First time here?" in page
+    assert 'id="visit"' in page
+    # The primer's teaching sections.
+    assert "POOL TYPES" in page and "TO ENTER" in page and "THE SLOTS" in page
+    # Pool types are keyed off `kind`; the slot glossary is sourced from /access-types.
+    assert "POOL_TYPES" in page  # the kind -> plain-language map
+    assert "fetch('/access-types')" in page
+    # Jargon is decoded inline (German term -> what it lets you do).
+    assert "Bahnenschwimmen" in page and "Öffentlich" in page
+
+
+def test_tourist_starter_pools_keep_closed_pools_visible() -> None:
+    """S3 invariant: a tourist at a locked door is the worst outcome, so closed/uncurated
+    pools are always kept visible below the distance-ranked starter pools — never hidden."""
+    with TestClient(app) as client:
+        page = client.get("/").text
+    # The tourist output renders the status lines, reusing the closed/uncurated branches.
+    assert "a.statuses.map(statusLine)" in page
+    assert "NOT necessarily shut" in page
+    # It reuses the shared honesty language: the provenance stamp over the same options.
+    assert "provStamp(a.options)" in page
+    # Starter pools are the distance-ranked options (the service sorts by distance).
+    assert "a.options.slice(0, 3)" in page
+
+
+def test_tourist_tab_shows_distance_only_never_walk_time() -> None:
+    """S3 / gap #4: with no routing model, the tourist view shows km only — walk / transit
+    time is deliberately never rendered."""
+    with TestClient(app) as client:
+        page = client.get("/").text
+    # Distance in km is surfaced in the starter card; walk-time never is.
+    assert "o.distance_km + ' km'" in page
+    assert "min walk" not in page.lower()
+    assert "walk time" not in page.lower()
