@@ -51,6 +51,13 @@ _PAGE = """<!doctype html>
   label { display: flex; flex-direction: column; font-size: .85rem; gap: .25rem; }
   input, select, button { padding: .5rem; font-size: 1rem; }
   form button { grid-column: 1 / -1; cursor: pointer; }
+  /* Shared context bar (#12): the persistent place/gender/age/radius inputs live ONCE above the
+     tabs (styled as a boxed form) and drive every tab, so switching tabs continues the session. */
+  .ctxbar { border: 1px solid #8886; border-radius: .5rem; padding: .75rem .9rem; margin: 1rem 0 .3rem; background: #8881; }
+  .ctxlead { font-size: .78rem; opacity: .6; margin: 0 0 .5rem; }
+  /* Neutral data-coverage line (#10): the consolidated footer's second row — states the
+     verified-timetable fraction calmly (NOT the old amber "7 of ~57" `.warn` banner). */
+  .coverage { margin-top: .5rem; font-size: .82rem; }
   table { border-collapse: collapse; width: 100%; margin-top: 1rem; }
   th, td { text-align: left; padding: .4rem .5rem; border-bottom: 1px solid #8884; font-size: .9rem; vertical-align: top; }
   .badge { display: inline-block; padding: .05rem .4rem; border-radius: .4rem; background: #8882; font-size: .8rem; }
@@ -156,6 +163,28 @@ _PAGE = """<!doctype html>
 <h1>🏊 Swimming in Zürich</h1>
 <p class="muted">Locations from the city open data (WFS). Schedules are curated/illustrative — verify on-site via the official link.</p>
 
+<!-- Shared context bar (#12): place/gender/age/radius live here ONCE, above the tabs. Every tab
+     reads this state and adds only its own control (Find: "When"; Plan: its filters). Changing it
+     re-runs the active tab, so switching tabs continues the session instead of resetting it. -->
+<p class="ctxlead">Your search context — applies to every tab:</p>
+<form id="ctx" class="ctxbar">
+  <label>Near
+    <select name="place">
+      <option value="47.3779,8.5403">Zürich HB (main station)</option>
+      <option value="47.3671,8.5451">Bellevue</option>
+      <option value="47.3606,8.5510">Zürichhorn</option>
+    </select>
+  </label>
+  <label>Gender
+    <select name="gender">
+      <option value="">any</option><option value="female">female</option>
+      <option value="male">male</option><option value="diverse">diverse</option>
+    </select>
+  </label>
+  <label>Age<input type="number" name="age" min="0" max="120" placeholder="optional"></label>
+  <label>Radius (km)<input type="number" name="radius_km" min="1" max="30" value="10"></label>
+</form>
+
 <nav>
   <button data-tab="find" class="active">Find a swim</button>
   <button data-tab="plan">Plan my week</button>
@@ -164,15 +193,10 @@ _PAGE = """<!doctype html>
 </nav>
 
 <section id="find" class="active">
+  <!-- Find's ONLY tab-specific inputs are "When" + the eligible toggle; place/gender/age/radius
+       come from the shared context bar above. -->
   <form id="f">
     <label>When<input type="datetime-local" name="at" required></label>
-    <label>Gender
-      <select name="gender">
-        <option value="">any</option><option value="female">female</option>
-        <option value="male">male</option><option value="diverse">diverse</option>
-      </select>
-    </label>
-    <label>Age<input type="number" name="age" min="0" max="120" placeholder="optional"></label>
     <label>Only eligible
       <select name="eligible_only"><option value="true">yes</option><option value="false">no</option></select>
     </label>
@@ -189,25 +213,9 @@ PROV     ⓘ Schedule last checked … · source · official / from the website 
 </section>
 
 <section id="plan">
-  <p class="muted">Plan recurring lap windows across the week near home. Read-only — a days×time grid for one nearby pool at a time. (Saving a routine is not built yet.)</p>
-  <form id="pf">
-    <label>Near
-      <select name="place">
-        <option value="47.3779,8.5403">Zürich HB (main station)</option>
-        <option value="47.3671,8.5451">Bellevue</option>
-        <option value="47.3606,8.5510">Zürichhorn</option>
-      </select>
-    </label>
-    <label>Gender
-      <select name="gender">
-        <option value="">any</option><option value="female">female</option>
-        <option value="male">male</option><option value="diverse">diverse</option>
-      </select>
-    </label>
-    <label>Age<input type="number" name="age" min="0" max="120" placeholder="optional"></label>
-    <label>Radius (km)<input type="number" name="radius_km" min="1" max="30" value="10"></label>
-    <button type="submit">Show my week</button>
-  </form>
+  <p class="muted">Plan recurring lap windows across the week near home. Read-only — a days×time grid for one nearby pool at a time. Uses your shared context (place/gender/age/radius) above. (Saving a routine is not built yet.)</p>
+  <!-- Plan's ONLY tab-specific controls are these lap/reserved/eligible filters; place/gender/age/
+       radius come from the shared context bar. The week auto-resolves from that shared state. -->
   <div class="planfilters">
     <label><input type="checkbox" id="pf-lap" checked> lap only</label>
     <label><input type="checkbox" id="pf-reserved"> show reserved</label>
@@ -223,25 +231,7 @@ FOR YOU  ✓ in     ✗ not you   ? unknown</pre>
 </section>
 
 <section id="visit">
-  <p class="muted">New to Zürich? Start here — the vocabulary you need, then a few pools to try. Closed pools stay on the list (a locked door is worse than a long word).</p>
-  <form id="vf">
-    <label>Staying near
-      <select name="place">
-        <option value="47.3779,8.5403">Zürich HB (main station)</option>
-        <option value="47.3671,8.5451">Bellevue</option>
-        <option value="47.3606,8.5510">Zürichhorn</option>
-      </select>
-    </label>
-    <label>Radius (km)<input type="number" name="radius_km" min="1" max="30" value="5"></label>
-    <label>Age<input type="number" name="age" min="0" max="120" placeholder="optional"></label>
-    <label>Gender
-      <select name="gender">
-        <option value="">any</option><option value="female">female</option>
-        <option value="male">male</option><option value="diverse">diverse</option>
-      </select>
-    </label>
-    <button type="submit">Show me starter pools</button>
-  </form>
+  <p class="muted">New to Zürich? Start here — the vocabulary you need, then a few pools to try. Closed pools stay on the list (a locked door is worse than a long word). Uses your shared context (place/gender/age/radius) above — this tab adds nothing extra.</p>
   <div id="visitOut"></div>
   <div class="primer" id="primer"></div>
 </section>
@@ -259,7 +249,9 @@ FOR YOU  ✓ in     ✗ not you   ? unknown</pre>
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 // tabs — activateTab is also the programmatic entry point for the All-pools "Plan ›" jump.
+let activeTab = 'find';   // which tab the shared-context re-run targets
 function activateTab(tab) {
+  activeTab = tab;
   document.querySelectorAll('nav button').forEach(x => x.classList.toggle('active', x.dataset.tab === tab));
   document.querySelectorAll('section').forEach(x => x.classList.toggle('active', x.id === tab));
   if (tab === 'all' && !allLoaded) loadPools();
@@ -268,6 +260,24 @@ function activateTab(tab) {
 }
 document.querySelectorAll('nav button').forEach(b =>
   b.addEventListener('click', () => activateTab(b.dataset.tab)));
+
+// --- Shared context bar (#12): ONE set of place/gender/age/radius inputs, above the tabs ---
+// Every tab reads ctxState() instead of its own duplicated fields, so the session is carried
+// across tab switches (the inputs are never re-entered per tab). Changing any shared input
+// re-runs whichever tab is active, continuing the session rather than resetting it. The
+// All-pools tab lists the whole catalog and does not consume this context.
+const ctx = $('#ctx');
+ctx.addEventListener('submit', e => e.preventDefault());  // Enter in a field must not reload
+function ctxState() {
+  const [lat, lon] = ctx.place.value.split(',');
+  return { lat, lon, gender: ctx.gender.value, age: ctx.age.value, radius_km: ctx.radius_km.value };
+}
+function rerunActiveTab() {
+  if (activeTab === 'find') { if (findLoaded) f.dispatchEvent(new Event('submit')); }
+  else if (activeTab === 'plan') { if (planLoaded) runPlan(); }
+  else if (activeTab === 'visit') { if (visitLoaded) runVisit(); }
+}
+ctx.addEventListener('change', rerunActiveTab);
 
 // --- Pool catalog join: the facility as a first-class, actionable object ---
 // /swim carries only the facility NAME; /pools carries url/phone/address/lat/lon per pool.
@@ -280,7 +290,9 @@ let poolMap = new Map();   // facility name -> { url, phone, address, lat, lon, 
 function loadPoolsData() {
   if (!poolsPromise) poolsPromise = fetch('/pools')
     .then(r => r.ok ? r.json() : { count: 0, kinds: [], pools: [] })
-    .then(a => { poolMap = new Map((a.pools || []).map(p => [p.name, p])); return a; });
+    .then(a => { poolMap = new Map((a.pools || []).map(p => [p.name, p]));
+      if (catalogCount === null) catalogCount = a.count;  // shared: the coverage footer reuses it
+      return a; });
   return poolsPromise;
 }
 function poolInfo(name) { return poolMap.get(name) || null; }  // the catalog record, or null
@@ -350,6 +362,7 @@ function poolLinksHTML(name) {
 
 // --- Find a swim ---
 const f = $('#f'), findOut = $('#findOut');
+let findLoaded = false;   // becomes true after the first search, so a context change re-runs Find
 const now = new Date(); now.setSeconds(0, 0);
 f.at.value = new Date(now.getTime() - now.getTimezoneOffset()*60000).toISOString().slice(0,16);
 
@@ -434,15 +447,35 @@ function provStamp(options) {
   return `<div class="prov">ⓘ ${asOf}${esc(sources.join(', ') || 'unknown source')} · ${provenance}</div>`;
 }
 
+// #10: ONE consolidated footer per tab. The trailing meta used to be a stack (provenance stamp
+// + a separate amber hardcoded-count .warn banner). footerHTML folds them into a single footer:
+// the ⓘ provenance stamp, then a NEUTRAL data-coverage line built from the REAL counts — the
+// memoized catalog size (catalogCount, from /pools) and the scheduled-facility set (from /swim) —
+// stating the same honest fact (few verified timetables; unknown ≠ closed) calmly, not in alarm red.
+function coverageHTML() {
+  if (catalogCount == null) return '';
+  return `<div class="coverage muted">Timetables verified for ${scheduledPools.size} of ~${catalogCount} Zürich pools so far — the rest are listed as locations and show as “unknown”, which is not the same as closed.</div>`;
+}
+function footerHTML(options) { return provStamp(options) + coverageHTML(); }
+
 f.addEventListener('submit', async e => {
   e.preventDefault();
+  findLoaded = true;
+  // Find's own control is "When" + the eligible toggle; place/gender/age/radius come from ctx.
+  const c = ctxState();
   const p = new URLSearchParams();
-  for (const [k, v] of new FormData(f)) if (v !== '') p.append(k, v);
+  p.append('at', f.at.value);
+  p.append('eligible_only', f.eligible_only.value);
+  p.append('lat', c.lat); p.append('lon', c.lon);
+  if (c.radius_km) p.append('radius_km', c.radius_km);
+  if (c.age) p.append('age', c.age);
+  if (c.gender) p.append('gender', c.gender);
   findOut.innerHTML = '<p class="muted">Searching…</p>';
   const r = await fetch('/swim?' + p);
   if (!r.ok) { findOut.innerHTML = '<p class="warn">' + esc((await r.json()).detail) + '</p>'; return; }
   const a = await r.json();
   await loadPoolsData();  // memoized /pools — so every card can link its pool + show detail
+  await loadScheduledFacilities();  // memoized /swim — for the consolidated coverage footer
   let h = a.notices.map(n => '<p class="warn">📣 <strong>' + esc(n.facility) + '</strong>: ' + esc(n.text) + '</p>').join('');
   h += a.warnings.map(w => '<p class="warn">⚠ ' + esc(w) + '</p>').join('');
   if (!a.options.length) h += '<p>No open, eligible sessions for that moment.</p>';
@@ -450,7 +483,7 @@ f.addEventListener('submit', async e => {
   if (a.statuses.length)
     h += '<div class="notshown"><div class="sep">not shown as options</div>'
        + a.statuses.map(statusLine).join('') + '</div>';
-  h += provStamp(a.options);
+  h += footerHTML(a.options);
   findOut.innerHTML = h;
 });
 
@@ -463,7 +496,7 @@ fetch('/access-types').then(r => r.json()).then(a => {
 // Plain-language primer + a few distance-ranked starter pools with jargon decoded inline.
 // Reuses the shared /swim, /pools, /access-types responses and the unified card helpers
 // above — no new endpoints, no invented data.
-const vf = $('#vf'), visitOut = $('#visitOut');
+const visitOut = $('#visitOut');
 
 // Pool TYPES keyed off the catalog `kind` value → the German label + a plain-English gloss.
 const POOL_TYPES = {
@@ -495,7 +528,7 @@ async function loadVisit() {
   // The slot glossary is the /access-types data; POOL TYPES is keyed off the kinds actually
   // present in the results (see renderPrimer), so no /pools fetch is needed here.
   visitAccess = await fetch('/access-types').then(r => r.json());
-  vf.dispatchEvent(new Event('submit'));  // show starter pools immediately with defaults
+  await runVisit();  // show starter pools immediately, from the shared context bar
 }
 
 // The primer is deliberately small: one always-visible line (the only thing a newcomer must
@@ -542,22 +575,22 @@ function starterCard(o, mark) {
   </article>`;
 }
 
-vf.addEventListener('submit', async e => {
-  e.preventDefault();
+async function runVisit() {
   const now = new Date(); now.setSeconds(0, 0);
-  const [lat, lon] = vf.place.value.split(',');
+  const c = ctxState();  // place/gender/age/radius from the shared context bar (no vf form now)
   const p = new URLSearchParams();
   p.append('at', new Date(now.getTime() - now.getTimezoneOffset()*60000).toISOString().slice(0,16));
-  p.append('lat', lat); p.append('lon', lon);
-  if (vf.radius_km.value) p.append('radius_km', vf.radius_km.value);
-  if (vf.age.value) p.append('age', vf.age.value);
-  if (vf.gender.value) p.append('gender', vf.gender.value);
+  p.append('lat', c.lat); p.append('lon', c.lon);
+  if (c.radius_km) p.append('radius_km', c.radius_km);
+  if (c.age) p.append('age', c.age);
+  if (c.gender) p.append('gender', c.gender);
   p.append('eligible_only', 'false');  // a newcomer sees every nearby option, ✓/✗/? and all
   visitOut.innerHTML = '<p class="muted">Finding pools near you…</p>';
   const r = await fetch('/swim?' + p);
   if (!r.ok) { visitOut.innerHTML = '<p class="warn">' + esc((await r.json()).detail) + '</p>'; return; }
   const a = await r.json();
   await loadPoolsData();  // memoized /pools — link each starter pool + its contact/route detail
+  await loadScheduledFacilities();  // memoized /swim — for the consolidated coverage footer
   renderPrimer(a.options);  // keep the glossary keyed to the kinds these results actually contain
   let h = '<h3>Starter pools near you</h3>';
   const marks = ['①', '②', '③'];
@@ -576,10 +609,11 @@ vf.addEventListener('submit', async e => {
   if (a.statuses.length)
     h += '<div class="notshown"><div class="sep">also nearby — not open right now, but NOT necessarily shut</div>'
        + a.statuses.map(statusLine).join('') + '</div>';
-  h += provStamp(a.options);
-  h += '<p class="warn">⚠ Only 7 of ~57 Zürich pools have verified timetables. The rest show as “unknown” — which is NOT the same as closed.</p>';
+  // #10: one consolidated footer — provenance + a NEUTRAL data-coverage line — replaces the old
+  // provStamp-plus-amber-"7 of ~57"-banner stack. Same honesty, told once, calmly (not alarm red).
+  h += footerHTML(a.options);
   visitOut.innerHTML = h;
-});
+}
 
 // --- Plan my week (read-only weekly grid) ---
 // DISCOVERY (Option A): /swim takes a single `at` moment, but find_swim_options resolves
@@ -587,7 +621,7 @@ vf.addEventListener('submit', async e => {
 // `open_now` is just a per-session flag), so 7 calls — one per weekday at a representative
 // noon — assemble the whole week with no API change. Eligibility (✓✗?) is per-session and
 // time-independent; only holiday-correct schedules need the real date, which each call has.
-const pf = $('#pf'), planOut = $('#planOut'), poolSwitch = $('#poolSwitch'), planNote = $('#planNote');
+const planOut = $('#planOut'), poolSwitch = $('#poolSwitch'), planNote = $('#planNote');
 const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 let planLoaded = false;
 let planWeek = null;      // [{ label, iso, answer }] for Mon..Sun
@@ -605,11 +639,13 @@ function mondayOf(d) {
   return m;
 }
 
-async function loadPlan() { planLoaded = true; pf.dispatchEvent(new Event('submit')); }
+async function loadPlan() { planLoaded = true; await runPlan(); }
 
-pf.addEventListener('submit', async e => {
-  e.preventDefault();
-  const [lat, lon] = pf.place.value.split(',');
+// The week resolves from the shared context bar (place/gender/age/radius) — no per-tab form.
+// loadPlan runs it on first tab open; a shared-context change re-runs it (see rerunActiveTab).
+async function runPlan() {
+  const c = ctxState();
+  const [lat, lon] = [c.lat, c.lon];
   const monday = mondayOf(new Date());
   planOut.innerHTML = '<p class="muted">Resolving the week…</p>';
   const days = WEEKDAYS.map((label, i) => {
@@ -619,9 +655,9 @@ pf.addEventListener('submit', async e => {
   // Option A: one /swim call per weekday (7), assembled client-side.
   const answers = await Promise.all(days.map(async day => {
     const p = new URLSearchParams({ at: day.iso, lat, lon, eligible_only: 'false' });
-    if (pf.radius_km.value) p.append('radius_km', pf.radius_km.value);
-    if (pf.age.value) p.append('age', pf.age.value);
-    if (pf.gender.value) p.append('gender', pf.gender.value);
+    if (c.radius_km) p.append('radius_km', c.radius_km);
+    if (c.age) p.append('age', c.age);
+    if (c.gender) p.append('gender', c.gender);
     const r = await fetch('/swim?' + p);
     return r.ok ? r.json() : { options: [], statuses: [], warnings: [], notices: [] };
   }));
@@ -657,7 +693,7 @@ pf.addEventListener('submit', async e => {
     planPreselect = null;
   }
   renderPlan();
-});
+}
 
 ['pf-lap', 'pf-reserved', 'pf-elig'].forEach(id =>
   $('#' + id).addEventListener('change', () => { if (planWeek) renderPlan(); }));

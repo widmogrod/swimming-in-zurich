@@ -96,8 +96,9 @@ def test_tourist_starter_pools_keep_closed_pools_visible() -> None:
     # The tourist output renders the status lines, reusing the closed/uncurated branches.
     assert "a.statuses.map(statusLine)" in page
     assert "NOT necessarily shut" in page
-    # It reuses the shared honesty language: the provenance stamp over the same options.
-    assert "provStamp(a.options)" in page
+    # It reuses the shared honesty language: the consolidated footer (provenance + coverage)
+    # over the same options (S6 #10 folded provStamp + the amber banner into one footer).
+    assert "footerHTML(a.options)" in page
     # Starter pools are distinct FACILITIES taken from the distance-ordered options.
     assert "if (!byFacility.has(o.facility)) byFacility.set(o.facility, o)" in page
     assert "[...byFacility.values()].slice(0, 3)" in page
@@ -601,3 +602,111 @@ def test_s5_scheduled_rows_wire_a_jump_to_the_plan_tab() -> None:
         "if (planPools.some(p => p.facility === planPreselect)) planSelected = planPreselect;"
     )
     assert preselect in page
+
+
+def test_s6_one_shared_context_bar_above_the_tabs_drives_every_tab() -> None:
+    """S6 #12: place/gender/age/radius are lifted into ONE persistent context bar (``#ctx``)
+    ABOVE the tabs. The three per-tab forms no longer duplicate these fields — each shared
+    field name appears exactly once (in the bar) — and every tab reads them via ``ctxState()``."""
+    with TestClient(app) as client:
+        page = client.get("/").text
+    # A single shared context bar, positioned above the tab nav.
+    assert '<form id="ctx" class="ctxbar">' in page
+    assert page.index('<form id="ctx"') < page.index("<nav>")
+    # The four shared inputs live ONCE (the old Find/Plan/Tourist duplication is gone).
+    assert page.count('name="place"') == 1
+    assert page.count('name="radius_km"') == 1
+    assert page.count('name="gender"') == 1
+    assert page.count('name="age"') == 1
+    # A single reader helper exposes the shared state as {lat, lon, gender, age, radius_km}.
+    assert "function ctxState()" in page
+    assert "const [lat, lon] = ctx.place.value.split(',');" in page
+    assert (
+        "return { lat, lon, gender: ctx.gender.value, age: ctx.age.value,"
+        " radius_km: ctx.radius_km.value };" in page
+    )
+    # All three query tabs consume the shared state (Find, Plan, Tourist each call ctxState()).
+    assert page.count("const c = ctxState();") == 3
+
+
+def test_s6_find_keeps_only_its_when_control_place_moves_to_the_bar() -> None:
+    """S6 #12: Find's own form keeps only its tab-specific controls (When + the eligible
+    toggle); it no longer carries place/gender/age/radius — those come from the shared bar,
+    and Find now passes the bar's lat/lon so its cards gain distance."""
+    with TestClient(app) as client:
+        page = client.get("/").text
+    # Find's form still owns "When" and the eligible toggle.
+    assert '<input type="datetime-local" name="at" required>' in page
+    assert 'name="eligible_only"' in page
+    # Find now sources place/gender/age/radius from the shared context, not a per-tab field.
+    find = page[page.index("f.addEventListener('submit'") : page.index("// access legend")]
+    assert "const c = ctxState();" in find
+    assert "p.append('lat', c.lat); p.append('lon', c.lon);" in find
+    assert "if (c.gender) p.append('gender', c.gender);" in find
+
+
+def test_s6_changing_shared_context_reruns_the_active_tab_continuing_the_session() -> None:
+    """S6 #12: switching tabs carries the shared inputs (they are never re-entered per tab),
+    and changing any shared input re-runs whichever tab is active — the session CONTINUES
+    rather than resetting."""
+    with TestClient(app) as client:
+        page = client.get("/").text
+    # The active tab is tracked and a shared-context change re-runs it.
+    assert "let activeTab = 'find';" in page
+    assert "activeTab = tab;" in page  # activateTab records the current tab
+    assert "ctx.addEventListener('change', rerunActiveTab);" in page
+    assert "function rerunActiveTab()" in page
+    # Each query tab is re-run through its own runner when it is the active one.
+    find_rerun = (
+        "if (activeTab === 'find') { if (findLoaded) f.dispatchEvent(new Event('submit')); }"
+    )
+    assert find_rerun in page
+    assert "else if (activeTab === 'plan') { if (planLoaded) runPlan(); }" in page
+    assert "else if (activeTab === 'visit') { if (visitLoaded) runVisit(); }" in page
+    # Plan and Tourist became context-driven runners (no per-tab submit form remains).
+    assert "async function runPlan()" in page
+    assert "async function runVisit()" in page
+
+
+def test_s6_footer_is_consolidated_and_coverage_line_is_neutral_not_amber() -> None:
+    """S6 #10: the trailing meta-stack (provenance stamp + a separate amber "Only 7 of ~57"
+    ``.warn`` banner) is consolidated into ONE footer per tab, and the amber banner is demoted
+    to a NEUTRAL data-coverage line that reuses the real ``catalogCount`` + scheduled set."""
+    with TestClient(app) as client:
+        page = client.get("/").text
+    # One footer helper folds provenance + coverage together, used on Find and Tourist.
+    assert "function footerHTML(options) { return provStamp(options) + coverageHTML(); }" in page
+    assert page.count("footerHTML(a.options)") == 2  # Find + Tourist
+    # The coverage line is NEUTRAL (a muted line, never the amber .warn class) and honest.
+    assert "function coverageHTML()" in page
+    assert '<div class="coverage muted">' in page
+    assert "which is not the same as closed." in page
+    assert ".coverage { margin-top:" in page  # its own neutral style exists
+    # It reuses the REAL counts, not a hardcoded number.
+    assert "${scheduledPools.size} of ~${catalogCount}" in page
+    assert "if (catalogCount == null) return '';" in page
+    # The old amber "Only 7 of ~57 …" .warn banner is gone.
+    assert "Only 7 of ~57" not in page
+    assert 'class="warn">⚠ Only' not in page
+
+
+def test_s6_tourist_tab_is_kept_not_demoted_onboarding_preserved() -> None:
+    """S6 #15 DECISION: keep the "First time here?" tab rather than demoting it to a
+    collapsible "New here? ▸" panel on Find. The tourist tab carries onboarding the Find tab
+    does not (the plain-language primer, distinct starter pools, the inline decode, and the
+    kept-visible closed pools); demoting it would regress newcomer onboarding, so — per the
+    plan's "prefer keeping the tab unless demotion is clearly a net win" — it stays a tab."""
+    with TestClient(app) as client:
+        page = client.get("/").text
+    # The tourist tab survives as a first-class tab (four tabs total, in the nav spine).
+    assert 'data-tab="visit"' in page
+    assert "First time here?" in page
+    assert '<section id="visit">' in page
+    assert page.count("data-tab=") == 4  # Find · Plan · First-time · All-pools
+    # The onboarding the tab exists FOR is intact: primer, distinct starters, inline decode.
+    assert 'id="primer"' in page
+    assert "renderPrimer(a.options)" in page
+    assert "[...byFacility.values()].slice(0, 3)" in page
+    assert "This slot is <b>" in page
+    # The rejected demotion artifact ("New here? ▸" panel on Find) was NOT built.
+    assert "New here? ▸" not in page
