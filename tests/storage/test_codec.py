@@ -64,7 +64,7 @@ def test_curated_basins_carry_kind_and_decimal_dimensions(
     facilities: tuple[Facility, ...],
 ) -> None:
     # The YAML migration replaced `length_m: 50` with `dimensions: {length_m: "50"}`.
-    city = next(f for f in facilities if str(f.identity.facility_id) == "city")
+    city = next(f for f in facilities if str(f.identity.facility_id) == "hallenbad-city")
     fifty = next(b for b in city.basins if str(b.basin_id) == "city-50m")
     assert fifty.kind is BasinKind.LAP
     assert fifty.dimensions == Dimensions(length_m=Decimal("50"))
@@ -97,7 +97,7 @@ def test_roundtrip_covers_every_physical_basin_field(facilities: tuple[Facility,
 def test_curated_city_carries_facility_level_statics(facilities: tuple[Facility, ...]) -> None:
     # The curated YAML schema expresses website/features/lockers, and the all-facilities
     # round-trip above already proves they survive the codec on real data.
-    city = next(f for f in facilities if str(f.identity.facility_id) == "city")
+    city = next(f for f in facilities if str(f.identity.facility_id) == "hallenbad-city")
     assert city.website is not None
     assert {f.kind for f in city.features} == {FeatureKind.SAUNA}
     assert city.features[0].hours, "sauna hours should be curated as ScheduleRules"

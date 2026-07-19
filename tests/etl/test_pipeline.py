@@ -58,7 +58,7 @@ def test_pipeline_end_to_end_then_query() -> None:
     repo = result.value
     assert repo.count() == 4
 
-    city = repo.get(FacilityId("city"))
+    city = repo.get(FacilityId("hallenbad-city"))
     assert city is not None
     assert city.geo is not None
     assert city.identity.geo_sport_id == "poi_hallenbad_view.2"

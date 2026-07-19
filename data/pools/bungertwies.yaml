@@ -2,7 +2,7 @@
 # Demonstrates a Wednesday family afternoon (Kinderspielnachmittag) partitioned cleanly
 # out of the public block, and a mid-July closure.
 
-facility_id: "bungertwies"
+facility_id: "hallenbad-bungertwies"
 address: "Bungertwies 2, 8008 Zürich"
 source: "stadt-zuerich.ch/hallenbaeder/bungertwies (curated, illustrative)"
 valid_as_of: "2026-07-18"

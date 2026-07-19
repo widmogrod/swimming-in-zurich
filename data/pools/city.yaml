@@ -5,7 +5,7 @@
 # Sunday-schedule public holiday, a summer closure). Verify against stadt-zuerich.ch and
 # update `valid_as_of` before relying on any answer.
 
-facility_id: "city"
+facility_id: "hallenbad-city"
 address: "Sihlstrasse 71, 8001 Zürich"
 source: "stadt-zuerich.ch/hallenbaeder/city (curated, illustrative)"
 valid_as_of: "2026-07-18"

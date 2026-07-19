@@ -5,55 +5,61 @@
 # listed here without a curated pool file under data/pools/ are reported as "uncurated"
 # (identity known, schedule not yet curated) — distinct from "closed".
 #
+# The canonical id is the catalog slug (`slug(name)`, see domain/catalog.slug), so a
+# facility here and its catalog.json entry share ONE key: every facility_id below is a
+# catalog pool_id (referential integrity). The pre-unification short ids (`city`,
+# `oerlikon`, …) are preserved LOSSLESSLY as aliases so every legacy id still resolves by
+# lookup (registry.resolve_name).
+#
 # geo_sport_id values are placeholders (null) until wired from the geo_sport provider.
 
 facilities:
   # --- curated (have a schedule file under data/pools/) ---
-  - facility_id: "city"
+  - facility_id: "hallenbad-city"
     name: "Hallenbad City"
     kind: "indoor"
     geo_sport_id: null
     crowdmonitor_keys: ["City", "Hallenbad City", "Sportbad City"]
-    aliases: ["City", "Sportbad City"]
+    aliases: ["city", "City", "Sportbad City"]
 
-  - facility_id: "oerlikon"
+  - facility_id: "hallenbad-oerlikon"
     name: "Hallenbad Oerlikon"
     kind: "indoor"
     geo_sport_id: null
     crowdmonitor_keys: ["Oerlikon", "Hallenbad Oerlikon"]
-    aliases: ["Oerlikon"]
+    aliases: ["oerlikon", "Oerlikon"]
 
-  - facility_id: "bungertwies"
+  - facility_id: "hallenbad-bungertwies"
     name: "Hallenbad Bungertwies"
     kind: "indoor"
     geo_sport_id: null
     crowdmonitor_keys: ["Bungertwies", "Hallenbad Bungertwies"]
-    aliases: ["Bungertwies"]
+    aliases: ["bungertwies", "Bungertwies"]
 
-  - facility_id: "aemtler"
+  - facility_id: "schulschwimmanlage-aemtler"
     name: "Schulschwimmanlage Aemtler"
     kind: "school"
     geo_sport_id: null
     crowdmonitor_keys: []
-    aliases: ["Aemtler", "Schulschwimmanlage Aemtler"]
+    aliases: ["aemtler", "Aemtler", "Schulschwimmanlage Aemtler"]
 
   # --- known but not yet curated (identity only) ---
-  - facility_id: "altstetten"
+  - facility_id: "hallenbad-altstetten"
     name: "Hallenbad Altstetten"
     kind: "indoor"
-    aliases: ["Altstetten"]
+    aliases: ["altstetten", "Altstetten"]
 
-  - facility_id: "blaesi"
+  - facility_id: "hallenbad-blaesi"
     name: "Hallenbad Bläsi"
     kind: "indoor"
-    aliases: ["Bläsi", "Blaesi"]
+    aliases: ["blaesi", "Bläsi", "Blaesi"]
 
-  - facility_id: "leimbach"
+  - facility_id: "hallenbad-leimbach"
     name: "Hallenbad Leimbach"
     kind: "indoor"
-    aliases: ["Leimbach"]
+    aliases: ["leimbach", "Leimbach"]
 
-  - facility_id: "kaeferberg"
+  - facility_id: "waermebad-kaeferberg"
     name: "Wärmebad Käferberg"
     kind: "thermal"
-    aliases: ["Käferberg", "Kaeferberg", "Wärmebad Käferberg"]
+    aliases: ["kaeferberg", "Käferberg", "Kaeferberg", "Wärmebad Käferberg"]

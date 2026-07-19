@@ -152,7 +152,7 @@ Appended by /dev:implement after each slice — never rewritten. Newest row last
 
 | date | slice | status | divergence | tech debt | human review? |
 |------|-------|--------|------------|-----------|---------------|
-| —    | —     | —      | —          | —         | —             |
+| 2026-07-19 | S1 | done | none on contract; no loader/DTO change needed (they already key `facility_id` as an opaque string), so the re-key is pure data + test-expectation updates | `data/pools/*.yaml` filenames still use short names (`city.yaml` holds `hallenbad-city`; loader globs on the inner field, harmless); `drop_curated_duplicates` unit tests still build `FacilityId("city")` in-memory — deleted with the function in S4 | yes |
 
 ## Decisions & divergences
 
@@ -165,6 +165,17 @@ Substantive choices made during implementation, with the why. Each entry dated.
   than fight per-agent cwd pinning on every slice, and since **no concurrent sessions are active** and
   every prior plan this session shipped on `main`, the worktree + branch were removed and the plan
   runs on `main`. Ledger/gates/commits per slice are unchanged; only the isolation mechanism is dropped.
+
+- **2026-07-19 — S1 discoveries carried into S2/S4 (critic-confirmed real).**
+  1. After the re-key, `scrape-gold` (which mints `FacilityId(entry.pool_id)` = the catalog slug) and
+     the curated build now produce the **same** id for a shared pool (`hallenbad-city`). In the current
+     two-table gold this is masked by `drop_curated_duplicates`; once S2 unifies into one `pool` PK,
+     curated + scraped rows collide by construction — so S4's per-aspect `compose` (replacing the drop
+     filter) is **load-bearing**, not optional.
+  2. `waermebad-kaeferberg` has `kind: thermal` in `data/registry.yaml` but `kind: indoor` in
+     `data/catalog.json`. S1 asserts id membership only; **S2 must pick the authoritative `kind`** when it
+     collapses `facility` + `catalog` into one `pool` row (recommend: catalog is the roster authority for
+     `kind`, curated overrides only where it carries richer facts — decide in S2 and record).
 
 ## Summary
 

@@ -43,7 +43,7 @@ def dataset() -> Dataset:
 
 @pytest.fixture(scope="module")
 def city(dataset: Dataset) -> Facility:
-    return next(f for f in dataset.facilities if str(f.identity.facility_id) == "city")
+    return next(f for f in dataset.facilities if str(f.identity.facility_id) == "hallenbad-city")
 
 
 def test_detail_surfaces_website_lockers_and_basins(dataset: Dataset, city: Facility) -> None:

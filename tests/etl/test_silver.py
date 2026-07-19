@@ -72,13 +72,13 @@ def test_reconcile_merges_geo_and_stamps_provenance(dataset: Dataset) -> None:
     assert isinstance(result, Ok), result
 
     by_id = {f.identity.facility_id: f for f in result.value}
-    city = by_id[FacilityId("city")]
+    city = by_id[FacilityId("hallenbad-city")]
     assert city.geo == GeoPoint(lat=47.3723, lon=8.5330)
     assert city.identity.geo_sport_id == "poi_hallenbad_view.2"
     assert city.provenance.fetched_at == FETCHED_AT
 
     # A curated facility without a matching geo pool still gets its provenance stamped.
-    bungertwies = by_id[FacilityId("bungertwies")]
+    bungertwies = by_id[FacilityId("hallenbad-bungertwies")]
     assert bungertwies.provenance.fetched_at == FETCHED_AT
 
 
@@ -113,7 +113,7 @@ def test_attach_lane_plan_reconciles_hint_and_stamps_fetched_at(dataset: Dataset
     assert isinstance(result, Ok), result
 
     by_id = {f.identity.facility_id: f for f in result.value.facilities}
-    basins = {b.basin_id: b for b in by_id[FacilityId("city")].basins}
+    basins = {b.basin_id: b for b in by_id[FacilityId("hallenbad-city")].basins}
     lap = basins[BasinId("city-50m")]
     assert lap.lane_plan is not None
     assert lap.lane_plan.lane_count == 6

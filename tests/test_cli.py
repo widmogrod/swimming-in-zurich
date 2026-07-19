@@ -149,7 +149,7 @@ def test_scrape_lanes_attaches_plan_to_curated_basin(tmp_path: Path) -> None:
     )
     assert code == 0
 
-    city = GoldRepository(open_db(db)).get(FacilityId("city"))
+    city = GoldRepository(open_db(db)).get(FacilityId("hallenbad-city"))
     assert city is not None
     lap = next(b for b in city.basins if b.basin_id == BasinId("city-50m"))
     assert lap.lane_plan is not None
@@ -270,7 +270,7 @@ def test_build_then_scrape_lanes_enriches(tmp_path: Path) -> None:
     assert code == 0
 
     conn = open_db(db)
-    city = GoldRepository(conn).get(FacilityId("city"))
+    city = GoldRepository(conn).get(FacilityId("hallenbad-city"))
     assert city is not None
     lap = next(b for b in city.basins if b.basin_id == BasinId("city-50m"))
     assert lap.lane_plan is not None

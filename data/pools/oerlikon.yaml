@@ -1,7 +1,7 @@
 # Hallenbad Oerlikon — CURATED, ILLUSTRATIVE DATA (not verified). See city.yaml header.
 # Demonstrates a facility that CLOSES on public holidays and a late-summer closure.
 
-facility_id: "oerlikon"
+facility_id: "hallenbad-oerlikon"
 address: "Wallisellenstrasse 100, 8050 Zürich"
 source: "stadt-zuerich.ch/hallenbaeder/oerlikon (curated, illustrative)"
 valid_as_of: "2026-07-18"

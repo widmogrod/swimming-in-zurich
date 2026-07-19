@@ -84,7 +84,7 @@ def test_swim_and_pools_read_the_same_store(gold_db: Path) -> None:
     the same store — the schedules and the catalog are one gold DB, not two sources."""
     with TestClient(app) as client:
         swim = client.get("/swim", params={"at": "2026-09-14T20:30", "gender": "female", "age": 34})
-        detail = client.get("/pools/city", params={"at": "2026-09-14T20:30"})
+        detail = client.get("/pools/hallenbad-city", params={"at": "2026-09-14T20:30"})
     assert swim.status_code == 200
     assert any(o["facility"] == "Hallenbad City" for o in swim.json()["options"])
     assert detail.status_code == 200

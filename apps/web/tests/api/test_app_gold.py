@@ -125,7 +125,7 @@ def test_facility_detail_lane_panel_surfaces_through_pools_endpoint(
     monkeypatch.setenv("SWIMZH_GOLD_DB", str(db))
     with TestClient(app) as client:
         # 2026-09-15 is a Tuesday; the plan is every-day, so the panel resolves.
-        response = client.get("/pools/city", params={"at": "2026-09-15T07:00"})
+        response = client.get("/pools/hallenbad-city", params={"at": "2026-09-15T07:00"})
     assert response.status_code == 200
     body = response.json()
     panels = {p["basin_name"]: p for p in body["lane_panels"]}
