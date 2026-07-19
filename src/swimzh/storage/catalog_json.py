@@ -73,13 +73,3 @@ def dumps(entries: tuple[PoolCatalogEntry, ...], generated_at: datetime) -> str:
 def loads(text: str) -> tuple[PoolCatalogEntry, ...]:
     catalog = _CatalogDTO.model_validate_json(text)
     return tuple(_from_dto(e) for e in catalog.entries)
-
-
-def entry_dumps(entry: PoolCatalogEntry) -> str:
-    """Serialise a single catalog entry to JSON (one gold-store `catalog` row's `doc`)."""
-    return _to_dto(entry).model_dump_json()
-
-
-def entry_loads(text: str) -> PoolCatalogEntry:
-    """Inverse of `entry_dumps`: rehydrate one catalog entry from a stored `doc`."""
-    return _from_dto(_EntryDTO.model_validate_json(text))

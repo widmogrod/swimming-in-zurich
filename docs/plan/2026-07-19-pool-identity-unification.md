@@ -153,6 +153,7 @@ Appended by /dev:implement after each slice — never rewritten. Newest row last
 | date | slice | status | divergence | tech debt | human review? |
 |------|-------|--------|------------|-----------|---------------|
 | 2026-07-19 | S1 | done | none on contract; no loader/DTO change needed (they already key `facility_id` as an opaque string), so the re-key is pure data + test-expectation updates | `data/pools/*.yaml` filenames still use short names (`city.yaml` holds `hallenbad-city`; loader globs on the inner field, harmless); `drop_curated_duplicates` unit tests still build `FacilityId("city")` in-memory — deleted with the function in S4 | yes |
+| 2026-07-19 | S2 | done | retired the `catalog` table but KEPT `facility` transiently (S3 rewires the app read, S4 the scrapers) — curated blob now lives in both `pool.facility_doc` and `facility.doc`; extended `storage/sqlite_repo.py` rather than building a separate `store/` package (row-normalization is out of scope — blob stays); `resolve(Global)` returns `Err` (the price fan-out to city pools is S4's compose, not reconcile) | duplicate curated blob until S3/S4; `_BASIN_KIND_WORDS` + basin-hint index duplicated in `build/seed.py` and `etl/silver.py` (S4 consolidates into reconcile); `write_facilities` still typed on `FacilityId` (the `PoolId`-typed write side holds for the new spine only); **`domain`/`etl` now import `build.normalize` — a backwards layer dependency** (no cycle today; fix by relocating `normalize` to `core/` or adding an import-direction guard); `build` is a reserved dir name (pytest `norecursedirs` + gitignore) → tests live in `tests/build_stage/`, breaking the tests↔src mirror for that one name | yes |
 
 ## Decisions & divergences
 
@@ -176,6 +177,22 @@ Substantive choices made during implementation, with the why. Each entry dated.
      `data/catalog.json`. S1 asserts id membership only; **S2 must pick the authoritative `kind`** when it
      collapses `facility` + `catalog` into one `pool` row (recommend: catalog is the roster authority for
      `kind`, curated overrides only where it carries richer facts — decide in S2 and record).
+
+- **2026-07-19 — S2 resolutions & findings.**
+  1. **Käferberg `kind` → `thermal` (curated-wins).** The hand-authored registry `kind: thermal` is more
+     specific and verified; the generic WFS catalog `kind: indoor` loses. Catalog is the roster authority
+     for membership; curated overrides `kind` where it carries the richer fact. It is the only pool whose
+     `kind` diverges from the catalog. `/pools` now surfaces a `thermal` category. (Tested.)
+  2. **Backwards layer dependency (tech debt).** Hoisting `_normalise` into `build/normalize.py` made
+     `domain/registry.py` and `etl/silver.py` import `swimzh.build.normalize`, i.e. `domain`/`etl` now
+     depend on `build` while `build/seed.py` depends on `domain`. No runtime cycle (`normalize.py` is a
+     pure zero-import leaf), but the direction is wrong. Fix: relocate `normalize` to `core/` (a lower
+     layer nothing points up from) or add an import-direction guard test. Track for a follow-up.
+  3. **`build` is a reserved dir name.** pytest `norecursedirs` skips dirs literally named `build` and the
+     repo `.gitignore` had an unanchored `build/` rule — together they nearly git-ignored `src/swimzh/build/`
+     and silently un-collected `tests/build/` (tests "passing" without running). Fixed by anchoring
+     `.gitignore` to `/build/` `/dist/` and naming the tests `tests/build_stage/`. **S3/S4: never name a
+     test dir `build`; confirm `src/swimzh/build/**` stays staged.**
 
 ## Summary
 

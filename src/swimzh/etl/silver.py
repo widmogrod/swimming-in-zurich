@@ -21,6 +21,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass, replace
 from datetime import date, datetime
 
+from swimzh.build.normalize import normalize as _normalise
 from swimzh.core.errors import ProviderError, SchemaMismatch
 from swimzh.core.result import Err, Ok, Result
 from swimzh.domain.models import Basin, BasinId, BasinKind, Facility, FacilityId
@@ -42,10 +43,6 @@ _BASIN_KIND_WORDS: dict[BasinKind, str] = {
     BasinKind.CHILDREN: "Kinderbecken",
     BasinKind.OUTDOOR: "Aussenbecken",
 }
-
-
-def _normalise(text: str) -> str:
-    return " ".join(text.strip().casefold().split())
 
 
 def drop_curated_duplicates(

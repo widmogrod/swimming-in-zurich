@@ -1,25 +1,63 @@
 """The gold store: SQLite as the single source of truth the query surface reads from.
 
-Each facility is one row: queryable columns (id, name, kind, lat, lon, freshness) for
-listing/location filtering, plus a `doc` column holding the faithful JSON of the full
-domain `Facility` (via `codec`). `GoldRepository.load_all()` rehydrates domain objects for
-`find_swim_options`.
+The identity spine is one ``pool`` table (all ~57 published pools, canonical id PK, a
+**derived** ``curation_status``), plus its DB-enforced crosswalk: ``pool_alias`` with a
+global ``UNIQUE(norm)`` and ``pool_xref`` with ``UNIQUE(namespace, ext_id)`` — so "same
+entity → two ids" is a write-time ``IntegrityError``, not a convention. These are ``STRICT``
+tables and their FKs cascade from ``pool``. The curated schedule payload rides as a typed
+blob on the ``pool`` row (``facility_doc``); row-normalizing it is a later plan.
+
+The legacy ``facility`` table (queryable columns + a full-``Facility`` ``doc`` blob) is kept
+transiently as the ``/swim`` schedule read path and the network-enrichment write target; it
+is retired when the app and scrapers are rewired to the ``pool`` spine.
 """
 
 from __future__ import annotations
 
 import sqlite3
 from pathlib import Path
+from typing import TYPE_CHECKING, Any
 
 from swimzh.domain.calendar import ZurichCalendar
 from swimzh.domain.catalog import PoolCatalogEntry
+from swimzh.domain.geo import GeoPoint
 from swimzh.domain.models import Facility, FacilityId
-from swimzh.storage import calendar_codec, catalog_json, codec
+from swimzh.storage import calendar_codec, codec
+from swimzh.storage.codec import _KIND_FROM
 
-# One store, three tables: `facility` (with schedules), `catalog` (every known pool), and
-# `calendar` (the Zürich overlay as a single JSON row). All `CREATE TABLE IF NOT EXISTS`, so
-# opening a pre-existing facility-only DB is backward-compatible — the new tables are added.
+if TYPE_CHECKING:
+    from swimzh.build.seed import PoolSpine
+
+# The identity spine (`pool` + `pool_alias` + `pool_xref`) alongside the transitional
+# `facility` table and the singleton `calendar` row. All `CREATE TABLE IF NOT EXISTS`, so an
+# existing store gains the spine additively. `STRICT` + `UNIQUE` + FK `ON DELETE CASCADE` make
+# the split-brain (one pool, two ids) an unrepresentable write.
 _SCHEMA = """
+CREATE TABLE IF NOT EXISTS pool (
+    id              TEXT PRIMARY KEY,
+    name            TEXT NOT NULL,
+    kind            TEXT NOT NULL,
+    address         TEXT NOT NULL,
+    lat             REAL,
+    lon             REAL,
+    url             TEXT,
+    description     TEXT,
+    phone           TEXT,
+    curation_status TEXT NOT NULL CHECK (curation_status IN ('curated', 'uncurated')),
+    facility_doc    TEXT
+) STRICT;
+CREATE TABLE IF NOT EXISTS pool_alias (
+    pool_id TEXT NOT NULL REFERENCES pool(id) ON DELETE CASCADE,
+    alias   TEXT NOT NULL,
+    norm    TEXT NOT NULL,
+    UNIQUE(norm)
+) STRICT;
+CREATE TABLE IF NOT EXISTS pool_xref (
+    pool_id   TEXT NOT NULL REFERENCES pool(id) ON DELETE CASCADE,
+    namespace TEXT NOT NULL,
+    ext_id    TEXT NOT NULL,
+    UNIQUE(namespace, ext_id)
+) STRICT;
 CREATE TABLE IF NOT EXISTS facility (
     facility_id   TEXT PRIMARY KEY,
     name          TEXT NOT NULL,
@@ -28,15 +66,6 @@ CREATE TABLE IF NOT EXISTS facility (
     lon           REAL,
     valid_as_of   TEXT,
     fetched_at    TEXT,
-    doc           TEXT NOT NULL
-);
-CREATE TABLE IF NOT EXISTS catalog (
-    pool_id       TEXT PRIMARY KEY,
-    name          TEXT NOT NULL,
-    kind          TEXT NOT NULL,
-    lat           REAL,
-    lon           REAL,
-    url           TEXT,
     doc           TEXT NOT NULL
 );
 CREATE TABLE IF NOT EXISTS calendar (
@@ -49,8 +78,9 @@ _CALENDAR_ROW_ID = "singleton"
 
 
 def open_db(path: str | Path) -> sqlite3.Connection:
-    """Open (creating if needed) a gold database with the schema applied."""
+    """Open (creating if needed) a gold database with the schema + FK enforcement applied."""
     conn = sqlite3.connect(path)
+    conn.execute("PRAGMA foreign_keys = ON")
     conn.executescript(_SCHEMA)
     conn.commit()
     return conn
@@ -80,32 +110,73 @@ def write_facilities(conn: sqlite3.Connection, facilities: tuple[Facility, ...])
     conn.commit()
 
 
-def write_catalog(conn: sqlite3.Connection, entries: tuple[PoolCatalogEntry, ...]) -> None:
-    """Upsert catalog entries into the gold store (idempotent on pool_id)."""
-    rows = [
-        (
-            e.pool_id,
-            e.name,
-            e.kind.value,
-            e.geo.lat if e.geo is not None else None,
-            e.geo.lon if e.geo is not None else None,
-            e.url,
-            catalog_json.entry_dumps(e),
-        )
-        for e in entries
-    ]
+def write_pools(conn: sqlite3.Connection, spine: PoolSpine) -> None:
+    """Write the identity spine (``pool`` + ``pool_alias`` + ``pool_xref``).
+
+    The write side is typed on ``PoolSpine`` — whose rows carry a ``PoolId`` minted only by
+    ``build.seed``/``build.reconcile`` — so no caller can reach a ``pool`` row without a
+    reconciled id. A full replace (cascade-clearing the crosswalk) keeps a re-build idempotent
+    and its rows deterministic.
+    """
+    conn.execute("DELETE FROM pool")  # FK ON DELETE CASCADE clears alias/xref too
     conn.executemany(
-        "INSERT OR REPLACE INTO catalog (pool_id, name, kind, lat, lon, url, doc) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?)",
-        rows,
+        "INSERT INTO pool "
+        "(id, name, kind, address, lat, lon, url, description, phone, "
+        "curation_status, facility_doc) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        [
+            (
+                str(p.id),
+                p.name,
+                p.kind.value,
+                p.address,
+                p.geo.lat if p.geo is not None else None,
+                p.geo.lon if p.geo is not None else None,
+                p.url,
+                p.description,
+                p.phone,
+                p.curation_status,
+                p.facility_doc,
+            )
+            for p in spine.pools
+        ],
+    )
+    conn.executemany(
+        "INSERT INTO pool_alias (pool_id, alias, norm) VALUES (?, ?, ?)",
+        [(str(a.pool_id), a.alias, a.norm) for a in spine.aliases],
+    )
+    conn.executemany(
+        "INSERT INTO pool_xref (pool_id, namespace, ext_id) VALUES (?, ?, ?)",
+        [(str(x.pool_id), x.namespace, x.ext_id) for x in spine.xrefs],
     )
     conn.commit()
 
 
 def load_catalog(conn: sqlite3.Connection) -> tuple[PoolCatalogEntry, ...]:
-    """Rehydrate every catalog entry from the gold store, ordered by pool_id."""
-    cursor = conn.execute("SELECT doc FROM catalog ORDER BY pool_id")
-    return tuple(catalog_json.entry_loads(row[0]) for row in cursor.fetchall())
+    """Rehydrate the full pool roster from the ``pool`` spine, ordered by canonical id.
+
+    The catalog listing (``/pools``) now serves from the same identity spine as ``/swim`` —
+    one store, joinable by ``pool.id``.
+    """
+    cursor = conn.execute(
+        "SELECT id, name, kind, address, lat, lon, url, description, phone FROM pool ORDER BY id"
+    )
+    return tuple(_catalog_entry(row) for row in cursor.fetchall())
+
+
+def _catalog_entry(row: tuple[Any, ...]) -> PoolCatalogEntry:
+    pool_id, name, kind, address, lat, lon, url, description, phone = row
+    geo = GeoPoint(lat=float(lat), lon=float(lon)) if lat is not None and lon is not None else None
+    return PoolCatalogEntry(
+        pool_id=str(pool_id),
+        name=str(name),
+        kind=_KIND_FROM[str(kind)],
+        address=str(address),
+        geo=geo,
+        url=str(url) if url is not None else None,
+        description=str(description) if description is not None else None,
+        phone=str(phone) if phone is not None else None,
+    )
 
 
 def write_calendar(conn: sqlite3.Connection, calendar: ZurichCalendar) -> None:
