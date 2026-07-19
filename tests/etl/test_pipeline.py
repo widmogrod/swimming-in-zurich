@@ -56,7 +56,7 @@ def test_pipeline_end_to_end_then_query() -> None:
     )
     assert isinstance(result, Ok), result
     repo = result.value
-    assert repo.count() == 3
+    assert repo.count() == 4
 
     city = repo.get(FacilityId("city"))
     assert city is not None

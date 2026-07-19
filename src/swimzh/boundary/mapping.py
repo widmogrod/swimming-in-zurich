@@ -15,6 +15,7 @@ from typing import assert_never
 
 from swimzh.boundary.curated_dto import (
     AccessDTO,
+    AdultsOnlyDTO,
     BasinDTO,
     ClosureDTO,
     ClubReservedDTO,
@@ -43,6 +44,7 @@ from swimzh.boundary.curated_dto import (
     _Weekday,
 )
 from swimzh.domain.access import (
+    AdultsOnly,
     ClubReserved,
     FamilyTime,
     LaneSwim,
@@ -159,6 +161,8 @@ def access_from_dto(dto: AccessDTO) -> SessionAccess:
             return SchoolReserved()
         case ClubReservedDTO(club=club):
             return ClubReserved(club=club)
+        case AdultsOnlyDTO(min_age=min_age, note=note):
+            return AdultsOnly(min_age=min_age, note=note)
         case _ as unreachable:
             assert_never(unreachable)
 
@@ -179,6 +183,8 @@ def access_to_dto(access: SessionAccess) -> AccessDTO:
             return SchoolReservedDTO(type="school_reserved")
         case ClubReserved(club):
             return ClubReservedDTO(type="club_reserved", club=club)
+        case AdultsOnly(min_age, note):
+            return AdultsOnlyDTO(type="adults_only", min_age=min_age, note=note)
         case _ as unreachable:
             assert_never(unreachable)
 

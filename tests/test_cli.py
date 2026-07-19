@@ -59,7 +59,7 @@ def test_build_gold_writes_readable_store(tmp_path: Path) -> None:
 
     # The written store is readable through the same SwimData port the app uses.
     data = GoldSwimData.open(db, DATA_DIR)
-    assert len(data.facilities()) == 3
+    assert len(data.facilities()) == 4
 
 
 def test_build_gold_reports_failure(tmp_path: Path) -> None:

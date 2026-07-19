@@ -37,7 +37,7 @@ def facilities() -> tuple[Facility, ...]:
 
 
 def test_roundtrip_all_curated_facilities(facilities: tuple[Facility, ...]) -> None:
-    assert len(facilities) == 3
+    assert len(facilities) == 4
     for facility in facilities:
         assert codec.loads(codec.dumps(facility)) == facility
 

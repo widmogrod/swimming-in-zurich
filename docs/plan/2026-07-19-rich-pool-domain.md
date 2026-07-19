@@ -301,6 +301,7 @@ Appended by /dev:implement after each slice — never rewritten. Newest row last
 |------|-------|--------|----------------------|-------------------|---------------|
 | 2026-07-19 | S1 | done | parser shape (see Decisions); YAML migration also added `kind:` | depth-phrase misread risk; parser unwired; mapping-table parity untested | yes |
 | 2026-07-19 | S2 | done | TOKEN→CHIP rename; resolve_hours extraction; FeatureStatus/FacilityDetail shapes (see Decisions) | facility_detail uncalled outside tests; Feature has no exceptions axis; coverage ratchet 91→93 possible (owner call) | no |
+| 2026-07-19 | S3 | done | REPRESENTATIVE_ACCESS derivation (plan's literal test was impossible — see Decisions); test count-bumps 3→4 pools | aemtler timetable plausible-but-unverified (marked in file); eligibility/access_info CC 11 and rising per arm; duplicate-representative gap (one-line assert) | yes |
 
 ## Decisions & divergences
 
@@ -336,6 +337,17 @@ Substantive choices made during implementation, with the why. Each entry dated.
   field style.
 - **2026-07-19 / S2 — S1 debt repaid**: `test_token_tables_cover_their_enums`
   covers ALL mapping token tables including S1's `_BASIN_KIND_TO`/`_BASIN_SOURCE_TO`.
+- **2026-07-19 / S3 — trap #1's literal test was impossible; closed better.**
+  `ACCESS_TYPES` holds `AccessInfo` records, not access instances, so the
+  plan's `{type(a) for a in ACCESS_TYPES}` could never work. Implemented:
+  `REPRESENTATIVE_ACCESS: tuple[SessionAccess, ...]` with
+  `ACCESS_TYPES = tuple(access_info(a) for a in REPRESENTATIVE_ACCESS)` (derived,
+  no drift channel) + completeness test deriving union members from
+  `get_args(SessionAccess.__value__)`. Critic CONFIRMED experimentally: a new
+  union arm omitted from `REPRESENTATIVE_ACCESS` fails the test.
+- **2026-07-19 / S3 — proof-case data honesty**: `aemtler.yaml` identity/geo
+  from in-repo `catalog.json`; timetable marked CURATED/ILLUSTRATIVE, verify
+  against stadt-zuerich.ch before relying; no basin physicals invented.
 
 ## Rejected (record so we don't relitigate)
 

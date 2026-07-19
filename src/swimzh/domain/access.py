@@ -58,8 +58,23 @@ class ClubReserved:
     club: str = ""
 
 
+@dataclass(frozen=True, slots=True)
+class AdultsOnly:
+    """Public window restricted to adults at or above `min_age` (school-pool evening swims)."""
+
+    min_age: int = 18
+    note: str = ""
+
+
 type SessionAccess = (
-    PublicSwim | LaneSwim | FamilyTime | WomenOnly | SeniorsOnly | SchoolReserved | ClubReserved
+    PublicSwim
+    | LaneSwim
+    | FamilyTime
+    | WomenOnly
+    | SeniorsOnly
+    | SchoolReserved
+    | ClubReserved
+    | AdultsOnly
 )
 
 
@@ -118,20 +133,32 @@ def access_info(access: SessionAccess) -> AccessInfo:
                 "Club reserved",
                 f"Reserved for a club/association{who} — not open to the public.",
             )
+        case AdultsOnly(min_age):
+            return AccessInfo(
+                "adults-only",
+                "Adults only",
+                f"Adults-only public window — reserved for guests aged {min_age} and over "
+                "(typical for school-pool evening swims).",
+            )
         case _ as unreachable:
             assert_never(unreachable)
 
 
 # One representative instance of every access type, for a UI legend / the /access-types API.
-ACCESS_TYPES: tuple[AccessInfo, ...] = (
-    access_info(PublicSwim()),
-    access_info(LaneSwim()),
-    access_info(FamilyTime()),
-    access_info(WomenOnly()),
-    access_info(SeniorsOnly()),
-    access_info(SchoolReserved()),
-    access_info(ClubReserved()),
+# The completeness test asserts this tuple covers every `SessionAccess` union member —
+# adding an arm without a representative here is a silent gap the compiler cannot see.
+REPRESENTATIVE_ACCESS: tuple[SessionAccess, ...] = (
+    PublicSwim(),
+    LaneSwim(),
+    FamilyTime(),
+    WomenOnly(),
+    SeniorsOnly(),
+    SchoolReserved(),
+    ClubReserved(),
+    AdultsOnly(),
 )
+
+ACCESS_TYPES: tuple[AccessInfo, ...] = tuple(access_info(a) for a in REPRESENTATIVE_ACCESS)
 
 
 @dataclass(frozen=True, slots=True)
@@ -165,6 +192,8 @@ def eligibility(person: Person, access: SessionAccess) -> EligibilityResult:
             return EligibilityResult(
                 False, "club-reserved", f"reserved for a club{who} — not public"
             )
+        case AdultsOnly(min_age):
+            return _adults_only(person, min_age)
         case _ as unreachable:
             assert_never(unreachable)
 
@@ -184,6 +213,19 @@ def _women_only(person: Person) -> EligibilityResult:
             return EligibilityResult(
                 False, rule, "women-only session — specify gender to determine eligibility"
             )
+
+
+def _adults_only(person: Person, min_age: int) -> EligibilityResult:
+    rule = "adults-only"
+    if person.age is None:
+        return EligibilityResult(
+            False,
+            rule,
+            f"adults-only session (age {min_age}+) — specify age to determine eligibility",
+        )
+    if person.age >= min_age:
+        return EligibilityResult(True, rule, f"adults-only session (age {min_age}+)")
+    return EligibilityResult(False, rule, f"adults-only session — requires age {min_age}+")
 
 
 def _seniors_only(person: Person, min_age: int) -> EligibilityResult:

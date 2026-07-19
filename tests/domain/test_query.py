@@ -29,11 +29,16 @@ def dataset() -> Dataset:
     return result.value
 
 
-def test_dataset_loads_three_curated_pools(dataset: Dataset) -> None:
+def test_dataset_loads_four_curated_pools(dataset: Dataset) -> None:
     names = {f.identity.name for f in dataset.facilities}
-    assert names == {"Hallenbad City", "Hallenbad Oerlikon", "Hallenbad Bungertwies"}
+    assert names == {
+        "Hallenbad City",
+        "Hallenbad Oerlikon",
+        "Hallenbad Bungertwies",
+        "Schulschwimmanlage Aemtler",
+    }
     # Registry knows more than we have curated.
-    assert len(dataset.registry.identities) == 7
+    assert len(dataset.registry.identities) == 8
 
 
 def _query(dataset: Dataset, when: datetime, person: Person = ADULT) -> QueryResult:
@@ -96,6 +101,49 @@ def test_maintenance_week_city_closed(dataset: Dataset) -> None:
     result = _query(dataset, datetime(2026, 7, 20, 12, 0, tzinfo=ZURICH))
     closed = {s.facility_name for s in result.statuses if s.status == "closed"}
     assert "Hallenbad City" in closed
+
+
+def test_school_pool_adults_only_window_rejects_child(dataset: Dataset) -> None:
+    # Monday 2026-03-09 19:00 in term: Aemtler runs an adults-only window 18:00-21:00.
+    # The correctness bug AdultsOnly exists to prevent: a child must NOT be told
+    # "you can swim" just because the window is public.
+    when = datetime(2026, 3, 9, 19, 0, tzinfo=ZURICH)
+    child = _query(dataset, when, person=Person(gender=Gender.FEMALE, age=10))
+    open_aemtler = [
+        o for o in child.options if str(o.facility_id) == "aemtler" and o.open_at_query_time
+    ]
+    assert open_aemtler, "expected the Aemtler adults-only window among Monday-evening options"
+    option = open_aemtler[0]
+    assert option.eligibility.allowed is False
+    assert option.eligibility.rule == "adults-only"
+    assert "requires age 18+" in option.eligibility.reason
+    # The same window admits an adult.
+    adult = _query(dataset, when)
+    open_adult = [
+        o for o in adult.options if str(o.facility_id) == "aemtler" and o.open_at_query_time
+    ]
+    assert open_adult and open_adult[0].eligibility.allowed is True
+
+
+def test_school_pool_daytime_is_school_reserved_in_term(dataset: Dataset) -> None:
+    # Wednesday 2026-03-11 14:00 in term: school time — reserved, not public.
+    result = _query(dataset, datetime(2026, 3, 11, 14, 0, tzinfo=ZURICH))
+    open_aemtler = [
+        o for o in result.options if str(o.facility_id) == "aemtler" and o.open_at_query_time
+    ]
+    assert open_aemtler
+    assert all(o.eligibility.allowed is False for o in open_aemtler)
+    assert open_aemtler[0].eligibility.rule == "school-reserved"
+
+
+def test_school_pool_opens_to_public_in_school_holidays(dataset: Dataset) -> None:
+    # Monday 2026-07-20 10:00 (Sommerferien): the daytime block is public; the term-scoped
+    # school-reserved and adults-only rules must not fire.
+    result = _query(dataset, datetime(2026, 7, 20, 10, 0, tzinfo=ZURICH))
+    aemtler = [o for o in result.options if str(o.facility_id) == "aemtler"]
+    assert aemtler
+    assert {o.eligibility.rule for o in aemtler} == {"public"}
+    assert all(o.eligibility.allowed for o in aemtler)
 
 
 def test_no_live_occupancy_without_provider(dataset: Dataset) -> None:

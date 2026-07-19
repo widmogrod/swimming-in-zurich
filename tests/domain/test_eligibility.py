@@ -2,13 +2,19 @@
 
 from __future__ import annotations
 
+from typing import get_args
+
 from swimzh.domain.access import (
+    ACCESS_TYPES,
+    REPRESENTATIVE_ACCESS,
+    AdultsOnly,
     ClubReserved,
     FamilyTime,
     LaneSwim,
     PublicSwim,
     SchoolReserved,
     SeniorsOnly,
+    SessionAccess,
     WomenOnly,
     eligibility,
 )
@@ -18,6 +24,7 @@ ADULT = Person(gender=Gender.MALE, age=40)
 WOMAN = Person(gender=Gender.FEMALE, age=40)
 SENIOR = Person(gender=Gender.FEMALE, age=70)
 DIVERSE = Person(gender=Gender.DIVERSE, age=40)
+CHILD = Person(gender=Gender.FEMALE, age=10)
 UNKNOWN = Person()
 
 
@@ -58,6 +65,28 @@ def test_reserved_sessions_are_not_public() -> None:
     assert "SC Uster" in club.reason
 
 
+def test_adults_only() -> None:
+    assert eligibility(ADULT, AdultsOnly()).allowed is True
+    # The core correctness trap: a child must NOT be told "you can swim".
+    child = eligibility(CHILD, AdultsOnly())
+    assert child.allowed is False
+    assert child.rule == "adults-only"
+    assert "requires age 18+" in child.reason
+    unknown_age = eligibility(Person(gender=Gender.MALE), AdultsOnly())
+    assert unknown_age.allowed is False
+    assert "specify age" in unknown_age.reason
+
+
 def test_result_reports_rule_name() -> None:
     assert eligibility(ADULT, PublicSwim()).rule == "public"
     assert eligibility(WOMAN, WomenOnly()).rule == "women-only"
+
+
+def test_access_types_covers_every_session_access_arm() -> None:
+    # The ACCESS_TYPES silent gap: a new `SessionAccess` arm is compile-enforced at the
+    # match/assert_never sites but NOT in the representative tuple — this closes that gap.
+    # Members are derived from the union type itself, not hand-listed a second time.
+    union_members = set(get_args(SessionAccess.__value__))
+    assert {type(a) for a in REPRESENTATIVE_ACCESS} == union_members
+    # And every representative yields a distinct legend entry (no arm shadows another).
+    assert len({info.key for info in ACCESS_TYPES}) == len(union_members)

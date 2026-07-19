@@ -67,6 +67,12 @@ class ClubReservedDTO(_Strict):
     club: str = ""
 
 
+class AdultsOnlyDTO(_Strict):
+    type: Literal["adults_only"]
+    min_age: int = 18
+    note: str = ""
+
+
 AccessDTO = Annotated[
     PublicDTO
     | LaneSwimDTO
@@ -74,7 +80,8 @@ AccessDTO = Annotated[
     | WomenOnlyDTO
     | SeniorsOnlyDTO
     | SchoolReservedDTO
-    | ClubReservedDTO,
+    | ClubReservedDTO
+    | AdultsOnlyDTO,
     Field(discriminator="type"),
 ]
 

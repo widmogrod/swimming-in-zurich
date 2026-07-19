@@ -12,7 +12,14 @@ from datetime import time
 from decimal import Decimal
 
 from swimzh.boundary import mapping
-from swimzh.boundary.curated_dto import FeatureDTO, LockerOptionDTO, PublicDTO, RuleDTO
+from swimzh.boundary.curated_dto import (
+    AdultsOnlyDTO,
+    FeatureDTO,
+    LockerOptionDTO,
+    PublicDTO,
+    RuleDTO,
+)
+from swimzh.domain.access import AdultsOnly
 from swimzh.domain.lockers import LockerCategory, LockerMechanism
 from swimzh.domain.models import BasinKind, BasinSource, FeatureKind
 from swimzh.domain.schedule import DayScope, Weekday
@@ -94,6 +101,16 @@ def test_feature_maps_hours_as_schedule_rules() -> None:
     assert feature.surcharge_chf == Decimal("10.00")
     assert feature.temp_c == Decimal("85")
     assert mapping.feature_to_dto(feature) == dto
+
+
+# --- access ------------------------------------------------------------------------
+
+
+def test_adults_only_access_round_trips() -> None:
+    dto = AdultsOnlyDTO(type="adults_only", min_age=18, note="Erwachsenenschwimmen")
+    access = mapping.access_from_dto(dto)
+    assert access == AdultsOnly(min_age=18, note="Erwachsenenschwimmen")
+    assert mapping.access_to_dto(access) == dto
 
 
 # --- token-table parity (no enum member silently unmapped) --------------------------

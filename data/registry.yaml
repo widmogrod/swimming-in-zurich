@@ -30,6 +30,13 @@ facilities:
     crowdmonitor_keys: ["Bungertwies", "Hallenbad Bungertwies"]
     aliases: ["Bungertwies"]
 
+  - facility_id: "aemtler"
+    name: "Schulschwimmanlage Aemtler"
+    kind: "school"
+    geo_sport_id: null
+    crowdmonitor_keys: []
+    aliases: ["Aemtler", "Schulschwimmanlage Aemtler"]
+
   # --- known but not yet curated (identity only) ---
   - facility_id: "altstetten"
     name: "Hallenbad Altstetten"
