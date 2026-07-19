@@ -5,16 +5,36 @@ or UI exists.
 
 from __future__ import annotations
 
-from datetime import datetime
+import dataclasses
+from datetime import datetime, time, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
 import pytest
 
-from swimzh.core.result import Ok
-from swimzh.domain.models import BasinKind
+from swimzh.core.errors import ProviderError, Timeout, describe
+from swimzh.core.result import Err, Ok, Result
+from swimzh.domain.access import PublicSwim
+from swimzh.domain.models import (
+    Basin,
+    BasinId,
+    BasinKind,
+    Facility,
+    FacilityId,
+    PoolIdentity,
+    PoolKind,
+    Provenance,
+)
 from swimzh.domain.person import Gender, Person
-from swimzh.domain.query import QueryResult, SwimQuery, find_swim_options
+from swimzh.domain.query import (
+    LiveOccupancy,
+    Occupancy,
+    OccupancyUnavailable,
+    QueryResult,
+    SwimQuery,
+    find_swim_options,
+)
+from swimzh.domain.schedule import ScheduleRule, TimeRange, Weekday
 from swimzh.providers.curated import Dataset, load_dataset
 
 DATA_DIR = Path(__file__).resolve().parents[2] / "data"
@@ -149,6 +169,133 @@ def test_school_pool_opens_to_public_in_school_holidays(dataset: Dataset) -> Non
 def test_no_live_occupancy_without_provider(dataset: Dataset) -> None:
     result = _query(dataset, datetime(2026, 3, 10, 18, 0, tzinfo=ZURICH))
     assert all(o.live_occupancy is None for o in result.options)
+
+
+# --- Live occupancy attach (fake provider — the real CrowdMonitor adapter is deferred
+# --- pending the ToS check recorded in data/sources.md) ---------------------------------
+
+
+class _FakeOccupancyProvider:
+    """In-memory `OccupancyProvider`: returns a canned Result and records calls."""
+
+    def __init__(self, result: Result[Occupancy, ProviderError]) -> None:
+        self._result = result
+        self.calls: list[tuple[str, ...]] = []
+
+    def read(self, keys: tuple[str, ...]) -> Result[Occupancy, ProviderError]:
+        self.calls.append(keys)
+        return self._result
+
+
+def _keyed_facility(keys: tuple[str, ...]) -> Facility:
+    """A synthetic facility whose one basin is open the entire day, every day, so a
+    wall-clock 'now' query always yields an option regardless of when tests run.
+    `time.max` (23:59:59.999999) because `TimeRange.contains` is end-exclusive — a
+    23:59 end would leave the last minute of the day uncovered."""
+    all_day = ScheduleRule(
+        weekdays=frozenset(Weekday),
+        time=TimeRange(time(0, 0), time.max),
+        access=PublicSwim(),
+    )
+    return Facility(
+        identity=PoolIdentity(
+            facility_id=FacilityId("occ-test"),
+            name="Hallenbad Occupancy-Test",
+            kind=PoolKind.INDOOR,
+            crowdmonitor_keys=keys,
+        ),
+        address="Teststrasse 1, Zürich",
+        provenance=Provenance(source="test", curated=True),
+        basins=(Basin(basin_id=BasinId("occ-main"), name="Hauptbecken", rules=(all_day,)),),
+    )
+
+
+def _reading(measured_at: datetime) -> Occupancy:
+    return Occupancy(
+        facility_id=FacilityId("occ-test"),
+        measured_at=measured_at,
+        percent_full=62.0,
+        people=93,
+        capacity=150,
+        source="fake",
+    )
+
+
+def test_now_query_attaches_live_occupancy(dataset: Dataset) -> None:
+    now = datetime.now(ZURICH)
+    provider = _FakeOccupancyProvider(Ok(_reading(now - timedelta(minutes=5))))
+    result = find_swim_options(
+        SwimQuery(person=ADULT, at=now),
+        (_keyed_facility(("Occupancy-Test", "Hallenbad Occupancy-Test")),),
+        dataset.calendar,
+        occupancy=provider,
+    )
+    assert result.options, "the 24/7 test basin must yield an option"
+    live = result.options[0].live_occupancy
+    assert isinstance(live, LiveOccupancy)
+    assert live.reading.people == 93
+    assert live.reading.percent_full == 62.0
+    # age is derived at attach time from measured_at (~5 min ago), not stored upstream.
+    assert timedelta(minutes=4) < live.age < timedelta(minutes=6)
+    assert live.is_stale() is False
+    # The provider is keyed by the facility's crowdmonitor keys, once per facility.
+    assert provider.calls == [("Occupancy-Test", "Hallenbad Occupancy-Test")]
+
+
+def test_future_query_does_not_request_occupancy(dataset: Dataset) -> None:
+    provider = _FakeOccupancyProvider(Ok(_reading(datetime.now(ZURICH))))
+    result = find_swim_options(
+        SwimQuery(person=ADULT, at=datetime.now(ZURICH) + timedelta(days=2)),
+        (_keyed_facility(("Occupancy-Test",)),),
+        dataset.calendar,
+        occupancy=provider,
+    )
+    assert result.options
+    assert all(o.live_occupancy is None for o in result.options)  # None = not requested
+    assert provider.calls == []
+
+
+def test_provider_error_becomes_occupancy_unavailable(dataset: Dataset) -> None:
+    error = Timeout(url="wss://occupancy.example.test/api", after_s=3.0)
+    provider = _FakeOccupancyProvider(Err(error))
+    result = find_swim_options(
+        SwimQuery(person=ADULT, at=datetime.now(ZURICH)),
+        (_keyed_facility(("Occupancy-Test",)),),
+        dataset.calendar,
+        occupancy=provider,
+    )
+    assert result.options
+    assert result.options[0].live_occupancy == OccupancyUnavailable(reason=describe(error))
+
+
+def test_facility_without_crowdmonitor_keys_is_unavailable(dataset: Dataset) -> None:
+    provider = _FakeOccupancyProvider(Ok(_reading(datetime.now(ZURICH))))
+    result = find_swim_options(
+        SwimQuery(person=ADULT, at=datetime.now(ZURICH)),
+        (_keyed_facility(()),),
+        dataset.calendar,
+        occupancy=provider,
+    )
+    assert result.options
+    assert result.options[0].live_occupancy == OccupancyUnavailable(reason="no crowdmonitor key")
+    assert provider.calls == []  # never asked without a key
+
+
+def test_naive_measured_at_is_rejected_at_construction() -> None:
+    # A future real adapter returning a naive datetime must fail loudly at the boundary,
+    # not as a TypeError escaping from the age subtraction inside find_swim_options.
+    with pytest.raises(ValueError, match="tz-aware"):
+        _reading(datetime(2026, 3, 10, 18, 0))
+
+
+def test_staleness_is_derived_not_stored() -> None:
+    reading = _reading(datetime(2026, 3, 10, 18, 0, tzinfo=ZURICH))
+    assert LiveOccupancy(reading=reading, age=timedelta(minutes=9)).is_stale() is False
+    stale = LiveOccupancy(reading=reading, age=timedelta(minutes=11))
+    assert stale.is_stale() is True
+    assert stale.is_stale(limit=timedelta(minutes=20)) is False
+    # No stored freshness enum / age_s shadow field — freshness derives from the reading.
+    assert {f.name for f in dataclasses.fields(LiveOccupancy)} == {"reading", "age"}
 
 
 def test_future_year_warns_about_calendar_coverage(dataset: Dataset) -> None:

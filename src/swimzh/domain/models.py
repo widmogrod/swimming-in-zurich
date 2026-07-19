@@ -1,4 +1,4 @@
-"""Facility-level domain models: identity, basins, provenance, occupancy, and the
+"""Facility-level domain models: identity, basins, provenance, and the
 `Facility` aggregate that the query surface reads.
 
 A `Facility` (e.g. "Hallenbad City") contains one or more `Basin`s, each with its *own*
@@ -74,18 +74,6 @@ class Notice:
         after_start = self.active_from is None or day >= self.active_from
         before_end = self.active_to is None or day <= self.active_to
         return after_start and before_end
-
-
-@dataclass(frozen=True, slots=True)
-class Occupancy:
-    """A live occupancy reading (attached only when the query time is ~now)."""
-
-    facility_id: FacilityId
-    measured_at: datetime
-    percent_full: float | None
-    people: int | None
-    capacity: int | None
-    source: str
 
 
 class BasinKind(Enum):

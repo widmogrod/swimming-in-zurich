@@ -15,10 +15,13 @@ It deliberately distinguishes three outcomes so an empty answer is never ambiguo
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timedelta
 from decimal import Decimal
+from typing import Protocol, assert_never
 from zoneinfo import ZoneInfo
 
+from swimzh.core.errors import ProviderError, describe
+from swimzh.core.result import Err, Ok, Result
 from swimzh.domain.access import EligibilityResult, eligibility
 from swimzh.domain.calendar import ZurichCalendar
 from swimzh.domain.geo import GeoPoint, haversine_km
@@ -30,7 +33,7 @@ from swimzh.domain.models import (
     Facility,
     FacilityId,
     Feature,
-    Occupancy,
+    PoolIdentity,
     Provenance,
 )
 from swimzh.domain.person import Person
@@ -50,6 +53,70 @@ class SwimQuery:
     radius_km: float | None = None
 
 
+# --- Live occupancy ---------------------------------------------------------------------
+#
+# Occupancy is LIVE-ONLY: these types live here in `query.py`, are never imported into
+# `models.py` or the gold codec (guarded by a regression test), and are attached only
+# when `query.at` is ~now — keyed by `identity.crowdmonitor_keys`.
+
+
+@dataclass(frozen=True, slots=True)
+class Occupancy:
+    """A raw live occupancy reading (people/percent/capacity) from a provider."""
+
+    facility_id: FacilityId
+    measured_at: datetime
+    percent_full: float | None
+    people: int | None
+    capacity: int | None
+    source: str
+
+    def __post_init__(self) -> None:
+        # Guard the tz-aware house convention at construction: a naive `measured_at`
+        # would make the derived-age subtraction raise deep inside `find_swim_options`
+        # (an exception escape in an errors-as-values surface). Fail loudly here
+        # instead, like `TimeRange.__post_init__`.
+        if self.measured_at.tzinfo is None:
+            raise ValueError("Occupancy.measured_at must be tz-aware (project rule)")
+
+
+@dataclass(frozen=True, slots=True)
+class LiveOccupancy:
+    """A reading successfully attached to an option; freshness is *derived* from
+    `measured_at` (via `age`), never stored as a separate freshness enum."""
+
+    reading: Occupancy
+    age: timedelta  # now - reading.measured_at, computed at attach time
+
+    def is_stale(self, limit: timedelta = timedelta(minutes=10)) -> bool:
+        return self.age > limit
+
+
+@dataclass(frozen=True, slots=True)
+class OccupancyUnavailable:
+    """Occupancy was requested but could not be resolved — with the reason, so an empty
+    answer is never ambiguous ("provider offline" | "no crowdmonitor key" | ...)."""
+
+    reason: str
+
+
+type OccupancyResult = LiveOccupancy | OccupancyUnavailable
+
+
+class OccupancyProvider(Protocol):
+    """Port for a live-occupancy source (errors as values, per house convention).
+
+    The real CrowdMonitor adapter is deferred until a ToS check is recorded in
+    `data/sources.md`; until then only fakes implement this port.
+    """
+
+    def read(self, keys: tuple[str, ...]) -> Result[Occupancy, ProviderError]: ...
+
+
+# A query counts as "~now" (occupancy-relevant) within this window of wall-clock now.
+_NOW_TOLERANCE = timedelta(minutes=30)
+
+
 @dataclass(frozen=True, slots=True)
 class SwimOption:
     facility_id: FacilityId
@@ -65,8 +132,9 @@ class SwimOption:
     price: PriceEntry | None
     distance_km: float | None
     provenance: Provenance
-    # Attached only when the query time ≈ now and an occupancy provider is wired (later).
-    live_occupancy: Occupancy | None = None
+    # None = not requested (no provider wired, or query.at is not ~now).
+    # LiveOccupancy / OccupancyUnavailable = requested and resolved.
+    live_occupancy: OccupancyResult | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -105,16 +173,37 @@ def _distance_km(query: SwimQuery, facility: Facility) -> float | None:
     return haversine_km(query.near, facility.geo)
 
 
+def _read_occupancy(
+    provider: OccupancyProvider, identity: PoolIdentity, now: datetime
+) -> OccupancyResult:
+    """Resolve one facility's live occupancy, keyed by `identity.crowdmonitor_keys`.
+    Provider errors become an explainable `OccupancyUnavailable`, never an exception."""
+    if not identity.crowdmonitor_keys:
+        return OccupancyUnavailable(reason="no crowdmonitor key")
+    match provider.read(identity.crowdmonitor_keys):
+        case Ok(reading):
+            return LiveOccupancy(reading=reading, age=now - reading.measured_at)
+        case Err(error):
+            return OccupancyUnavailable(reason=describe(error))
+        case _ as unreachable:
+            assert_never(unreachable)
+
+
 def find_swim_options(
     query: SwimQuery,
     facilities: tuple[Facility, ...],
     calendar: ZurichCalendar,
     *,
     registry: Registry | None = None,
+    occupancy: OccupancyProvider | None = None,
 ) -> QueryResult:
     at_local = query.at.astimezone(_ZURICH) if query.at.tzinfo is not None else query.at
     day = at_local.date()
     now_time = at_local.time()
+    now = datetime.now(_ZURICH)
+    at_aware = at_local if at_local.tzinfo is not None else at_local.replace(tzinfo=_ZURICH)
+    # Occupancy is only meaningful for a "~now" query; a future (or past) `at` yields None.
+    want_occupancy = abs(at_aware - now) <= _NOW_TOLERANCE
 
     warnings: list[str] = []
     if not calendar.covers(day):
@@ -138,6 +227,9 @@ def find_swim_options(
             if notice.active_on(day)
         )
         price = price_for(facility.prices, query.person.age) if facility.prices else None
+        live: OccupancyResult | None = None
+        if occupancy is not None and want_occupancy:
+            live = _read_occupancy(occupancy, facility.identity, now)
         facility_closed_reason: str | None = None
         produced = False
 
@@ -164,6 +256,7 @@ def find_swim_options(
                                 price=price,
                                 distance_km=distance,
                                 provenance=facility.provenance,
+                                live_occupancy=live,
                             )
                         )
 

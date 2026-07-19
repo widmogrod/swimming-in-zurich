@@ -137,6 +137,14 @@ def test_roundtrip_covers_every_facility_level_static_field(
     assert back.lockers[0].mechanism is LockerMechanism.COIN
 
 
+def test_occupancy_never_leaks_into_gold(facilities: tuple[Facility, ...]) -> None:
+    # Correctness trap #2: occupancy is live-only — its absence from gold must be a
+    # guarded regression, not just structural. If anyone ever attaches occupancy to
+    # Facility/Basin (or adds a DTO for it), this fails.
+    for facility in facilities:
+        assert "occupancy" not in codec.dumps(facility).lower()
+
+
 def test_legacy_basin_level_length_m_is_rejected(facilities: tuple[Facility, ...]) -> None:
     # The old flat `length_m` field is gone; a stale gold payload using it must fail
     # loudly (extra="forbid") instead of being silently dropped.

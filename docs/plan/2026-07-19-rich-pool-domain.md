@@ -302,6 +302,7 @@ Appended by /dev:implement after each slice — never rewritten. Newest row last
 | 2026-07-19 | S1 | done | parser shape (see Decisions); YAML migration also added `kind:` | depth-phrase misread risk; parser unwired; mapping-table parity untested | yes |
 | 2026-07-19 | S2 | done | TOKEN→CHIP rename; resolve_hours extraction; FeatureStatus/FacilityDetail shapes (see Decisions) | facility_detail uncalled outside tests; Feature has no exceptions axis; coverage ratchet 91→93 possible (owner call) | no |
 | 2026-07-19 | S3 | done | REPRESENTATIVE_ACCESS derivation (plan's literal test was impossible — see Decisions); test count-bumps 3→4 pools | aemtler timetable plausible-but-unverified (marked in file); eligibility/access_info CC 11 and rising per arm; duplicate-representative gap (one-line assert) | yes |
+| 2026-07-19 | S4 | done | Occupancy moved to query.py; is_stale as method; port consumer-owned in domain/query.py; ~now = 30min (see Decisions) | real CrowdMonitor adapter deferred pending ToS; _read_occupancy fires per facility even when no options; find_swim_options CC 21 (extraction candidate); anti-leak guard substring-based | yes |
 
 ## Decisions & divergences
 
@@ -348,6 +349,23 @@ Substantive choices made during implementation, with the why. Each entry dated.
 - **2026-07-19 / S3 — proof-case data honesty**: `aemtler.yaml` identity/geo
   from in-repo `catalog.json`; timetable marked CURATED/ILLUSTRATIVE, verify
   against stadt-zuerich.ch before relying; no basin physicals invented.
+- **2026-07-19 / S4 — four divergences, all critic-verified**: (1) `Occupancy`
+  MOVED `models.py` → `query.py` — the plan self-contradicted ("existing raw
+  reading" vs "never in models.py"); query.py was its only importer. (2)
+  `is_stale(limit=10min)` is a method — the plan's `@property` taking a
+  parameter is semantically unusable Python. (3) `OccupancyProvider` port is
+  consumer-owned in `domain/query.py` — `providers/` would invert layering and
+  the plan's `apps/web/services/ports.py` doesn't exist. (4) "≈ now" fixed at
+  30 min (`_NOW_TOLERANCE`) — plan left it unquantified.
+- **2026-07-19 / S4 — ToS honored**: `data/sources.md` records CrowdMonitor as
+  "Deferred until vendor terms verified" → port + fake-provider tests only, no
+  external calls, no real adapter. Critic verified zero network code in diff.
+- **2026-07-19 / S4 — review round record**: critic's blocking finding (test
+  fixture not truly 24/7: `TimeRange(0:00, 23:59)` end-exclusive) was a REAL
+  gap with an overstated mechanism — re-review adjudicated the implementer's
+  pushback correct (options append regardless; only `open_at_query_time` was
+  affected). Fix taken anyway (`time.max`), plus tz-aware guard on
+  `Occupancy.measured_at` (`__post_init__`, house precedent) with a pinning test.
 
 ## Rejected (record so we don't relitigate)
 
