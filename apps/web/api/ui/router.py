@@ -6,18 +6,23 @@ The "Plan my week" tab (Screen 2 in ``docs/plan/2026-07-19-ux-ascii-design.md``)
 read-only days×time grid for the nearest pool: it assembles seven ``/swim`` calls — one per
 weekday (Option A; ``find_swim_options`` returns a whole day's sessions per call) — into a
 grid whose cells carry the same orthogonal access (``≈◇⌂WSX·``) and eligibility (``✓✗?``)
-glyph axes; busyness is un-wired, so the grid states plainly "Busyness: not available yet."
-Closed and unknown days are called out explicitly, never left as a blank that reads as "closed".
+glyph axes plus the session's time range as VISIBLE cell text (not hover-only, invisible on
+touch), inside a horizontal-scroll container so it stays a grid on a phone; busyness is
+un-wired, so the grid states plainly "Busyness: not available yet." Closed and unknown days
+are called out explicitly, never left as a blank that reads as "closed".
 
-The "Find a swim" results embody the unified monospace visual language (see
-``docs/plan/2026-07-19-ux-ascii-design.md``): a fat length badge, orthogonal access
-(``≈◇⌂WSX·``) and eligibility (``✓✗?``) glyph axes, the three never-merged terminal
-states (open ``·closes`` / closed-with-reason / "Hours not listed yet"), an
-``ⓘ Schedule last checked … · source`` provenance stamp in plain words, and — below the
-results in a default-closed "What do the symbols mean?" expander — the shared glyph legend.
-The access word (from ``accessLabel``) reads on each card, not just the bare glyph. The badge
-carries a ``N lane`` sub-line under the length when the basin's lane count is known,
-degrading to length-only when it is not."""
+The "Find a swim" card leads with the ANSWER, not the filter (S4 #7): the facility name is the
+hero (and the S3 link), then a bold colored status pill (open = green / an upcoming window =
+amber, never opacity-only) paired with an eligibility WORD ("you're in" / "not for you" /
+"check"), then distance/price, with the length + lane count demoted to a compact secondary tag
+(kept — it's a real lap-swimmer filter — only shrunk). It still embodies the unified visual
+language (see ``docs/plan/2026-07-19-ux-ascii-design.md``): orthogonal access (``≈◇⌂WSX·``)
+and eligibility (``✓✗?``) glyph axes, the three never-merged terminal states (open ``·closes``
+/ closed-with-reason / "Hours not listed yet"), an ``ⓘ Schedule last checked … · source``
+provenance stamp in plain words, and — below the results in a default-closed "What do the
+symbols mean?" expander — the shared glyph legend. The access word (sentence-cased from
+``accessLabel``) reads on each card, not just the bare glyph. The length tag carries a
+``N lane`` note when the basin's lane count is known, degrading to length-only when it is not."""
 
 from __future__ import annotations
 
@@ -61,26 +66,33 @@ _PAGE = """<!doctype html>
     border: 1px solid #8886; border-radius: .4rem; padding: .6rem .8rem; margin: .4rem 0 1rem; opacity: .85; }
   .symbols { margin: 1rem 0; }
   .symbols summary { cursor: pointer; opacity: .8; font-size: .85rem; }
-  .card { display: flex; gap: .8rem; align-items: stretch; border: 1px solid #8886;
-    border-radius: .5rem; padding: .7rem; margin: .8rem 0; }
-  .lenbadge { font-family: var(--mono); flex: 0 0 auto; min-width: 5.5rem; display: flex;
-    flex-direction: column; align-items: center; justify-content: center; text-align: center;
-    border: 2px solid #8888; border-radius: .4rem; padding: .4rem .3rem; }
-  .lenbadge .len { font-size: 1.5rem; font-weight: 700; line-height: 1.1; }
-  .lenbadge .lanes { font-size: .8rem; opacity: .8; line-height: 1.2; }
-  .lenbadge .kind { font-size: .7rem; opacity: .7; text-transform: uppercase; letter-spacing: .05em; }
-  .card .body { flex: 1 1 auto; min-width: 0; }
-  .card .head { display: flex; justify-content: space-between; gap: .6rem; flex-wrap: wrap; }
-  .card .name { font-weight: 600; }
+  /* --- swim-card visual hierarchy (S4 #7): the facility NAME is the hero, then a bold
+     colored status pill + an eligibility WORD, then distance/price, with length/lanes
+     demoted to a small secondary tag (kept — it's a real lap-swimmer filter). --- */
+  .card { border: 1px solid #8886; border-radius: .5rem; padding: .7rem .9rem; margin: .8rem 0; }
+  .card .cardname { font-size: 1.15rem; font-weight: 700; line-height: 1.25; }
+  .card .cardname .mark { font-family: var(--mono); font-weight: 400; opacity: .6; margin-right: .25rem; }
+  .card .statusrow { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; margin: .35rem 0; }
   .glyph { font-family: var(--mono); font-weight: 700; }
-  .axis-access { }
   .axis-elig.in { color: #15803d; }
   .axis-elig.out { color: #b91c1c; }
   .axis-elig.unk { color: #b45309; }
-  .state { font-family: var(--mono); font-size: .85rem; white-space: nowrap; }
-  .state.open { color: #15803d; }
-  .state.upcoming { opacity: .8; }
-  .card .metaline { font-size: .85rem; opacity: .8; margin-top: .2rem; }
+  /* Open-vs-later is a bold COLORED pill, not an opacity difference (opacity reads as disabled
+     and washes out on some screens): open = green, an upcoming window = amber. */
+  .state { font-family: var(--mono); font-size: .78rem; font-weight: 700; white-space: nowrap;
+    color: #fff; padding: .12rem .55rem; border-radius: 1rem; }
+  .state.open { background: #15803d; }
+  .state.upcoming { background: #b45309; }
+  .eligword { font-size: .85rem; font-weight: 600; display: inline-flex; align-items: center; gap: .25rem; }
+  .eligword.in { color: #15803d; }
+  .eligword.out { color: #b91c1c; }
+  .eligword.unk { color: #b45309; }
+  /* length + lanes: kept as a real lap-swimmer filter, demoted to a compact monospace tag */
+  .lenbadge { display: inline-block; font-family: var(--mono); font-size: .74rem; white-space: nowrap;
+    border: 1px solid #8886; border-radius: .3rem; padding: .04rem .4rem; opacity: .9; }
+  .lenbadge .len { font-weight: 600; }
+  .lenbadge .lanes { opacity: .8; }
+  .card .metaline { font-size: .85rem; opacity: .85; margin-top: .2rem; }
   .card .reason { font-size: .8rem; opacity: .65; margin-top: .2rem; }
   /* pool-as-object detail line: address · tel · official ↗ · directions ↗ */
   .pooldetail { font-size: .8rem; opacity: .8; margin-top: .3rem; }
@@ -113,12 +125,18 @@ _PAGE = """<!doctype html>
   .chip.closedchip { opacity: .55; text-decoration: line-through; }
   .chip.closedchip.active { opacity: 1; text-decoration: none; }
   .planhead { font-family: var(--mono); font-size: .85rem; margin: .8rem 0 .3rem; }
-  .weekgrid { font-family: var(--mono); border-collapse: collapse; width: 100%; font-size: .9rem; }
+  /* The grid is wider than a phone: wrap it in a horizontal-scroll container with a sensible
+     min-width so it stays a grid on mobile (persona 2 plans on a phone) instead of collapsing. */
+  .gridscroll { overflow-x: auto; margin: .3rem 0; }
+  .weekgrid { font-family: var(--mono); border-collapse: collapse; width: 100%; min-width: 40rem; font-size: .9rem; }
   .weekgrid th, .weekgrid td { border: 1px solid #8884; padding: .3rem .45rem; text-align: center; }
   .weekgrid th { font-weight: 600; opacity: .85; }
   .weekgrid td.time { text-align: right; opacity: .8; white-space: nowrap; }
   .weekgrid td.closed-day { opacity: .45; }        /* no session at this slot (·) */
   .weekgrid td.unknown-day { color: #b45309; }     /* no data — ? , NEVER blank */
+  /* Session time ranges are VISIBLE cell text, not title=-hover-only (invisible on touch). */
+  .weekgrid .cellglyphs { display: block; line-height: 1.3; }
+  .weekgrid .celltime { display: block; font-size: .66rem; opacity: .7; white-space: nowrap; margin-top: .05rem; }
   .cell-elig.in { color: #15803d; } .cell-elig.out { color: #b91c1c; } .cell-elig.unk { color: #b45309; }
   .daynote { font-family: var(--mono); font-size: .82rem; margin: .15rem 0; }
   .daynote.closed { color: #b91c1c; } .daynote.unknown { color: #b45309; }
@@ -303,37 +321,51 @@ const ACCESS_LABEL = { LaneSwim:'LANE', PublicSwim:'PUBLIC', FamilyTime:'FAMILY'
   AdultsOnly:'ADULTS' };
 const accessGlyph = a => ACCESS_GLYPH[a] || '◇';
 const accessLabel = a => ACCESS_LABEL[a] || a;
+// Sentence-case the (shouty upper-case) access label so a card reads "Lane", not "LANE".
+const sentence = s => s ? s.charAt(0).toUpperCase() + s.slice(1).toLowerCase() : s;
 // Eligibility glyph axis (whether it's YOU) — ? = not determinable (unknown), never merged with ✗.
 function eligAxis(o) {
   if (o.eligible) return { g:'✓', cls:'in' };
   if (/determine eligibility|confirm admission/.test(o.reason)) return { g:'?', cls:'unk' };
   return { g:'✗', cls:'out' };
 }
-function optionCard(o) {
-  const badge = o.length_m != null
-    ? `<span class="len">${esc(o.length_m)} m</span>`
-    : `<span class="len">pool</span>`;
-  // Lane count sub-line — real datum from the basin; absent => length-only (honest degrade).
-  const lanes = o.lanes != null ? `<span class="lanes">${esc(o.lanes)} lane</span>` : '';
-  // Three terminal states, per card: OPEN (with closing time) vs. an upcoming window today.
-  const state = o.open_now
+// The eligibility axis paired with a plain WORD (derived, via eligAxis, from o.reason) so ✓/✗/?
+// is not the only signal: "you're in" / "not for you" / "check".
+const ELIG_WORD = { in: "you're in", out: 'not for you', unk: 'check' };
+function eligWord(o) { return ELIG_WORD[eligAxis(o).cls]; }
+// Open-vs-later terminal state as a bold COLORED pill (see .state CSS) — never opacity-only.
+function statePill(o) {
+  return o.open_now
     ? `<span class="state open">OPEN · closes ${esc(o.end)}</span>`
     : `<span class="state upcoming">${esc(o.start)}–${esc(o.end)} today</span>`;
+}
+// Length + lane count as a compact secondary tag: a real lap-swimmer filter, kept but demoted.
+// Lane count is a real datum from the basin — absent => length-only (honest degrade, no faked N).
+function lenTagHTML(o) {
+  const len = o.length_m != null ? `${esc(o.length_m)} m` : 'pool';
+  const lanes = o.lanes != null ? `<span class="lanes"> · ${esc(o.lanes)} lane</span>` : '';
+  return `<span class="lenbadge"><span class="len">${len}</span>${lanes}</span>`;
+}
+// Visual hierarchy (S4 #7): the eye lands on the ANSWER, not the filter — facility name (big,
+// the S3 link) → bold status pill + eligibility WORD → distance/price → length demoted to a
+// small tag. The redundant `indoor` kind is dropped (every Find result is indoor).
+function optionCard(o) {
   const el = eligAxis(o);
   const meta = [o.distance_km != null ? o.distance_km + ' km' : null, o.price]
     .filter(Boolean).map(esc).join(' · ');
   return `<article class="card">
-    <div class="lenbadge">${badge}${lanes}<span class="kind">${esc(o.kind)}</span></div>
-    <div class="body">
-      <div class="head"><span class="name">${poolNameHTML(o.facility)} · ${esc(o.basin)}</span>${state}</div>
-      <div class="metaline">
-        <span class="glyph axis-access">${esc(accessGlyph(o.access))}</span> ${esc(accessLabel(o.access))}
-        &nbsp; <span class="glyph axis-elig ${el.cls}">${el.g}</span>
-        ${meta ? '&nbsp; ' + meta : ''}
-      </div>
-      <div class="reason">${esc(o.reason)}</div>
-      ${poolDetailHTML(o.facility)}
+    <div class="cardname">${poolNameHTML(o.facility)} · ${esc(o.basin)}</div>
+    <div class="statusrow">
+      ${statePill(o)}
+      <span class="eligword ${el.cls}"><span class="glyph axis-elig ${el.cls}">${el.g}</span> ${esc(eligWord(o))}</span>
     </div>
+    <div class="metaline">
+      <span class="glyph axis-access">${esc(accessGlyph(o.access))}</span> ${esc(sentence(accessLabel(o.access)))}
+      ${meta ? '&nbsp; · ' + meta : ''}
+      &nbsp; ${lenTagHTML(o)}
+    </div>
+    <div class="reason">${esc(o.reason)}</div>
+    ${poolDetailHTML(o.facility)}
   </article>`;
 }
 
@@ -451,28 +483,22 @@ function renderPrimer(options) {
 // A starter-pool card: the S1 badge + orthogonal glyph axes, jargon decoded inline, km only.
 // Walk/transit time is deliberately never shown — there is no routing model (gap #4).
 function starterCard(o, mark) {
-  const badge = o.length_m != null
-    ? `<span class="len">${esc(o.length_m)} m</span>`
-    : `<span class="len">pool</span>`;
-  const lanes = o.lanes != null ? `<span class="lanes">${esc(o.lanes)} lane</span>` : '';
-  const state = o.open_now
-    ? `<span class="state open">OPEN · closes ${esc(o.end)}</span>`
-    : `<span class="state upcoming">${esc(o.start)}–${esc(o.end)} today</span>`;
   const el = eligAxis(o);
   const meta = [o.distance_km != null ? o.distance_km + ' km' : null, o.price]
     .filter(Boolean).map(esc).join(' · ');
   return `<article class="card">
-    <div class="lenbadge"><span class="kind">${esc(mark)}</span>${badge}${lanes}</div>
-    <div class="body">
-      <div class="head"><span class="name">${poolNameHTML(o.facility)} · ${esc(o.basin)}</span>${state}</div>
-      <div class="metaline">
-        <span class="glyph axis-access">${esc(accessGlyph(o.access))}</span>
-        <span class="glyph axis-elig ${el.cls}">${el.g}</span>
-        ${meta ? '&nbsp; ' + meta : ''}
-      </div>
-      <div class="decode">This slot is <b>${esc(decodeAccess(o.access))}</b>.</div>
-      ${poolDetailHTML(o.facility)}
+    <div class="cardname"><span class="mark">${esc(mark)}</span>${poolNameHTML(o.facility)} · ${esc(o.basin)}</div>
+    <div class="statusrow">
+      ${statePill(o)}
+      <span class="eligword ${el.cls}"><span class="glyph axis-elig ${el.cls}">${el.g}</span> ${esc(eligWord(o))}</span>
     </div>
+    <div class="metaline">
+      <span class="glyph axis-access">${esc(accessGlyph(o.access))}</span>
+      ${meta ? '&nbsp; ' + meta : ''}
+      &nbsp; ${lenTagHTML(o)}
+    </div>
+    <div class="decode">This slot is <b>${esc(decodeAccess(o.access))}</b>.</div>
+    ${poolDetailHTML(o.facility)}
   </article>`;
 }
 
@@ -655,7 +681,8 @@ function renderPlan() {
   }
 
   let h = `<div class="planhead">${badgePool}</div>` + poolDetail;
-  h += '<table class="weekgrid"><thead><tr><th>time</th>'
+  // Horizontal-scroll container (#9): the grid stays a grid on a phone instead of collapsing.
+  h += '<div class="gridscroll"><table class="weekgrid"><thead><tr><th>time</th>'
      + planWeek.map(d => `<th>${esc(d.label)}</th>`).join('') + '</tr></thead><tbody>';
   for (const t of times) {
     h += `<tr><td class="time">${esc(t)}</td>`;
@@ -668,12 +695,16 @@ function renderPlan() {
       const o = here.find(x => x.access === 'LaneSwim') || here[0];  // one glyph pair per cell
       const el = eligAxis(o);
       const title = here.map(x => x.start + '–' + x.end + ' ' + accessLabel(x.access)).join(' · ');
-      h += `<td title="${esc(title)}"><span class="glyph">${esc(accessGlyph(o.access))}</span>`
-         + `<span class="glyph cell-elig ${el.cls}">${el.g}</span></td>`;
+      // The time range is VISIBLE cell text (#9), not title=-hover-only — hover is invisible on
+      // touch. Glyphs stay for scannability; the full stacked-session detail stays in title=.
+      h += `<td title="${esc(title)}">`
+         + `<span class="cellglyphs"><span class="glyph">${esc(accessGlyph(o.access))}</span>`
+         + `<span class="glyph cell-elig ${el.cls}">${el.g}</span></span>`
+         + `<span class="celltime">${esc(o.start)}–${esc(o.end)}</span></td>`;
     }
     h += '</tr>';
   }
-  h += '</tbody></table>';
+  h += '</tbody></table></div>';
 
   // Closed / unknown days are called out explicitly below the grid — never left as a silent blank.
   const notes = planWeek.map((d, i) => {

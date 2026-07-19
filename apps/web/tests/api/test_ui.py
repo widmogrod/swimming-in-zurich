@@ -345,7 +345,9 @@ def test_facility_name_is_a_link_when_catalog_url_exists_else_plain_text() -> No
     assert '<a href="${esc(info.url)}" target="_blank" rel="noopener">${esc(name)}</a>' in page
     assert ": esc(name);" in page  # graceful degrade branch
     # Every card renderer routes its facility name through the link helper (Find, tourist, plan).
-    assert 'class="name">${poolNameHTML(o.facility)}' in page  # Find + tourist cards
+    # S4 renamed the card's name container to the hero `.cardname`; the link helper is unchanged.
+    assert "${poolNameHTML(o.facility)} · ${esc(o.basin)}" in page  # Find + tourist cards
+    assert 'class="cardname">' in page or 'class="cardname"><span' in page
     assert "const badgePool = poolNameHTML(planSelected);" in page  # plan grid heading
     # The old always-plain span is gone from the cards.
     assert 'class="name">${esc(o.facility)}' not in page
@@ -427,3 +429,102 @@ def test_provenance_stamp_uses_plain_language_not_dev_tokens() -> None:
     assert "Schedule last checked" in page
     # The raw dev tokens no longer render as the provenance mode.
     assert "(curated)" not in page and "(scraped)" not in page and "(mixed)" not in page
+
+
+def test_s4_card_hierarchy_leads_with_the_answer_not_the_filter() -> None:
+    """S4 #7: the Find card is reordered so the eye lands on the ANSWER — the facility name is
+    the hero, THEN the status pill + eligibility word, and the length badge is demoted to a
+    small tag last, no longer the big left-hand hero column it was."""
+    with TestClient(app) as client:
+        page = client.get("/").text
+    # Scope to the optionCard function body (its own unique substrings).
+    block = page[page.index("function optionCard(o)") : page.index("function statusLine")]
+    # Order within the card: name (hero) -> status pill + eligibility -> length tag (demoted).
+    assert block.index("cardname") < block.index("statusrow") < block.index("lenTagHTML(o)")
+    # The name is the big hero; the old flex "badge column first" layout is gone.
+    assert ".card .cardname { font-size: 1.15rem; font-weight: 700" in page
+    assert "flex: 0 0 auto; min-width: 5.5rem" not in page  # old hero badge column removed
+    assert ".lenbadge .len { font-size: 1.5rem" not in page  # old 1.5rem/700 length hero gone
+
+
+def test_s4_open_vs_later_is_a_bold_colored_pill_not_opacity() -> None:
+    """S4 #7: open-vs-later becomes a bold COLORED status pill (open = green, an upcoming window
+    = amber), not the opacity-only treatment (which reads as disabled / washes out)."""
+    with TestClient(app) as client:
+        page = client.get("/").text
+    # A shared statePill helper, used by both the Find and tourist starter cards.
+    assert "function statePill(o)" in page
+    assert page.count("${statePill(o)}") == 2
+    # Both states carry a background colour; neither is opacity-only anymore.
+    assert ".state.open { background: #15803d; }" in page
+    assert ".state.upcoming { background: #b45309; }" in page
+    assert ".state.upcoming { opacity" not in page  # the old opacity-only treatment is gone
+    # The distinct open branch (with closing time) survives.
+    assert "OPEN · closes" in page
+
+
+def test_s4_eligibility_is_paired_with_a_plain_word() -> None:
+    """S4 #7: the ✓/✗/? eligibility glyph is paired with a plain WORD derived (via eligAxis,
+    which reads o.reason) from the option — "you're in" / "not for you" / "check" — so the
+    signal does not rely on a single glyph."""
+    with TestClient(app) as client:
+        page = client.get("/").text
+    assert "function eligWord(o) { return ELIG_WORD[eligAxis(o).cls]; }" in page
+    assert "in: \"you're in\", out: 'not for you', unk: 'check'" in page
+    # The word rides beside the glyph on the card (Find + tourist).
+    assert page.count("${esc(eligWord(o))}") == 2
+    assert 'class="eligword' in page
+
+
+def test_s4_access_word_is_sentence_cased_not_shouty() -> None:
+    """S4 #7 (S2/S3 note): accessLabel returns shouty upper-case (LANE/PUBLIC); the card now
+    sentence-cases it so it reads "Lane", not "LANE" — the glyph axis is kept for scanning."""
+    with TestClient(app) as client:
+        page = client.get("/").text
+    assert "const sentence = s =>" in page
+    assert "${esc(sentence(accessLabel(o.access)))}" in page
+    assert "axis-access" in page  # the scannable glyph is kept
+
+
+def test_s4_length_lanes_badge_is_kept_but_demoted_to_a_small_tag() -> None:
+    """S4 #7 / KEEP invariant: the length + lane badge is a real lap-swimmer filter, so it is
+    KEPT — only its size/priority is demoted to a compact secondary tag. Lanes still render
+    only when known (honest degrade), and the redundant `indoor` kind is dropped from the card."""
+    with TestClient(app) as client:
+        page = client.get("/").text
+    # The badge concept survives via a shared compact tag helper.
+    assert "function lenTagHTML(o)" in page
+    assert "o.length_m != null" in page  # length still shown
+    assert "o.lanes != null" in page and "lane</span>" in page  # lanes only when known
+    # Demoted styling: a small inline tag, not the old hero column.
+    assert ".lenbadge { display: inline-block; font-family: var(--mono); font-size: .74rem" in page
+    # The redundant `indoor` kind is no longer rendered on the Find card.
+    block = page[page.index("function optionCard(o)") : page.index("function statusLine")]
+    assert "o.kind" not in block
+
+
+def test_s4_week_grid_scrolls_horizontally_on_a_phone() -> None:
+    """S4 #9: the week grid is wrapped in an overflow-x:auto container with a sensible min-width
+    so it stays a usable grid on a phone (persona 2 plans on mobile) rather than collapsing."""
+    with TestClient(app) as client:
+        page = client.get("/").text
+    # The render wraps the table in a scroll container that is opened and closed around it.
+    assert '<div class="gridscroll"><table class="weekgrid">' in page
+    assert "</tbody></table></div>" in page
+    # The container scrolls horizontally; the grid keeps a sensible minimum width.
+    assert ".gridscroll { overflow-x: auto;" in page
+    assert "min-width: 40rem" in page
+
+
+def test_s4_grid_cells_show_visible_times_not_hover_only() -> None:
+    """S4 #9: session time ranges render as VISIBLE cell text (a .celltime span), not the
+    title=-hover-only treatment that is invisible on touch. The glyphs stay for scannability
+    and the full stacked-session detail stays in title=."""
+    with TestClient(app) as client:
+        page = client.get("/").text
+    # The visible time range is rendered as cell text, from the session's own start/end.
+    assert '<span class="celltime">${esc(o.start)}–${esc(o.end)}</span>' in page
+    assert ".weekgrid .celltime { display: block;" in page
+    # The scannable glyph pair is still there, and the hover title is kept for full detail.
+    assert '<span class="cellglyphs">' in page
+    assert '<td title="${esc(title)}">' in page
