@@ -225,4 +225,20 @@ lacks (lane count), the slice **degrades gracefully** and the gap is deferred to
 
 | date | slice | status | divergence | tech debt | human review? |
 |------|-------|--------|------------|-----------|---------------|
-| —    | —     | —      | —          | —         | —             |
+| 2026-07-19 | S1 | done | added `OptionOut.source`/`.curated` beyond the two named fields — required to render the provenance stamp honestly (in-scope per S1's stamp deliverable) | uncurated state renders but `build_answer` calls `find_swim_options` without a registry, so it is never produced at runtime (honest scaffolding); `?` eligibility detected in JS by reason-substring match, not a structured flag | yes |
+
+## Decisions & divergences
+
+**2026-07-19 — S1 (approved by critic, non-blocking suggestions carried forward):**
+- **Registry not wired at runtime.** The UNCURATED terminal state is rendered in the page but
+  `build_answer` (`apps/web/api/swim/service.py`) calls `find_swim_options` without a `registry`,
+  so `query.py` never emits uncurated statuses live. Invariant #1 (three never-merged states) is
+  present in source but only half-observable. Wiring the registry is data-plumbing beyond S1's
+  presentation-only scope — deferred; worth a dedicated slice or a [[rich-pool-domain]] follow-up.
+- **`?` eligibility via substring match.** The unknown-eligibility axis is detected in JS by
+  matching reason substrings (`determine eligibility` / `confirm admission`). Correct today (critic
+  traced all `access.py` reasons), but fragile if reason copy changes. A structured tri-state on
+  `EligibilityResult` (e.g. `determinable: bool`) would remove the fragility — deferred (domain
+  change, touches the correctness core).
+- **Cosmetic legend drift:** code renders `CLOSED ⊘ reason` vs the plan mockup's `reason+reopen`;
+  `AdultsOnly` maps to `◇` (public) glyph. Accepted as-is.

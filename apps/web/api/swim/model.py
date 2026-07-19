@@ -7,7 +7,9 @@ from pydantic import BaseModel
 
 class OptionOut(BaseModel):
     facility: str
+    kind: str  # facility kind (indoor/outdoor/…), for the glance badge context
     basin: str
+    length_m: float | None  # basin length — the fat left badge; None degrades gracefully
     start: str
     end: str
     access: str
@@ -17,6 +19,8 @@ class OptionOut(BaseModel):
     distance_km: float | None
     open_now: bool
     valid_as_of: str | None
+    source: str  # provenance source (e.g. stadt-zuerich.ch), for the ⓘ stamp
+    curated: bool  # True = hand-curated, False = scraped
 
 
 class StatusOut(BaseModel):

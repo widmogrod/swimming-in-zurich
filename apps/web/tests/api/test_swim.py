@@ -36,6 +36,23 @@ def test_options_carry_price_and_provenance() -> None:
     assert all(o["valid_as_of"] for o in options)
 
 
+def test_options_expose_length_kind_and_source() -> None:
+    """S1: the glance badge needs basin length + facility kind, and the ⓘ stamp needs the
+    provenance source/curated flag, surfaced through the swim service into OptionOut."""
+    with TestClient(app) as client:
+        response = client.get("/swim", params={"at": MONDAY_EVENING, "gender": "female", "age": 34})
+    options = response.json()["options"]
+    assert options
+    for o in options:
+        assert set(o) >= {"length_m", "kind", "source", "curated"}
+        assert isinstance(o["kind"], str) and o["kind"]
+        assert isinstance(o["source"], str) and o["source"]
+        assert isinstance(o["curated"], bool)
+        assert o["length_m"] is None or isinstance(o["length_m"], (int, float))
+    # City's curated basins carry real dimensions (50m / 20m), so at least one badge is real.
+    assert any(o["length_m"] for o in options)
+
+
 def test_invalid_gender_is_400() -> None:
     with TestClient(app) as client:
         response = client.get("/swim", params={"at": MONDAY_EVENING, "gender": "other"})

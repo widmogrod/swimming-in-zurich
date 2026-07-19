@@ -22,7 +22,9 @@ def _option_out(option: SwimOption) -> OptionOut:
     valid = option.provenance.valid_as_of
     return OptionOut(
         facility=option.facility_name,
+        kind=option.facility_kind.value,
         basin=option.basin_name,
+        length_m=float(option.basin_length_m) if option.basin_length_m is not None else None,
         start=option.session.time.start.strftime("%H:%M"),
         end=option.session.time.end.strftime("%H:%M"),
         access=type(option.session.access).__name__,
@@ -32,6 +34,8 @@ def _option_out(option: SwimOption) -> OptionOut:
         distance_km=round(option.distance_km, 2) if option.distance_km is not None else None,
         open_now=option.open_at_query_time,
         valid_as_of=valid.isoformat() if valid is not None else None,
+        source=option.provenance.source,
+        curated=option.provenance.curated,
     )
 
 

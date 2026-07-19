@@ -34,6 +34,7 @@ from swimzh.domain.models import (
     FacilityId,
     Feature,
     PoolIdentity,
+    PoolKind,
     Provenance,
 )
 from swimzh.domain.person import Person
@@ -121,9 +122,11 @@ _NOW_TOLERANCE = timedelta(minutes=30)
 class SwimOption:
     facility_id: FacilityId
     facility_name: str
+    facility_kind: PoolKind  # indoor/outdoor/… — from the pool identity
     basin_id: BasinId
     basin_name: str
     basin_kind: BasinKind
+    basin_length_m: Decimal | None  # the immutable physical fact behind the glance badge
     lanes: int | None
     water_temp_c: Decimal | None  # the basin's nominal (design) temperature, not live
     session: ResolvedSession
@@ -245,9 +248,15 @@ def find_swim_options(
                             SwimOption(
                                 facility_id=facility.identity.facility_id,
                                 facility_name=facility.identity.name,
+                                facility_kind=facility.identity.kind,
                                 basin_id=basin.basin_id,
                                 basin_name=basin.name,
                                 basin_kind=basin.kind,
+                                basin_length_m=(
+                                    basin.dimensions.length_m
+                                    if basin.dimensions is not None
+                                    else None
+                                ),
                                 lanes=basin.lanes,
                                 water_temp_c=basin.nominal_temp_c,
                                 session=session,
