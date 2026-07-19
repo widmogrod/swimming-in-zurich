@@ -1,6 +1,6 @@
 ---
 type: plan
-status: approved            # design→2 agents→2 critics→synthesis; ready for /dev:implement
+status: in-progress         # design→2 agents→2 critics→synthesis; executing via /dev:implement
 created: 2026-07-19
 feature: lane-reservations
 gates:
