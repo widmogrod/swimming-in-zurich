@@ -24,7 +24,7 @@ from swimzh.etl.catalog import build_catalog
 from swimzh.etl.gold import write_gold
 from swimzh.etl.lane_plans import CITY_BELEGUNGSPLAN_URLS, scrape_lane_plans
 from swimzh.etl.scrape import scrape_indoor_facilities
-from swimzh.etl.silver import attach_lane_plans
+from swimzh.etl.silver import attach_lane_plans, drop_curated_duplicates
 from swimzh.providers import geo_sport
 from swimzh.providers.price_scraper import scrape_prices
 from swimzh.storage import catalog_json
@@ -86,9 +86,15 @@ def scrape_gold(
     if not report.facilities:
         print("no schedules could be scraped", file=sys.stderr)
         return 1
-    write_gold(open_db(db_path), report.facilities)
+    conn = open_db(db_path)
+    # Curated-wins: a scraped facility (long catalog slug) for an already-curated pool would
+    # otherwise land as a second row for the same pool. Keep the hand-curated schedule + lanes.
+    kept, dropped = drop_curated_duplicates(report.facilities, GoldRepository(conn).load_all())
+    write_gold(conn, kept)
     msg = f"scraped {len(report.facilities)} indoor pools into {db_path}"
     msg += " (with prices)" if prices is not None else " (prices unavailable)"
+    if dropped:
+        msg += f"; kept curated for {len(dropped)}: {', '.join(dropped)}"
     if report.skipped:
         msg += f"; skipped {len(report.skipped)}: {', '.join(report.skipped)}"
     print(msg)

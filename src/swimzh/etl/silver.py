@@ -48,6 +48,26 @@ def _normalise(text: str) -> str:
     return " ".join(text.strip().casefold().split())
 
 
+def drop_curated_duplicates(
+    scraped: Sequence[Facility], existing: Sequence[Facility]
+) -> tuple[tuple[Facility, ...], tuple[str, ...]]:
+    """Curated-wins: drop scraped facilities that duplicate an already-curated pool.
+
+    A best-effort scraped facility (keyed by the long catalog slug, e.g. ``hallenbad-city``)
+    for a pool that already has a hand-curated schedule — its authoritative short id and lane
+    plans, e.g. ``city`` — would otherwise land as a *second* row for the same pool, so the
+    app surfaces it twice. Match by normalised facility name against the curated facilities
+    already in the store; return the scraped facilities to keep and the names dropped in
+    favour of curated data. Scraped-only pools (no curated counterpart) are always kept.
+    """
+    curated = {_normalise(f.identity.name) for f in existing if f.provenance.curated}
+    kept = tuple(f for f in scraped if _normalise(f.identity.name) not in curated)
+    dropped = tuple(
+        sorted({f.identity.name for f in scraped if _normalise(f.identity.name) in curated})
+    )
+    return kept, dropped
+
+
 def reconcile(
     dataset: Dataset, geo_pools: list[GeoPool], fetched_at: datetime
 ) -> Result[tuple[Facility, ...], ProviderError]:
