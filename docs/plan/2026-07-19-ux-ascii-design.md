@@ -262,6 +262,16 @@ lacks (lane count), the slice **degrades gracefully** and the gap is deferred to
   usable recurring slots" was not built — the switcher stays distance-sorted (the literal S4
   deliverable, and invariant #2 bars a busyness-based sort anyway).
 
+**2026-07-19 — post-completion fix (user-reported):** the week-planner switcher silently showed
+only pools that produced options (2 at Zürich HB), while "All pools" lists all 57 — confusing and
+an invariant-#1 violation (silent drop). Fix: pools closed all week are now surfaced as
+struck-through `⊘ … (closed)` chips instead of vanishing, and a note under the switcher reconciles
+the plannable set with the catalog count (`Showing N open + M closed — only pools with a curated
+timetable can be planned; the "All pools" tab lists all 57 locations, the rest have no schedule
+yet`). Root cause is the two data sources (catalog vs curated schedules) plus the still-unwired
+registry (backlog #2) — the ~53 catalog-only pools would otherwise appear as `uncurated`. Verified
+in-browser; regression test added.
+
 ## Summary — what exists now
 
 All four slices shipped 2026-07-19 through the full QA + adversarial-review gates

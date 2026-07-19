@@ -154,9 +154,25 @@ def test_week_planner_pool_switcher_is_distance_sorted() -> None:
     with TestClient(app) as client:
         page = client.get("/").text
     assert 'id="poolSwitch"' in page
-    # Distance drives the ordering; the nearest pool is the default selection.
+    # Distance drives the ordering; the nearest OPEN pool is the default selection.
     assert "distance_km ?? Infinity) - (b.distance_km ?? Infinity)" in page
-    assert "planSelected = planPools.length ? planPools[0].facility" in page
+    assert "planSelected = openPools.length ? openPools[0].facility" in page
+
+
+def test_week_planner_surfaces_closed_pools_and_explains_the_catalog_gap() -> None:
+    """A pool closed all week produces no options, so it would silently vanish from the
+    switcher — invariant #1 forbids that. Closed pools are surfaced as struck-through chips,
+    and a note explains why the plannable set is smaller than the ~57-pool "All pools" catalog."""
+    with TestClient(app) as client:
+        page = client.get("/").text
+    # Closed-all-week pools (from `statuses`) are added to the switcher, not dropped.
+    assert "s.status === 'closed' && !dist.has(s.facility)" in page
+    assert "closedchip" in page and "(closed)" in page
+    # An honesty note reconciles the plannable set with the full catalog count from /pools.
+    assert 'id="planNote"' in page
+    assert "only pools with a curated timetable can be planned" in page
+    assert "catalog locations" in page
+    assert "await fetch('/pools')" in page  # catalog total drives the note
 
 
 def test_week_planner_never_blanks_closed_or_unknown_days() -> None:

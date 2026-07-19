@@ -99,6 +99,8 @@ _PAGE = """<!doctype html>
   /* --- week planner grid (read-only) --- */
   .planfilters { display: flex; flex-wrap: wrap; gap: 1rem; margin: .8rem 0; font-size: .88rem; }
   .planfilters label { flex-direction: row; align-items: center; gap: .35rem; }
+  .chip.closedchip { opacity: .55; text-decoration: line-through; }
+  .chip.closedchip.active { opacity: 1; text-decoration: none; }
   .planhead { font-family: var(--mono); font-size: .85rem; margin: .8rem 0 .3rem; }
   .weekgrid { font-family: var(--mono); border-collapse: collapse; width: 100%; font-size: .9rem; }
   .weekgrid th, .weekgrid td { border: 1px solid #8884; padding: .3rem .45rem; text-align: center; }
@@ -174,6 +176,7 @@ FOR YOU  ✓ in     ✗ not you   ? unknown          BUSY  [fc] forecast — not
     <label><input type="checkbox" id="pf-elig"> eligible-to-me only</label>
   </div>
   <div id="poolSwitch" class="chips"></div>
+  <p id="planNote" class="muted"></p>
   <div id="planOut"></div>
 </section>
 
@@ -429,12 +432,13 @@ vf.addEventListener('submit', async e => {
 // `open_now` is just a per-session flag), so 7 calls — one per weekday at a representative
 // noon — assemble the whole week with no API change. Eligibility (✓✗?) is per-session and
 // time-independent; only holiday-correct schedules need the real date, which each call has.
-const pf = $('#pf'), planOut = $('#planOut'), poolSwitch = $('#poolSwitch');
+const pf = $('#pf'), planOut = $('#planOut'), poolSwitch = $('#poolSwitch'), planNote = $('#planNote');
 const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 let planLoaded = false;
 let planWeek = null;      // [{ label, iso, answer }] for Mon..Sun
-let planPools = [];       // distance-sorted [{ facility, distance_km }]
+let planPools = [];       // [{ facility, distance_km, closed }] — open pools first (by distance), then closed
 let planSelected = null;  // selected facility name
+let catalogCount = null;  // total pools in the WFS catalog (the "All pools" universe)
 
 function localISO(d) {
   return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
@@ -466,6 +470,10 @@ pf.addEventListener('submit', async e => {
     return r.ok ? r.json() : { options: [], statuses: [], warnings: [], notices: [] };
   }));
   planWeek = days.map((day, i) => ({ ...day, answer: answers[i] }));
+  if (catalogCount === null) {  // the "All pools" universe, for the honesty note below the switcher
+    const cr = await fetch('/pools');
+    if (cr.ok) catalogCount = (await cr.json()).count;
+  }
 
   // Distance-sorted pool switcher: nearest facility (min distance across the week) first.
   const dist = new Map();
@@ -475,9 +483,17 @@ pf.addEventListener('submit', async e => {
       if (cur === undefined || (o.distance_km != null && o.distance_km < cur))
         dist.set(o.facility, o.distance_km != null ? o.distance_km : cur ?? null);
     }
-  planPools = [...dist.entries()].map(([facility, distance_km]) => ({ facility, distance_km }))
+  const openPools = [...dist.entries()].map(([facility, distance_km]) => ({ facility, distance_km, closed: false }))
     .sort((a, b) => (a.distance_km ?? Infinity) - (b.distance_km ?? Infinity));
-  planSelected = planPools.length ? planPools[0].facility : null;  // nearest pool by default
+  // Pools closed ALL week produce no options, so they'd silently vanish — invariant #1 forbids that.
+  // Surface them as closed chips (distance unknown: `statuses` carry none — S4 tech debt).
+  const closedNames = new Set();
+  for (const { answer } of planWeek)
+    for (const s of answer.statuses)
+      if (s.status === 'closed' && !dist.has(s.facility)) closedNames.add(s.facility);
+  const closedPools = [...closedNames].sort().map(facility => ({ facility, distance_km: null, closed: true }));
+  planPools = [...openPools, ...closedPools];
+  planSelected = openPools.length ? openPools[0].facility : (planPools[0]?.facility ?? null);  // nearest OPEN pool by default
   renderPlan();
 });
 
@@ -485,16 +501,26 @@ pf.addEventListener('submit', async e => {
   $('#' + id).addEventListener('change', () => { if (planWeek) renderPlan(); }));
 
 function renderPoolSwitch() {
-  if (!planPools.length) { poolSwitch.innerHTML = ''; return; }
+  if (!planPools.length) { poolSwitch.innerHTML = ''; planNote.textContent = ''; return; }
   poolSwitch.innerHTML = planPools.map(p => {
-    const mark = p.facility === planSelected ? '●' : '○';
+    const mark = p.closed ? '⊘' : (p.facility === planSelected ? '●' : '○');
     const km = p.distance_km != null ? ' ' + p.distance_km + 'km' : '';
-    const cls = p.facility === planSelected ? 'chip active' : 'chip';
-    return `<button class="${cls}" data-pool="${esc(p.facility)}">${mark} ${esc(p.facility)}${esc(km)}</button>`;
+    const suffix = p.closed ? ' (closed)' : '';
+    let cls = 'chip';
+    if (p.facility === planSelected) cls += ' active';
+    if (p.closed) cls += ' closedchip';
+    return `<button class="${cls}" data-pool="${esc(p.facility)}">${mark} ${esc(p.facility)}${esc(km)}${suffix}</button>`;
   }).join('');
   poolSwitch.querySelectorAll('.chip').forEach(c => c.addEventListener('click', () => {
     planSelected = c.dataset.pool; renderPlan();
   }));
+  // Explain the gap vs the "All pools" tab: only pools WITH a curated timetable can be planned.
+  const withSchedule = planPools.length;
+  const openN = planPools.filter(p => !p.closed).length;
+  let note = `Showing ${openN} open + ${withSchedule - openN} closed pool(s) — only pools with a curated timetable can be planned.`;
+  if (catalogCount != null)
+    note += ` The “All pools” tab lists all ${catalogCount} catalog locations; the rest have no schedule yet (locations only, not shown here).`;
+  planNote.textContent = note;
 }
 
 // One session -> its filtered access glyph, or null if the filters hide it.
