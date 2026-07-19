@@ -16,15 +16,13 @@ intent and design decisions, and `README.md` for orientation.
   `geo_sport`; occupancy later).
 - `src/swimzh/etl/` + `src/swimzh/storage/` — medallion raw→silver→gold (pure functions)
   into the SQLite gold store; `find_swim_options` reads from `GoldRepository`.
-- `apps/web/` — FastAPI service + minimal HTML UI over the swim data (see below).
-- `data/` — curated YAML (pools, registry, calendar) + `sources.md` legal register.
+- `apps/web/` — FastAPI service + minimal HTML UI over the gold DB (see below).
+- `data/` — **ETL inputs** (the curated source of truth): pools/registry/calendar YAML +
+  `catalog.json`, built into the gold DB by `swimzh build`; never read at app runtime. Plus
+  `sources.md` legal register.
 - `tests/` — mirrors `src/swimzh/`; `apps/web/tests/` mirrors the service.
 
 ## Web UI / API
-
-```sh
-uv run uvicorn apps.web.main:app --reload      # http://127.0.0.1:8000  (UI at /, API at /swim)
-```
 
 `GET /swim?at=<ISO datetime>&gender=female|male|diverse&age=<int>&lat=&lon=&radius_km=&eligible_only=true`
 returns eligibility-annotated options + statuses + warnings. Follows the
@@ -34,17 +32,39 @@ returns eligibility-annotated options + statuses + warnings. Follows the
 Endpoints: `/swim` (query), `/pools` (list all ~57 pools from the catalog, `?kind=` filter),
 `/access-types` (explanations), `/health`, `/` (UI: find tab + all-pools browser).
 
+### Single source of truth: build a gold DB, then run against it
+
+The app reads **only** one SQLite gold store — every endpoint (`/swim`, `/pools`,
+`/access-types`) serves from it. No `apps/web/**` module reads `data/*.yaml` or
+`data/catalog.json` at request/startup time (grep-asserted by a test). `SWIMZH_GOLD_DB` is
+**required**: if the DB is missing or empty, startup **fails fast** with `run \`swimzh build …\``.
+
+```sh
+# 1. Build a complete, self-contained gold DB from committed inputs — OFFLINE, no network.
+uv run python -m swimzh.cli build --db gold.sqlite
+
+# 2. (optional) Enrich the same store with real / geo-merged data (network):
+uv run python -m swimzh.cli build-gold    --db gold.sqlite   # curated 3 pools + WFS geo merge
+uv run python -m swimzh.cli scrape-gold   --db gold.sqlite   # REAL schedules scraped per pool
+uv run python -m swimzh.cli scrape-lanes  --db gold.sqlite   # per-basin Belegungsplan lane plans
+
+# 3. Run the app against the DB (UI at /, API at /swim).
+SWIMZH_GOLD_DB=gold.sqlite uv run uvicorn apps.web.main:app --reload   # http://127.0.0.1:8000
+```
+
+`swimzh build` assembles `facility` + `catalog` + `calendar` into one store from the committed
+inputs alone (offline); the network commands **layer onto** an already-built store. The curated
+data directory is supplied to the CLI/ETL via `--data` (default `data/`); the **app never reads
+`data/`** — only the gold DB.
+
 Data sources:
-- **Catalog** (all pools, every category): committed `data/catalog.json`, generated from the
-  WFS. Regenerate with `uv run python -m swimzh.cli build-catalog --out data/catalog.json`.
-- **Schedules** (`/swim`): the `SwimData` port — `SWIMZH_GOLD_DB` (SQLite gold store) if set
-  and present, else the curated dataset (offline default). Build gold two ways:
-  ```sh
-  uv run python -m swimzh.cli scrape-gold --db gold.sqlite   # REAL schedules scraped from
-                                                             #   each indoor pool's page
-  uv run python -m swimzh.cli build-gold  --db gold.sqlite   # curated 3 pools + geo merge
-  SWIMZH_GOLD_DB=gold.sqlite uv run uvicorn apps.web.main:app --reload
-  ```
+- **ETL inputs (human/curated source of truth, committed in git):** `data/pools/*.yaml`,
+  `data/registry.yaml`, `data/calendar/*.yaml`, and `data/catalog.json`. These are consumed by
+  `swimzh build`/the ETL only — never read at app runtime. Regenerate the catalog from the WFS
+  with `uv run python -m swimzh.cli build-catalog --out data/catalog.json`.
+- **Single runtime source:** the gold `.sqlite` the app reads (git-ignored; build it, don't
+  commit it). `/swim` schedules, `/pools` catalog, and the calendar all come from this one store.
+
 The WFS has locations but not opening hours (`n.a.`). `scrape-gold` parses the timetable
 JSON embedded in stadt-zuerich.ch pool pages (`providers/schedule_scraper.py`) — brittle,
 best-effort (unparseable pages are skipped and reported), pinned by a saved-page fixture test.
@@ -71,8 +91,12 @@ uv run pytest                 # writes coverage.json; enforces coverage fail_und
 uv run python scripts/crap.py # complexity²·(1−coverage)³ + complexity gate
 ```
 
-- **Type checker**: `mypy .` (strict) is the canonical gate. `pyright` (strict) is also
-  configured and passes; both agree. Either is fine locally; CI uses mypy.
+- **Type checker**: `mypy .` (strict) is the canonical, enforced gate and is **green**.
+  `pyright` (strict) is also configured but has **known, deferred debt** — pre-existing
+  `reportPrivateUsage` findings in `tests/.../test_belegungsplan.py`, `storage/catalog_json.py`,
+  and `storage/calendar_codec.py` (tests/codecs that read domain private attrs). Do **not**
+  assume pyright is clean; the QA gate is mypy. Clearing the pyright debt (read accessors on
+  `ZurichCalendar`, etc.) is a tracked backlog item.
 - **Coverage floor**: `fail_under` in `[tool.coverage.report]` is a no-regression ratchet
   (currently 91, calibrated to real coverage of 91.91%). Raise it as coverage grows; never
   lower it without a reason.

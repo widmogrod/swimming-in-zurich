@@ -1,5 +1,10 @@
 # Data sources — legal register
 
+> **These `data/` files are ETL inputs, not runtime reads.** The curated YAML (`pools/*.yaml`,
+> `registry.yaml`, `calendar/*.yaml`) and `catalog.json` are the human/curated **source of
+> truth**, committed to git. `swimzh build` assembles them (offline) into the single SQLite
+> gold DB that the app actually reads at runtime; the app never opens these files directly.
+
 One row per source we use or intend to use. Track license, terms, and refresh cadence so a
 stale-but-typed wrong answer is a tracked risk, not a surprise. **Owner action noted below:
 email Open Data Zürich to ask whether machine-readable schedules exist — that could remove
