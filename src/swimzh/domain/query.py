@@ -25,6 +25,7 @@ from swimzh.core.result import Err, Ok, Result
 from swimzh.domain.access import EligibilityResult, eligibility
 from swimzh.domain.calendar import ZurichCalendar
 from swimzh.domain.geo import GeoPoint, haversine_km
+from swimzh.domain.lane_plan import LaneAvailability, lane_availability_at
 from swimzh.domain.lockers import LockerOption
 from swimzh.domain.models import (
     Basin,
@@ -41,7 +42,7 @@ from swimzh.domain.person import Person
 from swimzh.domain.pricing import PriceEntry, price_for
 from swimzh.domain.registry import Registry
 from swimzh.domain.resolver import resolve_basin, resolve_hours
-from swimzh.domain.schedule import ClosedDay, DaySchedule, OpenDay, ResolvedSession
+from swimzh.domain.schedule import ClosedDay, DaySchedule, OpenDay, ResolvedSession, Weekday
 
 _ZURICH = ZoneInfo("Europe/Zurich")
 
@@ -138,6 +139,10 @@ class SwimOption:
     # None = not requested (no provider wired, or query.at is not ~now).
     # LiveOccupancy / OccupancyUnavailable = requested and resolved.
     live_occupancy: OccupancyResult | None = None
+    # None = the basin has no parsed lane plan. A `LaneAvailability` is a pure derivation of
+    # the STORED recurring plan, so — unlike live_occupancy — it is attached for ANY query
+    # time (incl. future dates), computed at the resolved session's start.
+    lane_availability: LaneAvailability | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -244,6 +249,13 @@ def find_swim_options(
                 case OpenDay(sessions):
                     for session in sessions:
                         produced = True
+                        lane_avail = (
+                            lane_availability_at(
+                                basin.lane_plan, Weekday(day.weekday()), session.time.start
+                            )
+                            if basin.lane_plan is not None
+                            else None
+                        )
                         options.append(
                             SwimOption(
                                 facility_id=facility.identity.facility_id,
@@ -266,6 +278,7 @@ def find_swim_options(
                                 distance_km=distance,
                                 provenance=facility.provenance,
                                 live_occupancy=live,
+                                lane_availability=lane_avail,
                             )
                         )
 

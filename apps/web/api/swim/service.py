@@ -9,13 +9,32 @@ from __future__ import annotations
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
-from apps.web.api.swim.model import AnswerOut, NoticeOut, OptionOut, StatusOut
+from apps.web.api.swim.model import (
+    AnswerOut,
+    LaneAvailabilityOut,
+    NoticeOut,
+    OptionOut,
+    StatusOut,
+)
 from apps.web.services.ports import SwimData
 from swimzh.domain.geo import GeoPoint
+from swimzh.domain.lane_plan import LaneAvailability
 from swimzh.domain.person import Gender, Person
 from swimzh.domain.query import SwimOption, SwimQuery, find_swim_options
 
 _ZURICH = ZoneInfo("Europe/Zurich")
+
+
+def _lane_availability_out(avail: LaneAvailability | None) -> LaneAvailabilityOut | None:
+    if avail is None:
+        return None
+    return LaneAvailabilityOut(
+        lane_count=avail.lane_count,
+        public_lanes=avail.public_lanes,
+        reserved_lanes=avail.reserved_lanes,
+        public_until=avail.public_until.strftime("%H:%M") if avail.public_until else None,
+        partial=avail.partial,
+    )
 
 
 def _option_out(option: SwimOption) -> OptionOut:
@@ -37,6 +56,7 @@ def _option_out(option: SwimOption) -> OptionOut:
         valid_as_of=valid.isoformat() if valid is not None else None,
         source=option.provenance.source,
         curated=option.provenance.curated,
+        lane_availability=_lane_availability_out(option.lane_availability),
     )
 
 

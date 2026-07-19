@@ -67,6 +67,21 @@ def test_badge_renders_lane_count_subline_conditionally() -> None:
     assert ".lenbadge .lanes" in page
 
 
+def test_lane_availability_badge_renders_conditionally() -> None:
+    """S3: the lane-availability glance badge ("5/6 lanes public · until 18:00") is driven by
+    OptionOut.lane_availability, rendered only when the basin has a parsed plan (absent =>
+    no badge, an honest degrade) and flags `partial` when a lane is unresolved."""
+    with TestClient(app) as client:
+        page = client.get("/").text
+    # The render branch reads the lane_availability field and gates on its presence.
+    assert "o.lane_availability" in page
+    assert "lanes public" in page
+    assert "until ${esc(la.public_until)}" in page
+    assert "la.partial" in page
+    # Its own badge class exists in the stylesheet.
+    assert ".lanebadge" in page
+
+
 def test_tourist_tab_renders_primer_and_glossary() -> None:
     """S1/S3: the newcomer tab leads with a plain-language primer — one always-visible
     how-to-enter line, then a glossary (pool types keyed off `kind`, slots from

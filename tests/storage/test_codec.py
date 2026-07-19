@@ -174,12 +174,40 @@ def test_roundtrip_basin_carrying_a_lane_plan(facilities: tuple[Facility, ...]) 
     assert back.basins[0].lane_plan == plan
 
 
-def test_occupancy_never_leaks_into_gold(facilities: tuple[Facility, ...]) -> None:
-    # Correctness trap #2: occupancy is live-only — its absence from gold must be a
-    # guarded regression, not just structural. If anyone ever attaches occupancy to
-    # Facility/Basin (or adds a DTO for it), this fails.
-    for facility in facilities:
-        assert "occupancy" not in codec.dumps(facility).lower()
+def test_occupancy_and_lane_availability_never_leak_into_gold(
+    facilities: tuple[Facility, ...],
+) -> None:
+    # Correctness trap #2/#3 (DERIVED side): occupancy AND lane *availability* are live-only /
+    # query-time derivations — their absence from gold must be a guarded regression, not just
+    # structural. The STORED `lane_plan` IS serialised; the DERIVED `LaneAvailability` /
+    # `lane_availability` must never be. Dump a plan-carrying basin so the guard is meaningful.
+    plan = LanePlan(
+        lane_count=6,
+        reservations=(
+            LaneReservation(
+                weekdays=frozenset({Weekday.TUESDAY}),
+                time=TimeRange(time(6, 0), time(8, 0)),
+                lanes=frozenset({1, 2}),
+                access=ClubReserved(club="ASVZ"),
+            ),
+        ),
+        valid_from=date(2026, 1, 1),
+        coverage=PlanCoverage(
+            confidence=PlanConfidence.COMPLETE, cells_total=1344, cells_resolved=1344
+        ),
+    )
+    with_plan = replace(
+        facilities[0],
+        basins=(replace(facilities[0].basins[0], lane_plan=plan), *facilities[0].basins[1:]),
+    )
+    for facility in (*facilities, with_plan):
+        dumped = codec.dumps(facility).lower()
+        assert "occupancy" not in dumped
+        assert "lane_availability" not in dumped
+        assert "laneavailability" not in dumped
+    # The stored plan itself must still be present (proves the guard rejects the derived type,
+    # not lane data wholesale).
+    assert "lane_plan" in codec.dumps(with_plan).lower()
 
 
 def test_legacy_basin_level_length_m_is_rejected(facilities: tuple[Facility, ...]) -> None:

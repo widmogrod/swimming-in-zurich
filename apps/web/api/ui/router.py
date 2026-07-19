@@ -99,6 +99,11 @@ _PAGE = """<!doctype html>
     border: 1px solid #8886; border-radius: .3rem; padding: .04rem .4rem; opacity: .9; }
   .lenbadge .len { font-weight: 600; }
   .lenbadge .lanes { opacity: .8; }
+  /* lane availability: which of the basin's lanes are public right now (Belegungsplan). */
+  .lanebadge { display: inline-block; font-size: .74rem; white-space: nowrap; border-radius: .3rem;
+    padding: .04rem .4rem; background: #16a34a22; color: #15803d; border: 1px solid #16a34a55; }
+  .lanebadge .lpub { font-weight: 600; }
+  .lanebadge .lpartial { opacity: .8; font-style: italic; }
   .card .metaline { font-size: .85rem; opacity: .85; margin-top: .2rem; }
   .card .reason { font-size: .8rem; opacity: .65; margin-top: .2rem; }
   /* pool-as-object detail line: address · tel · official ↗ · directions ↗ */
@@ -399,6 +404,16 @@ function lenTagHTML(o) {
   const lanes = o.lanes != null ? `<span class="lanes"> · ${esc(o.lanes)} lane</span>` : '';
   return `<span class="lenbadge"><span class="len">${len}</span>${lanes}</span>`;
 }
+// Lane-availability glance badge (Belegungsplan): "5/6 lanes public · until 18:00". Only shown
+// when the basin has a parsed lane plan; `partial` flags an unresolved cell so the count isn't
+// silently trusted. Absent (null) => no badge, an honest degrade (most basins have no plan yet).
+function laneBadgeHTML(o) {
+  const la = o.lane_availability;
+  if (!la) return '';
+  const until = la.public_until ? ` · until ${esc(la.public_until)}` : '';
+  const partial = la.partial ? ' <span class="lpartial">partial</span>' : '';
+  return `<span class="lanebadge"><span class="lpub">${esc(la.public_lanes)}/${esc(la.lane_count)}</span> lanes public${until}${partial}</span>`;
+}
 // Visual hierarchy (S4 #7): the eye lands on the ANSWER, not the filter — facility name (big,
 // the S3 link) → bold status pill + eligibility WORD → distance/price → length demoted to a
 // small tag. The redundant `indoor` kind is dropped (every Find result is indoor).
@@ -416,6 +431,7 @@ function optionCard(o) {
       <span class="glyph axis-access">${esc(accessGlyph(o.access))}</span> ${esc(sentence(accessLabel(o.access)))}
       ${meta ? '&nbsp; · ' + meta : ''}
       &nbsp; ${lenTagHTML(o)}
+      ${laneBadgeHTML(o)}
     </div>
     <div class="reason">${esc(o.reason)}</div>
     ${poolDetailHTML(o.facility)}

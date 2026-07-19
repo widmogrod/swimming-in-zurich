@@ -16,10 +16,10 @@ lives object-level in `PlanCoverage`, so *closed* (not represented) stays distin
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import date, datetime
+from datetime import date, datetime, time
 from enum import Enum
 
-from swimzh.domain.access import SessionAccess
+from swimzh.domain.access import PublicSwim, SessionAccess
 from swimzh.domain.schedule import TimeRange, Weekday
 
 
@@ -69,3 +69,87 @@ class LanePlan:
     valid_from: date | None
     coverage: PlanCoverage
     fetched_at: datetime | None = None
+
+
+# --- Derived (query-time, DTO-free, never stored) ---------------------------------------
+#
+# `LaneAvailability` mirrors `LiveOccupancy`: it lives outside `models.py`/the gold codec
+# (guarded by a regression test) and is attached to a `SwimOption` at query time. Unlike
+# occupancy it is *not* gated to a "~now" query — it is a pure derivation of the stored,
+# recurring plan, so it is meaningful for any query time (including future dates).
+
+
+@dataclass(frozen=True, slots=True)
+class LaneAvailability:
+    """How a basin's lanes are split between public swimming and reservations at one slot.
+
+    A pure derivation of the stored `LanePlan` — never stored, never serialised. `public_lanes`
+    counts only lanes *explicitly* held by a `PublicSwim` reservation at the slot (never
+    derived by complement — a blank/absent lane is not public). `public_until` is the end of
+    the contiguous public run covering the slot. `partial` is True when the slot touches a
+    lane the parser could not resolve (`PlanCoverage.unresolved_lanes`), so an honest badge
+    can flag that the count may be incomplete.
+    """
+
+    lane_count: int
+    public_lanes: int
+    reserved_lanes: int
+    owners: tuple[SessionAccess, ...]
+    public_until: time | None
+    partial: bool
+
+
+def _active_reservations(plan: LanePlan, weekday: Weekday, t: time) -> tuple[LaneReservation, ...]:
+    """Reservations covering (weekday, t). Lane-sets are pairwise-disjoint per slot (a parse
+    invariant), so a lane appears in at most one active reservation."""
+    return tuple(r for r in plan.reservations if weekday in r.weekdays and r.time.contains(t))
+
+
+def _public_run_end(plan: LanePlan, weekday: Weekday, t: time) -> time | None:
+    """End of the maximal contiguous window (on `weekday`) that has ≥1 public lane and
+    covers `t`; `None` when no public reservation covers `t`. Adjacent public blocks
+    (`prev.end == next.start`) are merged so "public until 18:00" spans several RLE rows."""
+    ranges = sorted(
+        (
+            r.time
+            for r in plan.reservations
+            if weekday in r.weekdays and isinstance(r.access, PublicSwim)
+        ),
+        key=lambda tr: (tr.start, tr.end),
+    )
+    merged: list[tuple[time, time]] = []
+    for tr in ranges:
+        if merged and tr.start <= merged[-1][1]:
+            merged[-1] = (merged[-1][0], max(merged[-1][1], tr.end))
+        else:
+            merged.append((tr.start, tr.end))
+    for start, end in merged:
+        if start <= t < end:
+            return end
+    return None
+
+
+def lane_availability_at(plan: LanePlan, weekday: Weekday, t: time) -> LaneAvailability:
+    """Derive, from the stored recurring plan, how the basin's lanes are allocated at
+    (`weekday`, `t`). Pure; safe for any query time including future dates."""
+    active = _active_reservations(plan, weekday, t)
+    public: set[int] = set()
+    reserved: set[int] = set()
+    owners: list[SessionAccess] = []
+    for r in sorted(active, key=lambda r: min(r.lanes) if r.lanes else 0):
+        if isinstance(r.access, PublicSwim):
+            public |= r.lanes
+        else:
+            reserved |= r.lanes
+            if r.access not in owners:
+                owners.append(r.access)
+    covered = public | reserved
+    partial = any(lane not in covered for lane in plan.coverage.unresolved_lanes)
+    return LaneAvailability(
+        lane_count=plan.lane_count,
+        public_lanes=len(public),
+        reserved_lanes=len(reserved),
+        owners=tuple(owners),
+        public_until=_public_run_end(plan, weekday, t),
+        partial=partial,
+    )

@@ -6,7 +6,7 @@ or UI exists.
 from __future__ import annotations
 
 import dataclasses
-from datetime import datetime, time, timedelta
+from datetime import date, datetime, time, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
@@ -14,7 +14,14 @@ import pytest
 
 from swimzh.core.errors import ProviderError, Timeout, describe
 from swimzh.core.result import Err, Ok, Result
-from swimzh.domain.access import PublicSwim
+from swimzh.domain.access import ClubReserved, PublicSwim
+from swimzh.domain.lane_plan import (
+    LaneAvailability,
+    LanePlan,
+    LaneReservation,
+    PlanConfidence,
+    PlanCoverage,
+)
 from swimzh.domain.models import (
     Basin,
     BasinId,
@@ -280,6 +287,102 @@ def test_facility_without_crowdmonitor_keys_is_unavailable(dataset: Dataset) -> 
     assert result.options
     assert result.options[0].live_occupancy == OccupancyUnavailable(reason="no crowdmonitor key")
     assert provider.calls == []  # never asked without a key
+
+
+# --- Lane availability (query-time derivation of the STORED lane plan) -------------------
+#
+# Unlike occupancy, lane availability is a pure derivation of the recurring plan, so it is
+# attached for ANY query time (incl. future dates), computed at each session's start.
+
+# Tuesday 2026-09-15 (2026-09-14 is a Monday per the fixtures above).
+_TUESDAY = datetime(2026, 9, 15, 12, 0, tzinfo=ZURICH)
+
+
+def _planned_facility() -> Facility:
+    """A synthetic facility open Tue 06:00–08:00, whose basin carries a lane plan for that
+    slot: lanes 1–2 held by a club, 3–6 public."""
+    rule = ScheduleRule(
+        weekdays=frozenset({Weekday.TUESDAY}),
+        time=TimeRange(time(6, 0), time(8, 0)),
+        access=PublicSwim(),
+    )
+    plan = LanePlan(
+        lane_count=6,
+        reservations=(
+            LaneReservation(
+                weekdays=frozenset({Weekday.TUESDAY}),
+                time=TimeRange(time(6, 0), time(8, 0)),
+                lanes=frozenset({1, 2}),
+                access=ClubReserved(club="ASVZ"),
+            ),
+            LaneReservation(
+                weekdays=frozenset({Weekday.TUESDAY}),
+                time=TimeRange(time(6, 0), time(8, 0)),
+                lanes=frozenset({3, 4, 5, 6}),
+                access=PublicSwim(),
+            ),
+        ),
+        valid_from=date(2026, 1, 1),
+        coverage=PlanCoverage(
+            confidence=PlanConfidence.COMPLETE, cells_total=1344, cells_resolved=1344
+        ),
+    )
+    return Facility(
+        identity=PoolIdentity(
+            facility_id=FacilityId("lane-test"),
+            name="Hallenbad Lane-Test",
+            kind=PoolKind.INDOOR,
+        ),
+        address="Bahnstrasse 1, Zürich",
+        provenance=Provenance(source="test", curated=True),
+        basins=(
+            Basin(
+                basin_id=BasinId("lane-main"),
+                name="Schwimmerbecken",
+                rules=(rule,),
+                lane_plan=plan,
+            ),
+        ),
+    )
+
+
+def test_lane_availability_attached_at_session_time(dataset: Dataset) -> None:
+    result = find_swim_options(
+        SwimQuery(person=ADULT, at=_TUESDAY), (_planned_facility(),), dataset.calendar
+    )
+    assert result.options
+    avail = result.options[0].lane_availability
+    assert avail == LaneAvailability(
+        lane_count=6,
+        public_lanes=4,
+        reserved_lanes=2,
+        owners=(ClubReserved(club="ASVZ"),),
+        public_until=time(8, 0),
+        partial=False,
+    )
+
+
+def test_lane_availability_not_gated_to_now(dataset: Dataset) -> None:
+    # The query moment (2026-09-15) is far from wall-clock now, yet the badge is still
+    # attached — availability is a static derivation, not a "~now" signal like occupancy.
+    far_future = _TUESDAY + timedelta(weeks=104)  # ~2 years ahead, still a Tuesday
+    result = find_swim_options(
+        SwimQuery(person=ADULT, at=far_future), (_planned_facility(),), dataset.calendar
+    )
+    assert result.options
+    assert result.options[0].lane_availability is not None
+    assert result.options[0].live_occupancy is None  # occupancy stays unrequested
+
+
+def test_no_lane_availability_without_a_plan(dataset: Dataset) -> None:
+    # The curated dataset carries no lane plans yet (S2 needs live URLs) → None, never invented.
+    result = find_swim_options(
+        SwimQuery(person=ADULT, at=datetime(2026, 9, 14, 12, 0, tzinfo=ZURICH)),
+        dataset.facilities,
+        dataset.calendar,
+    )
+    assert result.options
+    assert all(o.lane_availability is None for o in result.options)
 
 
 def test_naive_measured_at_is_rejected_at_construction() -> None:

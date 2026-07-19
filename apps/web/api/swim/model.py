@@ -5,6 +5,17 @@ from __future__ import annotations
 from pydantic import BaseModel
 
 
+class LaneAvailabilityOut(BaseModel):
+    """The lane-reservation glance badge: how many of the basin's lanes are public at this
+    session's time. A derived, live-only-style projection — never persisted to gold."""
+
+    lane_count: int
+    public_lanes: int  # count of EXPLICITLY-public lanes (never derived by complement)
+    reserved_lanes: int
+    public_until: str | None  # "HH:MM" end of the current public run, or None if not public now
+    partial: bool  # the slot touches an unresolved lane, so the counts may be incomplete
+
+
 class OptionOut(BaseModel):
     facility: str
     kind: str  # facility kind (indoor/outdoor/…), for the glance badge context
@@ -22,6 +33,8 @@ class OptionOut(BaseModel):
     valid_as_of: str | None
     source: str  # provenance source (e.g. stadt-zuerich.ch), for the ⓘ stamp
     curated: bool  # True = hand-curated, False = scraped
+    # None = the basin has no parsed Belegungsplan; otherwise the lane-availability badge.
+    lane_availability: LaneAvailabilityOut | None = None
 
 
 class StatusOut(BaseModel):
