@@ -13,10 +13,15 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-from apps.web.main import app
+from apps.web.config import Config
+from apps.web.main import app, startup_error
 
 APP_SRC = Path(__file__).resolve().parents[2]  # apps/web
 FORBIDDEN = ("catalog.json", ".yaml", "load_dataset")
+
+
+def _config(gold_db: Path) -> Config:
+    return Config(gold_db=gold_db, host="127.0.0.1", port=8000, reload=False)
 
 
 def _runtime_source_files() -> list[Path]:
@@ -35,8 +40,29 @@ def test_no_app_module_reads_curated_data_at_runtime() -> None:
 
 def test_missing_gold_db_fails_fast(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("SWIMZH_GOLD_DB", str(tmp_path / "absent.sqlite"))
-    with pytest.raises(RuntimeError, match="swimzh build"), TestClient(app):
+    with pytest.raises(RuntimeError, match=r"swimzh\.cli build"), TestClient(app):
         pass
+
+
+def test_startup_error_reports_missing_db_cleanly(tmp_path: Path) -> None:
+    # The clean preflight (used by `python -m apps.web.main`) returns an actionable message
+    # instead of raising — so the entrypoint can print one line and exit, no ASGI traceback.
+    msg = startup_error(_config(tmp_path / "absent.sqlite"))
+    assert msg is not None
+    assert "not found" in msg and "swimzh.cli build" in msg
+
+
+def test_startup_error_reports_empty_db_cleanly(tmp_path: Path) -> None:
+    from swimzh.storage.sqlite_repo import open_db
+
+    empty = tmp_path / "empty.sqlite"
+    open_db(empty)  # schema, no rows
+    msg = startup_error(_config(empty))
+    assert msg is not None and "empty" in msg
+
+
+def test_startup_error_none_when_store_ready(gold_db: Path) -> None:
+    assert startup_error(_config(gold_db)) is None
 
 
 def test_swim_pools_and_access_types_serve_from_one_gold_db(gold_db: Path) -> None:

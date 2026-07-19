@@ -25,13 +25,33 @@ from swimzh.domain.catalog import PoolCatalogEntry
 from swimzh.storage.sqlite_repo import load_catalog, open_db
 
 
+def _missing_db_message(gold_db: Path) -> str:
+    return (
+        f"gold store '{gold_db}' not found — it is the app's single source of truth.\n"
+        f"Build it first:  uv run python -m swimzh.cli build --db {gold_db}"
+    )
+
+
 def _require_gold_db(gold_db: Path) -> None:
     """Fail fast at startup when the gold store is missing — it is the single source of
     truth and must be built first."""
     if not gold_db.exists():
-        raise RuntimeError(
-            f"gold store {gold_db} not found; build it first (run `swimzh build --db {gold_db}`)"
-        )
+        raise RuntimeError(_missing_db_message(gold_db))
+
+
+def startup_error(config: Config) -> str | None:
+    """A human-readable reason the app cannot start (missing or empty gold store), or None.
+
+    Used by the `python -m apps.web.main` entrypoint to report cleanly (one line, no
+    traceback) before uvicorn starts. The lifespan below is the defense-in-depth net for
+    other launch paths (`uvicorn apps.web.main:app`, `TestClient`)."""
+    if not config.gold_db.exists():
+        return _missing_db_message(config.gold_db)
+    try:
+        GoldSwimData.open(config.gold_db)
+    except RuntimeError as exc:  # empty / unreadable store
+        return str(exc)
+    return None
 
 
 def _load_swim_data(config: Config) -> SwimData:
@@ -62,8 +82,22 @@ app.include_router(pools_router)
 app.include_router(access_router)
 
 
-if __name__ == "__main__":  # pragma: no cover
+def main() -> None:  # pragma: no cover
+    """Clean dev entrypoint: preflight the gold store, then serve.
+
+    Reports a one-line, actionable error and exits 1 if the store is missing/empty —
+    no ASGI traceback. Run: `SWIMZH_GOLD_DB=gold.sqlite uv run python -m apps.web.main`."""
+    import sys
+
     import uvicorn
 
-    startup_config = Config.from_env()
-    uvicorn.run("apps.web.main:app", host=startup_config.host, port=startup_config.port)
+    config = Config.from_env()
+    error = startup_error(config)
+    if error is not None:
+        print(f"error: {error}", file=sys.stderr)
+        raise SystemExit(1)
+    uvicorn.run("apps.web.main:app", host=config.host, port=config.port, reload=config.reload)
+
+
+if __name__ == "__main__":  # pragma: no cover
+    main()
