@@ -140,6 +140,16 @@ _PAGE = """<!doctype html>
   .cell-elig.in { color: #15803d; } .cell-elig.out { color: #b91c1c; } .cell-elig.unk { color: #b45309; }
   .daynote { font-family: var(--mono); font-size: .82rem; margin: .15rem 0; }
   .daynote.closed { color: #b91c1c; } .daynote.unknown { color: #b45309; }
+
+  /* --- All-pools hub (S5): name filter, schedule indicator, jump-to-plan action --- */
+  .poolfilter { max-width: 22rem; margin: 1rem 0 .4rem; }
+  .poolfilter input { width: 100%; }
+  .sched-yes { color: #15803d; font-weight: 600; white-space: nowrap; }
+  .sched-no { opacity: .6; font-size: .82rem; }        /* honest: no timetable yet, NOT closed */
+  tr.norow { opacity: .72; }                            /* location-only rows sit back, not hidden */
+  button.jump { padding: .25rem .6rem; font-size: .85rem; cursor: pointer; white-space: nowrap;
+    border: 1px solid #3b82f6; color: #3b82f6; background: transparent; border-radius: .4rem; }
+  button.jump:hover { background: #3b82f6; color: #fff; }
 </style>
 </head>
 <body>
@@ -237,6 +247,10 @@ FOR YOU  ✓ in     ✗ not you   ? unknown</pre>
 </section>
 
 <section id="all">
+  <p class="muted">Every pool in the city catalog. Pools with a ✓ schedule can be planned — jump straight to the weekly grid; the rest are locations we list honestly without a timetable yet.</p>
+  <label class="poolfilter">Filter by name
+    <input type="search" id="poolFilter" placeholder="type a pool name…" autocomplete="off">
+  </label>
   <div class="chips" id="kinds"></div>
   <div id="allOut"></div>
 </section>
@@ -244,15 +258,16 @@ FOR YOU  ✓ in     ✗ not you   ? unknown</pre>
 <script>
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-// tabs
-document.querySelectorAll('nav button').forEach(b => b.addEventListener('click', () => {
-  document.querySelectorAll('nav button').forEach(x => x.classList.remove('active'));
-  document.querySelectorAll('section').forEach(x => x.classList.remove('active'));
-  b.classList.add('active'); $('#' + b.dataset.tab).classList.add('active');
-  if (b.dataset.tab === 'all' && !allLoaded) loadPools();
-  if (b.dataset.tab === 'visit' && !visitLoaded) loadVisit();
-  if (b.dataset.tab === 'plan' && !planLoaded) loadPlan();
-}));
+// tabs — activateTab is also the programmatic entry point for the All-pools "Plan ›" jump.
+function activateTab(tab) {
+  document.querySelectorAll('nav button').forEach(x => x.classList.toggle('active', x.dataset.tab === tab));
+  document.querySelectorAll('section').forEach(x => x.classList.toggle('active', x.id === tab));
+  if (tab === 'all' && !allLoaded) loadPools();
+  if (tab === 'visit' && !visitLoaded) loadVisit();
+  if (tab === 'plan' && !planLoaded) loadPlan();
+}
+document.querySelectorAll('nav button').forEach(b =>
+  b.addEventListener('click', () => activateTab(b.dataset.tab)));
 
 // --- Pool catalog join: the facility as a first-class, actionable object ---
 // /swim carries only the facility NAME; /pools carries url/phone/address/lat/lon per pool.
@@ -269,6 +284,31 @@ function loadPoolsData() {
   return poolsPromise;
 }
 function poolInfo(name) { return poolMap.get(name) || null; }  // the catalog record, or null
+
+// Which catalog pools actually HAVE a curated timetable (S5 #11)? /swim answers it: a facility
+// appears in `options` (it produced sessions) or in `statuses` as `closed` (it has a schedule but
+// is shut that day) IFF it is curated/scheduled. `uncurated` statuses are pools with NO timetable
+// — deliberately EXCLUDED, so the All-pools row honestly reads "no timetable yet", never "closed"
+// (honesty invariant #1). One representative no-location call (verified to enumerate the full
+// scheduled set on any day) is memoized so it runs at most once.
+let scheduledPromise = null;
+let scheduledPools = new Set();  // facility names that have a schedule the app can show
+function loadScheduledFacilities() {
+  if (!scheduledPromise) {
+    const t = new Date(); t.setSeconds(0, 0);
+    const at = new Date(t.getTime() - t.getTimezoneOffset()*60000).toISOString().slice(0, 16);
+    scheduledPromise = fetch('/swim?' + new URLSearchParams({ at, eligible_only: 'false' }))
+      .then(r => r.ok ? r.json() : { options: [], statuses: [] })
+      .then(a => {
+        scheduledPools = new Set([
+          ...(a.options || []).map(o => o.facility),
+          ...(a.statuses || []).filter(s => s.status === 'closed').map(s => s.facility),
+        ]);
+        return scheduledPools;
+      });
+  }
+  return scheduledPromise;
+}
 
 // The facility name as a link (only when a catalog url exists; else plain, escaped text).
 function poolNameHTML(name) {
@@ -553,6 +593,7 @@ let planLoaded = false;
 let planWeek = null;      // [{ label, iso, answer }] for Mon..Sun
 let planPools = [];       // [{ facility, distance_km, closed }] — open pools first (by distance), then closed
 let planSelected = null;  // selected facility name
+let planPreselect = null; // facility the All-pools "Plan ›" jump asked to select once resolved
 let catalogCount = null;  // total pools in the WFS catalog (the "All pools" universe)
 
 function localISO(d) {
@@ -609,6 +650,12 @@ pf.addEventListener('submit', async e => {
   const closedPools = [...closedNames].sort().map(facility => ({ facility, distance_km: null, closed: true }));
   planPools = [...openPools, ...closedPools];
   planSelected = openPools.length ? openPools[0].facility : (planPools[0]?.facility ?? null);  // nearest OPEN pool by default
+  // S5 jump: if the All-pools "Plan ›" button requested a pool and it resolved within the
+  // current place/radius, preselect it (else fall back to the nearest — recorded tech debt).
+  if (planPreselect) {
+    if (planPools.some(p => p.facility === planPreselect)) planSelected = planPreselect;
+    planPreselect = null;
+  }
   renderPlan();
 });
 
@@ -719,26 +766,67 @@ function renderPlan() {
   planOut.innerHTML = h;
 }
 
-// --- All pools ---
-let allLoaded = false, currentKind = null;
+// --- All pools: a navigation HUB, not a dead-end (S5) ---
+// One /pools fetch TOTAL: fold onto the memoized loadPoolsData() (S3 left this tab
+// double-fetching). A second, distinct call — the memoized /swim scheduled set — tells each row
+// whether it has a timetable. Rows WITH a schedule get a "Plan ›" jump; rows WITHOUT read
+// "location only — no timetable yet" (honest, never "closed"). A name-filter box narrows the 57.
+let allLoaded = false, currentKind = null, nameFilter = '', allPools = [];
 async function loadPools() {
   allLoaded = true;
-  const r = await fetch('/pools');
-  const a = await r.json();
+  const [a] = await Promise.all([loadPoolsData(), loadScheduledFacilities()]);
+  allPools = a.pools || [];
   $('#kinds').innerHTML = ['<button class="chip active" data-kind="">all (' + a.count + ')</button>']
     .concat(a.kinds.map(k => `<button class="chip" data-kind="${esc(k)}">${esc(k)}</button>`)).join('');
   document.querySelectorAll('#kinds .chip').forEach(c => c.addEventListener('click', () => {
     document.querySelectorAll('#kinds .chip').forEach(x => x.classList.remove('active'));
-    c.classList.add('active'); currentKind = c.dataset.kind || null; renderPools(a.pools);
+    c.classList.add('active'); currentKind = c.dataset.kind || null; renderPools();
   }));
-  renderPools(a.pools);
+  renderPools();
 }
-function renderPools(pools) {
-  const items = currentKind ? pools.filter(p => p.kind === currentKind) : pools;
-  let h = `<p class="muted">${items.length} pools</p><table><thead><tr><th>Name</th><th>Kind</th><th>Address</th><th></th></tr></thead><tbody>`;
-  for (const p of items)
-    h += `<tr><td>${esc(p.name)}</td><td><span class="badge">${esc(p.kind)}</span></td><td>${esc(p.address)}</td><td>${p.url ? `<a href="${esc(p.url)}" target="_blank" rel="noopener">official ↗</a>` : ''}</td></tr>`;
+// Client-side name filter (#13): case-insensitive `includes` on p.name, the jump-to-schedule
+// entry point. Wired once (the input lives in static markup); a no-op until the tab is loaded.
+$('#poolFilter').addEventListener('input', e => {
+  nameFilter = e.target.value.trim().toLowerCase();
+  if (allLoaded) renderPools();
+});
+function renderPools() {
+  let items = allPools;
+  if (currentKind) items = items.filter(p => p.kind === currentKind);
+  if (nameFilter) items = items.filter(p => p.name.toLowerCase().includes(nameFilter));
+  let h = `<p class="muted">${items.length} pools</p><table><thead><tr>`
+    + '<th>Name</th><th>Kind</th><th>Schedule</th><th>Address</th><th></th></tr></thead><tbody>';
+  for (const p of items) {
+    const scheduled = scheduledPools.has(p.name);
+    // #11: a schedule indicator + a "Plan ›" jump for pools we can actually plan; the rest are
+    // honestly "location only — no timetable yet" (NOT closed — invariant #1).
+    const schedCell = scheduled
+      ? '<span class="sched-yes">✓ schedule</span>'
+      : '<span class="sched-no">location only — no timetable yet</span>';
+    const action = scheduled
+      ? `<button class="jump" data-pool="${esc(p.name)}">Plan ›</button>`
+      : (p.url ? `<a href="${esc(p.url)}" target="_blank" rel="noopener">official ↗</a>` : '');
+    h += `<tr${scheduled ? '' : ' class="norow"'}><td>${poolNameHTML(p.name)}</td>`
+      + `<td><span class="badge">${esc(p.kind)}</span></td><td>${schedCell}</td>`
+      + `<td>${esc(p.address)}</td><td>${action}</td></tr>`;
+  }
   $('#allOut').innerHTML = h + '</tbody></table>';
+  // Wire the jumps: switch to Plan and preselect this pool (see jumpToPlan).
+  $('#allOut').querySelectorAll('button.jump').forEach(b =>
+    b.addEventListener('click', () => jumpToPlan(b.dataset.pool)));
+}
+// The All-pools → Plan jump: switch tabs and ask the planner to preselect this pool. If the plan
+// is already resolved, apply the selection now (when the pool is within the current place/radius);
+// otherwise loadPlan()'s submit consumes planPreselect once the week resolves.
+function jumpToPlan(facility) {
+  planPreselect = facility;
+  const wasLoaded = planLoaded;
+  activateTab('plan');
+  if (wasLoaded) {
+    if (planPools.some(p => p.facility === facility)) planSelected = facility;
+    planPreselect = null;
+    renderPlan();
+  }
 }
 </script>
 </body>

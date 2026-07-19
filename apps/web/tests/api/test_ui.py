@@ -190,7 +190,9 @@ def test_week_planner_surfaces_closed_pools_and_explains_the_catalog_gap() -> No
     assert 'id="planNote"' in page
     assert "only pools with a curated timetable can be planned" in page
     assert "catalog locations" in page
-    assert "await fetch('/pools')" in page  # catalog total drives the note
+    # The catalog total comes from the memoized /pools fetch (S5 folded the last raw
+    # `await fetch('/pools')` — the All-pools tab's — onto loadPoolsData()).
+    assert "if (catalogCount === null) catalogCount = catalog.count;" in page
 
 
 def test_week_planner_never_blanks_closed_or_unknown_days() -> None:
@@ -528,3 +530,74 @@ def test_s4_grid_cells_show_visible_times_not_hover_only() -> None:
     # The scannable glyph pair is still there, and the hover title is kept for full detail.
     assert '<span class="cellglyphs">' in page
     assert '<td title="${esc(title)}">' in page
+
+
+def test_s5_all_pools_fetches_pools_once_via_the_memoized_path() -> None:
+    """S5 debt paydown: the All-pools tab no longer runs its own `await fetch('/pools')`; it
+    folds onto the memoized loadPoolsData() so /pools is fetched at most once for the whole page.
+    The only raw /pools fetch that survives is the guarded memoization inside loadPoolsData."""
+    with TestClient(app) as client:
+        page = client.get("/").text
+    # The single memoization site remains; no other raw /pools fetch exists.
+    assert "if (!poolsPromise) poolsPromise = fetch('/pools')" in page
+    assert page.count("fetch('/pools')") == 1
+    # loadPools consumes the memoized catalog, not a fresh fetch.
+    assert "async function loadPools()" in page
+    assert "await Promise.all([loadPoolsData(), loadScheduledFacilities()])" in page
+
+
+def test_s5_schedule_indicator_marks_which_pools_have_a_timetable() -> None:
+    """S5 #11: each All-pools row carries a schedule indicator. The scheduled set is the /swim
+    facilities that have a timetable — options OR `closed` statuses — with `uncurated` pools
+    deliberately EXCLUDED, so a pool without a timetable reads "location only — no timetable
+    yet" (honest per invariant #1), never "closed"."""
+    with TestClient(app) as client:
+        page = client.get("/").text
+    # A memoized /swim call builds the scheduled-facility set.
+    assert "function loadScheduledFacilities()" in page
+    assert "let scheduledPools = new Set();" in page
+    # options ∪ closed statuses; uncurated is NOT counted as scheduled (scoped to the helper body).
+    helper = page[
+        page.index("function loadScheduledFacilities") : page.index("function poolNameHTML")
+    ]
+    assert "(a.options || []).map(o => o.facility)" in helper
+    assert "(a.statuses || []).filter(s => s.status === 'closed').map(s => s.facility)" in helper
+    # only `closed` counts as scheduled; no-timetable (uncurated) pools are excluded
+    assert "uncurated" not in helper
+    # The row renders the two honest states — ✓ schedule vs. location-only (never "closed").
+    assert "const scheduled = scheduledPools.has(p.name);" in page
+    assert "✓ schedule" in page
+    assert "location only — no timetable yet" in page
+    assert "<th>Schedule</th>" in page
+
+
+def test_s5_name_filter_narrows_the_all_pools_list() -> None:
+    """S5 #13: a client-side name filter box sits above the list and narrows the rendered rows
+    via a case-insensitive `includes` on p.name — the same box is the jump-to-schedule entry."""
+    with TestClient(app) as client:
+        page = client.get("/").text
+    # The filter input exists above the results.
+    assert 'id="poolFilter"' in page
+    assert page.index('id="poolFilter"') < page.index('id="allOut"')
+    # Its handler lower-cases the query and re-renders; the render filters by includes on name.
+    assert "nameFilter = e.target.value.trim().toLowerCase();" in page
+    assert "items = items.filter(p => p.name.toLowerCase().includes(nameFilter));" in page
+
+
+def test_s5_scheduled_rows_wire_a_jump_to_the_plan_tab() -> None:
+    """S5 #11: rows WITH a schedule carry a "Plan ›" button that switches to the Plan tab and
+    asks the planner to preselect that pool; the plan's submit consumes the pending preselect."""
+    with TestClient(app) as client:
+        page = client.get("/").text
+    # The action button and its wiring.
+    assert 'class="jump" data-pool="${esc(p.name)}">Plan ›</button>' in page
+    assert "b.addEventListener('click', () => jumpToPlan(b.dataset.pool))" in page
+    # The jump switches tabs and stores the pending selection.
+    assert "function jumpToPlan(facility)" in page
+    assert "planPreselect = facility;" in page
+    assert "activateTab('plan');" in page
+    # The planner honours the pending preselect when the pool resolves within place/radius.
+    preselect = (
+        "if (planPools.some(p => p.facility === planPreselect)) planSelected = planPreselect;"
+    )
+    assert preselect in page
