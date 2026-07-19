@@ -159,3 +159,25 @@ change (delegates basins). **Serialize both frozensets sorted** or the round-tri
 - Per-cell `Fact[T]` — object-level `PlanCoverage` only.
 - `pypdf` — no reliable per-word coordinates.
 - Sparkline / countdown / glance per-lane / dedicated lanes endpoint — v2.
+
+## Ledger
+
+| date | slice | status | divergence | tech debt | human review? |
+|------|-------|--------|------------|-----------|---------------|
+| 2026-07-19 | S1 | done | Orchestrator reverted out-of-scope `apps/web` UI changes the implementer introduced (unrelated "all-pools hub"); parser derives grid rows (32 filled slots) instead of assuming; `fetched_at` stamped in S2 | unknown-owner-label warning string not surfaced (query-time, S3); `GridSpec` tolerances calibrated to City layout only; label-vs-known-set reconciliation not implemented (code-absent-from-legend triggers unresolved, not a garbled label) | yes |
+
+## Decisions & divergences
+
+### 2026-07-19 — S1 (model + parser + provider + codec)
+- **Blocking review finding, resolved:** the slice-implementer's tree carried unrelated
+  `apps/web/api/ui/router.py` + `test_ui.py` changes ("all-pools hub", 0 lane references).
+  Orchestrator reverted both to HEAD so the S1 commit is lane-reservations-only; QA re-run
+  green (196 passed, 94.72% coverage). Flagged for human review.
+- Parser derives the grid row count from the actual digit grid (32 filled slot rows,
+  06:00–22:00), skipping the unconstructable "24:00" label; `cells_total = 32×7×6 = 1344`.
+- `pdfplumber` added to the dev group (tests need it installed) in addition to the `[pdf]`
+  extra; the missing-dep branch is exercised by monkeypatching `sys.modules`; import stays
+  lazy and the extra remains the production path.
+- Non-blocking, deferred: the ⊆-bound invariant is present but a tautology for parser-built
+  grids (the `Basin.lanes is None` skip belongs to S2/silver, which has the `Basin`);
+  unrecognized-label warning strings surface at query time (S3).

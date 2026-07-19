@@ -8,21 +8,26 @@ a hand-written `_X_TO` table would otherwise only fail at runtime on first use.
 
 from __future__ import annotations
 
-from datetime import time
+from datetime import date, time
 from decimal import Decimal
 
 from swimzh.boundary import mapping
 from swimzh.boundary.curated_dto import (
     AdultsOnlyDTO,
+    ClubReservedDTO,
     FeatureDTO,
+    LanePlanDTO,
+    LaneReservationDTO,
     LockerOptionDTO,
+    PlanCoverageDTO,
     PublicDTO,
     RuleDTO,
 )
-from swimzh.domain.access import AdultsOnly
+from swimzh.domain.access import AdultsOnly, ClubReserved, PublicSwim
+from swimzh.domain.lane_plan import LaneReservation, PlanConfidence
 from swimzh.domain.lockers import LockerCategory, LockerMechanism
 from swimzh.domain.models import BasinKind, BasinSource, FeatureKind
-from swimzh.domain.schedule import DayScope, Weekday
+from swimzh.domain.schedule import DayScope, TimeRange, Weekday
 
 # --- the three real locker-row shapes ----------------------------------------------
 
@@ -113,6 +118,70 @@ def test_adults_only_access_round_trips() -> None:
     assert mapping.access_to_dto(access) == dto
 
 
+# --- lane reservations (Belegungsplan) ----------------------------------------------
+
+
+def test_lane_reservation_round_trips_with_sorted_frozensets() -> None:
+    # A DTO whose weekdays/lanes are given out of order must map to a domain frozenset and
+    # serialise back *sorted* — the exact round-trip the codec test relies on.
+    dto = LaneReservationDTO(
+        weekdays=["wed", "mon"],
+        start=time(6, 0),
+        end=time(8, 0),
+        lanes=[2, 1],
+        access=ClubReservedDTO(type="club_reserved", club="ASVZ"),
+    )
+    reservation = mapping.lane_reservation_from_dto(dto)
+    assert reservation.weekdays == frozenset({Weekday.MONDAY, Weekday.WEDNESDAY})
+    assert reservation.lanes == frozenset({1, 2})
+    assert reservation.access == ClubReserved(club="ASVZ")
+    round_tripped = mapping.lane_reservation_to_dto(reservation)
+    assert round_tripped == LaneReservationDTO(
+        weekdays=["mon", "wed"],  # sorted, regardless of input order
+        start=time(6, 0),
+        end=time(8, 0),
+        lanes=[1, 2],  # sorted
+        access=ClubReservedDTO(type="club_reserved", club="ASVZ"),
+    )
+
+
+def test_lane_plan_round_trips_with_coverage() -> None:
+    dto = LanePlanDTO(
+        lane_count=6,
+        reservations=[
+            LaneReservationDTO(
+                weekdays=["tue"],
+                start=time(6, 0),
+                end=time(8, 0),
+                lanes=[3, 4, 5, 6],
+                access=PublicDTO(type="public"),
+            )
+        ],
+        valid_from=date(2026, 1, 1),
+        coverage=PlanCoverageDTO(
+            confidence="partial",
+            cells_total=1344,
+            cells_resolved=1300,
+            unresolved_lanes=[5, 1],
+        ),
+    )
+    plan = mapping.lane_plan_from_dto(dto)
+    assert plan.lane_count == 6
+    assert plan.valid_from == date(2026, 1, 1)
+    assert plan.coverage.confidence is PlanConfidence.PARTIAL
+    assert plan.coverage.unresolved_lanes == frozenset({1, 5})
+    assert plan.reservations[0] == LaneReservation(
+        weekdays=frozenset({Weekday.TUESDAY}),
+        time=TimeRange(time(6, 0), time(8, 0)),
+        lanes=frozenset({3, 4, 5, 6}),
+        access=PublicSwim(),
+    )
+    back = mapping.lane_plan_to_dto(plan)
+    assert back.coverage.unresolved_lanes == [1, 5]  # sorted, regardless of input order
+    # Everything else survives the round trip unchanged.
+    assert back.model_copy(update={"coverage": dto.coverage}) == dto
+
+
 # --- token-table parity (no enum member silently unmapped) --------------------------
 
 
@@ -122,3 +191,4 @@ def test_token_tables_cover_their_enums() -> None:
     assert set(mapping._LOCKER_MECHANISM_TO) == set(LockerMechanism)
     assert set(mapping._BASIN_KIND_TO) == set(BasinKind)
     assert set(mapping._BASIN_SOURCE_TO) == set(BasinSource)
+    assert set(mapping._PLAN_CONFIDENCE_TO) == set(PlanConfidence)

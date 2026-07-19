@@ -7,7 +7,7 @@ union so the boundary and the domain stay in one-to-one correspondence.
 
 from __future__ import annotations
 
-from datetime import date, time
+from datetime import date, datetime, time
 from decimal import Decimal
 from typing import Annotated, Literal
 
@@ -22,6 +22,7 @@ _BasinKind = Literal[
     "lap", "non_swimmer", "diving", "vario", "teaching", "children", "outdoor", "other"
 ]
 _BasinSource = Literal["curated", "parsed_prose"]
+_PlanConfidence = Literal["complete", "partial"]
 _FeatureKind = Literal["sauna", "steam_bath", "wellness", "slide", "hot_tub"]
 _LockerCategory = Literal["wardrobe", "valuables", "laundry"]
 _LockerMechanism = Literal["coin", "key", "chip", "wristband", "other"]
@@ -121,6 +122,32 @@ class DimensionsDTO(_Strict):
     width_m: Decimal | None = None
 
 
+# --- lane reservations (Belegungsplan) --------------------------------------------
+
+
+class LaneReservationDTO(_Strict):
+    weekdays: list[_Weekday]
+    start: time
+    end: time
+    lanes: list[int]
+    access: AccessDTO
+
+
+class PlanCoverageDTO(_Strict):
+    confidence: _PlanConfidence
+    cells_total: int
+    cells_resolved: int
+    unresolved_lanes: list[int] = []
+
+
+class LanePlanDTO(_Strict):
+    lane_count: int
+    reservations: list[LaneReservationDTO]
+    valid_from: date | None = None
+    coverage: PlanCoverageDTO
+    fetched_at: datetime | None = None
+
+
 class BasinDTO(_Strict):
     basin_id: str
     name: str
@@ -131,6 +158,7 @@ class BasinDTO(_Strict):
     lanes: int | None = None
     nominal_temp_c: Decimal | None = None
     physical_source: _BasinSource = "curated"
+    lane_plan: LanePlanDTO | None = None
 
 
 # --- features & lockers (facility-level statics) ----------------------------------

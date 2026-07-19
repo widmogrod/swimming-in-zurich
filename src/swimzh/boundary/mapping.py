@@ -24,8 +24,11 @@ from swimzh.boundary.curated_dto import (
     FamilyDTO,
     FeatureDTO,
     GeoDTO,
+    LanePlanDTO,
+    LaneReservationDTO,
     LaneSwimDTO,
     LockerOptionDTO,
+    PlanCoverageDTO,
     PriceEntryDTO,
     PriceTableDTO,
     PublicDTO,
@@ -39,6 +42,7 @@ from swimzh.boundary.curated_dto import (
     _FeatureKind,
     _LockerCategory,
     _LockerMechanism,
+    _PlanConfidence,
     _PriceCategory,
     _Scope,
     _Weekday,
@@ -55,6 +59,12 @@ from swimzh.domain.access import (
     WomenOnly,
 )
 from swimzh.domain.geo import GeoPoint
+from swimzh.domain.lane_plan import (
+    LanePlan,
+    LaneReservation,
+    PlanConfidence,
+    PlanCoverage,
+)
 from swimzh.domain.lockers import LockerCategory, LockerMechanism, LockerOption
 from swimzh.domain.models import (
     Basin,
@@ -117,6 +127,11 @@ _BASIN_SOURCE_FROM: dict[str, BasinSource] = {s.value: s for s in BasinSource}
 _BASIN_SOURCE_TO: dict[BasinSource, _BasinSource] = {
     BasinSource.CURATED: "curated",
     BasinSource.PARSED_PROSE: "parsed_prose",
+}
+_PLAN_CONFIDENCE_FROM: dict[str, PlanConfidence] = {c.value: c for c in PlanConfidence}
+_PLAN_CONFIDENCE_TO: dict[PlanConfidence, _PlanConfidence] = {
+    PlanConfidence.COMPLETE: "complete",
+    PlanConfidence.PARTIAL: "partial",
 }
 _FEATURE_KIND_FROM: dict[str, FeatureKind] = {k.value: k for k in FeatureKind}
 _FEATURE_KIND_TO: dict[FeatureKind, _FeatureKind] = {
@@ -259,6 +274,66 @@ def dimensions_to_dto(dims: Dimensions) -> DimensionsDTO:
     return DimensionsDTO(length_m=dims.length_m, width_m=dims.width_m)
 
 
+# --- lane reservations (Belegungsplan) ----------------------------------------------
+
+
+def lane_reservation_from_dto(dto: LaneReservationDTO) -> LaneReservation:
+    return LaneReservation(
+        weekdays=frozenset(_WEEKDAY_FROM[w] for w in dto.weekdays),
+        time=time_range(dto.start, dto.end),
+        lanes=frozenset(dto.lanes),
+        access=access_from_dto(dto.access),
+    )
+
+
+def lane_reservation_to_dto(reservation: LaneReservation) -> LaneReservationDTO:
+    return LaneReservationDTO(
+        weekdays=[_WEEKDAY_TO[w] for w in sorted(reservation.weekdays)],
+        start=reservation.time.start,
+        end=reservation.time.end,
+        lanes=sorted(reservation.lanes),
+        access=access_to_dto(reservation.access),
+    )
+
+
+def plan_coverage_from_dto(dto: PlanCoverageDTO) -> PlanCoverage:
+    return PlanCoverage(
+        confidence=_PLAN_CONFIDENCE_FROM[dto.confidence],
+        cells_total=dto.cells_total,
+        cells_resolved=dto.cells_resolved,
+        unresolved_lanes=frozenset(dto.unresolved_lanes),
+    )
+
+
+def plan_coverage_to_dto(coverage: PlanCoverage) -> PlanCoverageDTO:
+    return PlanCoverageDTO(
+        confidence=_PLAN_CONFIDENCE_TO[coverage.confidence],
+        cells_total=coverage.cells_total,
+        cells_resolved=coverage.cells_resolved,
+        unresolved_lanes=sorted(coverage.unresolved_lanes),
+    )
+
+
+def lane_plan_from_dto(dto: LanePlanDTO) -> LanePlan:
+    return LanePlan(
+        lane_count=dto.lane_count,
+        reservations=tuple(lane_reservation_from_dto(r) for r in dto.reservations),
+        valid_from=dto.valid_from,
+        coverage=plan_coverage_from_dto(dto.coverage),
+        fetched_at=dto.fetched_at,
+    )
+
+
+def lane_plan_to_dto(plan: LanePlan) -> LanePlanDTO:
+    return LanePlanDTO(
+        lane_count=plan.lane_count,
+        reservations=[lane_reservation_to_dto(r) for r in plan.reservations],
+        valid_from=plan.valid_from,
+        coverage=plan_coverage_to_dto(plan.coverage),
+        fetched_at=plan.fetched_at,
+    )
+
+
 def basin_from_dto(dto: BasinDTO) -> Basin:
     return Basin(
         basin_id=BasinId(dto.basin_id),
@@ -270,6 +345,7 @@ def basin_from_dto(dto: BasinDTO) -> Basin:
         lanes=dto.lanes,
         nominal_temp_c=dto.nominal_temp_c,
         physical_source=_BASIN_SOURCE_FROM[dto.physical_source],
+        lane_plan=lane_plan_from_dto(dto.lane_plan) if dto.lane_plan is not None else None,
     )
 
 
@@ -284,6 +360,7 @@ def basin_to_dto(basin: Basin) -> BasinDTO:
         lanes=basin.lanes,
         nominal_temp_c=basin.nominal_temp_c,
         physical_source=_BASIN_SOURCE_TO[basin.physical_source],
+        lane_plan=lane_plan_to_dto(basin.lane_plan) if basin.lane_plan is not None else None,
     )
 
 

@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import replace
-from datetime import datetime
+from datetime import date, datetime, time
 from decimal import Decimal
 from pathlib import Path
 from zoneinfo import ZoneInfo
@@ -14,6 +14,8 @@ import pytest
 from pydantic import ValidationError
 
 from swimzh.core.result import Ok
+from swimzh.domain.access import ClubReserved, PublicSwim
+from swimzh.domain.lane_plan import LanePlan, LaneReservation, PlanConfidence, PlanCoverage
 from swimzh.domain.lockers import LockerCategory, LockerMechanism, LockerOption
 from swimzh.domain.models import (
     BasinKind,
@@ -23,6 +25,7 @@ from swimzh.domain.models import (
     Feature,
     FeatureKind,
 )
+from swimzh.domain.schedule import TimeRange, Weekday
 from swimzh.providers.curated import load_dataset
 from swimzh.storage import codec
 
@@ -135,6 +138,40 @@ def test_roundtrip_covers_every_facility_level_static_field(
     assert back == facility
     assert back.features[0].hours == base.basins[0].rules[:1]
     assert back.lockers[0].mechanism is LockerMechanism.COIN
+
+
+def test_roundtrip_basin_carrying_a_lane_plan(facilities: tuple[Facility, ...]) -> None:
+    # Correctness trap #3 (STORED side): a basin carrying a LanePlan must round-trip exactly,
+    # including sorted frozensets and PARTIAL coverage with unresolved lanes.
+    plan = LanePlan(
+        lane_count=6,
+        reservations=(
+            LaneReservation(
+                weekdays=frozenset({Weekday.TUESDAY, Weekday.MONDAY}),
+                time=TimeRange(time(6, 0), time(8, 0)),
+                lanes=frozenset({2, 1}),
+                access=ClubReserved(club="ASVZ"),
+            ),
+            LaneReservation(
+                weekdays=frozenset({Weekday.TUESDAY}),
+                time=TimeRange(time(6, 0), time(8, 0)),
+                lanes=frozenset({3, 4, 5, 6}),
+                access=PublicSwim(),
+            ),
+        ),
+        valid_from=date(2026, 1, 1),
+        coverage=PlanCoverage(
+            confidence=PlanConfidence.PARTIAL,
+            cells_total=1344,
+            cells_resolved=1300,
+            unresolved_lanes=frozenset({5, 1}),
+        ),
+    )
+    base = facilities[0]
+    facility = replace(base, basins=(replace(base.basins[0], lane_plan=plan), *base.basins[1:]))
+    back = codec.loads(codec.dumps(facility))
+    assert back == facility
+    assert back.basins[0].lane_plan == plan
 
 
 def test_occupancy_never_leaks_into_gold(facilities: tuple[Facility, ...]) -> None:

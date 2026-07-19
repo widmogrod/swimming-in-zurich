@@ -15,6 +15,7 @@ from enum import Enum
 from typing import NewType
 
 from swimzh.domain.geo import GeoPoint
+from swimzh.domain.lane_plan import LanePlan
 from swimzh.domain.lockers import LockerOption
 from swimzh.domain.pricing import PriceTable
 from swimzh.domain.schedule import (
@@ -116,6 +117,7 @@ class Basin:
     lanes: int | None = None  # "(6 Bahnen)"
     nominal_temp_c: Decimal | None = None  # "28°C" — a design target, NOT a live reading
     physical_source: BasinSource = BasinSource.CURATED
+    lane_plan: LanePlan | None = None  # parsed per-basin Belegungsplan (static/recurring)
 
 
 class FeatureKind(Enum):
