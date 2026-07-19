@@ -25,6 +25,7 @@ def _option_out(option: SwimOption) -> OptionOut:
         kind=option.facility_kind.value,
         basin=option.basin_name,
         length_m=float(option.basin_length_m) if option.basin_length_m is not None else None,
+        lanes=option.lanes,
         start=option.session.time.start.strftime("%H:%M"),
         end=option.session.time.end.strftime("%H:%M"),
         access=type(option.session.access).__name__,

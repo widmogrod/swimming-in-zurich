@@ -53,6 +53,26 @@ def test_options_expose_length_kind_and_source() -> None:
     assert any(o["length_m"] for o in options)
 
 
+def test_options_expose_lane_count_and_degrade_when_unknown() -> None:
+    """S2: the badge's "N lane" sub-line needs a per-basin lane count on OptionOut. City's
+    50m basin carries a real lane count (6 Bahnen); the teaching pool has none, so lanes
+    must degrade to None rather than being invented."""
+    with TestClient(app) as client:
+        response = client.get("/swim", params={"at": MONDAY_EVENING, "gender": "female", "age": 34})
+    options = response.json()["options"]
+    assert options
+    for o in options:
+        assert "lanes" in o
+        assert o["lanes"] is None or isinstance(o["lanes"], int)
+    # Basin *names* collide across facilities (City and Oerlikon both have a "50m-Becken",
+    # only City's stating 6 Bahnen), so assert over sets rather than a name-keyed dict that
+    # would collapse them order-dependently.
+    city_50m = {o["lanes"] for o in options if o["basin"] == "50m-Becken"}
+    assert 6 in city_50m  # City's real lane count surfaces
+    lehrbecken = {o["lanes"] for o in options if o["basin"] == "Lehrschwimmbecken"}
+    assert lehrbecken == {None}  # unknown degrades to None, never invented
+
+
 def test_invalid_gender_is_400() -> None:
     with TestClient(app) as client:
         response = client.get("/swim", params={"at": MONDAY_EVENING, "gender": "other"})

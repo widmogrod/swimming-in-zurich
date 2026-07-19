@@ -10,6 +10,7 @@ class OptionOut(BaseModel):
     kind: str  # facility kind (indoor/outdoor/…), for the glance badge context
     basin: str
     length_m: float | None  # basin length — the fat left badge; None degrades gracefully
+    lanes: int | None  # basin lane count — the badge's "N lane" sub-line; None => length-only
     start: str
     end: str
     access: str

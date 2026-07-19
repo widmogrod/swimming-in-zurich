@@ -41,3 +41,16 @@ def test_page_carries_the_unified_glyph_legend_and_badge() -> None:
     # Length badge + provenance stamp scaffolding.
     assert "lenbadge" in page
     assert "ⓘ" in page and "valid_as_of" in page
+
+
+def test_badge_renders_lane_count_subline_conditionally() -> None:
+    """S2: the badge carries a "N lane" sub-line driven by OptionOut.lanes, rendered only
+    when the lane count is known (o.lanes != null) so an unknown count degrades to
+    length-only rather than fabricating a number."""
+    with TestClient(app) as client:
+        page = client.get("/").text
+    # The render branch reads the lanes field and gates on its presence.
+    assert "o.lanes != null" in page
+    assert "lane</span>" in page
+    # Its own badge sub-line class exists in the stylesheet.
+    assert ".lenbadge .lanes" in page

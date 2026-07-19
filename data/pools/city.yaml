@@ -48,6 +48,7 @@ basins:
     name: "50m-Becken"
     kind: "lap"
     dimensions: { length_m: "50" }
+    lanes: 6  # "50 x 15 m (6 Bahnen)" — from the official infrastructure prose
     rules:
       # Weekday partition (school term): lane -> seniors -> public
       - { weekdays: ["mon", "tue", "wed", "thu", "fri"], start: "06:30", end: "09:00", access: { type: "lane_swim" } }

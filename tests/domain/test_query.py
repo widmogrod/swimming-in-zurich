@@ -96,14 +96,15 @@ def test_evening_public_swim_is_open_and_eligible(dataset: Dataset) -> None:
 
 
 def test_options_carry_basin_physicals(dataset: Dataset) -> None:
-    # Tuesday 18:00: the City 50m option surfaces the basin's kind; facts the curated
-    # data does not state (lanes, nominal temp) stay None — never invented.
+    # Tuesday 18:00: the City 50m option surfaces the basin's kind and its stated lane
+    # count (6 Bahnen); a fact the curated data does NOT state (nominal temp) stays None —
+    # never invented.
     result = _query(dataset, datetime(2026, 3, 10, 18, 0, tzinfo=ZURICH))
     city_50m = [o for o in result.options if str(o.basin_id) == "city-50m"]
     assert city_50m, "expected the City 50m basin among Tuesday-evening options"
     option = city_50m[0]
     assert option.basin_kind is BasinKind.LAP
-    assert option.lanes is None
+    assert option.lanes == 6
     assert option.water_temp_c is None
 
 

@@ -5,8 +5,8 @@ The "Find a swim" results embody the unified monospace visual language (see
 ``docs/plan/2026-07-19-ux-ascii-design.md``): a fat length badge, orthogonal access
 (``≈◇⌂WSX·``) and eligibility (``✓✗?``) glyph axes, the three never-merged terminal
 states (open ``·closes`` / closed-with-reason / uncurated), a ``ⓘ valid_as_of · source``
-provenance stamp, and the shared legend. Lane count is deferred to a later slice, so the
-badge degrades to length-only."""
+provenance stamp, and the shared legend. The badge carries a ``N lane`` sub-line under the
+length when the basin's lane count is known, degrading to length-only when it is not."""
 
 from __future__ import annotations
 
@@ -54,6 +54,7 @@ _PAGE = """<!doctype html>
     flex-direction: column; align-items: center; justify-content: center; text-align: center;
     border: 2px solid #8888; border-radius: .4rem; padding: .4rem .3rem; }
   .lenbadge .len { font-size: 1.5rem; font-weight: 700; line-height: 1.1; }
+  .lenbadge .lanes { font-size: .8rem; opacity: .8; line-height: 1.2; }
   .lenbadge .kind { font-size: .7rem; opacity: .7; text-transform: uppercase; letter-spacing: .05em; }
   .card .body { flex: 1 1 auto; min-width: 0; }
   .card .head { display: flex; justify-content: space-between; gap: .6rem; flex-wrap: wrap; }
@@ -149,6 +150,8 @@ function optionCard(o) {
   const badge = o.length_m != null
     ? `<span class="len">${esc(o.length_m)} m</span>`
     : `<span class="len">pool</span>`;
+  // Lane count sub-line — real datum from the basin; absent => length-only (honest degrade).
+  const lanes = o.lanes != null ? `<span class="lanes">${esc(o.lanes)} lane</span>` : '';
   // Three terminal states, per card: OPEN (with closing time) vs. an upcoming window today.
   const state = o.open_now
     ? `<span class="state open">OPEN · closes ${esc(o.end)}</span>`
@@ -157,7 +160,7 @@ function optionCard(o) {
   const meta = [o.distance_km != null ? o.distance_km + ' km' : null, o.price]
     .filter(Boolean).map(esc).join(' · ');
   return `<article class="card">
-    <div class="lenbadge">${badge}<span class="kind">${esc(o.kind)}</span></div>
+    <div class="lenbadge">${badge}${lanes}<span class="kind">${esc(o.kind)}</span></div>
     <div class="body">
       <div class="head"><span class="name">${esc(o.facility)} · ${esc(o.basin)}</span>${state}</div>
       <div class="metaline">
