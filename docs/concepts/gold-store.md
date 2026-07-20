@@ -12,24 +12,25 @@ The SQLite database the app reads from — the "gold" tier of the medallion ETL.
 committed curated inputs (`data/pools/*.yaml`, `data/registry.yaml`, `data/calendar/zurich.yaml`,
 `data/catalog.json`) plus network enrichment (WFS geo, page scrapers, Belegungsplan PDFs).
 
-Tables (after [[2026-07-19-pool-identity-unification]]):
-- **`pool`** — the identity spine and roster: all ~57 pools under one canonical id
-  (`id = slug(name)`), with a **derived** `curation_status` (`curated` iff ≥1 basin has ≥1 rule).
-  This IS the registry. `/pools` reads it.
+Tables (after [[2026-07-19-pool-identity-unification]] + [[2026-07-20-retire-facility-table-plan]]):
+- **`pool`** — the identity spine, roster, AND the schedule payload: all ~57 pools under one canonical
+  id (`id = slug(name)`); the composed curated+scraped `Facility` blob lives in the **`facility_doc`**
+  column (schedules, prices, notices, lane plans, geo). `curation_status` is **derived at read** from
+  `facility_doc` (`is_curated`: curated iff the blob is present with ≥1 basin having ≥1 rule) — NOT a
+  stored column. This IS the registry. `/pools` reads the roster; `/swim` reads `facility_doc`; the two
+  join on `pool.id`. **`write_schedules` is the single writer of `facility_doc`** (typed on `PoolId`).
 - **`pool_alias`** (`UNIQUE(norm)`) and **`pool_xref`** (`UNIQUE(namespace, ext_id)`) — every legacy
   short id / external namespace id (WFS feature id, crowdmonitor key) as a **value pointing at**
   `pool.id`. A second id claiming one pool is a write-time `IntegrityError` — the split-brain is
   unrepresentable. STRICT tables, FK `ON DELETE CASCADE`.
-- **`facility`** — the curated+scraped schedule payload as a JSON `doc`, keyed by the canonical id
-  (schedules, prices, notices, lane plans). `/swim` reads it, joined to `pool` on the canonical id.
-  *(Transitional: the composed blob currently also lives on `pool.facility_doc`; collapsing the two
-  is future work — see the plan's backlog.)*
 - **`calendar`** — the Zürich calendar as a single JSON `singleton` row.
 
-(The former separate `catalog` table was retired — its roster is the `pool` table.) It is the
-**single source of truth the app reads**: the composition root reads facilities, roster, and
-calendar exclusively from these tables and opens nothing under `data/` at runtime. A missing DB
-fails fast (`SWIMZH_GOLD_DB` required; the file must exist).
+(The former separate `catalog` table was retired into `pool`. A legacy **`facility`** table still
+physically exists — written only by the legacy `build-gold`/`build_store` path, read by no runtime
+code; [[delete-legacy-geo-pipeline]] (Plan C) deletes it.) The store is the **single source of truth
+the app reads**: the composition root reads the roster/facilities/calendar exclusively from `pool` +
+`calendar` and opens nothing under `data/` at runtime. A missing DB fails fast (`SWIMZH_GOLD_DB`
+required; the file must exist).
 
 Built by one offline command — `swimzh build --db gold.sqlite` — from the committed curated
 inputs (`data/pools/*.yaml`, `data/registry.yaml`, `data/calendar/zurich.yaml`,

@@ -70,8 +70,12 @@ safe and the `facility` table dead.
 
 - **C3 — Delete the now-dead `facility` table.** *(M)* With `build-gold` gone (C2) and reads/enrichment
   on `pool.facility_doc` (Plan B), the `facility` table + `storage.write_facilities` + `etl/gold.py`
-  (`write_gold`) + the test-only `load_catalog` have zero callers. Delete the `facility` CREATE TABLE
-  from `_SCHEMA`, `write_facilities`, `etl/gold.py`, and `load_catalog`.
+  (`write_gold`) + the test-only `load_catalog` have zero live callers. Delete the `facility` CREATE
+  TABLE from `_SCHEMA`, `write_facilities`, `etl/gold.py`, and `load_catalog`.
+  **Note (from the Plan B / B4 ledger):** there are **TWO** `write_facilities` call sites — `etl/pipeline.run`
+  (deleted in C2) AND `etl/build.build_store` (a B2 carryover kept only for the geo-parity test). C3
+  must remove `build_store`'s call too, and migrate `tests/etl/test_build.py`'s geo-parity test off its
+  `SELECT doc FROM facility` read (compare geo on `pool.facility_doc` instead — that IS the stamped geo now).
   **Acceptance:** `grep -rn 'facility' src/swimzh/storage` shows no `facility` *table* (only
   `pool.facility_doc`); no `write_gold`/`write_facilities`/`load_catalog` remain; the no-`facility`-table
   schema guard from Plan B5 now holds on the table's absence; QA green.

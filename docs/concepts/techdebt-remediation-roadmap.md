@@ -15,10 +15,16 @@ links: ["[[2026-07-19-pool-identity-unification]]", "[[data-layer-architecture]]
 
 > **Progress (2026-07-20):** Owner selected **A, B, C** (D, E stay backlog). Plans drafted, reviewed
 > against the code, and adjusted ([[layers-and-canonical-id]], [[retire-facility-table]],
-> [[delete-legacy-geo-pipeline]]). **Plan A is DONE** — resolving debt **#5** (`Global` deleted) and the
-> `normalize`/`BASIN_KIND_WORDS` half of **#2** (leaves relocated to `core`/`domain`; the id-unification
-> half of #7 also landed as one `PoolId`); the layering guard (`tests/test_layering.py`) is in place.
-> B and C are next in that order.
+> [[delete-legacy-geo-pipeline]]).
+> - **Plan A DONE** — debt **#5** (`Global` deleted), the `normalize`/`BASIN_KIND_WORDS` half of **#2**
+>   (leaves → `core`/`domain`), and the id-unification half of **#7** (one `PoolId`); layering guard
+>   (`tests/test_layering.py`) in place.
+> - **Plan B DONE** — debt **#1** (app reads only `pool.facility_doc`; `write_schedules` the single
+>   writer), **#4** (`curation_status` derived at read), **#7** (the write side is typed on `PoolId`),
+>   #6a-blob duplication retired; four B5 guards lock it in. The `facility` table is now write-only-dead.
+>   Discovered for C: **TWO** legacy `write_facilities` writers remain (`pipeline.run` + `build_store`).
+> - **Plan C is next** — delete `build-gold`/`pipeline`/`raw` + `resolve_name`, and the now-dead
+>   `facility` table + both `write_facilities` sites + `write_gold`/`etl.gold`.
 
 ## Executive summary
 

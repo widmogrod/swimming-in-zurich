@@ -1,6 +1,6 @@
 ---
 type: plan
-status: in-progress      # owner-approved 2026-07-20; /dev:implement executing on main (worktree retired — see [[2026-07-19-pool-identity-unification]] Decisions)
+status: done             # all 5 slices on main 2026-07-20; see Summary
 created: 2026-07-20
 feature: retire-facility-table
 gates:
@@ -137,4 +137,36 @@ Appended by /dev:implement after each slice — never rewritten. Newest row last
 
 ## Summary
 
-Written when the plan reaches `done`; then distilled into `docs/summaries/retire-facility-table.md`.
+**Done — one blob behind one `PoolId`-typed write door; the app reads only `pool.facility_doc`; status
+derived, never stored.** All 5 slices on `main` (commits `4785594` B1, `bb6503e` B2, `16c78d8` B3,
+`9cdf418` B4, `cbd7497` B5); 350 tests, 95.50% coverage, mypy strict + CRAP green.
+
+What exists now (verified live: `build → scrape-gold → scrape-lanes → serve`):
+- **B1** — the offline build stamps authoritative committed-catalog(WFS) geo onto `pool.facility_doc`,
+  so a later `facility`-table collapse doesn't shift `/swim` distance. Recorded behavior change: 3
+  curated pools' distance basis moved to the more-accurate WFS coords.
+- **B2** — `write_schedules(conn, keyed)` is the **single writer** of `pool.facility_doc`; `write_pools`
+  writes identity/roster only; `GoldRepository`/`GoldSwimStore` read `pool.facility_doc`. `/swim` distance
+  now on catalog geo.
+- **B3** — `curation_status` is **derived at read** from one `is_curated(facility_doc)` rule; the stored
+  column + CHECK are dropped — it can't desync (retires #4 by construction).
+- **B4** — `scrape-gold`/`scrape-lanes` route through `write_schedules`; the enrichment gap is closed.
+  End-to-end: City serves curated schedule + lane plan + merged scraped price; scraped-only pools with
+  parsed schedules auto-derive `curated` at read (8 curated after enrichment, as pre-B).
+- **B5** — four falsifiable guards: no runtime `FROM/JOIN facility` read; single writer of
+  `facility_doc`; no writable `curation_status` column; a consistency test (a scraped schedule flips the
+  derived flag on `/pools` and is served by `/swim`).
+
+The `facility` table still physically exists (written by legacy `build-gold`/`build_store`, read by no
+runtime path) — **[[delete-legacy-geo-pipeline]] (Plan C) deletes it.**
+
+**Open tech debt (backlog / Plan C):**
+1. **Two legacy `write_facilities` writers** remain (`etl/pipeline.run` + `etl/build.build_store`) — Plan
+   C must remove BOTH, plus the geo-parity test's `SELECT doc FROM facility`.
+2. `PoolRow.facility_doc` is an in-memory carrier only (not persisted by `write_pools`) — collapsible.
+3. Two B5 line-based guards would miss a newline-split SQL statement (harmless today; all such SQL is
+   single-line).
+
+**Process:** implemented on `main` (worktree retired; no concurrent sessions). B4 took one revision round
+(the `scrape-gold` reroute was initially unguarded — a mutation-verified test now covers it). No
+merge-back.
