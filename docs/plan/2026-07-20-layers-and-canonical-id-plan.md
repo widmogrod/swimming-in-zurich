@@ -1,6 +1,6 @@
 ---
 type: plan
-status: in-progress      # owner-approved 2026-07-20; /dev:implement executing on main (worktree retired — see [[2026-07-19-pool-identity-unification]] Decisions)
+status: done             # all 5 slices on main 2026-07-20; see Summary
 created: 2026-07-20
 feature: layers-and-canonical-id
 gates:
@@ -125,4 +125,33 @@ Appended by /dev:implement after each slice — never rewritten. Newest row last
 
 ## Summary
 
-Written when the plan reaches `done`; then distilled into `docs/summaries/layers-and-canonical-id.md`.
+**Done — dependencies point down, one id type, layering fenced. Zero behavior change.** All 5 slices on
+`main` (commits `df6d71c` A1, `bfd3f7e` A2, `b2a87ba` A3, `5a17786` A4, `8dd40e4` A5); 333 tests,
+95.44% coverage, mypy strict + CRAP green throughout.
+
+What exists now:
+- **`normalize` → `core`** (A1) and **`BASIN_KIND_WORDS` → `domain/models`** (A2) — the shared leaves live
+  in low layers; `etl/silver` imports nothing from `build`.
+- **One `PoolId`** (A3) — `FacilityId` erased across 18 files; the single `PoolId = NewType(...)` lives in
+  `domain/models`. Trusted reconstruction (persisted rows / validated DTOs) routes through the
+  `reconstruct_pool_id` shim at 4 sites; the minter grep-guard gains only the shim's home in its ALLOWED
+  set and stays falsifiable. Field/param names keep their `facility_*` spelling (type-only change).
+- **Spine row DTOs → `storage/rows.py`** (A4) — `storage` imports nothing from `build`; the
+  `TYPE_CHECKING` reverse edge in `sqlite_repo` is gone.
+- **`Global` deleted** (A5) — `SourceRef` is `Xref | Name | BasinHint`; `assert_never` over the narrowed
+  union is the exhaustiveness proof. **`tests/test_layering.py`** enforces the direction: `domain`/`storage`
+  may not import `build`; `etl → build` is allowed (etl sits above build). Docstring-trap-proof, proven
+  falsifiable.
+
+This unblocks Plan B (a `PoolId`-typed `write_schedules` no longer re-cements `storage → build`).
+
+**Open tech debt (backlog):**
+1. A now-no-op `PoolId(str(...))` round-trip at `build/reconcile.py` (in an allowed minter; trivially
+   collapsible).
+2. The layering guard matches only ABSOLUTE `swimzh.build` imports — a relative `from ..build` would slip
+   (harmless today; these layers use only absolute imports). Could harden + extend to `apps`/`core`.
+3. Doc references reconciled at completion (see Decisions); the dated summary/prior-plan mentions of
+   `Global`/`build/normalize` are historical records, left as-is.
+
+**Process:** implemented on `main` (worktree retired — sub-agent cwds pin to the main checkout; no
+concurrent sessions). No merge-back.

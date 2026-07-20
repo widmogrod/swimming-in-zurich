@@ -1,9 +1,9 @@
 ---
 type: concept
 name: data-layer-architecture
-status: partially-implemented   # identity spine + reconcile/compose landed via [[2026-07-19-pool-identity-unification]]; row-normalization + snapshots still proposed
-updated: 2026-07-19
-links: ["[[gold-store]]", "[[2026-07-19-pool-identity-unification]]", "[[2026-07-19-sqlite-sot-backend-redesign]]", "[[fastapi-service-integration]]"]
+status: partially-implemented   # identity spine + reconcile/compose landed via [[2026-07-19-pool-identity-unification]]; layering + one id via [[layers-and-canonical-id]]; row-normalization + snapshots still proposed
+updated: 2026-07-20
+links: ["[[gold-store]]", "[[2026-07-19-pool-identity-unification]]", "[[layers-and-canonical-id]]", "[[techdebt-remediation-roadmap]]", "[[2026-07-19-sqlite-sot-backend-redesign]]", "[[fastapi-service-integration]]"]
 ---
 
 # Data layer architecture — provider extract → clean/normalize/reconcile → gold
@@ -11,6 +11,14 @@ links: ["[[gold-store]]", "[[2026-07-19-pool-identity-unification]]", "[[2026-07
 > Output of a 9-agent design panel (Data-Eng / ETL / ELT / Backend perspectives, then
 > simplicity / loose-coupling / modularity / poka-yoke scrutiny, then synthesis). This is the
 > **proposed** agreed design that feeds a `/dev:plan`; open questions at the end are the owner's.
+
+> **As-built deltas (the prose below is proposal-altitude; these are the concrete names now).**
+> The one cleaning home is **`core/normalize.py`**, not `build/normalize.py` ([[layers-and-canonical-id]]
+> A1). The `Global` `SourceRef` variant was **deleted** — the union is `Xref | Name | BasinHint` (A5).
+> There is **one** id NewType, **`PoolId`** in `domain/models`; `FacilityId` is gone, and trusted
+> reconstruction routes through `domain.reconstruct_pool_id` (A3). The spine row DTOs live in
+> **`storage/rows.py`** (A4). Layer direction (`core → domain → storage → build → etl → apps`) is
+> enforced by `tests/test_layering.py`.
 
 ## Executive summary
 

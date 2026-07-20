@@ -13,6 +13,13 @@ links: ["[[2026-07-19-pool-identity-unification]]", "[[data-layer-architecture]]
 > becomes a `/dev:plan` when the owner picks it up. Goals: simpler, modular, poka-yoke, preserving every
 > already-won invariant.
 
+> **Progress (2026-07-20):** Owner selected **A, B, C** (D, E stay backlog). Plans drafted, reviewed
+> against the code, and adjusted ([[layers-and-canonical-id]], [[retire-facility-table]],
+> [[delete-legacy-geo-pipeline]]). **Plan A is DONE** — resolving debt **#5** (`Global` deleted) and the
+> `normalize`/`BASIN_KIND_WORDS` half of **#2** (leaves relocated to `core`/`domain`; the id-unification
+> half of #7 also landed as one `PoolId`); the layering guard (`tests/test_layering.py`) is in place.
+> B and C are next in that order.
+
 ## Executive summary
 
 Fold the three proposals into one program that keeps Proposal 1's deletion backbone but swaps in Proposal 3's two strictly-simpler mechanisms (a single PoolId-typed write_schedules seam and derive-curation_status-at-read) and only the cheap subset of Proposal 2's layering (leaf relocations + a lightweight grep-guard), dropping the flagged over-engineering: the build->assemble rename, the full AST layer-DAG walker, promoting pyright to a second CI gate, the basin-hint-index consolidation, and any new build/pipeline seam wrapped around dead code. Sequence across five plans by risk/value. Plan A (layering leaves + one canonical PoolId) lands first because it is zero-behavior-change and is the unstated precondition for a PoolId-typed write side — without it, that type re-cements the wrong storage->build direction. Plan B then retires the facility table through one write seam onto pool.facility_doc, gated on a geo-stamp prerequisite so /swim distance survives, and drops the stored curation_status column so no writer can desync it. Plan C deletes the legacy geo pipeline as an explicit product decision (owner sign-off; rewrite the resolve_name cutover test first). Plan D adds partial-batch resilience to scrape while keeping ambiguous hints structurally fatal. Plan E clears the calendar pyright findings without adding a gate. Every already-won invariant (DB UNIQUE spine, single minter, grep-guard, three un-merged states, one gold DB, errors-as-values) is preserved; #6a/#6b/#6c/#9/#10 stay out of scope as additive structure off the simplicity critical path.
