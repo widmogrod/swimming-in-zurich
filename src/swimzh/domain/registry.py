@@ -1,9 +1,8 @@
-"""The pool identity registry: the single source of canonical IDs and the crosswalk into
-other sources' names.
+"""The pool identity registry: the single source of canonical `PoolIdentity` records.
 
-Providers map *into* canonical IDs by **lookup here** — never by fuzzy matching. A name we
-cannot resolve is returned as `None` so the caller can fail loudly / queue it for review,
-rather than guessing and silently attaching data to the wrong pool.
+Built from the curated identities, it enforces that no two pools claim the same
+`facility_id` or the same normalised alias (a duplicate is a loud `ValueError` at
+construction, never a silently-overwritten crosswalk), and serves identities by canonical id.
 """
 
 from __future__ import annotations
@@ -18,8 +17,6 @@ class Registry:
     def __init__(self, identities: Iterable[PoolIdentity]) -> None:
         self._by_id: dict[PoolId, PoolIdentity] = {}
         self._alias_index: dict[str, PoolId] = {}
-        self._geo_sport_index: dict[str, PoolId] = {}
-        self._crowdmonitor_index: dict[str, PoolId] = {}
         for identity in identities:
             self._register(identity)
 
@@ -34,10 +31,6 @@ class Registry:
             if existing is not None and existing != fid:
                 raise ValueError(f"alias {alias!r} maps to both {existing} and {fid}")
             self._alias_index[key] = fid
-        if identity.geo_sport_id is not None:
-            self._geo_sport_index[identity.geo_sport_id] = fid
-        for key in identity.crowdmonitor_keys:
-            self._crowdmonitor_index[key] = fid
 
     @property
     def identities(self) -> Mapping[PoolId, PoolIdentity]:
@@ -45,13 +38,3 @@ class Registry:
 
     def get(self, facility_id: PoolId) -> PoolIdentity | None:
         return self._by_id.get(facility_id)
-
-    def resolve_name(self, name: str) -> PoolId | None:
-        """Resolve a display name / alias to a canonical id, or None if unknown."""
-        return self._alias_index.get(_normalise(name))
-
-    def resolve_geo_sport(self, geo_sport_id: str) -> PoolId | None:
-        return self._geo_sport_index.get(geo_sport_id)
-
-    def resolve_crowdmonitor(self, key: str) -> PoolId | None:
-        return self._crowdmonitor_index.get(key)

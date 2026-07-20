@@ -1,12 +1,6 @@
-"""Silver stage: normalise + reconcile sources to canonical facility ids.
+"""Silver stage: reconcile Belegungsplan lane plans to canonical basins.
 
-Reconciliation is **lookup, not fuzzy match**: every geo_sport pool name must resolve to a
-canonical id via the registry. Any name that does not is a **loud failure** (an error value
-naming the offenders) — never a silent drop or a guessed match. Matched geo is merged into
-the curated facilities (coordinates + geo_sport_id crosswalk), and provenance is stamped
-with the run's `fetched_at`.
-
-The same discipline applies at **basin granularity** for Belegungsplan lane plans: a parsed
+Reconciliation is **lookup, not fuzzy match**, applied at **basin granularity**: a parsed
 plan carries only a `basin_hint` (the PDF header title, e.g. "Hallenbad City
 Schwimmerbecken"). `attach_lane_plans` resolves that hint to exactly one `Basin` by a
 built-from-the-model lookup index (facility name/alias × basin name/kind German word) — an
@@ -32,49 +26,8 @@ from swimzh.domain.models import (
     PoolId,
 )
 from swimzh.providers.belegungsplan import ParsedPlan
-from swimzh.providers.curated import Dataset
-from swimzh.providers.geo_sport import GeoPool
 
 _SOURCE = "silver"
-
-
-def reconcile(
-    dataset: Dataset, geo_pools: list[GeoPool], fetched_at: datetime
-) -> Result[tuple[Facility, ...], ProviderError]:
-    registry = dataset.registry
-    resolved: dict[PoolId, GeoPool] = {}
-    unmatched: list[str] = []
-    for pool in geo_pools:
-        facility_id = registry.resolve_name(pool.name)
-        if facility_id is None:
-            unmatched.append(pool.name)
-        else:
-            resolved[facility_id] = pool
-
-    if unmatched:
-        return Err(
-            SchemaMismatch(
-                source=_SOURCE,
-                detail=f"unresolved geo_sport pools (not in registry): {sorted(unmatched)}",
-            )
-        )
-
-    merged: list[Facility] = []
-    for facility in dataset.facilities:
-        provenance = replace(facility.provenance, fetched_at=fetched_at)
-        matched = resolved.get(facility.identity.facility_id)
-        if matched is not None:
-            merged.append(
-                replace(
-                    facility,
-                    identity=replace(facility.identity, geo_sport_id=matched.source_id),
-                    geo=matched.geo,
-                    provenance=provenance,
-                )
-            )
-        else:
-            merged.append(replace(facility, provenance=provenance))
-    return Ok(tuple(merged))
 
 
 # --- basin-granular lane-plan reconciliation ----------------------------------------

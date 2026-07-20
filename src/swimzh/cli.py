@@ -1,7 +1,8 @@
 """Command-line entry point.
 
-  swimzh build-gold    --db gold.sqlite     # raw→silver→gold SQLite the web app serves from
+  swimzh build         --db gold.sqlite     # assemble the gold SQLite from committed inputs
   swimzh build-catalog --out data/catalog.json  # full pool catalog from the WFS (committed)
+  swimzh scrape-gold   --db gold.sqlite     # scrape real schedules onto a built store
   swimzh scrape-lanes  --db gold.sqlite     # attach per-basin Belegungsplan lane plans
 
 Run via: `uv run python -m swimzh.cli <command> ...`
@@ -20,7 +21,6 @@ from swimzh.build.reconcile import crosswalk_from_rows, resolve_all
 from swimzh.core.errors import describe
 from swimzh.core.http import HttpClient
 from swimzh.core.result import Err, Ok
-from swimzh.etl import pipeline
 from swimzh.etl.build import build_store
 from swimzh.etl.catalog import build_catalog
 from swimzh.etl.lane_plans import CITY_BELEGUNGSPLAN_URLS, scrape_lane_plans
@@ -38,17 +38,6 @@ from swimzh.storage.sqlite_repo import (
 )
 
 _ZURICH = ZoneInfo("Europe/Zurich")
-
-
-def build_gold(*, db_path: Path, data_dir: Path, client: HttpClient, fetched_at: datetime) -> int:
-    """Run raw→silver→gold into `db_path`. Returns a process exit code."""
-    match pipeline.run(data_dir=data_dir, db_path=db_path, client=client, fetched_at=fetched_at):
-        case Ok(repo):
-            print(f"gold store written to {db_path} ({repo.count()} facilities)")
-            return 0
-        case Err(error):
-            print(f"ETL failed: {describe(error)}", file=sys.stderr)
-            return 1
 
 
 def build(*, db_path: Path, data_dir: Path) -> int:
@@ -191,10 +180,6 @@ def main(argv: list[str] | None = None) -> int:
     offline.add_argument("--db", required=True, help="path to the gold SQLite file to write")
     offline.add_argument("--data", default="data", help="curated data directory (default: data)")
 
-    gold = subparsers.add_parser("build-gold", help="build the SQLite gold store")
-    gold.add_argument("--db", required=True, help="path to the gold SQLite file to write")
-    gold.add_argument("--data", default="data", help="curated data directory (default: data)")
-
     catalog = subparsers.add_parser("build-catalog", help="build the pool catalog from the WFS")
     catalog.add_argument("--out", default="data/catalog.json", help="catalog JSON to write")
 
@@ -223,10 +208,6 @@ def main(argv: list[str] | None = None) -> int:
     with httpx.Client(timeout=30.0, follow_redirects=True) as inner:  # pragma: no cover - live
         client = HttpClient(inner, source="geo_sport", timeout_s=30.0)
         now = datetime.now(_ZURICH)
-        if args.command == "build-gold":
-            return build_gold(
-                db_path=Path(args.db), data_dir=Path(args.data), client=client, fetched_at=now
-            )
         if args.command == "scrape-gold":
             return scrape_gold(
                 db_path=Path(args.db),
