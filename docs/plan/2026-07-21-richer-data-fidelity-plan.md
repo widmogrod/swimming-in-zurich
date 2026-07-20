@@ -4,7 +4,7 @@ status: in-progress      # draft -> approved -> in-progress -> done
 created: 2026-07-21
 feature: richer-data-fidelity
 branch: plan/richer-data-fidelity
-worktree: .claude/worktrees/plan-richer-data-fidelity
+worktree: (collapsed to the primary checkout on branch plan/richer-data-fidelity — see Decisions 2026-07-21 worktree-collapse)
 base_branch: main
 gates:
   qa: full               # ruff, format, mypy strict, pytest+coverage floor (95), CRAP
@@ -200,7 +200,7 @@ caveat where prose-derived; amenity chips in the all-pools table.
 
 | date | slice | status | divergence | tech debt | human review? |
 |------|-------|--------|------------|-----------|---------------|
-| —    | —     | —      | —          | —         | —             |
+| 2026-07-21 | A | done | Leimbach parses (`PARTIAL`) but is uncurated → lands in `unmatched`; `/pools/{leimbach}` lane_panels clause deferred (plan pre-authorized). Bläsi/Käferberg = typed `SchemaMismatch` skips until E2. Current real parse count: **6 of 8** listed basins (City-Schwimmerbecken + Leimbach). | 3 real-PDF fixtures committed (refresh-cadence debt, dec#3); Bläsi/Käferberg tests pin `SchemaMismatch` — flip to positive-parse when E2 lands | yes |
 
 ## Decisions & divergences
 
@@ -210,6 +210,15 @@ caveat where prose-derived; amenity chips in the all-pools table.
   supported basin (accept a refresh-cadence tech-debt). #4 measured temp overrides nominal in the badge,
   nominal in a tooltip. #5 low-confidence `PARSED_PROSE` basins are shown in `/pools` detail (with
   caveat) but gated out of `/swim` options.
+- **2026-07-21 — worktree-collapse (environment divergence).** `/dev:implement` normally runs in a
+  dedicated git worktree at `.claude/worktrees/plan-<feature>`. In this environment **subagents pin their
+  working directory to the session's launch checkout**, not the orchestrator's post-`EnterWorktree` cwd, so
+  the Slice-A implementer wrote its changes into the primary checkout while git/QA in the worktree saw an
+  empty tree (the critic caught this). Resolution: the separate worktree was removed and branch
+  `plan/richer-data-fidelity` is checked out **in the primary checkout** for the rest of the run. All
+  essential guarantees hold — commits land on `plan/richer-data-fidelity`, the `main` ref is untouched
+  until the final ff-merge, gates still run per slice. Only the separate directory is gone. Slice-A work
+  was relocated intact (git stash → branch) before this note.
 - **2026-07-21 — pause-override (owner directive at implementation start).** The owner approved and
   instructed: *"don't stop on D, execute everything to end."* The declared `pause_after: [D, E3]` gates are
   therefore NOT honoured as stops in this run — A→F execute continuously through the D schema pause and the

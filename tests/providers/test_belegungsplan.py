@@ -34,7 +34,8 @@ from swimzh.providers.belegungsplan import (
     scrape_belegungsplan,
 )
 
-FIXTURE = Path(__file__).resolve().parent / "fixtures" / "city-schwimmerbecken.pdf"
+FIXTURES = Path(__file__).resolve().parent / "fixtures"
+FIXTURE = FIXTURES / "city-schwimmerbecken.pdf"
 
 
 @pytest.fixture(scope="module")
@@ -96,6 +97,42 @@ def test_real_fixture_stores_public_and_school_explicitly(city_bytes: bytes) -> 
 def test_real_fixture_passes_disjointness(city_bytes: bytes) -> None:
     plan = parse_belegungsplan(city_bytes).unwrap_or_raise().plan
     assert _check_invariants(plan.reservations, plan.lane_count) is None
+
+
+# --- newly-listed basins pinned by committed real fixtures (Slice A) -----------------
+#
+# Reality pinned against the live PDFs (verified 2026-07-21): only Leimbach parses under the
+# current City-A4 geometry — as a real, PARTIAL LanePlan. Bläsi/Käferberg are movable-floor
+# basins whose per-weekday lane counts make the grid ragged (fewer than 7×lane_count columns),
+# so they are typed `SchemaMismatch` skips until the anchor-derived parser (Slice E2). Either
+# way scrape_lane_plans downgrades a failed parse to a reported skip, never fatal.
+
+
+def test_leimbach_real_fixture_parses_to_partial_plan() -> None:
+    result = parse_belegungsplan((FIXTURES / "leimbach.pdf").read_bytes())
+    assert isinstance(result, Ok), result
+    parsed = result.value
+    assert "Leimbach" in parsed.basin_hint
+    assert parsed.plan.lane_count == 5
+    assert parsed.plan.valid_from == date(2026, 3, 3)
+    # Some cells carry owners the legend doesn't resolve -> a real but PARTIAL plan.
+    assert parsed.plan.coverage.confidence is PlanConfidence.PARTIAL
+    assert parsed.plan.reservations  # non-empty
+    assert _check_invariants(parsed.plan.reservations, parsed.plan.lane_count) is None
+
+
+def test_blaesi_real_fixture_is_schema_mismatch_until_slice_e() -> None:
+    result = parse_belegungsplan((FIXTURES / "blaesi.pdf").read_bytes())
+    assert isinstance(result, Err)
+    assert isinstance(result.error, SchemaMismatch)
+    assert "columns" in result.error.detail  # ragged movable-floor grid
+
+
+def test_kaeferberg_real_fixture_is_schema_mismatch_until_slice_e() -> None:
+    result = parse_belegungsplan((FIXTURES / "kaeferberg.pdf").read_bytes())
+    assert isinstance(result, Err)
+    assert isinstance(result.error, SchemaMismatch)
+    assert "columns" in result.error.detail  # ragged movable-floor grid
 
 
 # --- owner-relabel trap: an unknown code is never public ----------------------------
