@@ -1,6 +1,6 @@
 ---
 type: plan
-status: approved         # owner-approved 2026-07-20 (the "continue" after A/B/C = sign-off, incl. reversing S4's whole-batch abort)
+status: in-progress      # /dev:implement executing on main (worktree retired)
 created: 2026-07-20
 feature: resilient-reconcile
 gates:
