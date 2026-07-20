@@ -1,6 +1,6 @@
 ---
 type: plan
-status: in-progress      # /dev:implement executing on main (worktree retired)
+status: done             # both slices on main 2026-07-20; see Summary
 created: 2026-07-20
 feature: resilient-reconcile
 gates:
@@ -58,6 +58,7 @@ becomes reportable, not fatal. Owner sign-off given (the "continue" after A/B/C)
 | date | slice | status | divergence | tech debt | human review? |
 |------|-------|--------|------------|-----------|---------------|
 | 2026-07-20 | D1 | done | none — `resolve_all -> Result[ReconcileOutcome, ProviderError]` (`unresolved` required); a typed `_Matched/_NotFound/_Ambiguous` classification (`_classify` + `assert_never`) makes ambiguous-vs-not-found STRUCTURAL — never-attach-to-wrong-pool holds by construction (only `BasinHint` can be ambiguous; `Name`/`Xref` are dict lookups). `resolve`'s public `Ok\|Err` behavior is unchanged | interim `cli.scrape_gold` shim keeps pre-D1 whole-batch-fail behavior (D2 rewires to real partial success). Discovery: scrape extracts are `Name` only → never ambiguous by construction → D2's ambiguous-aborts test needs a `BasinHint`/seeded-ambiguous crosswalk | no |
+| 2026-07-20 | D2 | done | none — `cli.scrape_gold` composes `outcome.resolved` + `write_schedules` UNCONDITIONALLY (partial success), reports `unresolved` to stderr, exits 1 iff non-empty; the ambiguous `Err` branch still aborts writing nothing. Ambiguous was tested at the CLI `Err` branch via a monkeypatched `resolve_all` returning the exact typed error a real ambiguous ref produces (critic-verified shape-identical) — a CLI-level ambiguous scrape is impossible by construction (scrape emits `Name` only) | none — the success summary now counts written pools (`len(resolved)`), truthful under partial success | no |
 
 ## Decisions & divergences
 
@@ -66,4 +67,18 @@ becomes reportable, not fatal. Owner sign-off given (the "continue" after A/B/C)
 
 ## Summary
 
-Written at `done`; distilled into `docs/summaries/resilient-reconcile.md`.
+**Done — `scrape-gold` survives a benign miss; ambiguous stays structurally fatal.** Both slices on
+`main` (`c3bc632` D1, plus D2); 348 tests, 95.67% coverage, mypy strict + CRAP green.
+
+- **D1** — `resolve_all -> Result[ReconcileOutcome, ProviderError]`; `ReconcileOutcome(resolved,
+  unresolved)` with `unresolved` required. A typed `_Matched/_NotFound/_Ambiguous` classification makes
+  the benign-vs-ambiguous split structural: `Name`/`Xref` dict-lookups can only miss (→ `unresolved`),
+  only a `BasinHint` can be ambiguous (→ hard `Err`) — so never-attach-to-wrong-pool holds by
+  construction, not convention.
+- **D2** — `cli.scrape_gold` writes the matched pools via `write_schedules` even when some refs are
+  unresolved, reports the misses to stderr, and exits non-zero iff any are unresolved. The ambiguous
+  `Err` branch still aborts writing nothing.
+
+One unmatched WFS name no longer discards the whole batch. Backlog: **E** (calendar pyright) is the last
+roadmap item.
+

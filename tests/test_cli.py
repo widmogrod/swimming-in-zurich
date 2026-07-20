@@ -14,8 +14,9 @@ import pytest
 
 from swimzh.build.compose import ScrapedAspects, compose
 from swimzh.cli import build, build_catalog_file, main, scrape_gold, scrape_lanes
+from swimzh.core.errors import SchemaMismatch
 from swimzh.core.http import HttpClient, RetryPolicy
-from swimzh.core.result import Ok
+from swimzh.core.result import Err, Ok
 from swimzh.domain.catalog import PoolCatalogEntry
 from swimzh.domain.geo import GeoPoint
 from swimzh.domain.models import BasinId, Facility, PoolKind, reconstruct_pool_id
@@ -224,9 +225,12 @@ def test_scrape_gold_requires_a_built_store(tmp_path: Path) -> None:
     assert code == 1
 
 
-def test_scrape_gold_unreconcilable_name_is_reported_not_silently_written(tmp_path: Path) -> None:
-    # A scraped pool whose name is in no alias -> a loud typed Err; the store is untouched (never
-    # a silent wrong-pool write).
+def test_scrape_gold_unreconcilable_name_is_reported_not_silently_written(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # D2 partial success: a lone scraped name in no alias is a benign miss — never a silent
+    # wrong-pool write. Nothing is composed (no resolved refs), the miss is reported to stderr,
+    # and the exit code is non-zero so the miss stays visible.
     db = tmp_path / "gold.sqlite"
     assert build(db_path=db, data_dir=DATA_DIR) == 0
     before = {f.identity.facility_id for f in GoldRepository(open_db(db)).load_all()}
@@ -247,8 +251,111 @@ def test_scrape_gold_unreconcilable_name_is_reported_not_silently_written(tmp_pa
     code = scrape_gold(
         db_path=db, catalog_path=catalog_file, client=_city_scrape_client(), fetched_at=FETCHED_AT
     )
-    assert code == 1
+    assert code == 1  # the unmatched name is signalled by a non-zero exit
+    # The miss is named on stderr, not swallowed.
+    assert "Hallenbad Nonexistent" in capsys.readouterr().err
     # The store's facility set is unchanged — nothing was attached to a guessed pool.
+    after = {f.identity.facility_id for f in GoldRepository(open_db(db)).load_all()}
+    assert after == before
+
+
+def _partial_catalog_file(tmp_path: Path) -> Path:
+    """A catalog mixing pools that reconcile (curated `Hallenbad City`, scraped-only
+    `Hallenbad Altstetten`) with one benign miss (`Hallenbad Nonexistent`, in no alias). Every
+    entry is INDOOR with a URL, so all three are scraped; only the matched two are written."""
+    catalog_file = tmp_path / "catalog.json"
+    entries = (
+        PoolCatalogEntry(
+            pool_id="hallenbad-city",
+            name="Hallenbad City",
+            kind=PoolKind.INDOOR,
+            address="Sihlstrasse 71",
+            geo=GeoPoint(lat=47.37, lon=8.53),
+            url="https://example.test/city.html",
+            description=None,
+            phone=None,
+        ),
+        PoolCatalogEntry(
+            pool_id="hallenbad-altstetten",
+            name="Hallenbad Altstetten",
+            kind=PoolKind.INDOOR,
+            address="Flurstrasse 91",
+            geo=GeoPoint(lat=47.39, lon=8.49),
+            url="https://example.test/altstetten.html",
+            description=None,
+            phone=None,
+        ),
+        PoolCatalogEntry(
+            pool_id="hallenbad-nonexistent",
+            name="Hallenbad Nonexistent",  # in no pool_alias row -> benign miss
+            kind=PoolKind.INDOOR,
+            address="",
+            geo=GeoPoint(lat=47.37, lon=8.53),
+            url="https://example.test/nonexistent.html",
+            description=None,
+            phone=None,
+        ),
+    )
+    catalog_file.write_text(catalog_json.dumps(entries, FETCHED_AT), encoding="utf-8")
+    return catalog_file
+
+
+def test_scrape_gold_partial_success_writes_matched_reports_unmatched(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # D2 acceptance: one unmatched name among several matched. The matched pools ARE written to
+    # `pool.facility_doc` (partial success — the good scrapes are not discarded), the unmatched
+    # name is reported to stderr, and the exit code is non-zero so the miss stays visible.
+    db = tmp_path / "gold.sqlite"
+    assert build(db_path=db, data_dir=DATA_DIR) == 0
+    altstetten = reconstruct_pool_id("hallenbad-altstetten")
+    # Scraped-only pool: absent from the read path before the scrape.
+    assert GoldRepository(open_db(db)).get(altstetten) is None
+
+    code = scrape_gold(
+        db_path=db,
+        catalog_path=_partial_catalog_file(tmp_path),
+        client=_city_scrape_client(),
+        fetched_at=FETCHED_AT,
+    )
+    assert code == 1  # non-zero because one name stayed unmatched
+
+    # The matched scraped-only pool reached the read path (`pool.facility_doc`) — partial success.
+    served = GoldRepository(open_db(db)).get(altstetten)
+    assert served is not None, "matched pools must be written even when some are unresolved"
+    assert any(b.rules for b in served.basins)  # the scraped schedule is on the read path
+    assert served.provenance.curated is False  # it came through the scrape, not a seed
+    # The matched curated pool is still present too.
+    assert GoldRepository(open_db(db)).get(reconstruct_pool_id("hallenbad-city")) is not None
+    # The unmatched name is named on stderr, not swallowed.
+    assert "Hallenbad Nonexistent" in capsys.readouterr().err
+
+
+def test_scrape_gold_ambiguous_reconcile_aborts_writing_nothing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # Ambiguous stays structurally fatal. Scrape extracts are `Name`-only, so they can NEVER be
+    # ambiguous by construction (D1's discovery) — a faithful CLI-level ambiguous scrape cannot
+    # exist. So we drive scrape_gold's `case Err` branch directly: a `resolve_all` that returns
+    # the typed ambiguous `Err` a seeded ambiguous crosswalk would produce (see
+    # `test_resolve_all_is_fatal_on_ambiguous_ref_naming_the_offender`). The store must be left
+    # untouched — never a silent wrong-pool write.
+    db = tmp_path / "gold.sqlite"
+    assert build(db_path=db, data_dir=DATA_DIR) == 0
+    before = {f.identity.facility_id for f in GoldRepository(open_db(db)).load_all()}
+
+    ambiguous = SchemaMismatch(source="reconcile", detail="ambiguous basin hint: 'Twin Bad'")
+    monkeypatch.setattr("swimzh.cli.resolve_all", lambda _extracts, _crosswalk: Err(ambiguous))
+
+    code = scrape_gold(
+        db_path=db,
+        catalog_path=_city_catalog_file(tmp_path),
+        client=_city_scrape_client(),
+        fetched_at=FETCHED_AT,
+    )
+    assert code == 1
+    assert "ambiguous" in capsys.readouterr().err.lower()
+    # Nothing written: the ambiguous batch aborts whole, leaving the store as `build` left it.
     after = {f.identity.facility_id for f in GoldRepository(open_db(db)).load_all()}
     assert after == before
 

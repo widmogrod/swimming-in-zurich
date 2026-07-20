@@ -101,28 +101,29 @@ def scrape_gold(
             print(f"scrape reconcile failed: {describe(error)}", file=sys.stderr)
             return 1
         case Ok(outcome):
-            # D1 interim: preserve the pre-D2 whole-batch-abort behaviour by treating any
-            # benign miss as fatal. D2 rewires this to real partial success — write
-            # outcome.resolved, report outcome.unresolved, exit non-zero iff it is non-empty.
-            if outcome.unresolved:
-                print(
-                    "scrape reconcile failed: unresolved scrape refs (no pool matched): "
-                    f"{sorted(outcome.unresolved)}",
-                    file=sys.stderr,
-                )
-                return 1
+            # Partial success: compose + write the pools that reconciled, UNCONDITIONALLY —
+            # one unmatched WFS name no longer discards every good scrape. Benign misses are
+            # reported to stderr and signalled by a non-zero exit (visible, not silent); the
+            # good scrapes are still written. Only an ambiguous ref (the `Err` case above) is
+            # fatal — never a silent wrong-pool write.
             composition = compose(curated, outcome.resolved)
             write_schedules(
                 conn,
                 tuple((f.identity.facility_id, f) for f in composition.facilities),
             )
-            msg = f"scraped {len(report.extracts)} indoor pools into {db_path}"
+            msg = f"scraped {len(outcome.resolved)} indoor pools into {db_path}"
             msg += " (with prices)" if prices is not None else " (prices unavailable)"
             for note in composition.notes:
                 msg += f"; {note}"
             if report.skipped:
                 msg += f"; skipped {len(report.skipped)}: {', '.join(report.skipped)}"
             print(msg)
+            if outcome.unresolved:
+                print(
+                    f"unresolved (no pool matched): {', '.join(sorted(outcome.unresolved))}",
+                    file=sys.stderr,
+                )
+                return 1
             return 0
 
 
