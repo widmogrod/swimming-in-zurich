@@ -2,9 +2,9 @@
 
 Plan B collapsed the composed schedule blob to ONE place (``pool.facility_doc``) behind ONE
 ``PoolId``-typed write door (``write_schedules``) and made ``curation_status`` a read-time
-derivation. The physical ``facility`` table still EXISTS and is still WRITTEN (``INSERT INTO
-facility``) by the legacy ``build-gold``/``build_store`` writers until Plan C deletes them — so
-these guards lock the *read* and *single-writer* invariants without asserting the table is gone.
+derivation. Plan C then physically deleted the legacy ``facility`` table (with ``build-gold``,
+its last writer, gone). So these guards lock the *read* and *single-writer* invariants AND now
+assert the table is gone — no runtime source creates, reads, or writes a ``facility`` table.
 
 Each guard is falsifiable: it fires on a real violation (verified by a temporary mutation during
 implementation) and its companion positive assertion proves it is scanning live source rather
@@ -43,7 +43,7 @@ def _matching_lines(path: Path, pattern: re.Pattern[str]) -> list[str]:
 
 # `facility` in FROM/JOIN position only. `\bfacility\b` has no word boundary before `_`, so
 # `facility_doc` / `facility_id` (the pool-column blob / identity) never match — only the bare
-# table name in a read does. `INTO facility` (the still-legal legacy write) is not FROM/JOIN.
+# table name in a read does. `INTO facility` (a write, now also gone) is not FROM/JOIN.
 _READS_FACILITY = re.compile(r"\b(?:FROM|JOIN)\s+facility\b", re.IGNORECASE)
 
 
@@ -55,14 +55,14 @@ def test_no_runtime_read_of_facility_table() -> None:
             offenders[str(path.relative_to(_ROOT))] = hits
     assert not offenders, (
         "runtime source must not READ the `facility` table (the read path is `pool.facility_doc`); "
-        f"the table still exists/writes for legacy build-gold until Plan C: {offenders}"
+        f"Plan C deleted the table entirely: {offenders}"
     )
 
 
 def test_reads_facility_matcher_fires_on_a_read_but_not_on_columns() -> None:
     # Proves the matcher is live and precise (falsifiable, not vacuous): it catches a real
     # `FROM facility` read yet ignores the `facility_doc`/`facility_id` column names it must not
-    # confuse for the table, and ignores the legal `INSERT INTO facility` write.
+    # confuse for the table, and ignores an `INSERT INTO facility` write (a write, not a read).
     assert _READS_FACILITY.search("SELECT doc FROM facility ORDER BY facility_id")
     assert _READS_FACILITY.search("JOIN facility f ON f.facility_id = pool.id")
     assert not _READS_FACILITY.search("SELECT facility_doc FROM pool WHERE facility_doc NOT NULL")
@@ -156,3 +156,36 @@ def test_pool_table_still_carries_facility_doc() -> None:
     # Positive half: the column extractor targets the real `pool` table (falsifiable, not
     # vacuous) — it still finds the `facility_doc` blob column the read path depends on.
     assert "facility_doc" in _pool_columns()
+
+
+# --- Guard 4: the `facility` table is GONE (Plan C physical delete) ----------------------------
+
+# A `CREATE TABLE ... facility (` — `[^;(]*` stays before the opening paren, so `\bfacility\b`
+# there matches only a table NAMED facility, never the `facility_doc` column inside `pool`.
+_CREATES_FACILITY_TABLE = re.compile(r"CREATE\s+TABLE[^;(]*\bfacility\b\s*\(", re.IGNORECASE)
+# Any write targeting the table: `INSERT ... INTO facility`. `INTO facility_doc` is impossible
+# (no such column write shape), and `\bfacility\b` won't match `facility_doc`/`facility_id`.
+_WRITES_INTO_FACILITY = re.compile(r"\bINTO\s+facility\b", re.IGNORECASE)
+
+
+def test_no_runtime_creates_or_writes_facility_table() -> None:
+    offenders: dict[str, list[str]] = {}
+    for path in _runtime_files():
+        hits = _matching_lines(path, _CREATES_FACILITY_TABLE) + _matching_lines(
+            path, _WRITES_INTO_FACILITY
+        )
+        if hits:
+            offenders[str(path.relative_to(_ROOT))] = hits
+    assert not offenders, (
+        "the `facility` table was deleted in Plan C; no runtime source may CREATE or WRITE it "
+        f"(the schedule blob lives on `pool.facility_doc`): {offenders}"
+    )
+
+
+def test_facility_table_matchers_are_precise() -> None:
+    # Falsifiable, not vacuous: the absence matchers fire on a real CREATE/INSERT of the table
+    # yet ignore the `pool` table and its `facility_doc` column that legitimately remain.
+    assert _CREATES_FACILITY_TABLE.search("CREATE TABLE IF NOT EXISTS facility (facility_id TEXT")
+    assert not _CREATES_FACILITY_TABLE.search("CREATE TABLE IF NOT EXISTS pool (facility_doc TEXT")
+    assert _WRITES_INTO_FACILITY.search("INSERT OR REPLACE INTO facility (facility_id, doc)")
+    assert not _WRITES_INTO_FACILITY.search("INSERT INTO pool (id, facility_doc) VALUES (?, ?)")

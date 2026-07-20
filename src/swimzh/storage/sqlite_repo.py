@@ -9,12 +9,10 @@ tables and their FKs cascade from ``pool``. The curated schedule payload rides a
 blob on the ``pool`` row (``facility_doc``), written by the single ``write_schedules`` door;
 row-normalizing it is a later plan.
 
-The legacy ``facility`` table (queryable columns + a full-``Facility`` ``doc`` blob) is now
-write-only and unread: the ``/swim`` read path *and* the network enrichers (``scrape-gold``/
-``scrape-lanes``) serve/write the curated blob through ``pool.facility_doc`` (via
-``write_schedules``/``GoldRepository``). The ``facility`` table survives only as the legacy
-``build-gold`` (``pipeline.run``) / offline-``build`` write target until that pipeline is
-deleted (Plan C).
+The ``/swim`` read path *and* the network enrichers (``scrape-gold``/``scrape-lanes``)
+serve/write the curated blob through ``pool.facility_doc`` (via
+``write_schedules``/``GoldRepository``). The legacy ``facility`` table was deleted in Plan C
+once ``build-gold`` — its last writer — was gone.
 """
 
 from __future__ import annotations
@@ -31,10 +29,10 @@ from swimzh.storage import calendar_codec, codec
 from swimzh.storage.codec import _KIND_FROM
 from swimzh.storage.rows import PoolSpine
 
-# The identity spine (`pool` + `pool_alias` + `pool_xref`) alongside the transitional
-# `facility` table and the singleton `calendar` row. All `CREATE TABLE IF NOT EXISTS`, so an
-# existing store gains the spine additively. `STRICT` + `UNIQUE` + FK `ON DELETE CASCADE` make
-# the split-brain (one pool, two ids) an unrepresentable write.
+# The identity spine (`pool` + `pool_alias` + `pool_xref`) alongside the singleton `calendar`
+# row. All `CREATE TABLE IF NOT EXISTS`, so an existing store gains the spine additively.
+# `STRICT` + `UNIQUE` + FK `ON DELETE CASCADE` make the split-brain (one pool, two ids) an
+# unrepresentable write.
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS pool (
     id              TEXT PRIMARY KEY,
@@ -60,16 +58,6 @@ CREATE TABLE IF NOT EXISTS pool_xref (
     ext_id    TEXT NOT NULL,
     UNIQUE(namespace, ext_id)
 ) STRICT;
-CREATE TABLE IF NOT EXISTS facility (
-    facility_id   TEXT PRIMARY KEY,
-    name          TEXT NOT NULL,
-    kind          TEXT NOT NULL,
-    lat           REAL,
-    lon           REAL,
-    valid_as_of   TEXT,
-    fetched_at    TEXT,
-    doc           TEXT NOT NULL
-);
 CREATE TABLE IF NOT EXISTS calendar (
     id            TEXT PRIMARY KEY,
     doc           TEXT NOT NULL
@@ -86,30 +74,6 @@ def open_db(path: str | Path) -> sqlite3.Connection:
     conn.executescript(_SCHEMA)
     conn.commit()
     return conn
-
-
-def write_facilities(conn: sqlite3.Connection, facilities: tuple[Facility, ...]) -> None:
-    """Upsert facilities into the gold store (idempotent on facility_id)."""
-    rows = [
-        (
-            str(f.identity.facility_id),
-            f.identity.name,
-            f.identity.kind.value,
-            f.geo.lat if f.geo is not None else None,
-            f.geo.lon if f.geo is not None else None,
-            f.provenance.valid_as_of.isoformat() if f.provenance.valid_as_of is not None else None,
-            f.provenance.fetched_at.isoformat() if f.provenance.fetched_at is not None else None,
-            codec.dumps(f),
-        )
-        for f in facilities
-    ]
-    conn.executemany(
-        "INSERT OR REPLACE INTO facility "
-        "(facility_id, name, kind, lat, lon, valid_as_of, fetched_at, doc) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-        rows,
-    )
-    conn.commit()
 
 
 def write_pools(conn: sqlite3.Connection, spine: PoolSpine) -> None:
@@ -189,18 +153,6 @@ def load_xref_rows(conn: sqlite3.Connection) -> tuple[tuple[str, str, str], ...]
         (str(namespace), str(ext_id), str(pool_id))
         for namespace, ext_id, pool_id in cursor.fetchall()
     )
-
-
-def load_catalog(conn: sqlite3.Connection) -> tuple[PoolCatalogEntry, ...]:
-    """Rehydrate the full pool roster from the ``pool`` spine, ordered by canonical id.
-
-    The catalog listing (``/pools``) now serves from the same identity spine as ``/swim`` —
-    one store, joinable by ``pool.id``.
-    """
-    cursor = conn.execute(
-        "SELECT id, name, kind, address, lat, lon, url, description, phone FROM pool ORDER BY id"
-    )
-    return tuple(_catalog_entry(row) for row in cursor.fetchall())
 
 
 def load_roster(conn: sqlite3.Connection) -> tuple[RosterEntry, ...]:

@@ -1,13 +1,12 @@
 """Offline build: assemble a complete, self-contained gold DB from committed inputs.
 
-`build_store` is the network-free counterpart to `pipeline.run`: it reads only the curated
-files already committed under `data_dir` — the curated dataset (facilities + registry +
-calendar via `load_dataset`) and the committed pool catalog (`catalog.json`) — and writes the
-DB-enforced identity spine (one `pool` table = the roster, plus its `pool_alias`/`pool_xref`
-crosswalk) with the curated schedule payload carried as a typed blob on the `pool` row. The
-curated facilities are also written to the transitional `facility` table (the `/swim` read
-path) and the calendar to its singleton row. No WFS fetch, no scraping; the network commands
-layer onto the store this produces.
+`build_store` is the one offline builder: it reads only the curated files already committed
+under `data_dir` — the curated dataset (facilities + registry + calendar via `load_dataset`)
+and the committed pool catalog (`catalog.json`) — and writes the DB-enforced identity spine
+(one `pool` table = the roster, plus its `pool_alias`/`pool_xref` crosswalk) with the curated
+schedule payload carried as a typed blob on the `pool` row (`facility_doc`), and the calendar
+to its singleton row. No WFS fetch, no scraping; the network commands layer onto the store
+this produces.
 """
 
 from __future__ import annotations
@@ -26,7 +25,6 @@ from swimzh.storage.sqlite_repo import (
     GoldRepository,
     open_db,
     write_calendar,
-    write_facilities,
     write_pools,
     write_schedules,
 )
@@ -39,8 +37,8 @@ def build_store(data_dir: Path, db_path: str | Path) -> Result[GoldRepository, P
 
     Curated facilities + registry + calendar come from `load_dataset(data_dir)`; the pool
     roster from the committed `data_dir/catalog.json`. The identity spine (`pool` +
-    `pool_alias` + `pool_xref`), the transitional `facility` table, and the calendar are
-    written into one gold DB. Any input failure short-circuits to a typed `ProviderError`.
+    `pool_alias` + `pool_xref`) and the calendar are written into one gold DB. Any input
+    failure short-circuits to a typed `ProviderError`.
     """
     dataset_result = load_dataset(data_dir)
     if isinstance(dataset_result, Err):
@@ -58,11 +56,8 @@ def build_store(data_dir: Path, db_path: str | Path) -> Result[GoldRepository, P
     write_pools(conn, spine)
     # The single write door for the schedule blob: `pool.facility_doc` is populated by
     # `write_schedules` (from the geo-stamped curated facilities `build_spine` serialized),
-    # never by `write_pools`. The `write_facilities` call keeps the transitional `facility`
-    # table populated for the legacy `build-gold`/scrape paths (removed in Plan C); it no
-    # longer backs the read path.
+    # never by `write_pools`.
     write_schedules(conn, _keyed_schedules(spine))
-    write_facilities(conn, dataset.facilities)
     write_calendar(conn, dataset.calendar)
     return Ok(GoldRepository(conn))
 

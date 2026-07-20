@@ -26,7 +26,7 @@ from swimzh.storage import catalog_json
 from swimzh.storage.sqlite_repo import (
     GoldRepository,
     load_calendar,
-    load_catalog,
+    load_roster,
     open_db,
     write_schedules,
 )
@@ -144,9 +144,9 @@ def test_scrape_gold_composes_onto_built_store(tmp_path: Path) -> None:
 def test_scrape_gold_wires_scraped_only_pool_onto_read_path(tmp_path: Path) -> None:
     # B4 wiring proof: scrape-gold MUST write the composed facilities through `write_schedules`
     # (→ `pool.facility_doc`, the read path). A scraped-ONLY pool (curated data lacks it) can
-    # appear on that path only if the reroute holds; were scrape-gold to regress to `write_gold`
-    # (the dead `facility` table), the pool's `facility_doc` stays NULL and `get` returns None —
-    # so this test goes red on that mutation, closing the enrichment gap for good.
+    # appear on that path only if the reroute holds; were scrape-gold to stop writing
+    # `pool.facility_doc`, the pool's blob stays NULL and `get` returns None — so this test goes
+    # red on that mutation, closing the enrichment gap for good.
     db = tmp_path / "gold.sqlite"
     assert build(db_path=db, data_dir=DATA_DIR) == 0
     altstetten = reconstruct_pool_id("hallenbad-altstetten")
@@ -335,11 +335,11 @@ def test_build_produces_complete_offline_store(tmp_path: Path) -> None:
     assert db.exists()
 
     conn = open_db(db)
-    # Catalog table holds every known pool (committed data/catalog.json).
-    assert len(load_catalog(conn)) == 57
+    # The pool spine holds every known pool (committed data/catalog.json).
+    assert len(load_roster(conn)) == 57
     # Calendar table covers the current planning horizon.
     assert load_calendar(conn).covers(datetime(2026, 1, 1, tzinfo=ZURICH).date())
-    # Facility table holds the curated facilities — no geo/network enrichment needed.
+    # The curated facilities land on the read path (`pool.facility_doc`) — no network needed.
     dataset = load_dataset(DATA_DIR)
     assert isinstance(dataset, Ok)
     stored = {f.identity.facility_id for f in GoldRepository(conn).load_all()}
@@ -350,7 +350,7 @@ def test_build_via_main_offline(tmp_path: Path) -> None:
     db = tmp_path / "gold.sqlite"
     code = main(["build", "--db", str(db), "--data", str(DATA_DIR)])
     assert code == 0
-    assert len(load_catalog(open_db(db))) == 57
+    assert len(load_roster(open_db(db))) == 57
 
 
 def test_build_missing_catalog_is_error(tmp_path: Path) -> None:
@@ -399,7 +399,7 @@ def test_build_then_scrape_gold_enriches(tmp_path: Path) -> None:
     # Enrichment adds/updates facilities on top of the offline build; catalog+calendar survive.
     conn = open_db(db)
     assert GoldRepository(conn).count() >= before
-    assert len(load_catalog(conn)) == 57
+    assert len(load_roster(conn)) == 57
     assert load_calendar(conn).covers(datetime(2026, 6, 1, tzinfo=ZURICH).date())
 
 
@@ -420,8 +420,8 @@ def test_build_then_scrape_lanes_enriches(tmp_path: Path) -> None:
     city = _facility_from_read_path(db, "hallenbad-city")
     lap = next(b for b in city.basins if b.basin_id == BasinId("city-50m"))
     assert lap.lane_plan is not None
-    # Catalog + calendar assembled by `build` are untouched by lane enrichment.
-    assert len(load_catalog(conn)) == 57
+    # Roster + calendar assembled by `build` are untouched by lane enrichment.
+    assert len(load_roster(conn)) == 57
 
 
 def test_main_requires_a_subcommand() -> None:

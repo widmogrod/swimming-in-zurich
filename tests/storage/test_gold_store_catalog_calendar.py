@@ -1,8 +1,8 @@
-"""The gold store is self-contained: one DB round-trips the pool spine + facilities + calendar.
+"""The gold store is self-contained: one DB round-trips the pool spine + schedules + calendar.
 
-Writing the identity spine (`pool` + `pool_alias` + `pool_xref`), the transitional `facility`
-table, and the calendar into one `:memory:` store and reading them back equal. The catalog
-listing now serves from the same `pool` spine as `/swim` — one store, joinable by `pool.id`.
+Writing the identity spine (`pool` + `pool_alias` + `pool_xref`) and the calendar into one
+`:memory:` store and reading them back equal. The catalog listing now serves from the same
+`pool` spine as `/swim` — one store, joinable by `pool.id`.
 """
 
 from __future__ import annotations
@@ -22,10 +22,9 @@ from swimzh.storage import catalog_json, codec
 from swimzh.storage.sqlite_repo import (
     GoldRepository,
     load_calendar,
-    load_catalog,
+    load_roster,
     open_db,
     write_calendar,
-    write_facilities,
     write_pools,
     write_schedules,
 )
@@ -77,7 +76,6 @@ def test_one_db_holds_spine_facilities_and_calendar(
         (p.id, codec.loads(p.facility_doc)) for p in spine.pools if p.facility_doc is not None
     )
     write_schedules(conn, keyed)
-    write_facilities(conn, facilities)
     write_calendar(conn, calendar)
 
     # /swim reads the curated blob from `pool.facility_doc` (written by `write_schedules`),
@@ -88,8 +86,8 @@ def test_one_db_holds_spine_facilities_and_calendar(
     assert loaded_facilities == {pool_id: facility for pool_id, facility in keyed}
 
     # /pools reads the full roster from the pool spine — every catalog pool, one canonical id.
-    roster = load_catalog(conn)
-    assert {e.pool_id for e in roster} == {e.pool_id for e in catalog}
+    roster = load_roster(conn)
+    assert {e.entry.pool_id for e in roster} == {e.pool_id for e in catalog}
 
     assert _calendar_state(load_calendar(conn)) == _calendar_state(calendar)
 
@@ -103,7 +101,7 @@ def test_pool_write_is_idempotent(
     spine = build_spine(catalog, facilities, registry)
     write_pools(conn, spine)
     write_pools(conn, spine)  # full replace, not duplicate
-    assert len(load_catalog(conn)) == len(catalog)
+    assert len(load_roster(conn)) == len(catalog)
     assert conn.execute("SELECT COUNT(*) FROM pool_alias").fetchone()[0] == len(spine.aliases)
     assert conn.execute("SELECT COUNT(*) FROM pool_xref").fetchone()[0] == len(spine.xrefs)
 
@@ -124,6 +122,8 @@ def test_load_calendar_missing_raises() -> None:
 def test_spine_tables_present_and_strict() -> None:
     conn = open_db(":memory:")
     tables = {row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type = 'table'")}
-    assert {"pool", "pool_alias", "pool_xref", "facility", "calendar"} <= tables
-    # The retired `catalog` table is gone — the roster lives on the `pool` spine.
+    assert {"pool", "pool_alias", "pool_xref", "calendar"} <= tables
+    # The retired `catalog` and `facility` tables are gone — the roster lives on the `pool`
+    # spine and the schedule blob on `pool.facility_doc` (Plan C deleted the `facility` table).
     assert "catalog" not in tables
+    assert "facility" not in tables
