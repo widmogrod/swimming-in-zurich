@@ -19,6 +19,11 @@ links: ["[[gold-store]]", "[[2026-07-19-pool-identity-unification]]", "[[layers-
 > reconstruction routes through `domain.reconstruct_pool_id` (A3). The spine row DTOs live in
 > **`storage/rows.py`** (A4). Layer direction (`core → domain → storage → build → etl → apps`) is
 > enforced by `tests/test_layering.py`.
+> **The legacy geo pipeline referenced below is GONE** ([[delete-legacy-geo-pipeline]]): `etl/pipeline`,
+> `etl/raw`, `silver.reconcile`, `registry.resolve_*`, `build-gold`, the `facility` table, and
+> `etl/gold.write_gold` are all deleted. The app reads only `pool.facility_doc` (via
+> [[retire-facility-table]] `write_schedules`); `curation_status` is derived at read; geo is stamped
+> offline from the committed `catalog.json`. One offline builder (`etl/build.build_store`) remains.
 
 ## Executive summary
 

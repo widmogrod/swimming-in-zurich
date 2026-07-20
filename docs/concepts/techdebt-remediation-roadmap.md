@@ -21,10 +21,15 @@ links: ["[[2026-07-19-pool-identity-unification]]", "[[data-layer-architecture]]
 >   (`tests/test_layering.py`) in place.
 > - **Plan B DONE** — debt **#1** (app reads only `pool.facility_doc`; `write_schedules` the single
 >   writer), **#4** (`curation_status` derived at read), **#7** (the write side is typed on `PoolId`),
->   #6a-blob duplication retired; four B5 guards lock it in. The `facility` table is now write-only-dead.
->   Discovered for C: **TWO** legacy `write_facilities` writers remain (`pipeline.run` + `build_store`).
-> - **Plan C is next** — delete `build-gold`/`pipeline`/`raw` + `resolve_name`, and the now-dead
->   `facility` table + both `write_facilities` sites + `write_gold`/`etl.gold`.
+>   #6a-blob duplication retired; four B5 guards lock it in.
+> - **Plan C DONE** — deleted `build-gold`/`etl.pipeline`/`etl.raw`/`silver.reconcile`/`registry.resolve_*`
+>   and the now-dead `facility` table + both `write_facilities` sites + `write_gold`/`etl.gold`. One
+>   offline builder; geo via committed `catalog.json`; gold schema `{pool, pool_alias, pool_xref,
+>   calendar}`; coverage floor ratcheted 91→95.
+>
+> **The A → B → C program is complete.** Remaining backlog: **D** (resilient reconcile — partial-batch)
+> and **E** (calendar pyright), plus the deferred structural items #6a-rows / #6b snapshots / #6c Dagster
+> and #9 (`tests/build_stage` mirror) / #10 (GridSpec PDF calibration).
 
 ## Executive summary
 

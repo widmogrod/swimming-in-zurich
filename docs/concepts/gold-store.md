@@ -25,17 +25,17 @@ Tables (after [[2026-07-19-pool-identity-unification]] + [[2026-07-20-retire-fac
   unrepresentable. STRICT tables, FK `ON DELETE CASCADE`.
 - **`calendar`** — the Zürich calendar as a single JSON `singleton` row.
 
-(The former separate `catalog` table was retired into `pool`. A legacy **`facility`** table still
-physically exists — written only by the legacy `build-gold`/`build_store` path, read by no runtime
-code; [[delete-legacy-geo-pipeline]] (Plan C) deletes it.) The store is the **single source of truth
-the app reads**: the composition root reads the roster/facilities/calendar exclusively from `pool` +
-`calendar` and opens nothing under `data/` at runtime. A missing DB fails fast (`SWIMZH_GOLD_DB`
-required; the file must exist).
+(The former separate `catalog` table was retired into `pool`, and the legacy `facility` table was
+deleted by [[delete-legacy-geo-pipeline]] (Plan C) — the schedule payload now lives only on
+`pool.facility_doc`.) The store is the **single source of truth the app reads**: the composition root
+reads the roster/facilities/calendar exclusively from `pool` + `calendar` and opens nothing under
+`data/` at runtime. A missing DB fails fast (`SWIMZH_GOLD_DB` required; the file must exist).
 
 Built by one offline command — `swimzh build --db gold.sqlite` — from the committed curated
 inputs (`data/pools/*.yaml`, `data/registry.yaml`, `data/calendar/zurich.yaml`,
-`data/catalog.json`), no network. Optional network enrichment (`build-gold` WFS geo,
-`scrape-gold` page schedules, `scrape-lanes` Belegungsplan PDFs) layers on top of the same DB.
+`data/catalog.json`), no network; WFS geo is stamped from the committed `catalog.json`, not merged
+live. Optional network enrichment (`scrape-gold` page schedules, `scrape-lanes` Belegungsplan PDFs)
+layers on top of the same DB. `build-catalog` regenerates the committed `catalog.json` from the WFS.
 The committed `data/` files are ETL inputs, not runtime reads. `.sqlite` stays git-ignored
 (build-on-demand, no binary in git).
 
