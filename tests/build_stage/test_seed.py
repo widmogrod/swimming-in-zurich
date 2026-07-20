@@ -12,12 +12,13 @@ from pathlib import Path
 import pytest
 
 from swimzh.build.reconcile import Name, Xref
-from swimzh.build.seed import CURATED, UNCURATED, PoolSpine, build_crosswalk, build_spine
+from swimzh.build.seed import CURATED, UNCURATED, build_crosswalk, build_spine
 from swimzh.core.result import Ok
 from swimzh.domain.catalog import PoolCatalogEntry
 from swimzh.domain.models import PoolId, PoolKind
 from swimzh.providers.curated import Dataset, load_dataset
 from swimzh.storage import catalog_json
+from swimzh.storage.rows import PoolSpine
 
 DATA_DIR = Path(__file__).resolve().parents[2] / "data"
 

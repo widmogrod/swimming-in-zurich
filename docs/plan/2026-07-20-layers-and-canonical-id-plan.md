@@ -107,6 +107,7 @@ Appended by /dev:implement after each slice — never rewritten. Newest row last
 | 2026-07-20 | A1 | done | none — byte-identical git-tracked rename + 5 import repoints (4 src + 1 test) | concept docs (`data-layer-architecture`, `techdebt-remediation-roadmap`) still name `build/normalize.py` as the cleaning home — cosmetic doc-sync for a later pass | no |
 | 2026-07-20 | A2 | done | none — `BASIN_KIND_WORDS` moved to `domain/models.py` (beside `BasinKind`); byte-identical map; bonus — `etl/silver.py` now imports nothing from `swimzh.build` (helps A5) | none | no |
 | 2026-07-20 | A3 | done | repointed 3 `tests/build_stage/*` `PoolId` imports to `domain.models` (plan listed them under A5) — forced by moving `PoolId`'s canonical home + mypy `no_implicit_reexport`; simplified `build/seed.py` to `registry.get(pool_id)` (reuse the local minted id) | a now-no-op round-trip remains at `build/reconcile.py:184` (`PoolId(str(...))` on an already-`PoolId`; harmless, sits in an allowed minter — trivially collapsible in a later pass) | no |
+| 2026-07-20 | A4 | done | repointed `tests/build_stage/test_seed.py` `PoolSpine` import to `storage.rows` (mypy `no_implicit_reexport`) — same forced-repoint pattern as A3 | none | no |
 
 ## Decisions & divergences
 

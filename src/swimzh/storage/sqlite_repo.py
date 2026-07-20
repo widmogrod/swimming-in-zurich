@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import sqlite3
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 from swimzh.domain.calendar import ZurichCalendar
 from swimzh.domain.catalog import PoolCatalogEntry, RosterEntry
@@ -24,9 +24,7 @@ from swimzh.domain.geo import GeoPoint
 from swimzh.domain.models import Facility, PoolId
 from swimzh.storage import calendar_codec, codec
 from swimzh.storage.codec import _KIND_FROM
-
-if TYPE_CHECKING:
-    from swimzh.build.seed import PoolSpine
+from swimzh.storage.rows import PoolSpine
 
 # The identity spine (`pool` + `pool_alias` + `pool_xref`) alongside the transitional
 # `facility` table and the singleton `calendar` row. All `CREATE TABLE IF NOT EXISTS`, so an

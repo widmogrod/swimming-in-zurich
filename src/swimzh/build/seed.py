@@ -18,57 +18,16 @@ grep test. See ``docs/concepts/data-layer-architecture.md`` §3 for the enforcem
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-
 from swimzh.build.reconcile import Crosswalk, build_basin_hint_index
 from swimzh.core.normalize import normalize
 from swimzh.domain.catalog import PoolCatalogEntry
-from swimzh.domain.geo import GeoPoint
-from swimzh.domain.models import Facility, PoolId, PoolKind
+from swimzh.domain.models import Facility, PoolId
 from swimzh.domain.registry import Registry
 from swimzh.storage import codec
+from swimzh.storage.rows import PoolAliasRow, PoolRow, PoolSpine, PoolXrefRow
 
 CURATED = "curated"
 UNCURATED = "uncurated"
-
-
-@dataclass(frozen=True, slots=True)
-class PoolRow:
-    """One roster row: canonical identity + catalog metadata + the (optional) curated blob."""
-
-    id: PoolId
-    name: str
-    kind: PoolKind
-    address: str
-    geo: GeoPoint | None
-    url: str | None
-    description: str | None
-    phone: str | None
-    curation_status: str  # CURATED | UNCURATED — DERIVED, never authored
-    facility_doc: str | None  # curated Facility JSON (codec), else None
-
-
-@dataclass(frozen=True, slots=True)
-class PoolAliasRow:
-    pool_id: PoolId
-    alias: str
-    norm: str
-
-
-@dataclass(frozen=True, slots=True)
-class PoolXrefRow:
-    pool_id: PoolId
-    namespace: str
-    ext_id: str
-
-
-@dataclass(frozen=True, slots=True)
-class PoolSpine:
-    """The identity spine: the ``pool`` rows plus the alias/xref crosswalk that points at them."""
-
-    pools: tuple[PoolRow, ...]
-    aliases: tuple[PoolAliasRow, ...]
-    xrefs: tuple[PoolXrefRow, ...]
 
 
 def _is_curated(facility: Facility) -> bool:
