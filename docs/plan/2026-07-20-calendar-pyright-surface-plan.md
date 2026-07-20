@@ -1,6 +1,6 @@
 ---
 type: plan
-status: approved         # owner-approved 2026-07-20 (the "continue" after A/B/C)
+status: in-progress      # /dev:implement executing on main (worktree retired)
 created: 2026-07-20
 feature: calendar-pyright-surface
 gates:
