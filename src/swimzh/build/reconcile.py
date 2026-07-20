@@ -22,25 +22,11 @@ from typing import NewType, assert_never
 from swimzh.core.errors import ProviderError, SchemaMismatch
 from swimzh.core.normalize import normalize
 from swimzh.core.result import Err, Ok, Result
-from swimzh.domain.models import BasinKind, Facility
+from swimzh.domain.models import BASIN_KIND_WORDS, Facility
 
 PoolId = NewType("PoolId", str)
 
 _SOURCE = "reconcile"
-
-# German basin-type words used to build the lane-plan / basin-hint index — the single home
-# for this vocabulary (previously duplicated in ``build/seed`` and ``etl/silver``). Mirrors
-# the ``BasinKind`` prose the Belegungsplan headers use ("… Schwimmerbecken"); ``OTHER`` has
-# no meaningful word and is deliberately absent so it never seeds an over-broad key.
-BASIN_KIND_WORDS: dict[BasinKind, str] = {
-    BasinKind.LAP: "Schwimmerbecken",
-    BasinKind.NON_SWIMMER: "Nichtschwimmerbecken",
-    BasinKind.DIVING: "Sprungbecken",
-    BasinKind.VARIO: "Variobecken",
-    BasinKind.TEACHING: "Lehrschwimmbecken",
-    BasinKind.CHILDREN: "Kinderbecken",
-    BasinKind.OUTDOOR: "Aussenbecken",
-}
 
 
 # --- SourceRef: the closed union a provider emits instead of an id --------------------

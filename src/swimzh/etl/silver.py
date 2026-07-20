@@ -21,11 +21,16 @@ from collections.abc import Sequence
 from dataclasses import dataclass, replace
 from datetime import date, datetime
 
-from swimzh.build.reconcile import BASIN_KIND_WORDS
 from swimzh.core.errors import ProviderError, SchemaMismatch
 from swimzh.core.normalize import normalize as _normalise
 from swimzh.core.result import Err, Ok, Result
-from swimzh.domain.models import Basin, BasinId, Facility, FacilityId
+from swimzh.domain.models import (
+    BASIN_KIND_WORDS,
+    Basin,
+    BasinId,
+    Facility,
+    FacilityId,
+)
 from swimzh.providers.belegungsplan import ParsedPlan
 from swimzh.providers.curated import Dataset
 from swimzh.providers.geo_sport import GeoPool
