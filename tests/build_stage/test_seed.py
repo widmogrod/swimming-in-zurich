@@ -17,7 +17,7 @@ from swimzh.core.result import Ok
 from swimzh.domain.catalog import PoolCatalogEntry
 from swimzh.domain.models import PoolId, PoolKind
 from swimzh.providers.curated import Dataset, load_dataset
-from swimzh.storage import catalog_json
+from swimzh.storage import catalog_json, codec
 from swimzh.storage.rows import PoolSpine
 
 DATA_DIR = Path(__file__).resolve().parents[2] / "data"
@@ -67,6 +67,24 @@ def test_curated_pools_carry_a_facility_blob_uncurated_do_not(spine: PoolSpine) 
             assert p.facility_doc is not None
         else:
             assert p.facility_doc is None
+
+
+def test_facility_doc_geo_equals_committed_catalog_geo(
+    spine: PoolSpine, catalog: tuple[PoolCatalogEntry, ...]
+) -> None:
+    # B1 parity: the geo carried inside `pool.facility_doc` for every curated pool equals the
+    # committed `data/catalog.json` (= WFS) geo — compared OFFLINE against the committed catalog,
+    # never a live `build-gold` run. This is the coordinate a later collapse of the `facility`
+    # table (Plan C) must serve, so it must already match the authoritative catalog here.
+    catalog_geo = {e.pool_id: e.geo for e in catalog}
+    curated_rows = [p for p in spine.pools if p.facility_doc is not None]
+    assert len(curated_rows) == 4
+    for row in curated_rows:
+        entry_geo = catalog_geo[str(row.id)]
+        assert entry_geo is not None  # all 4 curated pools are in the catalog with coords
+        assert row.facility_doc is not None
+        facility = codec.loads(row.facility_doc)
+        assert facility.geo == entry_geo
 
 
 def test_kaeferberg_kind_is_curated_wins_thermal(spine: PoolSpine) -> None:

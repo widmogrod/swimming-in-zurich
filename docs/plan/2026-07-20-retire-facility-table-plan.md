@@ -112,7 +112,7 @@ Appended by /dev:implement after each slice — never rewritten. Newest row last
 
 | date | slice | status | divergence | tech debt | human review? |
 |------|-------|--------|------------|-----------|---------------|
-| —    | —     | —      | —          | —         | —             |
+| 2026-07-20 | B1 | done | stamped geo only in `build/seed.build_spine` (the single offline serialization point), not also `build/compose` — compose is the network/scraped path (its output goes to `write_gold`→the `facility` table, Plan C territory) and isn't passed the catalog | **behavior change**: 3 curated pools' `/swim` distance basis shifts from YAML coords to committed-catalog(WFS) coords — bungertwies **564 m** (slightly above the plan's ~50–500 m band, real data precision), oerlikon 297 m, city 194 m; aemtler 0. The `or facility.geo` fallback is defensive but untested (all 4 curated pools are in catalog today) | yes |
 
 ## Decisions & divergences
 

@@ -18,6 +18,8 @@ grep test. See ``docs/concepts/data-layer-architecture.md`` §3 for the enforcem
 
 from __future__ import annotations
 
+from dataclasses import replace
+
 from swimzh.build.reconcile import Crosswalk, build_basin_hint_index
 from swimzh.core.normalize import normalize
 from swimzh.domain.catalog import PoolCatalogEntry
@@ -57,6 +59,14 @@ def build_spine(
         pool_id = PoolId(entry.pool_id)
         identity = registry.get(pool_id)
         facility = curated_by_id.get(entry.pool_id)
+
+        # Geo parity, not geo rescue: stamp the authoritative committed-catalog (= WFS) geo onto
+        # the curated facility before it is serialized into `facility_doc`, so the offline read
+        # path serves the same coords an enriched (`build-gold`) deployment did. Offline — the
+        # catalog entry comes from the committed `catalog.json`. Curated pools absent from the
+        # catalog keep their YAML geo (the `or facility.geo` fallback).
+        if facility is not None:
+            facility = replace(facility, geo=entry.geo or facility.geo)
 
         # Curated-wins on kind: a hand-authored registry kind (richer/verified) overrides the
         # generic WFS catalog kind; catalog is the authority only where no curation exists.
