@@ -96,7 +96,7 @@ Appended by /dev:implement after each slice — never rewritten. Newest row last
 
 | date | slice | status | divergence | tech debt | human review? |
 |------|-------|--------|------------|-----------|---------------|
-| —    | —     | —      | —          | —         | —             |
+| 2026-07-20 | C1 | done | none — test-only rewrite; the cutover guard now asserts off `pool_alias` in a built store (stronger than before: exactly-one row + maps to the RIGHT canonical id + that id is a live `pool` row), no longer references `registry.resolve_name`; critic mutation-verified | none. **Discovery for C2:** the only other `resolve_name`-shaped test is `tests/build_stage/test_reconcile.py::test_resolve_name_hit_uses_normalized_key`, which exercises `build.reconcile.resolve` — a DIFFERENT symbol C2 KEEPS. The live `registry.resolve_name` caller is `etl/silver.reconcile` (deleted in C2). C2 must not touch the reconcile test | no |
 
 ## Decisions & divergences
 
