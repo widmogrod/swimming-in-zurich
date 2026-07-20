@@ -1,12 +1,12 @@
 ---
 type: plan
-status: draft            # draft -> approved -> in-progress -> done
+status: approved         # draft -> approved -> in-progress -> done
 created: 2026-07-21
 feature: richer-data-fidelity
 gates:
   qa: full               # ruff, format, mypy strict, pytest+coverage floor (95), CRAP
   review: adversarial
-pause_after: [D]         # D is the fidelity-preserving model/schema change — human-review before the parser rewrite (E) builds on it
+pause_after: [D, E3]     # D: schema/DTO change before the parser builds on it. E3: the brittle parser now feeds user-facing lane data — spot-check EVERY newly-parsed basin (E2 + E3) against the live PDFs before F/ship
 links: ["[[techdebt-remediation-roadmap]]", "[[gold-store]]", "[[data-layer-architecture]]"]
 ---
 
@@ -25,9 +25,13 @@ The gold codec round-trips the whole `Facility` tree faithfully (incl. `LanePlan
 "dropped on round-trip" worry is **stale**, verified). **The fidelity loss is at three seams, not
 storage:**
 
-1. **Extraction is City-only.** `providers/belegungsplan.py` hard-codes A4 pixel bands
-   (`GridSpec.central_x=(70,645)`, `_segment_grid` needs exactly 7×`lane_count` columns) → **1 of 8** live
-   basin PDFs parses; `etl/lane_plans.py` doesn't even list 3 pools (Leimbach, Bläsi, Käferberg).
+1. **Extraction is City-A4-only.** `providers/belegungsplan.py` hard-codes A4 pixel bands
+   (`GridSpec.central_x=(70,645)`, `_segment_grid` needs exactly 7×`lane_count` columns) → only the
+   City-Schwimmerbecken layout parses. `CITY_BELEGUNGSPLAN_URLS` (`etl/lane_plans.py`) **already lists 5
+   basins** (city-schwimmerbecken, city-variobecken, both Oerlikon sheets, bungertwies) but 4 of them are
+   skipped by the parser; 3 further pools (Leimbach, Bläsi, Käferberg) aren't listed at all. So the target
+   is "8 basins listed, up to 8 parsing" — the exact current parse count must be pinned to a real
+   `scrape-lanes` run before A/E acceptance (do not assume "1 of 8").
 2. **Query-time collapse.** `query.py` evaluates each option at `session.time.start` → a 06:00–22:00
    public session reports identical lane counts at 12:00 and 18:00 — the timeline the model holds is
    discarded at the call site.
@@ -54,9 +58,18 @@ LaneAvailabilityTimeline(weekday: Weekday, segments: tuple[LaneSlotAvailability,
 lane_availability_timeline(plan, weekday, within: TimeRange) -> LaneAvailabilityTimeline
     # cut at every reservation boundary within `within`; evaluate lane_availability_at() per sub-window
 ```
-Keep `lane_availability_at(plan, weekday, t)` as the point primitive. In `query.py`, clamp the point
-eval into the queried moment (`t = now if session.time.contains(now) else session.time.start`) and
-attach the timeline to `SwimOption` (derived, not stored).
+Keep `lane_availability_at(plan, weekday, t)` as the point primitive. **The queried moment `at` is the
+single filtering clock** — client-device time, defaulting to **server time at the `/swim` boundary** when
+absent (today `at` is a *required* query param — B makes it optional with a one-line server-time default,
+materialised once at the boundary so the domain stays pure). In `query.py`, clamp the point eval into
+that queried moment:
+```
+t = now_time if session.time.contains(now_time) else session.time.start   # now_time = at_local.time()
+```
+This is the **same clock `open_at_query_time` already uses** (`query.py:277`) — NOT the wall-clock
+`now = datetime.now()` (`query.py:212`), which would make a future/other-time query fall back to
+`session.time.start` and reintroduce the collapse. Wall-clock `now` stays reserved for occupancy
+freshness/relevance only (`want_occupancy`). Attach the timeline to `SwimOption` (derived, not stored).
 
 **Fidelity-preserving model change — ADDITIVE (Slice D, prereq for E).** Today `LanePlan.lane_count:int`
 + `LaneReservation.lanes: frozenset[int]` can't represent movable-floor basins (Vario/Käferberg run e.g.
@@ -74,11 +87,13 @@ test guards exactness.
 `FeatureKind` (terrace/rest/gastronomy) or a free `Feature.note`; `Facility.accessibility: str | None`,
 `Facility.last_admission_before: timedelta | None` — each with matching DTO + mapping + codec.
 
-**Extraction targets.** (A) add `leimbach`/`blaesi`/`kaeferberg` + both Oerlikon slugs to
-`CITY_BELEGUNGSPLAN_URLS`. (E) replace `_segment_grid`'s global 7×lane_count rectangle with per-weekday
+**Extraction targets.** (A) add the 3 unlisted slugs `leimbach`/`blaesi`/`kaeferberg` to
+`CITY_BELEGUNGSPLAN_URLS` (the Oerlikon/Vario/Bungertwies slugs are already listed — they need E's parser,
+not a new URL). (E1) replace `_segment_grid`'s global 7×lane_count rectangle with per-weekday
 columns under DETECTED weekday x-anchors; make `GridSpec` **page-relative** (anchor off the weekday-row
-span + page width, not absolute A4 pixels); add abbreviated weekday names; ragged/partial → `PARTIAL`
-coverage, not `SchemaMismatch`. (F) wire `parse_infrastruktur`/`apply_physicals` into build over
+span + page width, not absolute A4 pixels); add abbreviated weekday names — City stays `COMPLETE` (pure
+geometry refactor). (E2) ragged per-weekday floors → write D's `lanes_by_weekday`; ragged/partial →
+`PARTIAL` coverage, not `SchemaMismatch`. (E3) multi-basin/Teil segmentation writing D's `section`. (F) wire `parse_infrastruktur`/`apply_physicals` into build over
 `catalog.json` prose (tag `BasinSource.PARSED_PROSE`); widen `ScrapedAspects` + `_ASPECTS` with
 features/lockers/website/amenities/accessibility.
 
@@ -101,20 +116,27 @@ caveat where prose-derived; amenity chips in the all-pools table.
 
 ## Slices
 
-- **A — Basin PDF coverage quick win.** *(S)* Add `leimbach`/`blaesi`/`kaeferberg` + both Oerlikon slugs
-  to `CITY_BELEGUNGSPLAN_URLS` (`etl/lane_plans.py`); one saved-PDF fixture per newly-listed basin +
-  parse assertion (Leimbach parses today; the rest are typed skips until E).
-  **Acceptance:** `scrape-lanes` attaches a Leimbach `LanePlan`; `/pools/{leimbach}` returns non-empty
-  `lane_panels`; skipped basins counted in `LanePlanReport.skipped`, never fatal; QA green.
+- **A — Basin PDF coverage quick win.** *(S)* Add the 3 currently-unlisted slugs
+  `leimbach`/`blaesi`/`kaeferberg` to `CITY_BELEGUNGSPLAN_URLS` (`etl/lane_plans.py`) — Oerlikon/Vario/
+  Bungertwies are already listed. One saved-PDF fixture per newly-listed basin + a parse assertion.
+  **First, verify against the real Leimbach PDF whether the current A4 parser parses it** — the "Leimbach
+  parses today" claim is unverified. If it parses, A yields a real `LanePlan`; if not, all 3 are typed
+  skips until E and A's value is fixtures + wiring only (downgrade the acceptance accordingly).
+  **Acceptance:** *(if Leimbach parses)* `scrape-lanes` attaches a Leimbach `LanePlan` and
+  `/pools/{leimbach}` returns non-empty `lane_panels`; *(either way)* skipped basins counted in
+  `LanePlanReport.skipped`, never fatal; QA green.
   **Depends on:** —
 
 - **B — Query-time lane timeline (the 12:00 == 18:00 fix).** *(M)* `+LaneSlotAvailability`,
-  `+LaneAvailabilityTimeline`, `+lane_availability_timeline` (`domain/lane_plan.py`); clamp `t` into the
-  session + attach timeline to `SwimOption` (`query.py`); timeline in `/swim` `OptionOut`
-  (model+service); badge renders the arc (`ui/router.py`); update the session-start assertions + the
-  derive-at-read grep-guard.
-  **Acceptance:** a query at 18:00 (club takes lanes then) reports fewer public lanes than 12:00; the
-  timeline never reaches `codec.py` (grep-guard green); QA green.
+  `+LaneAvailabilityTimeline`, `+lane_availability_timeline` (`domain/lane_plan.py`); clamp `t` to the
+  **queried moment `now_time`** (not wall-clock `now`) + attach timeline to `SwimOption` (`query.py`);
+  make `/swim` `at` **optional with a server-time default** materialised once at the boundary
+  (`swim/router.py` + `swim/service.py`); timeline in `/swim` `OptionOut` (model+service); badge renders
+  the arc (`ui/router.py`); update the session-start assertions + the derive-at-read grep-guard.
+  **Acceptance:** (a) `/swim` with **no `at`** answers using server time (no 422); (b) `?at=<today 18:00>`
+  reports fewer public lanes than `?at=<today 12:00>`, and this holds **regardless of the wall-clock time
+  the test runs** (pins `now_time`, not `now`); (c) the timeline never reaches `codec.py` (grep-guard
+  green); QA green.
   **Depends on:** —
 
 - **C — Surface the full FacilityDetail through `/pools/{id}` + UI.** *(M)* Extend `FacilityDetailOut`
@@ -133,14 +155,32 @@ caveat where prose-derived; amenity chips in the all-pools table.
   green. **[PAUSE — schema/DTO change before the parser builds on it.]**
   **Depends on:** —
 
-- **E — Anchor-derived, page-relative parser (→ up to 8/8).** *(L)* Per-weekday columns under detected
-  anchors; page-relative `GridSpec`; abbreviated weekday names; multi-basin/Teil segmentation writing
-  D's fields; ragged → `PARTIAL`; keep all failures typed. One fixture + assertion per newly-supported
-  basin.
-  **Acceptance:** Vario/Bläsi/Käferberg (→5/8) then both Oerlikon sheets (→8/8) parse to the expected
-  lane/section shape + confidence; a truncated grid → `PARTIAL`, not an exception; City still parses
-  `COMPLETE` (no regression); QA green.
-  **Depends on:** D
+- **E1 — Page-relative / anchor-derived grid refactor (no new basins).** *(M)* Replace absolute A4 pixel
+  bands with page-relative geometry: detect the weekday-row x-anchors, derive columns off the weekday
+  span + page width, add abbreviated weekday-name recognition. **Behaviour-preserving on City** — no new
+  basin parses here; this is the foundation E2/E3 build on. Keep all failures typed.
+  **Acceptance:** City-Schwimmerbecken still parses `COMPLETE` with byte-identical reservations to the
+  pre-refactor fixture (no regression); the A4 pixel constants are gone from `GridSpec`; QA green.
+  **Depends on:** — *(independent of D — pure parser geometry; can land before or after the D pause)*
+
+- **E2 — Ragged per-weekday floors (movable-floor basins → PARTIAL-aware).** *(M)* Under E1's anchors,
+  allow the lane count to differ by weekday and write D's `lanes_by_weekday`; a truncated/ragged grid
+  resolves to `PARTIAL` coverage, never `SchemaMismatch`. One saved-PDF fixture + assertion per newly
+  supported basin.
+  **Acceptance:** Vario/Bläsi/Käferberg parse (→ up to 5/8) to the expected per-weekday lane shape +
+  `PARTIAL`/`COMPLETE` confidence; a deliberately truncated grid → `PARTIAL`, not an exception; City
+  unchanged; QA green.
+  **Depends on:** D, E1
+
+- **E3 — Multi-basin / named-section (Teil) segmentation (→ up to 8/8). *(M — pause after)*** Segment a
+  sheet that stacks several basins / "Teil 1 / Teil 2" sections, writing D's `section`; one fixture +
+  assertion per Oerlikon sheet.
+  **Acceptance:** both Oerlikon sheets parse (→ 8/8) to the expected lane/section shape + confidence;
+  City + E2's basins unchanged; QA green.
+  **[PAUSE — brittle parser now feeds user-facing lane data: manually spot-check EVERY newly-parsed basin
+  (E2's Vario/Bläsi/Käferberg + E3's Oerlikon sheets) against the live PDFs before F/ship. Wrong lane
+  counts mislead swimmers and fixtures alone can't catch a mis-anchored column.]**
+  **Depends on:** D, E1 (and E2 for the shared ragged/`PARTIAL` handling)
 
 - **F — Richer facility extraction across all 57 pools.** *(L)* `Basin.measured_temp_c`/
   `diving_platforms_m`, `Facility.accessibility`/`last_admission_before`, `FeatureKind` growth (+ DTO +
@@ -148,8 +188,9 @@ caveat where prose-derived; amenity chips in the all-pools table.
   `parse_infrastruktur`/`apply_physicals` into build; widen `ScrapedAspects` + `_ASPECTS`; UI badges with
   `PARSED_PROSE` caveat; update `data/sources.md`.
   **Acceptance:** `swimzh build` yields `PARSED_PROSE` basins for a previously location-only pool; a
-  scraped feature/locker survives compose onto a non-curated base; round-trip test green; `sources.md`
-  updated; QA green.
+  low-confidence `PARSED_PROSE` basin appears in `/pools/{id}` detail **with its caveat** but produces
+  **no** `/swim` option (Decision #5 gate — explicitly tested, not incidental); a scraped feature/locker
+  survives compose onto a non-curated base; round-trip test green; `sources.md` updated; QA green.
   **Depends on:** C (UI surface) for the badges; model additions independent of D/E.
 
 ## Ledger
@@ -166,10 +207,25 @@ caveat where prose-derived; amenity chips in the all-pools table.
   supported basin (accept a refresh-cadence tech-debt). #4 measured temp overrides nominal in the badge,
   nominal in a tooltip. #5 low-confidence `PARSED_PROSE` basins are shown in `/pools` detail (with
   caveat) but gated out of `/swim` options.
-- **OWNER SIGN-OFF NEEDED (#6, gates A/E):** broadening lane-plan scraping from City to all 8 basins
-  increases the copyright/ToS surface flagged in `data/sources.md`. Recommendation: best-effort,
-  read-only, per-term is consistent with the existing `scrape-gold` posture — but confirm before A/E,
-  and keep the "ask OGD for a machine-readable feed" action open.
+- **2026-07-21 — critical review (pre-approval), corrections applied.** Verified the plan's diagnosis
+  against the code (all three seams confirmed: `query.py:253` clamps to `session.time.start`;
+  `belegungsplan.py:293` requires `7×lane_count` cols; `FacilityDetailOut` drops the computed
+  basins/features/lockers; `parse_infrastruktur`/`apply_physicals` have no build call site). Fixes folded
+  in: (1) Slice A no longer "adds both Oerlikon slugs" — they, Vario, and Bungertwies are **already listed**;
+  A adds only leimbach/blaesi/kaeferberg. (2) Slice B clamp corrected `now → now_time` (queried moment),
+  matching `open_at_query_time`; wall-clock `now` reserved for occupancy. (3) `/swim` `at` made optional
+  with a server-time default at the boundary (owner rule: filtering time is the client-device moment,
+  server time only as fallback) — it is a **required** param today. (4) Decision #5's `/swim` gate given an
+  explicit acceptance in F. Also applied per owner ("both"): (b) **Slice E split** into
+  E1 (page-relative refactor, City byte-identical) / E2 (ragged floors → `lanes_by_weekday`, PARTIAL) /
+  E3 (multi-basin/Teil → `section`); (c) **`pause_after` now `[D, E3]`** with a mandatory manual
+  spot-check of every newly-parsed basin (E2 + E3) against the live PDFs before F. **Still open for the
+  owner:** (a) the parse-count numbers ("1 of 8" / "Leimbach parses today") remain unverified — pin to a
+  real `scrape-lanes` run before A / E2 acceptance.
+- **2026-07-21 — #6 resolved (owner sign-off): best-effort, proceed.** Broadening lane-plan scraping
+  from City to all published stadt-zuerich Belegungsplan PDFs is approved — read-only, best-effort,
+  per-term (same posture as the existing `scrape-gold`); A and E proceed with full scope. The "ask Open
+  Data Zürich for a machine-readable feed" action stays open in `data/sources.md`.
 
 ## Summary
 
