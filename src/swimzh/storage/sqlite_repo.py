@@ -5,11 +5,13 @@ The identity spine is one ``pool`` table (all ~57 published pools, canonical id 
 global ``UNIQUE(norm)`` and ``pool_xref`` with ``UNIQUE(namespace, ext_id)`` — so "same
 entity → two ids" is a write-time ``IntegrityError``, not a convention. These are ``STRICT``
 tables and their FKs cascade from ``pool``. The curated schedule payload rides as a typed
-blob on the ``pool`` row (``facility_doc``); row-normalizing it is a later plan.
+blob on the ``pool`` row (``facility_doc``), written by the single ``write_schedules`` door;
+row-normalizing it is a later plan.
 
-The legacy ``facility`` table (queryable columns + a full-``Facility`` ``doc`` blob) is kept
-transiently as the ``/swim`` schedule read path and the network-enrichment write target; it
-is retired when the app and scrapers are rewired to the ``pool`` spine.
+The legacy ``facility`` table (queryable columns + a full-``Facility`` ``doc`` blob) is now
+write-only: the ``/swim`` read path serves the curated blob from ``pool.facility_doc`` (via
+``write_schedules``/``GoldRepository``), and the ``facility`` table survives solely as the
+network-enrichment write target until the legacy ``build-gold`` pipeline is deleted (Plan C).
 """
 
 from __future__ import annotations
@@ -111,6 +113,11 @@ def write_facilities(conn: sqlite3.Connection, facilities: tuple[Facility, ...])
 def write_pools(conn: sqlite3.Connection, spine: PoolSpine) -> None:
     """Write the identity spine (``pool`` + ``pool_alias`` + ``pool_xref``).
 
+    Writes identity/roster columns only — **not** ``facility_doc``, which is left ``NULL`` for
+    ``write_schedules`` to fill. That makes ``write_schedules`` the *single writer* of the
+    schedule blob, so no ``pool`` row can carry a blob that never passed the ``PoolId``-typed
+    schedule seam.
+
     The write side is typed on ``PoolSpine`` — whose rows carry a ``PoolId`` minted only by
     ``build.seed``/``build.reconcile`` — so no caller can reach a ``pool`` row without a
     reconciled id. A full replace (cascade-clearing the crosswalk) keeps a re-build idempotent
@@ -119,9 +126,8 @@ def write_pools(conn: sqlite3.Connection, spine: PoolSpine) -> None:
     conn.execute("DELETE FROM pool")  # FK ON DELETE CASCADE clears alias/xref too
     conn.executemany(
         "INSERT INTO pool "
-        "(id, name, kind, address, lat, lon, url, description, phone, "
-        "curation_status, facility_doc) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        "(id, name, kind, address, lat, lon, url, description, phone, curation_status) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         [
             (
                 str(p.id),
@@ -134,7 +140,6 @@ def write_pools(conn: sqlite3.Connection, spine: PoolSpine) -> None:
                 p.description,
                 p.phone,
                 p.curation_status,
-                p.facility_doc,
             )
             for p in spine.pools
         ],
@@ -146,6 +151,22 @@ def write_pools(conn: sqlite3.Connection, spine: PoolSpine) -> None:
     conn.executemany(
         "INSERT INTO pool_xref (pool_id, namespace, ext_id) VALUES (?, ?, ?)",
         [(str(x.pool_id), x.namespace, x.ext_id) for x in spine.xrefs],
+    )
+    conn.commit()
+
+
+def write_schedules(conn: sqlite3.Connection, keyed: tuple[tuple[PoolId, Facility], ...]) -> None:
+    """Write each curated schedule blob to its ``pool.facility_doc`` — the *single writer* of
+    that column.
+
+    Typed on ``PoolId``: a caller cannot land a schedule on a ``pool`` row without a reconciled
+    canonical id, so an unreconciled schedule write is unrepresentable. Each blob is applied as
+    an ``UPDATE`` keyed on ``pool.id``, so ``write_schedules`` layers onto an already-seeded
+    spine (``write_pools`` first) and re-running it is idempotent.
+    """
+    conn.executemany(
+        "UPDATE pool SET facility_doc = ? WHERE id = ?",
+        [(codec.dumps(facility), str(pool_id)) for pool_id, facility in keyed],
     )
     conn.commit()
 
@@ -237,22 +258,29 @@ def load_calendar(conn: sqlite3.Connection) -> ZurichCalendar:
 
 
 class GoldRepository:
-    """Read side over the gold store."""
+    """Read side over the gold store: the curated schedule blobs on the ``pool`` spine.
+
+    Reads ``pool.facility_doc`` (the pools that carry a curated schedule — ``facility_doc IS NOT
+    NULL``), ordered by canonical id. The ``facility`` table is no longer read here.
+    """
 
     def __init__(self, conn: sqlite3.Connection) -> None:
         self._conn = conn
 
     def load_all(self) -> tuple[Facility, ...]:
-        cursor = self._conn.execute("SELECT doc FROM facility ORDER BY facility_id")
+        cursor = self._conn.execute(
+            "SELECT facility_doc FROM pool WHERE facility_doc IS NOT NULL ORDER BY id"
+        )
         return tuple(codec.loads(row[0]) for row in cursor.fetchall())
 
     def get(self, facility_id: PoolId) -> Facility | None:
         cursor = self._conn.execute(
-            "SELECT doc FROM facility WHERE facility_id = ?", (str(facility_id),)
+            "SELECT facility_doc FROM pool WHERE id = ? AND facility_doc IS NOT NULL",
+            (str(facility_id),),
         )
         row = cursor.fetchone()
         return codec.loads(row[0]) if row is not None else None
 
     def count(self) -> int:
-        cursor = self._conn.execute("SELECT COUNT(*) FROM facility")
+        cursor = self._conn.execute("SELECT COUNT(*) FROM pool WHERE facility_doc IS NOT NULL")
         return int(cursor.fetchone()[0])

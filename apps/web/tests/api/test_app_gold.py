@@ -18,7 +18,7 @@ from swimzh.domain.models import Basin, Facility
 from swimzh.domain.schedule import TimeRange, Weekday
 from swimzh.etl.build import build_store
 from swimzh.providers.curated import load_dataset
-from swimzh.storage.sqlite_repo import open_db, write_facilities
+from swimzh.storage.sqlite_repo import open_db, write_schedules
 
 DATA_DIR = Path(__file__).resolve().parents[4] / "data"
 
@@ -30,8 +30,11 @@ def _gold_db_with_lane_plan(tmp_path: Path) -> Path:
     assert isinstance(dataset, Ok)
     db = tmp_path / "gold.sqlite"
     assert isinstance(build_store(DATA_DIR, db), Ok)
-    # Overwrite the facility rows with lane-plan-attached copies (catalog + calendar stay).
-    write_facilities(open_db(db), _attach_lane_plan(dataset.value.facilities))
+    # Re-write City's `pool.facility_doc` (the flipped read path) with a lane-plan-attached copy
+    # via the single write door; the other pools keep their build-stamped catalog geo.
+    attached = _attach_lane_plan(dataset.value.facilities)
+    city = next(f for f in attached if f.identity.name == "Hallenbad City")
+    write_schedules(open_db(db), ((city.identity.facility_id, city),))
     return db
 
 

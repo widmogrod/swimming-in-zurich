@@ -18,14 +18,17 @@ from swimzh.build.seed import build_spine
 from swimzh.core.errors import ParseError, ProviderError, SchemaMismatch
 from swimzh.core.result import Err, Ok, Result
 from swimzh.domain.catalog import PoolCatalogEntry
+from swimzh.domain.models import Facility, PoolId
 from swimzh.providers.curated import load_dataset
-from swimzh.storage import catalog_json
+from swimzh.storage import catalog_json, codec
+from swimzh.storage.rows import PoolSpine
 from swimzh.storage.sqlite_repo import (
     GoldRepository,
     open_db,
     write_calendar,
     write_facilities,
     write_pools,
+    write_schedules,
 )
 
 _SOURCE = "catalog"
@@ -53,9 +56,27 @@ def build_store(data_dir: Path, db_path: str | Path) -> Result[GoldRepository, P
 
     conn = open_db(db_path)
     write_pools(conn, spine)
+    # The single write door for the schedule blob: `pool.facility_doc` is populated by
+    # `write_schedules` (from the geo-stamped curated facilities `build_spine` serialized),
+    # never by `write_pools`. The `write_facilities` call keeps the transitional `facility`
+    # table populated for the legacy `build-gold`/scrape paths (removed in Plan C); it no
+    # longer backs the read path.
+    write_schedules(conn, _keyed_schedules(spine))
     write_facilities(conn, dataset.facilities)
     write_calendar(conn, dataset.calendar)
     return Ok(GoldRepository(conn))
+
+
+def _keyed_schedules(spine: PoolSpine) -> tuple[tuple[PoolId, Facility], ...]:
+    """The curated ``(PoolId, Facility)`` pairs `write_schedules` writes to ``pool.facility_doc``.
+
+    Rehydrated from the spine rows `build_spine` already produced, so the geo authoritatively
+    stamped there (committed-catalog coords, B1) is exactly what reaches the read path — one
+    stamping site, no divergence.
+    """
+    return tuple(
+        (p.id, codec.loads(p.facility_doc)) for p in spine.pools if p.facility_doc is not None
+    )
 
 
 def _load_catalog(path: Path) -> Result[tuple[PoolCatalogEntry, ...], ProviderError]:

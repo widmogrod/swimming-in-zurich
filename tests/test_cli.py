@@ -15,16 +15,30 @@ from swimzh.core.http import HttpClient, RetryPolicy
 from swimzh.core.result import Ok
 from swimzh.domain.catalog import PoolCatalogEntry
 from swimzh.domain.geo import GeoPoint
-from swimzh.domain.models import BasinId, PoolId, PoolKind
+from swimzh.domain.models import BasinId, Facility, PoolKind
 from swimzh.providers.curated import load_dataset
 from swimzh.providers.geo_sport import POOL_LAYERS
-from swimzh.storage import catalog_json
+from swimzh.storage import catalog_json, codec
 from swimzh.storage.sqlite_repo import (
     GoldRepository,
     load_calendar,
     load_catalog,
     open_db,
 )
+
+
+def _facility_from_table(conn: object, facility_id: str) -> Facility:
+    """Read one facility from the legacy `facility` table (the `scrape-*`/`build-gold` write
+    target). The flipped read path serves `pool.facility_doc`; the enrichment scrapers still
+    write only the `facility` table until B4 routes them through `write_schedules`, so their
+    output (lane plans, scraped schedules) is verified on the facility table here.
+    """
+    row = conn.execute(  # type: ignore[attr-defined]
+        "SELECT doc FROM facility WHERE facility_id = ?", (facility_id,)
+    ).fetchone()
+    assert row is not None, facility_id
+    return codec.loads(row[0])
+
 
 _FIXTURES = Path(__file__).resolve().parent / "providers" / "fixtures"
 FIXTURE_HTML = _FIXTURES / "hallenbad_city.html"
@@ -67,8 +81,9 @@ def test_build_gold_writes_readable_store(tmp_path: Path) -> None:
     assert code == 0
     assert db.exists()
 
-    # The written store's facilities are readable through the gold read side.
-    assert len(GoldRepository(open_db(db)).load_all()) == 4
+    # `build-gold` (the legacy pipeline) writes only the transitional `facility` table (Plan C
+    # retires it); the flipped read path is `pool.facility_doc`, so count the facility table.
+    assert open_db(db).execute("SELECT COUNT(*) FROM facility").fetchone()[0] == 4
 
 
 def test_build_gold_reports_failure(tmp_path: Path) -> None:
@@ -218,8 +233,10 @@ def _pdf_client(handler: Callable[[httpx.Request], httpx.Response]) -> HttpClien
 
 
 def test_scrape_lanes_attaches_plan_to_curated_basin(tmp_path: Path) -> None:
+    # `scrape-lanes` reads the curated facilities (now from `pool.facility_doc`) and needs the
+    # offline `build` spine present, then writes the attached plan to the `facility` table.
     db = tmp_path / "gold.sqlite"
-    build_gold(db_path=db, data_dir=DATA_DIR, client=_client(), fetched_at=FETCHED_AT)
+    assert build(db_path=db, data_dir=DATA_DIR) == 0
 
     body = FIXTURE_PDF.read_bytes()
     client = _pdf_client(lambda _r: httpx.Response(200, content=body))
@@ -228,8 +245,9 @@ def test_scrape_lanes_attaches_plan_to_curated_basin(tmp_path: Path) -> None:
     )
     assert code == 0
 
-    city = GoldRepository(open_db(db)).get(PoolId("hallenbad-city"))
-    assert city is not None
+    # B2→B4 enrichment gap: the plan lands on the `facility` table (write_gold), not yet on the
+    # read path — B4 routes scrape-lanes through `write_schedules`.
+    city = _facility_from_table(open_db(db), "hallenbad-city")
     lap = next(b for b in city.basins if b.basin_id == BasinId("city-50m"))
     assert lap.lane_plan is not None
     assert lap.lane_plan.lane_count == 6
@@ -244,7 +262,7 @@ def test_scrape_lanes_missing_db_is_error(tmp_path: Path) -> None:
 
 def test_scrape_lanes_reports_when_no_pdf_parses(tmp_path: Path) -> None:
     db = tmp_path / "gold.sqlite"
-    build_gold(db_path=db, data_dir=DATA_DIR, client=_client(), fetched_at=FETCHED_AT)
+    assert build(db_path=db, data_dir=DATA_DIR) == 0  # spine present, so the 503 is the cause
     client = _pdf_client(lambda _r: httpx.Response(503, text="down"))
     code = scrape_lanes(
         db_path=db, client=client, fetched_at=FETCHED_AT, urls=("https://example.test/city.pdf",)
@@ -349,8 +367,9 @@ def test_build_then_scrape_lanes_enriches(tmp_path: Path) -> None:
     assert code == 0
 
     conn = open_db(db)
-    city = GoldRepository(conn).get(PoolId("hallenbad-city"))
-    assert city is not None
+    # B2→B4 enrichment gap: the attached plan is on the `facility` table (write_gold), not yet
+    # on the flipped read path (`pool.facility_doc`) — B4 closes this via `write_schedules`.
+    city = _facility_from_table(conn, "hallenbad-city")
     lap = next(b for b in city.basins if b.basin_id == BasinId("city-50m"))
     assert lap.lane_plan is not None
     # Catalog + calendar assembled by `build` are untouched by lane enrichment.

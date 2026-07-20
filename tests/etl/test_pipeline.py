@@ -12,11 +12,13 @@ import httpx
 from swimzh.core.errors import HttpStatus
 from swimzh.core.http import HttpClient, RetryPolicy
 from swimzh.core.result import Err, Ok
-from swimzh.domain.models import PoolId
+from swimzh.domain.models import Facility
 from swimzh.domain.person import Gender, Person
 from swimzh.domain.query import SwimQuery, find_swim_options
 from swimzh.etl import pipeline
 from swimzh.providers.curated import load_dataset
+from swimzh.storage import codec
+from swimzh.storage.sqlite_repo import open_db
 
 DATA_DIR = Path(__file__).resolve().parents[2] / "data"
 ZURICH = ZoneInfo("Europe/Zurich")
@@ -47,19 +49,31 @@ def _client(response: httpx.Response) -> HttpClient:
     return HttpClient(inner, source="geo_sport", retry=RetryPolicy(max_attempts=1))
 
 
-def test_pipeline_end_to_end_then_query() -> None:
+def _facility_table(conn: object) -> tuple[Facility, ...]:
+    """Read the legacy ``facility`` table directly — pipeline.run's only write target.
+
+    ``pipeline.run`` (the legacy build-gold path, retired in Plan C) writes the transitional
+    ``facility`` table but not the ``pool`` spine; the flipped ``GoldRepository`` reads
+    ``pool.facility_doc``, so its output is verified on the facility table here.
+    """
+    cursor = conn.execute("SELECT doc FROM facility ORDER BY facility_id")  # type: ignore[attr-defined]
+    return tuple(codec.loads(row[0]) for row in cursor.fetchall())
+
+
+def test_pipeline_end_to_end_then_query(tmp_path: Path) -> None:
+    db = tmp_path / "gold.sqlite"
     result = pipeline.run(
         data_dir=DATA_DIR,
-        db_path=":memory:",
+        db_path=db,
         client=_client(httpx.Response(200, json=GEOJSON)),
         fetched_at=FETCHED_AT,
     )
     assert isinstance(result, Ok), result
-    repo = result.value
-    assert repo.count() == 4
 
-    city = repo.get(PoolId("hallenbad-city"))
-    assert city is not None
+    facilities = _facility_table(open_db(db))
+    assert len(facilities) == 4
+    by_id = {str(f.identity.facility_id): f for f in facilities}
+    city = by_id["hallenbad-city"]
     assert city.geo is not None
     assert city.identity.geo_sport_id == "poi_hallenbad_view.2"
     assert city.provenance.fetched_at == FETCHED_AT
@@ -71,7 +85,7 @@ def test_pipeline_end_to_end_then_query() -> None:
         person=Person(gender=Gender.MALE, age=40),
         at=datetime(2026, 9, 15, 18, 0, tzinfo=ZURICH),
     )
-    answer = find_swim_options(query, repo.load_all(), calendar_result.value.calendar)
+    answer = find_swim_options(query, facilities, calendar_result.value.calendar)
     assert answer.eligible_options()
 
 

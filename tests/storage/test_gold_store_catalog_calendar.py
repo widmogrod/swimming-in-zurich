@@ -18,7 +18,7 @@ from swimzh.domain.catalog import PoolCatalogEntry
 from swimzh.domain.models import Facility
 from swimzh.domain.registry import Registry
 from swimzh.providers.curated import load_dataset
-from swimzh.storage import catalog_json
+from swimzh.storage import catalog_json, codec
 from swimzh.storage.sqlite_repo import (
     GoldRepository,
     load_calendar,
@@ -27,6 +27,7 @@ from swimzh.storage.sqlite_repo import (
     write_calendar,
     write_facilities,
     write_pools,
+    write_schedules,
 )
 
 DATA_DIR = Path(__file__).resolve().parents[2] / "data"
@@ -72,13 +73,19 @@ def test_one_db_holds_spine_facilities_and_calendar(
     spine = build_spine(catalog, facilities, registry)
 
     write_pools(conn, spine)
+    keyed = tuple(
+        (p.id, codec.loads(p.facility_doc)) for p in spine.pools if p.facility_doc is not None
+    )
+    write_schedules(conn, keyed)
     write_facilities(conn, facilities)
     write_calendar(conn, calendar)
 
-    # /swim reads facilities from the transitional facility table.
+    # /swim reads the curated blob from `pool.facility_doc` (written by `write_schedules`),
+    # which carries B1's committed-catalog geo — so it equals the geo-stamped spine payload,
+    # not the raw YAML-geo `facilities` fixture.
     repo = GoldRepository(conn)
     loaded_facilities = {f.identity.facility_id: f for f in repo.load_all()}
-    assert loaded_facilities == {f.identity.facility_id: f for f in facilities}
+    assert loaded_facilities == {pool_id: facility for pool_id, facility in keyed}
 
     # /pools reads the full roster from the pool spine — every catalog pool, one canonical id.
     roster = load_catalog(conn)
