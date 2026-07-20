@@ -27,13 +27,21 @@ vestigial `Global` variant, and fences the layering with a cheap grep-guard.
   `build.seed` (under `TYPE_CHECKING`) — backwards. Fix by pushing the shared *leaves* DOWN, not by
   moving consumers up.
 - **One id type.** `FacilityId` and `PoolId` are the same concept; collapse to a single
-  `PoolId = NewType("PoolId", str)` in `domain/models`. The minter grep-guard (only `build/reconcile`
-  + `build/seed` may construct it from an external ref) is preserved; trusted *reconstruction* from
-  persisted rows / validated DTOs (`storage/codec.py`, `providers/curated.py`) routes through a tiny
-  `reconstruct_pool_id(str) -> PoolId` boundary shim so the guard stays strictly "mint-from-external-
-  ref only" (open-question #1 resolved to option (a)).
-- **Enforced layering.** A lightweight import-direction grep-guard test (mirroring the existing
-  "no `data/` reads at runtime" guard) — no AST DAG walker.
+  `PoolId = NewType("PoolId", str)` in `domain/models`. Blast radius is wide (18 files: 9 `src/`, 9
+  `tests/`) — a mechanical erase-and-repoint, not a local change. The minter grep-guard (only
+  `build/reconcile` + `build/seed` may construct a `PoolId` from an external ref) must stay coherent;
+  trusted *reconstruction* from persisted rows / validated DTOs routes through a tiny
+  `reconstruct_pool_id(str) -> PoolId` boundary shim placed in `domain` (beside the relocated
+  `PoolId`). Because the shim's body constructs a `PoolId`, **the grep-guard is explicitly updated** to
+  add the shim's home to its `ALLOWED` set (option (a)); the guard is NOT left untouched. The three
+  reconstruction call-sites are `storage/codec.py` (~124), `providers/curated.py` (~106 and ~133), and
+  `domain/query.py` (~408) — all routed through the shim (query.py's site was missed in the first draft).
+- **Enforced layering.** Target order `core → domain → storage → build → etl → apps`. Note `etl` is
+  **above** `build`, so `etl → build` is a legitimate downward edge and MUST be allowed (`etl/scrape.py`
+  and `etl/build.py` import from `build` and are not touched here). The wrong edges Plan A removes are
+  `domain/** → build` and `storage/** → build`. A lightweight import-direction grep-guard (matching the
+  `from swimzh.build` / `import swimzh.build` tokens, mirroring the existing "no `data/` reads at
+  runtime" guard) forbids exactly those two — no AST DAG walker.
 
 ## Out of scope
 
@@ -45,8 +53,9 @@ vestigial `Global` variant, and fences the layering with a cheap grep-guard.
 ## Slices
 
 - **A1 — `normalize` → `core`.** *(S)* Move `build/normalize.py` → `core/normalize.py` (a zero-import
-  leaf); repoint the four importers (`domain/registry`, `etl/silver`, `build/reconcile`, `build/seed`);
-  delete `build/normalize.py`.
+  leaf); repoint the four `src/` importers (`domain/registry`, `etl/silver`, `build/reconcile`,
+  `build/seed`) AND the test importer (`tests/build_stage/test_normalize.py`); delete
+  `build/normalize.py`.
   **Acceptance:** no module under `domain/**` or `etl/**` imports `swimzh.build.normalize`; QA green;
   behavior identical (normalize output byte-for-byte unchanged, asserted).
   **Depends on:** —
@@ -56,14 +65,20 @@ vestigial `Global` variant, and fences the layering with a cheap grep-guard.
   **Acceptance:** the map has one home in `domain`; both consumers import it from there; QA green.
   **Depends on:** —
 
-- **A3 — Unify `FacilityId` → one `PoolId`.** *(M)* Introduce/relocate the single
-  `PoolId = NewType(...)` in `domain/models`; make `FacilityId = PoolId` a one-step alias then remove
-  the alias and its uses; delete the `FacilityId(str(pool_id))` round-trip at `build/compose.py:118`;
-  add the `reconstruct_pool_id` shim and route the trusted reconstruction sites (`storage/codec.py`,
-  `providers/curated.py`) through it.
-  **Acceptance:** exactly one id NewType remains; the minter grep-guard still passes (construction from
-  external refs only in `build/reconcile` + `build/seed`; reconstruction only via the shim); mypy
-  strict green; QA green.
+- **A3 — Unify `FacilityId` → one `PoolId`.** *(M–L — 18 files)* Introduce/relocate the single
+  `PoolId = NewType(...)` in `domain/models`; make `FacilityId = PoolId` a one-step alias, then erase
+  `FacilityId` everywhere (9 `src/` files incl. `domain/query.py`, `domain/registry.py`,
+  `etl/silver.py`, `storage/sqlite_repo.py`, `build/seed.py`, `build/compose.py`; 9 `tests/` files that
+  import it from `domain.models`). Delete the `FacilityId(str(pool_id))` round-trip at
+  `build/compose.py` (~118). Add the `reconstruct_pool_id` shim in `domain` and route the four trusted
+  reconstruction sites through it: `storage/codec.py` (~124), `providers/curated.py` (~106, ~133), and
+  `domain/query.py` (~408). Update the minter grep-guard to add the shim's home to `ALLOWED`.
+  Field/param names keep their `facility_*` spelling (`PoolIdentity.facility_id`,
+  `Registry.resolve_name() -> PoolId`) — renames are **out of scope** (state it, so the type/name
+  mismatch isn't flagged in review).
+  **Acceptance:** `grep -rn '\bFacilityId\b' src/ tests/` returns nothing; exactly one id NewType
+  remains; the minter grep-guard passes (external-ref construction only in `build/reconcile` +
+  `build/seed`; reconstruction only via the `ALLOWED` shim); mypy strict green; QA green.
   **Depends on:** —
 
 - **A4 — Spine row DTOs → `storage`.** *(M)* Move `PoolSpine`/`PoolRow`/`PoolAliasRow`/`PoolXrefRow`
@@ -74,11 +89,13 @@ vestigial `Global` variant, and fences the layering with a cheap grep-guard.
   **Depends on:** A3
 
 - **A5 — Delete `Global` + fence the layering.** *(S)* Delete the `Global` `SourceRef` variant end to
-  end (its `resolve()`/`_ref_label()` match arms, its test, the doc bullet); add the import-direction
-  grep-guard test.
+  end (its `resolve()`/`_ref_label()` match arms in `build/reconcile.py`, its test in
+  `tests/build_stage/test_reconcile.py`, the doc bullet); repoint any `tests/build_stage/*` imports of
+  moved symbols (`PoolId`, `SourceRef`, `BASIN_KIND_WORDS`); add the import-direction grep-guard test.
   **Acceptance:** `Global` appears nowhere in `src/`; `assert_never` exhaustiveness still holds over the
-  narrowed `SourceRef` union; the new grep-guard fails if `domain/**` or `etl/**` imports `swimzh.build`
-  or if `storage/**` imports `swimzh.build`; QA green.
+  narrowed `Xref | Name | BasinHint` union; the new grep-guard fails if `domain/**` or `storage/**`
+  imports `swimzh.build` (matched on `from swimzh.build` / `import swimzh.build` tokens), and **allows**
+  `etl/** → swimzh.build` (a legitimate downward edge); QA green.
   **Depends on:** A1, A2, A4
 
 ## Ledger
@@ -92,8 +109,15 @@ Appended by /dev:implement after each slice — never rewritten. Newest row last
 ## Decisions & divergences
 
 - **2026-07-20 — Open-question #1 resolved (owner picked A/B/C).** Trusted id *reconstruction* from
-  persisted rows / validated DTOs routes through a `reconstruct_pool_id` boundary shim (option (a)),
-  keeping the minter grep-guard strictly "mint-from-external-ref only" rather than diluting its allow-set.
+  persisted rows / validated DTOs routes through a single `reconstruct_pool_id` boundary shim
+  (option (a)) — the guard's allow-set gains exactly ONE entry (the shim's home in `domain`), not the
+  three scattered call-sites, so "mint-from-external-ref only in `reconcile`/`seed`" stays legible.
+- **2026-07-20 — Review adjustments (pre-implementation).** A draft review found three blockers, now
+  folded in: (1) the layering guard must ALLOW `etl → build` (etl sits above build; `etl/scrape.py` +
+  `etl/build.py` legitimately import `build`) — it forbids only `domain/**` and `storage/** → build`;
+  (2) A3's minter-guard claim was under-analyzed — the shim's body constructs a `PoolId` so the guard
+  IS updated (allow the shim's home), and `domain/query.py` (~408) is a fourth reconstruction site;
+  (3) A3's blast radius is 18 files, resized to M–L with a `grep FacilityId` acceptance.
 
 ## Summary
 
