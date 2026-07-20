@@ -26,11 +26,11 @@ from swimzh.boundary.curated_dto import (
 )
 from swimzh.domain.models import (
     Facility,
-    FacilityId,
     Notice,
     PoolIdentity,
     PoolKind,
     Provenance,
+    reconstruct_pool_id,
 )
 from swimzh.domain.schedule import HolidayPolicy
 
@@ -121,7 +121,7 @@ def to_stored(facility: Facility) -> StoredFacilityDTO:
 
 def from_stored(stored: StoredFacilityDTO) -> Facility:
     identity = PoolIdentity(
-        facility_id=FacilityId(stored.facility_id),
+        facility_id=reconstruct_pool_id(stored.facility_id),
         name=stored.name,
         kind=_KIND_FROM[stored.kind],
         geo_sport_id=stored.geo_sport_id,

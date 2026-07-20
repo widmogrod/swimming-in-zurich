@@ -20,13 +20,12 @@ from datetime import datetime
 from enum import Enum
 from typing import Any
 
-from swimzh.build.reconcile import PoolId
 from swimzh.domain.geo import GeoPoint
 from swimzh.domain.models import (
     Basin,
     Facility,
-    FacilityId,
     Notice,
+    PoolId,
     PoolIdentity,
     PoolKind,
     Provenance,
@@ -114,9 +113,7 @@ class Composition:
 def _scraped_facility(pool_id: PoolId, aspects: ScrapedAspects) -> Facility:
     """Assemble a scraped ``Facility`` from an already-reconciled ``PoolId`` (never minted here)."""
     return Facility(
-        identity=PoolIdentity(
-            facility_id=FacilityId(str(pool_id)), name=aspects.name, kind=aspects.kind
-        ),
+        identity=PoolIdentity(facility_id=pool_id, name=aspects.name, kind=aspects.kind),
         address=aspects.address,
         provenance=Provenance(
             source=_SCRAPE_SOURCE,

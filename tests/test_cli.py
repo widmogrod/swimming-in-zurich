@@ -15,7 +15,7 @@ from swimzh.core.http import HttpClient, RetryPolicy
 from swimzh.core.result import Ok
 from swimzh.domain.catalog import PoolCatalogEntry
 from swimzh.domain.geo import GeoPoint
-from swimzh.domain.models import BasinId, FacilityId, PoolKind
+from swimzh.domain.models import BasinId, PoolId, PoolKind
 from swimzh.providers.curated import load_dataset
 from swimzh.providers.geo_sport import POOL_LAYERS
 from swimzh.storage import catalog_json
@@ -228,7 +228,7 @@ def test_scrape_lanes_attaches_plan_to_curated_basin(tmp_path: Path) -> None:
     )
     assert code == 0
 
-    city = GoldRepository(open_db(db)).get(FacilityId("hallenbad-city"))
+    city = GoldRepository(open_db(db)).get(PoolId("hallenbad-city"))
     assert city is not None
     lap = next(b for b in city.basins if b.basin_id == BasinId("city-50m"))
     assert lap.lane_plan is not None
@@ -349,7 +349,7 @@ def test_build_then_scrape_lanes_enriches(tmp_path: Path) -> None:
     assert code == 0
 
     conn = open_db(db)
-    city = GoldRepository(conn).get(FacilityId("hallenbad-city"))
+    city = GoldRepository(conn).get(PoolId("hallenbad-city"))
     assert city is not None
     lap = next(b for b in city.basins if b.basin_id == BasinId("city-50m"))
     assert lap.lane_plan is not None

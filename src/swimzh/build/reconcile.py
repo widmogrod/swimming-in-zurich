@@ -17,14 +17,12 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 from dataclasses import dataclass
-from typing import NewType, assert_never
+from typing import assert_never
 
 from swimzh.core.errors import ProviderError, SchemaMismatch
 from swimzh.core.normalize import normalize
 from swimzh.core.result import Err, Ok, Result
-from swimzh.domain.models import BASIN_KIND_WORDS, Facility
-
-PoolId = NewType("PoolId", str)
+from swimzh.domain.models import BASIN_KIND_WORDS, Facility, PoolId
 
 _SOURCE = "reconcile"
 

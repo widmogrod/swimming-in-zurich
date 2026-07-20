@@ -28,7 +28,7 @@ from swimzh.domain.models import (
     BasinId,
     BasinKind,
     Facility,
-    FacilityId,
+    PoolId,
     PoolIdentity,
     PoolKind,
     Provenance,
@@ -236,7 +236,7 @@ def _keyed_facility(keys: tuple[str, ...]) -> Facility:
     )
     return Facility(
         identity=PoolIdentity(
-            facility_id=FacilityId("occ-test"),
+            facility_id=PoolId("occ-test"),
             name="Hallenbad Occupancy-Test",
             kind=PoolKind.INDOOR,
             crowdmonitor_keys=keys,
@@ -249,7 +249,7 @@ def _keyed_facility(keys: tuple[str, ...]) -> Facility:
 
 def _reading(measured_at: datetime) -> Occupancy:
     return Occupancy(
-        facility_id=FacilityId("occ-test"),
+        facility_id=PoolId("occ-test"),
         measured_at=measured_at,
         percent_full=62.0,
         people=93,
@@ -358,7 +358,7 @@ def _planned_facility() -> Facility:
     )
     return Facility(
         identity=PoolIdentity(
-            facility_id=FacilityId("lane-test"),
+            facility_id=PoolId("lane-test"),
             name="Hallenbad Lane-Test",
             kind=PoolKind.INDOOR,
         ),

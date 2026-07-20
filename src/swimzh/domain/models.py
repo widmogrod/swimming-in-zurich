@@ -25,8 +25,21 @@ from swimzh.domain.schedule import (
     ScheduleRule,
 )
 
-FacilityId = NewType("FacilityId", str)
+PoolId = NewType("PoolId", str)
 BasinId = NewType("BasinId", str)
+
+
+def reconstruct_pool_id(value: str) -> PoolId:
+    """Re-wrap a canonical id string that was ALREADY minted upstream — a persisted gold row
+    or a validated DTO — back into a ``PoolId``.
+
+    This is *reconstruction*, not minting: the id already passed through the two minting seams
+    (``build.reconcile`` / ``build.seed``, the only sites that create an id from an external
+    ref) before it was stored, so trusting it here introduces no new identity. Kept as a single
+    named boundary so the minter grep-guard can allow exactly ONE reconstruction door (this
+    module) instead of every trusted call-site (persisted-row codec / validated DTO providers).
+    """
+    return PoolId(value)
 
 
 class PoolKind(Enum):
@@ -54,7 +67,7 @@ class Provenance:
 class PoolIdentity:
     """Canonical identity + crosswalk into other data sources' namespaces."""
 
-    facility_id: FacilityId
+    facility_id: PoolId
     name: str
     kind: PoolKind
     geo_sport_id: str | None = None

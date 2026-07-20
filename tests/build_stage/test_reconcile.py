@@ -7,7 +7,6 @@ from swimzh.build.reconcile import (
     Crosswalk,
     Global,
     Name,
-    PoolId,
     SourceRef,
     Xref,
     build_basin_hint_index,
@@ -22,7 +21,7 @@ from swimzh.domain.models import (
     BasinId,
     BasinKind,
     Facility,
-    FacilityId,
+    PoolId,
     PoolIdentity,
     PoolKind,
     Provenance,
@@ -124,7 +123,7 @@ def test_resolve_all_is_loud_on_any_unresolved_ref() -> None:
 
 def _facility() -> Facility:
     return Facility(
-        identity=PoolIdentity(FacilityId("hallenbad-city"), "Hallenbad City", PoolKind.INDOOR),
+        identity=PoolIdentity(PoolId("hallenbad-city"), "Hallenbad City", PoolKind.INDOOR),
         address="",
         provenance=Provenance(source="curated", curated=True),
         basins=(Basin(basin_id=BasinId("city-50m"), name="50m", rules=(), kind=BasinKind.LAP),),

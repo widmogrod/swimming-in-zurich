@@ -17,7 +17,7 @@ import pytest
 
 from swimzh.core.result import Ok
 from swimzh.domain.catalog import slug
-from swimzh.domain.models import FacilityId
+from swimzh.domain.models import PoolId
 from swimzh.providers.curated import Dataset, load_dataset
 from swimzh.storage import catalog_json
 
@@ -74,7 +74,7 @@ def test_legacy_short_ids_still_resolve_by_lookup(dataset: Dataset) -> None:
     # Lossless: every pre-unification short id resolves to its canonical slug.
     for legacy, canonical in LEGACY_IDS.items():
         resolved = dataset.registry.resolve_name(legacy)
-        assert resolved == FacilityId(canonical), (legacy, resolved, canonical)
+        assert resolved == PoolId(canonical), (legacy, resolved, canonical)
 
 
 def test_legacy_ids_map_onto_registered_identities(dataset: Dataset) -> None:

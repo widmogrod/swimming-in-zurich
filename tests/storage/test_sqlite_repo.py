@@ -39,9 +39,9 @@ def test_get_by_id_and_missing(facilities: tuple[Facility, ...]) -> None:
 
     some_id = facilities[0].identity.facility_id
     assert repo.get(some_id) == facilities[0]
-    from swimzh.domain.models import FacilityId
+    from swimzh.domain.models import PoolId
 
-    assert repo.get(FacilityId("does-not-exist")) is None
+    assert repo.get(PoolId("does-not-exist")) is None
 
 
 def test_write_is_idempotent(facilities: tuple[Facility, ...]) -> None:

@@ -12,7 +12,7 @@ import httpx
 from swimzh.core.errors import HttpStatus
 from swimzh.core.http import HttpClient, RetryPolicy
 from swimzh.core.result import Err, Ok
-from swimzh.domain.models import FacilityId
+from swimzh.domain.models import PoolId
 from swimzh.domain.person import Gender, Person
 from swimzh.domain.query import SwimQuery, find_swim_options
 from swimzh.etl import pipeline
@@ -58,7 +58,7 @@ def test_pipeline_end_to_end_then_query() -> None:
     repo = result.value
     assert repo.count() == 4
 
-    city = repo.get(FacilityId("hallenbad-city"))
+    city = repo.get(PoolId("hallenbad-city"))
     assert city is not None
     assert city.geo is not None
     assert city.identity.geo_sport_id == "poi_hallenbad_view.2"

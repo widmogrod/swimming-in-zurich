@@ -17,14 +17,13 @@ from decimal import Decimal
 from zoneinfo import ZoneInfo
 
 from swimzh.build.compose import ScrapedAspects, compose
-from swimzh.build.reconcile import PoolId
 from swimzh.domain.access import PublicSwim
 from swimzh.domain.geo import GeoPoint
 from swimzh.domain.models import (
     Basin,
     BasinId,
     Facility,
-    FacilityId,
+    PoolId,
     PoolIdentity,
     PoolKind,
     Provenance,
@@ -44,7 +43,7 @@ _CURATED_RULE = ScheduleRule(
 
 def _curated_city(*, prices: PriceTable | None) -> Facility:
     return Facility(
-        identity=PoolIdentity(FacilityId("hallenbad-city"), "Hallenbad City", PoolKind.INDOOR),
+        identity=PoolIdentity(PoolId("hallenbad-city"), "Hallenbad City", PoolKind.INDOOR),
         address="Sihlstrasse 71",
         provenance=Provenance(source="curated", curated=True, valid_as_of=date(2026, 7, 18)),
         basins=(Basin(basin_id=BasinId("city-50m"), name="50m-Becken", rules=(_CURATED_RULE,)),),
@@ -99,7 +98,7 @@ def test_curated_keeps_schedule_and_gains_scraped_price() -> None:
     # whole-row filter dropped).
     assert merged.prices == scraped_price
     # Identity stays canonical; the merged facility remains the curated (facility-level) row.
-    assert merged.identity.facility_id == FacilityId("hallenbad-city")
+    assert merged.identity.facility_id == PoolId("hallenbad-city")
     assert merged.provenance.curated is True
 
 
@@ -120,7 +119,7 @@ def test_scraped_only_pool_passes_through() -> None:
     result = compose((), ((CITY, scraped),))
     assert len(result.facilities) == 1
     merged = result.facilities[0]
-    assert merged.identity.facility_id == FacilityId("hallenbad-city")
+    assert merged.identity.facility_id == PoolId("hallenbad-city")
     assert merged.basins[0].rules == scraped.basins[0].rules
     assert merged.prices == _price("8.00")
     assert merged.provenance.curated is False

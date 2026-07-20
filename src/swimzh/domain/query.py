@@ -33,11 +33,12 @@ from swimzh.domain.models import (
     BasinId,
     BasinKind,
     Facility,
-    FacilityId,
     Feature,
+    PoolId,
     PoolIdentity,
     PoolKind,
     Provenance,
+    reconstruct_pool_id,
 )
 from swimzh.domain.person import Person
 from swimzh.domain.pricing import PriceEntry, price_for
@@ -66,7 +67,7 @@ class SwimQuery:
 class Occupancy:
     """A raw live occupancy reading (people/percent/capacity) from a provider."""
 
-    facility_id: FacilityId
+    facility_id: PoolId
     measured_at: datetime
     percent_full: float | None
     people: int | None
@@ -121,7 +122,7 @@ _NOW_TOLERANCE = timedelta(minutes=30)
 
 @dataclass(frozen=True, slots=True)
 class SwimOption:
-    facility_id: FacilityId
+    facility_id: PoolId
     facility_name: str
     facility_kind: PoolKind  # indoor/outdoor/… — from the pool identity
     basin_id: BasinId
@@ -149,7 +150,7 @@ class SwimOption:
 class FacilityStatus:
     """Why a facility produced no options: closed that day, or not yet curated."""
 
-    facility_id: FacilityId
+    facility_id: PoolId
     facility_name: str
     status: str  # "closed" | "uncurated"
     detail: str
@@ -159,7 +160,7 @@ class FacilityStatus:
 class FacilityNotice:
     """A pool alert active on the queried date (e.g. a maintenance closure)."""
 
-    facility_id: FacilityId
+    facility_id: PoolId
     facility_name: str
     text: str
 
@@ -344,7 +345,7 @@ class FacilityDetail:
     parsed Belegungsplan, the per-lane day timeline / best-time / roster derivations for the
     queried weekday (empty when no basin has a plan)."""
 
-    facility_id: FacilityId
+    facility_id: PoolId
     facility_name: str
     address: str
     website: str | None
@@ -405,7 +406,7 @@ def _uncurated_statuses(
     scheduled_ids = {str(f.identity.facility_id) for f in facilities}
     return [
         FacilityStatus(
-            facility_id=FacilityId(row.entry.pool_id),
+            facility_id=reconstruct_pool_id(row.entry.pool_id),
             facility_name=row.entry.name,
             status="uncurated",
             detail="schedule not yet curated",

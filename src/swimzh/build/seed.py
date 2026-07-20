@@ -20,11 +20,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from swimzh.build.reconcile import Crosswalk, PoolId, build_basin_hint_index
+from swimzh.build.reconcile import Crosswalk, build_basin_hint_index
 from swimzh.core.normalize import normalize
 from swimzh.domain.catalog import PoolCatalogEntry
 from swimzh.domain.geo import GeoPoint
-from swimzh.domain.models import Facility, FacilityId, PoolKind
+from swimzh.domain.models import Facility, PoolId, PoolKind
 from swimzh.domain.registry import Registry
 from swimzh.storage import codec
 
@@ -96,7 +96,7 @@ def build_spine(
 
     for entry in sorted(catalog, key=lambda e: e.pool_id):
         pool_id = PoolId(entry.pool_id)
-        identity = registry.get(FacilityId(entry.pool_id))
+        identity = registry.get(pool_id)
         facility = curated_by_id.get(entry.pool_id)
 
         # Curated-wins on kind: a hand-authored registry kind (richer/verified) overrides the

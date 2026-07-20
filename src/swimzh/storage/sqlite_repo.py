@@ -21,7 +21,7 @@ from typing import TYPE_CHECKING, Any
 from swimzh.domain.calendar import ZurichCalendar
 from swimzh.domain.catalog import PoolCatalogEntry, RosterEntry
 from swimzh.domain.geo import GeoPoint
-from swimzh.domain.models import Facility, FacilityId
+from swimzh.domain.models import Facility, PoolId
 from swimzh.storage import calendar_codec, codec
 from swimzh.storage.codec import _KIND_FROM
 
@@ -248,7 +248,7 @@ class GoldRepository:
         cursor = self._conn.execute("SELECT doc FROM facility ORDER BY facility_id")
         return tuple(codec.loads(row[0]) for row in cursor.fetchall())
 
-    def get(self, facility_id: FacilityId) -> Facility | None:
+    def get(self, facility_id: PoolId) -> Facility | None:
         cursor = self._conn.execute(
             "SELECT doc FROM facility WHERE facility_id = ?", (str(facility_id),)
         )

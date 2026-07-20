@@ -11,11 +11,11 @@ from pathlib import Path
 
 import pytest
 
-from swimzh.build.reconcile import Name, PoolId, Xref
+from swimzh.build.reconcile import Name, Xref
 from swimzh.build.seed import CURATED, UNCURATED, PoolSpine, build_crosswalk, build_spine
 from swimzh.core.result import Ok
 from swimzh.domain.catalog import PoolCatalogEntry
-from swimzh.domain.models import PoolKind
+from swimzh.domain.models import PoolId, PoolKind
 from swimzh.providers.curated import Dataset, load_dataset
 from swimzh.storage import catalog_json
 

@@ -29,7 +29,7 @@ from swimzh.domain.models import (
     Basin,
     BasinId,
     Facility,
-    FacilityId,
+    PoolId,
 )
 from swimzh.providers.belegungsplan import ParsedPlan
 from swimzh.providers.curated import Dataset
@@ -42,7 +42,7 @@ def reconcile(
     dataset: Dataset, geo_pools: list[GeoPool], fetched_at: datetime
 ) -> Result[tuple[Facility, ...], ProviderError]:
     registry = dataset.registry
-    resolved: dict[FacilityId, GeoPool] = {}
+    resolved: dict[PoolId, GeoPool] = {}
     unmatched: list[str] = []
     for pool in geo_pools:
         facility_id = registry.resolve_name(pool.name)
@@ -80,7 +80,7 @@ def reconcile(
 # --- basin-granular lane-plan reconciliation ----------------------------------------
 
 
-_BasinRef = tuple[FacilityId, BasinId]
+_BasinRef = tuple[PoolId, BasinId]
 
 
 @dataclass(frozen=True, slots=True)
