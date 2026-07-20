@@ -14,8 +14,9 @@ intent and design decisions, and `README.md` for orientation.
 - `src/swimzh/boundary/` — pydantic v2 DTOs (ingest boundary).
 - `src/swimzh/providers/` — adapters returning `Result[..., ProviderError]` (`curated`,
   `geo_sport`; occupancy later).
-- `src/swimzh/etl/` + `src/swimzh/storage/` — medallion raw→silver→gold (pure functions)
-  into the SQLite gold store; `find_swim_options` reads from `GoldRepository`.
+- `src/swimzh/build/` + `src/swimzh/etl/` + `src/swimzh/storage/` — the single offline builder
+  (`build_store`: seed → identity spine → curated blob) writes the SQLite gold store (pure
+  functions); `find_swim_options` reads from `GoldRepository`.
 - `apps/web/` — FastAPI service + minimal HTML UI over the gold DB (see below).
 - `data/` — **ETL inputs** (the curated source of truth): pools/registry/calendar YAML +
   `catalog.json`, built into the gold DB by `swimzh build`; never read at app runtime. Plus
@@ -43,8 +44,7 @@ The app reads **only** one SQLite gold store — every endpoint (`/swim`, `/pool
 # 1. Build a complete, self-contained gold DB from committed inputs — OFFLINE, no network.
 uv run python -m swimzh.cli build --db gold.sqlite
 
-# 2. (optional) Enrich the same store with real / geo-merged data (network):
-uv run python -m swimzh.cli build-gold    --db gold.sqlite   # curated 3 pools + WFS geo merge
+# 2. (optional) Enrich the same store with real scraped data (network):
 uv run python -m swimzh.cli scrape-gold   --db gold.sqlite   # REAL schedules scraped per pool
 uv run python -m swimzh.cli scrape-lanes  --db gold.sqlite   # per-basin Belegungsplan lane plans
 
@@ -57,10 +57,15 @@ SWIMZH_GOLD_DB=gold.sqlite uv run python -m apps.web.main   # http://127.0.0.1:8
 uvicorn). `uvicorn apps.web.main:app` still works and still fails fast without a DB, but reports
 through uvicorn's lifespan traceback rather than the one-liner.
 
-`swimzh build` assembles `facility` + `catalog` + `calendar` into one store from the committed
-inputs alone (offline); the network commands **layer onto** an already-built store. The curated
-data directory is supplied to the CLI/ETL via `--data` (default `data/`); the **app never reads
-`data/`** — only the gold DB.
+`swimzh build` is the **single offline builder**: it assembles the identity spine (the `pool`
+table = the ~57-pool roster, plus its `pool_alias`/`pool_xref` crosswalk) + the `calendar`
+singleton into one store from the committed inputs alone (offline, no network). The curated
+schedule payload rides as a typed blob on the `pool` row (`facility_doc`); there is **no
+`facility` table** and no stored `curation_status` (it is derived at read from that blob). Geo
+comes from the committed `catalog.json` (WFS coordinates), stamped onto `facility_doc` at build
+time — not a live WFS merge. The network commands (`scrape-gold`, `scrape-lanes`) **layer onto**
+an already-built store. The curated data directory is supplied to the CLI/ETL via `--data`
+(default `data/`); the **app never reads `data/`** — only the gold DB.
 
 Data sources:
 - **ETL inputs (human/curated source of truth, committed in git):** `data/pools/*.yaml`,
@@ -103,8 +108,8 @@ uv run python scripts/crap.py # complexity²·(1−coverage)³ + complexity gate
   assume pyright is clean; the QA gate is mypy. Clearing the pyright debt (read accessors on
   `ZurichCalendar`, etc.) is a tracked backlog item.
 - **Coverage floor**: `fail_under` in `[tool.coverage.report]` is a no-regression ratchet
-  (currently 91, calibrated to real coverage of 91.91%). Raise it as coverage grows; never
-  lower it without a reason.
+  (currently 95, calibrated to real coverage of 95.61% after Plan C deleted the legacy geo
+  pipeline + `facility` table). Raise it as coverage grows; never lower it without a reason.
 - **CRAP gate**: fails a function only when `cc > min-complexity (5)` AND `crap > threshold
   (30)`. Fix by adding tests or reducing complexity — do **not** raise the threshold to pass.
 

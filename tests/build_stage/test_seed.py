@@ -76,8 +76,8 @@ def test_facility_doc_geo_equals_committed_catalog_geo(
 ) -> None:
     # B1 parity: the geo carried inside `pool.facility_doc` for every curated pool equals the
     # committed `data/catalog.json` (= WFS) geo — compared OFFLINE against the committed catalog,
-    # never a live `build-gold` run. This is the coordinate a later collapse of the `facility`
-    # table (Plan C) must serve, so it must already match the authoritative catalog here.
+    # never a live WFS merge. This is the coordinate the offline read path serves (Plan C deleted
+    # the `facility` table), so it must match the authoritative catalog here.
     catalog_geo = {e.pool_id: e.geo for e in catalog}
     curated_rows = [p for p in spine.pools if p.facility_doc is not None]
     assert len(curated_rows) == 4

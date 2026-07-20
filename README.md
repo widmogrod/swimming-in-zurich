@@ -45,8 +45,7 @@ committed inputs (offline, no network), then run the web app against it.
 # 1. Build a complete, self-contained gold DB from the committed data/ inputs (offline).
 uv run python -m swimzh.cli build --db gold.sqlite
 
-# 2. (optional) enrich it with real / geo-merged schedules (network):
-uv run python -m swimzh.cli build-gold   --db gold.sqlite   # curated pools + WFS geo
+# 2. (optional) enrich it with real scraped schedules (network):
 uv run python -m swimzh.cli scrape-gold  --db gold.sqlite   # real scraped schedules
 uv run python -m swimzh.cli scrape-lanes --db gold.sqlite   # per-basin lane plans
 
@@ -68,8 +67,7 @@ the curated source of truth, built into the gold DB by `swimzh build`. The app n
 |---|---|
 | Try it offline (curated pools only, no network) | `swimzh build --db gold.sqlite` |
 | Get real schedules + lane plans (network) | `build` then `scrape-gold` + `scrape-lanes` on the same `--db` |
-| Refresh geo / merge WFS locations (network) | `build-gold --db gold.sqlite` |
-| Regenerate the pool catalog from the WFS | `build-catalog --out data/catalog.json` (an ETL input; then re-`build`) |
+| Refresh geo / WFS locations (network) | `build-catalog --out data/catalog.json` (regenerates the committed catalog; then re-`build` to stamp its coords) |
 | Serve the UI + API | `SWIMZH_GOLD_DB=gold.sqlite python -m apps.web.main` (clean fail-fast; `SWIMZH_RELOAD=0` to disable reload) |
 | Ask "where can I swim now/later?" | `GET /swim?at=<ISO>&gender=female\|male\|diverse&age=<int>&lat=&lon=&radius_km=&eligible_only=true` |
 | Browse all ~57 pools | `GET /pools?kind=indoor` · access rules at `/access-types` |

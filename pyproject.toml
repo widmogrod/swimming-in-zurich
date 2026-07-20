@@ -80,9 +80,9 @@ source = ["src", "apps"]
 branch = true
 
 [tool.coverage.report]
-# Calibrated to current coverage (91.91%) rounded down, as a no-regression floor;
-# ratchet up as coverage grows.
-fail_under = 91
+# Calibrated to current coverage (95.61%, after Plan C deleted the legacy geo pipeline +
+# `facility` table) rounded down, as a no-regression floor; ratchet up as coverage grows.
+fail_under = 95
 
 [tool.crap]
 threshold = 30.0

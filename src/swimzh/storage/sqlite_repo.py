@@ -11,8 +11,8 @@ row-normalizing it is a later plan.
 
 The ``/swim`` read path *and* the network enrichers (``scrape-gold``/``scrape-lanes``)
 serve/write the curated blob through ``pool.facility_doc`` (via
-``write_schedules``/``GoldRepository``). The legacy ``facility`` table was deleted in Plan C
-once ``build-gold`` — its last writer — was gone.
+``write_schedules``/``GoldRepository``). There is no separate ``facility`` table: the schedule
+blob lives solely on ``pool.facility_doc``.
 """
 
 from __future__ import annotations

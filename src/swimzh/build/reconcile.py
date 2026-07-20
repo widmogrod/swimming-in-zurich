@@ -126,10 +126,10 @@ def resolve_all[Payload](
 ) -> Result[tuple[tuple[PoolId, Payload], ...], ProviderError]:
     """Resolve every provider extract's ``SourceRef`` to a ``PoolId`` — loud on any miss.
 
-    Mirrors the discipline of ``silver.reconcile``: a single unresolved ref aborts the batch
-    with a typed ``Err`` naming *all* the offenders, so a scrape can never silently attach its
-    payload to the wrong pool (or drop it unnoticed). On success returns the keyed payloads,
-    which ``compose`` then folds per pool.
+    Lookup-only discipline: a single unresolved ref aborts the batch with a typed ``Err``
+    naming *all* the offenders, so a scrape can never silently attach its payload to the wrong
+    pool (or drop it unnoticed). On success returns the keyed payloads, which ``compose`` then
+    folds per pool.
     """
     keyed: list[tuple[PoolId, Payload]] = []
     unresolved: list[str] = []

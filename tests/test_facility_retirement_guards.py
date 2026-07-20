@@ -2,9 +2,10 @@
 
 Plan B collapsed the composed schedule blob to ONE place (``pool.facility_doc``) behind ONE
 ``PoolId``-typed write door (``write_schedules``) and made ``curation_status`` a read-time
-derivation. Plan C then physically deleted the legacy ``facility`` table (with ``build-gold``,
-its last writer, gone). So these guards lock the *read* and *single-writer* invariants AND now
-assert the table is gone — no runtime source creates, reads, or writes a ``facility`` table.
+derivation. Plan C then physically deleted the legacy ``facility`` table (its last writer, the
+legacy geo pipeline, was gone). So these guards lock the *read* and *single-writer* invariants
+AND now assert the table is gone — no runtime source creates, reads, or writes a ``facility``
+table.
 
 Each guard is falsifiable: it fires on a real violation (verified by a temporary mutation during
 implementation) and its companion positive assertion proves it is scanning live source rather
