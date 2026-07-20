@@ -104,7 +104,7 @@ Appended by /dev:implement after each slice — never rewritten. Newest row last
 
 | date | slice | status | divergence | tech debt | human review? |
 |------|-------|--------|------------|-----------|---------------|
-| —    | —     | —      | —          | —         | —             |
+| 2026-07-20 | A1 | done | none — byte-identical git-tracked rename + 5 import repoints (4 src + 1 test) | concept docs (`data-layer-architecture`, `techdebt-remediation-roadmap`) still name `build/normalize.py` as the cleaning home — cosmetic doc-sync for a later pass | no |
 
 ## Decisions & divergences
 

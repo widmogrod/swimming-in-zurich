@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from swimzh.build.normalize import normalize
+from swimzh.core.normalize import normalize
 
 
 @pytest.mark.parametrize(

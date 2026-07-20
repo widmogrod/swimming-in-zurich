@@ -20,8 +20,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from swimzh.build.normalize import normalize
 from swimzh.build.reconcile import Crosswalk, PoolId, build_basin_hint_index
+from swimzh.core.normalize import normalize
 from swimzh.domain.catalog import PoolCatalogEntry
 from swimzh.domain.geo import GeoPoint
 from swimzh.domain.models import Facility, FacilityId, PoolKind

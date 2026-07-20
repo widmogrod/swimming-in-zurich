@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable, Mapping
 
-from swimzh.build.normalize import normalize as _normalise
+from swimzh.core.normalize import normalize as _normalise
 from swimzh.domain.models import FacilityId, PoolIdentity
 
 

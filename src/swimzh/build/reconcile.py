@@ -19,8 +19,8 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 from typing import NewType, assert_never
 
-from swimzh.build.normalize import normalize
 from swimzh.core.errors import ProviderError, SchemaMismatch
+from swimzh.core.normalize import normalize
 from swimzh.core.result import Err, Ok, Result
 from swimzh.domain.models import BasinKind, Facility
 
