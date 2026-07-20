@@ -1,12 +1,15 @@
 ---
 type: plan
-status: approved         # draft -> approved -> in-progress -> done
+status: in-progress      # draft -> approved -> in-progress -> done
 created: 2026-07-21
 feature: richer-data-fidelity
+branch: plan/richer-data-fidelity
+worktree: .claude/worktrees/plan-richer-data-fidelity
+base_branch: main
 gates:
   qa: full               # ruff, format, mypy strict, pytest+coverage floor (95), CRAP
   review: adversarial
-pause_after: [D, E3]     # D: schema/DTO change before the parser builds on it. E3: the brittle parser now feeds user-facing lane data — spot-check EVERY newly-parsed basin (E2 + E3) against the live PDFs before F/ship
+pause_after: [D, E3]     # DECLARED pauses — OVERRIDDEN for this run (owner: "don't stop on D, execute everything to end"); see Decisions 2026-07-21 pause-override. E3's live-PDF spot-check is deferred to post-run review.
 links: ["[[techdebt-remediation-roadmap]]", "[[gold-store]]", "[[data-layer-architecture]]"]
 ---
 
@@ -207,6 +210,13 @@ caveat where prose-derived; amenity chips in the all-pools table.
   supported basin (accept a refresh-cadence tech-debt). #4 measured temp overrides nominal in the badge,
   nominal in a tooltip. #5 low-confidence `PARSED_PROSE` basins are shown in `/pools` detail (with
   caveat) but gated out of `/swim` options.
+- **2026-07-21 — pause-override (owner directive at implementation start).** The owner approved and
+  instructed: *"don't stop on D, execute everything to end."* The declared `pause_after: [D, E3]` gates are
+  therefore NOT honoured as stops in this run — A→F execute continuously through the D schema pause and the
+  E3 parser pause. **Consequence / carried risk:** E3's mandatory manual spot-check of every newly-parsed
+  basin (Vario/Bläsi/Käferberg + Oerlikon sheets) against the live PDFs is **deferred to post-run review**
+  rather than gating before F — recorded here so the skipped safety step is visible, not silent. Merge-back
+  to `main` is still confirmed with the owner at completion (base-branch write).
 - **2026-07-21 — critical review (pre-approval), corrections applied.** Verified the plan's diagnosis
   against the code (all three seams confirmed: `query.py:253` clamps to `session.time.start`;
   `belegungsplan.py:293` requires `7×lane_count` cols; `FacilityDetailOut` drops the computed
