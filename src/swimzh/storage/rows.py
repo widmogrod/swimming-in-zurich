@@ -25,8 +25,7 @@ class PoolRow:
     url: str | None
     description: str | None
     phone: str | None
-    curation_status: str  # CURATED | UNCURATED — DERIVED, never authored
-    facility_doc: str | None  # curated Facility JSON (codec), else None
+    facility_doc: str | None  # curated Facility JSON (codec), else None; also the curation fact
 
 
 @dataclass(frozen=True, slots=True)

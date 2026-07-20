@@ -159,3 +159,17 @@ def dumps(facility: Facility) -> str:
 
 def loads(payload: str) -> Facility:
     return from_stored(StoredFacilityDTO.model_validate_json(payload))
+
+
+def is_curated(facility_doc: str | None) -> bool:
+    """The single source of the curation rule: a pool is curated iff its schedule blob is
+    present (NOT NULL) *and* the decoded facility carries at least one basin with at least one
+    rule; otherwise uncurated.
+
+    Derived from the schedule fact it describes rather than stored, so the status can never
+    disagree with the blob. Both the read path (``load_roster``) and any build-time consumer
+    share this one function so the rule cannot diverge.
+    """
+    if facility_doc is None:
+        return False
+    return any(basin.rules for basin in loads(facility_doc).basins)

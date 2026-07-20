@@ -15,8 +15,8 @@ from swimzh.storage.sqlite_repo import open_db
 
 def _add_pool(conn: sqlite3.Connection, pool_id: str) -> None:
     conn.execute(
-        "INSERT INTO pool (id, name, kind, address, curation_status) VALUES (?, ?, ?, ?, ?)",
-        (pool_id, pool_id.title(), "indoor", "addr", "uncurated"),
+        "INSERT INTO pool (id, name, kind, address) VALUES (?, ?, ?, ?)",
+        (pool_id, pool_id.title(), "indoor", "addr"),
     )
 
 
@@ -51,15 +51,6 @@ def test_alias_for_missing_pool_is_rejected_by_foreign_key() -> None:
     conn = open_db(":memory:")  # open_db enables PRAGMA foreign_keys = ON
     with pytest.raises(sqlite3.IntegrityError):
         conn.execute("INSERT INTO pool_alias (pool_id, alias, norm) VALUES ('ghost', 'G', 'g')")
-
-
-def test_curation_status_check_rejects_unknown_value() -> None:
-    conn = open_db(":memory:")
-    with pytest.raises(sqlite3.IntegrityError):
-        conn.execute(
-            "INSERT INTO pool (id, name, kind, address, curation_status) "
-            "VALUES ('p', 'P', 'indoor', 'a', 'guessed')"
-        )
 
 
 def test_deleting_a_pool_cascades_to_its_crosswalk() -> None:

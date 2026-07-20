@@ -1,7 +1,8 @@
 """The gold store: SQLite as the single source of truth the query surface reads from.
 
-The identity spine is one ``pool`` table (all ~57 published pools, canonical id PK, a
-**derived** ``curation_status``), plus its DB-enforced crosswalk: ``pool_alias`` with a
+The identity spine is one ``pool`` table (all ~57 published pools, canonical id PK; curation is
+**not** a column — it is derived at read from ``facility_doc`` via ``codec.is_curated``), plus
+its DB-enforced crosswalk: ``pool_alias`` with a
 global ``UNIQUE(norm)`` and ``pool_xref`` with ``UNIQUE(namespace, ext_id)`` — so "same
 entity → two ids" is a write-time ``IntegrityError``, not a convention. These are ``STRICT``
 tables and their FKs cascade from ``pool``. The curated schedule payload rides as a typed
@@ -43,7 +44,6 @@ CREATE TABLE IF NOT EXISTS pool (
     url             TEXT,
     description     TEXT,
     phone           TEXT,
-    curation_status TEXT NOT NULL CHECK (curation_status IN ('curated', 'uncurated')),
     facility_doc    TEXT
 ) STRICT;
 CREATE TABLE IF NOT EXISTS pool_alias (
@@ -126,8 +126,8 @@ def write_pools(conn: sqlite3.Connection, spine: PoolSpine) -> None:
     conn.execute("DELETE FROM pool")  # FK ON DELETE CASCADE clears alias/xref too
     conn.executemany(
         "INSERT INTO pool "
-        "(id, name, kind, address, lat, lon, url, description, phone, curation_status) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        "(id, name, kind, address, lat, lon, url, description, phone) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
         [
             (
                 str(p.id),
@@ -139,7 +139,6 @@ def write_pools(conn: sqlite3.Connection, spine: PoolSpine) -> None:
                 p.url,
                 p.description,
                 p.phone,
-                p.curation_status,
             )
             for p in spine.pools
         ],
@@ -210,17 +209,17 @@ def load_roster(conn: sqlite3.Connection) -> tuple[RosterEntry, ...]:
     runtime ``uncurated = roster − scheduled`` computation — one store, joinable by ``pool.id``.
     """
     cursor = conn.execute(
-        "SELECT id, name, kind, address, lat, lon, url, description, phone, curation_status "
+        "SELECT id, name, kind, address, lat, lon, url, description, phone, facility_doc "
         "FROM pool ORDER BY id"
     )
     return tuple(_roster_entry(row) for row in cursor.fetchall())
 
 
 def _roster_entry(row: tuple[Any, ...]) -> RosterEntry:
-    *catalog_cols, curation_status = row
+    *catalog_cols, facility_doc = row
     return RosterEntry(
         entry=_catalog_entry(tuple(catalog_cols)),
-        curated=str(curation_status) == "curated",
+        curated=codec.is_curated(str(facility_doc) if facility_doc is not None else None),
     )
 
 

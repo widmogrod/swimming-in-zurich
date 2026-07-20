@@ -4,8 +4,9 @@ The catalog is the **roster authority** — every one of the ~57 published pools
 ``pool`` row, its canonical id minted once as ``PoolId(catalog.pool_id)`` (already the name
 slug, per S1). Curated authoring layers on top: a hand-authored ``kind`` overrides the WFS
 ``kind`` (curated-wins — e.g. *Wärmebad Käferberg* is ``thermal`` here, not the WFS ``indoor``),
-the curated schedule payload rides along as a typed blob, and ``curation_status`` is **derived**
-(``curated`` iff the pool has ≥1 basin with ≥1 rule) — never authored.
+and the curated schedule payload rides along as a typed blob. Curation is **not** stored: it is
+derived at read from that blob (``codec.is_curated`` — ``curated`` iff ≥1 basin with ≥1 rule),
+so the status can never desync from the schedule fact it describes.
 
 Every *other* identifier becomes a value pointing at the canonical id: names/aliases →
 ``pool_alias`` rows (deduped by ``norm``), external keys (crowdmonitor, geo_sport) →
@@ -27,14 +28,6 @@ from swimzh.domain.models import Facility, PoolId
 from swimzh.domain.registry import Registry
 from swimzh.storage import codec
 from swimzh.storage.rows import PoolAliasRow, PoolRow, PoolSpine, PoolXrefRow
-
-CURATED = "curated"
-UNCURATED = "uncurated"
-
-
-def _is_curated(facility: Facility) -> bool:
-    """Derived curation: a pool is curated iff it has at least one basin with a rule."""
-    return any(basin.rules for basin in facility.basins)
 
 
 def build_spine(
@@ -71,7 +64,6 @@ def build_spine(
         # Curated-wins on kind: a hand-authored registry kind (richer/verified) overrides the
         # generic WFS catalog kind; catalog is the authority only where no curation exists.
         kind = identity.kind if identity is not None else entry.kind
-        curation_status = CURATED if facility is not None and _is_curated(facility) else UNCURATED
         facility_doc = codec.dumps(facility) if facility is not None else None
 
         pools.append(
@@ -84,7 +76,6 @@ def build_spine(
                 url=entry.url,
                 description=entry.description,
                 phone=entry.phone,
-                curation_status=curation_status,
                 facility_doc=facility_doc,
             )
         )

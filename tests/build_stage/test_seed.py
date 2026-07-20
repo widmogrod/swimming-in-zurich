@@ -12,7 +12,7 @@ from pathlib import Path
 import pytest
 
 from swimzh.build.reconcile import Name, Xref
-from swimzh.build.seed import CURATED, UNCURATED, build_crosswalk, build_spine
+from swimzh.build.seed import build_crosswalk, build_spine
 from swimzh.core.result import Ok
 from swimzh.domain.catalog import PoolCatalogEntry
 from swimzh.domain.models import PoolId, PoolKind
@@ -48,7 +48,9 @@ def test_spine_has_one_row_per_catalog_pool(
 
 
 def test_curation_status_is_derived(spine: PoolSpine, dataset: Dataset) -> None:
-    curated = {p.id for p in spine.pools if p.curation_status == CURATED}
+    # Curation is not stored on the spine; it is derived from `facility_doc` by the single
+    # shared rule (`codec.is_curated`) — the same predicate for every consumer.
+    curated = {p.id for p in spine.pools if codec.is_curated(p.facility_doc)}
     # Exactly the curated facilities that carry at least one basin with a rule.
     expected = {
         PoolId(str(f.identity.facility_id))
@@ -57,13 +59,13 @@ def test_curation_status_is_derived(spine: PoolSpine, dataset: Dataset) -> None:
     }
     assert curated == expected
     assert len(curated) == 4
-    # Every other roster pool is uncurated, and only these two statuses ever appear.
-    assert {p.curation_status for p in spine.pools} == {CURATED, UNCURATED}
+    # The remaining 53 roster pools derive uncurated.
+    assert sum(1 for p in spine.pools if not codec.is_curated(p.facility_doc)) == 53
 
 
 def test_curated_pools_carry_a_facility_blob_uncurated_do_not(spine: PoolSpine) -> None:
     for p in spine.pools:
-        if p.curation_status == CURATED:
+        if codec.is_curated(p.facility_doc):
             assert p.facility_doc is not None
         else:
             assert p.facility_doc is None

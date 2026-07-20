@@ -16,6 +16,7 @@ import yaml
 
 from swimzh.core.result import Ok
 from swimzh.etl.build import build_store
+from swimzh.storage import codec
 
 DATA_DIR = Path(__file__).resolve().parents[2] / "data"
 
@@ -58,19 +59,17 @@ def test_build_yields_exactly_57_pool_rows(tmp_path: Path) -> None:
 
 def test_build_derives_curated_status_for_the_four_curated_pools(tmp_path: Path) -> None:
     conn = _build(tmp_path)
-    curated = {
-        row[0] for row in conn.execute("SELECT id FROM pool WHERE curation_status = 'curated'")
-    }
+    # `curation_status` is no longer a stored column: it is derived at read from `facility_doc`
+    # by the shared `codec.is_curated` rule (NULL blob → uncurated).
+    rows = conn.execute("SELECT id, facility_doc FROM pool").fetchall()
+    curated = {pool_id for pool_id, doc in rows if codec.is_curated(doc)}
     assert curated == {
         "hallenbad-city",
         "hallenbad-oerlikon",
         "hallenbad-bungertwies",
         "schulschwimmanlage-aemtler",
     }
-    assert (
-        conn.execute("SELECT COUNT(*) FROM pool WHERE curation_status = 'uncurated'").fetchone()[0]
-        == 53
-    )
+    assert sum(1 for _, doc in rows if not codec.is_curated(doc)) == 53
 
 
 def test_cutover_every_catalog_pool_id_is_a_canonical_pool_row(tmp_path: Path) -> None:
@@ -102,7 +101,7 @@ def _spine_rows(conn: sqlite3.Connection) -> dict[str, list[tuple[object, ...]]]
     return {
         "pool": conn.execute(
             "SELECT id, name, kind, address, lat, lon, url, description, phone, "
-            "curation_status, facility_doc FROM pool ORDER BY id"
+            "facility_doc FROM pool ORDER BY id"
         ).fetchall(),
         "pool_alias": conn.execute(
             "SELECT pool_id, alias, norm FROM pool_alias ORDER BY norm"
