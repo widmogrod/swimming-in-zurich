@@ -59,7 +59,7 @@ def catalog() -> tuple[PoolCatalogEntry, ...]:
 
 
 def _calendar_state(cal: ZurichCalendar) -> tuple[object, object, object]:
-    return (cal._public, cal._school, cal._known_years)
+    return (cal.public_holidays, cal.school_holidays, cal.known_years)
 
 
 def test_one_db_holds_spine_facilities_and_calendar(

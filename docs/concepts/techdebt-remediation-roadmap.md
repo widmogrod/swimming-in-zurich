@@ -27,9 +27,15 @@ links: ["[[2026-07-19-pool-identity-unification]]", "[[data-layer-architecture]]
 >   offline builder; geo via committed `catalog.json`; gold schema `{pool, pool_alias, pool_xref,
 >   calendar}`; coverage floor ratcheted 91→95.
 >
-> **The A → B → C program is complete.** Remaining backlog: **D** (resilient reconcile — partial-batch)
-> and **E** (calendar pyright), plus the deferred structural items #6a-rows / #6b snapshots / #6c Dagster
-> and #9 (`tests/build_stage` mirror) / #10 (GridSpec PDF calibration).
+> - **Plan D DONE** ([[resilient-reconcile]]) — debt **#3**: `scrape-gold` writes matched pools on a
+>   partial batch and reports benign misses (non-zero exit); ambiguous stays structurally fatal.
+> - **Plan E DONE** ([[calendar-pyright-surface]]) — debt **#8** (calendar half): `ZurichCalendar` public
+>   accessors; the 12 `calendar_codec` `reportPrivateUsage` findings cleared (pyright 42→30).
+>
+> **The A → B → C → D → E program is complete.** Remaining backlog (deliberately not taken): the
+> structural items **#6a-rows** (full row-normalization) / **#6b** (snapshots) / **#6c** (Dagster),
+> **#8-rest** (the `catalog_json`/`test_belegungsplan` pyright debt), **#9** (`tests/build_stage` mirror),
+> **#10** (GridSpec PDF calibration).
 
 ## Executive summary
 

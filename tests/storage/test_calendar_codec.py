@@ -26,9 +26,15 @@ def test_roundtrip_preserves_all_state() -> None:
     original = _sample()
     restored = calendar_codec.loads(calendar_codec.dumps(original))
 
-    assert restored._public == original._public
-    assert restored._school == original._school
-    assert restored._known_years == original._known_years
+    assert restored == original
+    assert restored.public_holidays == original.public_holidays
+    assert restored.school_holidays == original.school_holidays
+    assert restored.known_years == original.known_years
+
+
+def test_equality_is_value_based_and_typed() -> None:
+    assert _sample() == _sample()
+    assert _sample() != "not a calendar"
 
 
 def test_roundtrip_preserves_holiday_context() -> None:

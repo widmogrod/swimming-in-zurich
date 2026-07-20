@@ -15,12 +15,14 @@ from swimzh.domain.calendar import HolidayRange, ZurichCalendar
 
 def to_dto(calendar: ZurichCalendar) -> CalendarDTO:
     return CalendarDTO(
-        known_years=sorted(calendar._known_years),
+        known_years=sorted(calendar.known_years),
         public_holidays=[
-            PublicHolidayDTO(date=day, name=name) for day, name in sorted(calendar._public.items())
+            PublicHolidayDTO(date=day, name=name)
+            for day, name in sorted(calendar.public_holidays.items())
         ],
         school_holidays=[
-            SchoolHolidayDTO(name=r.name, start=r.start, end=r.end) for r in calendar._school
+            SchoolHolidayDTO(name=r.name, start=r.start, end=r.end)
+            for r in calendar.school_holidays
         ],
     )
 

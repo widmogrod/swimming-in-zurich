@@ -102,11 +102,11 @@ uv run python scripts/crap.py # complexity²·(1−coverage)³ + complexity gate
 ```
 
 - **Type checker**: `mypy .` (strict) is the canonical, enforced gate and is **green**.
-  `pyright` (strict) is also configured but has **known, deferred debt** — pre-existing
-  `reportPrivateUsage` findings in `tests/.../test_belegungsplan.py`, `storage/catalog_json.py`,
-  and `storage/calendar_codec.py` (tests/codecs that read domain private attrs). Do **not**
-  assume pyright is clean; the QA gate is mypy. Clearing the pyright debt (read accessors on
-  `ZurichCalendar`, etc.) is a tracked backlog item.
+  `pyright` (strict) is also configured but has **known, deferred debt** — remaining
+  `reportPrivateUsage` findings in `tests/.../test_belegungsplan.py` and `storage/catalog_json.py`
+  (tests/codecs that read domain private attrs). Do **not** assume pyright is clean; the QA gate is
+  mypy. (The `storage/calendar_codec.py` findings were cleared by adding public read accessors to
+  `ZurichCalendar`; the same treatment for the remaining files is a tracked backlog item.)
 - **Coverage floor**: `fail_under` in `[tool.coverage.report]` is a no-regression ratchet
   (currently 95, calibrated to real coverage of 95.61% after Plan C deleted the legacy geo
   pipeline + `facility` table). Raise it as coverage grows; never lower it without a reason.

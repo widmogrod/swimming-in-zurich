@@ -11,6 +11,7 @@ from __future__ import annotations
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from datetime import date
+from types import MappingProxyType
 
 
 @dataclass(frozen=True, slots=True)
@@ -50,6 +51,34 @@ class ZurichCalendar:
         self._public = dict(public_holidays)
         self._school = tuple(school_holidays)
         self._known_years = frozenset(known_years)
+
+    @property
+    def public_holidays(self) -> Mapping[date, str]:
+        """Public holidays keyed by date, as a read-only view (frozen contract preserved)."""
+        return MappingProxyType(self._public)
+
+    @property
+    def school_holidays(self) -> tuple[HolidayRange, ...]:
+        """The seeded school-holiday ranges (already immutable)."""
+        return self._school
+
+    @property
+    def known_years(self) -> frozenset[int]:
+        """The years this calendar has data for (already immutable)."""
+        return self._known_years
+
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, ZurichCalendar):
+            return NotImplemented
+        return (
+            self._public == other._public
+            and self._school == other._school
+            and self._known_years == other._known_years
+        )
+
+    # Defining __eq__ on this plain class makes Python set __hash__ = None (unhashable). That
+    # is intentional and safe: nothing uses a ZurichCalendar as a dict key or set member, and
+    # one field is a mutable-origin Mapping, so value-based hashing would be unsound anyway.
 
     def covers(self, d: date) -> bool:
         """Whether calendar data is present for this date's year."""
