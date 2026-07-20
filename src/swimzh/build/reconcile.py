@@ -52,12 +52,7 @@ class BasinHint:
     text: str
 
 
-@dataclass(frozen=True, slots=True)
-class Global:
-    """An identity-free payload (a city-wide price table) — belongs to no single pool."""
-
-
-SourceRef = Xref | Name | BasinHint | Global
+SourceRef = Xref | Name | BasinHint
 
 
 # --- the crosswalk (lookup tables) and the resolve seam -------------------------------
@@ -109,14 +104,6 @@ def resolve(ref: SourceRef, crosswalk: Crosswalk) -> Result[PoolId, ProviderErro
                     SchemaMismatch(source=_SOURCE, detail=f"unresolved basin hint: {text!r}")
                 )
             return Ok(pool_id)
-        case Global():
-            return Err(
-                SchemaMismatch(
-                    source=_SOURCE,
-                    detail="Global ref is identity-free; it resolves to many pools via compose, "
-                    "never to a single PoolId",
-                )
-            )
         case _:  # pragma: no cover - exhaustiveness guard
             assert_never(ref)
 
@@ -130,8 +117,6 @@ def _ref_label(ref: SourceRef) -> str:
             return display
         case BasinHint(text):
             return text
-        case Global():
-            return "<global>"
         case _:  # pragma: no cover - exhaustiveness guard
             assert_never(ref)
 

@@ -5,7 +5,6 @@ from __future__ import annotations
 from swimzh.build.reconcile import (
     BasinHint,
     Crosswalk,
-    Global,
     Name,
     SourceRef,
     Xref,
@@ -79,15 +78,6 @@ def test_resolve_unknown_basin_hint_is_loud_err() -> None:
     assert isinstance(result, Err)
     assert isinstance(result.error, SchemaMismatch)
     assert "Variobecken" in result.error.detail
-
-
-def test_resolve_global_is_not_a_single_pool() -> None:
-    # An identity-free payload (a city-wide price table) belongs to many pools — resolve is
-    # honest and refuses to mint a single id (compose fans it out later).
-    result = resolve(Global(), _crosswalk())
-    assert isinstance(result, Err)
-    assert isinstance(result.error, SchemaMismatch)
-    assert "identity-free" in result.error.detail
 
 
 def test_crosswalk_resolve_method_delegates() -> None:
