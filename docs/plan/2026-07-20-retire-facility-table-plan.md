@@ -1,6 +1,6 @@
 ---
 type: plan
-status: draft            # draft -> approved -> in-progress -> done
+status: in-progress      # owner-approved 2026-07-20; /dev:implement executing on main (worktree retired — see [[2026-07-19-pool-identity-unification]] Decisions)
 created: 2026-07-20
 feature: retire-facility-table
 gates:
