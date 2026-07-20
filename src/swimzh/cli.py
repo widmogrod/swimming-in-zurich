@@ -23,7 +23,6 @@ from swimzh.core.result import Err, Ok
 from swimzh.etl import pipeline
 from swimzh.etl.build import build_store
 from swimzh.etl.catalog import build_catalog
-from swimzh.etl.gold import write_gold
 from swimzh.etl.lane_plans import CITY_BELEGUNGSPLAN_URLS, scrape_lane_plans
 from swimzh.etl.scrape import scrape_indoor_facilities
 from swimzh.etl.silver import attach_lane_plans
@@ -35,6 +34,7 @@ from swimzh.storage.sqlite_repo import (
     load_alias_rows,
     load_xref_rows,
     open_db,
+    write_schedules,
 )
 
 _ZURICH = ZoneInfo("Europe/Zurich")
@@ -113,7 +113,10 @@ def scrape_gold(
             return 1
         case Ok(keyed):
             composition = compose(curated, keyed)
-            write_gold(conn, composition.facilities)
+            write_schedules(
+                conn,
+                tuple((f.identity.facility_id, f) for f in composition.facilities),
+            )
             msg = f"scraped {len(report.extracts)} indoor pools into {db_path}"
             msg += " (with prices)" if prices is not None else " (prices unavailable)"
             for note in composition.notes:
@@ -167,7 +170,10 @@ def scrape_lanes(
             if attached == 0:
                 print("no lane plan reconciled to a curated basin", file=sys.stderr)
                 return 1
-            write_gold(conn, attachment.facilities)
+            write_schedules(
+                conn,
+                tuple((f.identity.facility_id, f) for f in attachment.facilities),
+            )
             msg = f"attached {attached} lane plan(s) into {db_path}"
             if report.skipped:
                 msg += f"; skipped {len(report.skipped)}: {', '.join(report.skipped)}"

@@ -3,41 +3,44 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from dataclasses import replace
 from datetime import datetime
+from decimal import Decimal
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
 import httpx
 import pytest
 
+from swimzh.build.compose import ScrapedAspects, compose
 from swimzh.cli import build, build_catalog_file, build_gold, main, scrape_gold, scrape_lanes
 from swimzh.core.http import HttpClient, RetryPolicy
 from swimzh.core.result import Ok
 from swimzh.domain.catalog import PoolCatalogEntry
 from swimzh.domain.geo import GeoPoint
-from swimzh.domain.models import BasinId, Facility, PoolKind
+from swimzh.domain.models import BasinId, Facility, PoolKind, reconstruct_pool_id
+from swimzh.domain.pricing import PriceCategory, PriceEntry, PriceTable
 from swimzh.providers.curated import load_dataset
 from swimzh.providers.geo_sport import POOL_LAYERS
-from swimzh.storage import catalog_json, codec
+from swimzh.storage import catalog_json
 from swimzh.storage.sqlite_repo import (
     GoldRepository,
     load_calendar,
     load_catalog,
     open_db,
+    write_schedules,
 )
 
 
-def _facility_from_table(conn: object, facility_id: str) -> Facility:
-    """Read one facility from the legacy `facility` table (the `scrape-*`/`build-gold` write
-    target). The flipped read path serves `pool.facility_doc`; the enrichment scrapers still
-    write only the `facility` table until B4 routes them through `write_schedules`, so their
-    output (lane plans, scraped schedules) is verified on the facility table here.
+def _facility_from_read_path(db: Path, facility_id: str) -> Facility:
+    """Read one facility from the flipped read path — ``pool.facility_doc`` via the
+    ``GoldRepository`` the app serves from. B4 routes ``scrape-gold``/``scrape-lanes`` through
+    ``write_schedules``, so their enrichment (scraped schedules, lane plans) is now visible on
+    this read path, not on the retired ``facility`` table.
     """
-    row = conn.execute(  # type: ignore[attr-defined]
-        "SELECT doc FROM facility WHERE facility_id = ?", (facility_id,)
-    ).fetchone()
-    assert row is not None, facility_id
-    return codec.loads(row[0])
+    facility = GoldRepository(open_db(db)).get(reconstruct_pool_id(facility_id))
+    assert facility is not None, facility_id
+    return facility
 
 
 _FIXTURES = Path(__file__).resolve().parent / "providers" / "fixtures"
@@ -138,6 +141,25 @@ def _city_catalog_file(tmp_path: Path) -> Path:
     return catalog_file
 
 
+def _scraped_only_catalog_file(tmp_path: Path) -> Path:
+    """A catalog naming an INDOOR pool the curated dataset does NOT cover (Hallenbad Altstetten
+    resolves to the scraped-only `hallenbad-altstetten` spine row). Its scraped schedule can
+    reach the read path only if scrape-gold writes it to `pool.facility_doc`."""
+    catalog_file = tmp_path / "catalog.json"
+    entry = PoolCatalogEntry(
+        pool_id="hallenbad-altstetten",
+        name="Hallenbad Altstetten",
+        kind=PoolKind.INDOOR,
+        address="Flurstrasse 91",
+        geo=GeoPoint(lat=47.39, lon=8.49),
+        url="https://example.test/altstetten.html",
+        description=None,
+        phone=None,
+    )
+    catalog_file.write_text(catalog_json.dumps((entry,), FETCHED_AT), encoding="utf-8")
+    return catalog_file
+
+
 def _city_scrape_client() -> HttpClient:
     body = FIXTURE_HTML.read_bytes()
     inner = httpx.Client(
@@ -162,6 +184,77 @@ def test_scrape_gold_composes_onto_built_store(tmp_path: Path) -> None:
     # No second row for City: the scrape composed onto the curated pool (still 4 curated).
     facilities = GoldRepository(open_db(db)).load_all()
     assert len(facilities) == 4
+
+
+def test_scrape_gold_wires_scraped_only_pool_onto_read_path(tmp_path: Path) -> None:
+    # B4 wiring proof: scrape-gold MUST write the composed facilities through `write_schedules`
+    # (→ `pool.facility_doc`, the read path). A scraped-ONLY pool (curated data lacks it) can
+    # appear on that path only if the reroute holds; were scrape-gold to regress to `write_gold`
+    # (the dead `facility` table), the pool's `facility_doc` stays NULL and `get` returns None —
+    # so this test goes red on that mutation, closing the enrichment gap for good.
+    db = tmp_path / "gold.sqlite"
+    assert build(db_path=db, data_dir=DATA_DIR) == 0
+    altstetten = reconstruct_pool_id("hallenbad-altstetten")
+    # Uncurated before the scrape: no schedule blob on the read path.
+    assert GoldRepository(open_db(db)).get(altstetten) is None
+
+    code = scrape_gold(
+        db_path=db,
+        catalog_path=_scraped_only_catalog_file(tmp_path),
+        client=_city_scrape_client(),
+        fetched_at=FETCHED_AT,
+    )
+    assert code == 0
+
+    served = GoldRepository(open_db(db)).get(altstetten)
+    assert served is not None, "scraped-only pool must reach pool.facility_doc via write_schedules"
+    # The scraped schedule (parsed from the fixture) is now on the read path…
+    assert any(b.rules for b in served.basins)
+    # …carrying scraped (not curated) provenance — proof it came through the scrape, not a seed.
+    assert served.provenance.curated is False
+
+
+def test_scrape_merge_puts_curated_schedule_and_scraped_price_on_read_path(tmp_path: Path) -> None:
+    # B4 acceptance: scrape-gold writes the composed facility through `write_schedules`, so the
+    # per-aspect merge (curated schedule kept + a scraped price the curated data lacked) is now
+    # visible on the read path (`pool.facility_doc` via `GoldRepository`), where `/swim` reads.
+    # The live scrape-gold mock yields no scraped price for City (its own curated price already
+    # wins), so this drives the same compose→`write_schedules` seam scrape-gold runs internally,
+    # over the real curated City with its price stripped so the scraped price is the one that
+    # fills the gap.
+    db = tmp_path / "gold.sqlite"
+    assert build(db_path=db, data_dir=DATA_DIR) == 0
+    conn = open_db(db)
+
+    curated_city = GoldRepository(conn).get(reconstruct_pool_id("hallenbad-city"))
+    assert curated_city is not None
+    assert curated_city.prices is not None  # real curated City carries a price
+    assert any(b.rules for b in curated_city.basins)  # ...and a curated schedule
+    priceless_city = replace(curated_city, prices=None)
+
+    scraped_price = PriceTable(
+        entries=(PriceEntry(PriceCategory.ADULT, Decimal("8.00"), "Erwachsene CHF 8.00"),),
+        valid_as_of=FETCHED_AT.date(),
+        source_url="https://example.test/prices",
+    )
+    scraped = ScrapedAspects(
+        name="Hallenbad City",
+        kind=PoolKind.INDOOR,
+        address=curated_city.address,
+        geo=curated_city.geo,
+        basins=(),
+        closures=(),
+        notices=(),
+        prices=scraped_price,
+        fetched_at=FETCHED_AT,
+    )
+    composition = compose((priceless_city,), ((reconstruct_pool_id("hallenbad-city"), scraped),))
+    write_schedules(conn, tuple((f.identity.facility_id, f) for f in composition.facilities))
+
+    served = GoldRepository(open_db(db)).get(reconstruct_pool_id("hallenbad-city"))
+    assert served is not None
+    assert served.basins == curated_city.basins  # curated schedule preserved through the seam
+    assert served.prices == scraped_price  # scraped price gained, now on `pool.facility_doc`
 
 
 def test_scrape_gold_requires_a_built_store(tmp_path: Path) -> None:
@@ -233,8 +326,8 @@ def _pdf_client(handler: Callable[[httpx.Request], httpx.Response]) -> HttpClien
 
 
 def test_scrape_lanes_attaches_plan_to_curated_basin(tmp_path: Path) -> None:
-    # `scrape-lanes` reads the curated facilities (now from `pool.facility_doc`) and needs the
-    # offline `build` spine present, then writes the attached plan to the `facility` table.
+    # `scrape-lanes` reads the curated facilities (from `pool.facility_doc`), needs the offline
+    # `build` spine present, then writes the attached plan back through `write_schedules`.
     db = tmp_path / "gold.sqlite"
     assert build(db_path=db, data_dir=DATA_DIR) == 0
 
@@ -245,9 +338,9 @@ def test_scrape_lanes_attaches_plan_to_curated_basin(tmp_path: Path) -> None:
     )
     assert code == 0
 
-    # B2→B4 enrichment gap: the plan lands on the `facility` table (write_gold), not yet on the
-    # read path — B4 routes scrape-lanes through `write_schedules`.
-    city = _facility_from_table(open_db(db), "hallenbad-city")
+    # B4 closes the B2→B4 enrichment gap: the lane plan is now on the read path
+    # (`pool.facility_doc`), a scraped aspect curated City lacked, visible where `/swim` reads.
+    city = _facility_from_read_path(db, "hallenbad-city")
     lap = next(b for b in city.basins if b.basin_id == BasinId("city-50m"))
     assert lap.lane_plan is not None
     assert lap.lane_plan.lane_count == 6
@@ -367,9 +460,9 @@ def test_build_then_scrape_lanes_enriches(tmp_path: Path) -> None:
     assert code == 0
 
     conn = open_db(db)
-    # B2→B4 enrichment gap: the attached plan is on the `facility` table (write_gold), not yet
-    # on the flipped read path (`pool.facility_doc`) — B4 closes this via `write_schedules`.
-    city = _facility_from_table(conn, "hallenbad-city")
+    # B4: the attached plan is on the flipped read path (`pool.facility_doc`, via
+    # `write_schedules`) — the enrichment gap is closed, `/swim` sees the lane plan.
+    city = _facility_from_read_path(db, "hallenbad-city")
     lap = next(b for b in city.basins if b.basin_id == BasinId("city-50m"))
     assert lap.lane_plan is not None
     # Catalog + calendar assembled by `build` are untouched by lane enrichment.

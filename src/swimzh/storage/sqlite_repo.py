@@ -10,9 +10,11 @@ blob on the ``pool`` row (``facility_doc``), written by the single ``write_sched
 row-normalizing it is a later plan.
 
 The legacy ``facility`` table (queryable columns + a full-``Facility`` ``doc`` blob) is now
-write-only: the ``/swim`` read path serves the curated blob from ``pool.facility_doc`` (via
-``write_schedules``/``GoldRepository``), and the ``facility`` table survives solely as the
-network-enrichment write target until the legacy ``build-gold`` pipeline is deleted (Plan C).
+write-only and unread: the ``/swim`` read path *and* the network enrichers (``scrape-gold``/
+``scrape-lanes``) serve/write the curated blob through ``pool.facility_doc`` (via
+``write_schedules``/``GoldRepository``). The ``facility`` table survives only as the legacy
+``build-gold`` (``pipeline.run``) / offline-``build`` write target until that pipeline is
+deleted (Plan C).
 """
 
 from __future__ import annotations
