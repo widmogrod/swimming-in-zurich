@@ -72,40 +72,97 @@ class Crosswalk:
         return resolve(ref, self)
 
 
-def resolve(ref: SourceRef, crosswalk: Crosswalk) -> Result[PoolId, ProviderError]:
-    """Resolve a ``SourceRef`` to exactly one ``PoolId`` by lookup, or a loud ``Err``."""
+# --- three-way resolution classification (the ambiguous/not-found distinction) --------
+#
+# ``resolve`` collapses the outcome to ``Ok | Err`` for its single-ref callers, but a batch
+# resolver needs to tell a *benign* miss (a ref with no crosswalk entry — reportable, not
+# fatal) apart from an *ambiguous* one (a ref that would attach to >1 pool — structurally
+# fatal, the never-attach-to-wrong-pool hazard). ``_classify`` carries that distinction as a
+# typed value so both callers agree on it without parsing an error string.
+
+
+@dataclass(frozen=True, slots=True)
+class _Matched:
+    """The ref resolved to exactly one pool."""
+
+    pool_id: PoolId
+
+
+@dataclass(frozen=True, slots=True)
+class _NotFound:
+    """A benign miss — no crosswalk entry for this ref. Reportable, not fatal."""
+
+    error: ProviderError
+
+
+@dataclass(frozen=True, slots=True)
+class _Ambiguous:
+    """The ref would attach to more than one pool — structurally fatal, never guessed."""
+
+    error: ProviderError
+
+
+_Resolution = _Matched | _NotFound | _Ambiguous
+
+
+def _classify(ref: SourceRef, crosswalk: Crosswalk) -> _Resolution:
+    """Look a ``SourceRef`` up, distinguishing matched / benign-miss / ambiguous.
+
+    ``Xref``/``Name`` are dict lookups (a key maps to a single pool by construction), so their
+    only failure is a benign ``_NotFound``. Only a ``BasinHint`` can be ``_Ambiguous`` — the
+    basin-hint index records a key mapping to two different pools in ``ambiguous_hints``.
+    """
     match ref:
         case Xref(namespace, ext_id):
             pool_id = crosswalk.xref.get((namespace, ext_id))
             if pool_id is None:
-                return Err(
+                return _NotFound(
                     SchemaMismatch(
                         source=_SOURCE,
                         detail=f"unresolved xref: namespace={namespace!r} ext_id={ext_id!r}",
                     )
                 )
-            return Ok(pool_id)
+            return _Matched(pool_id)
         case Name(display):
             pool_id = crosswalk.alias.get(normalize(display))
             if pool_id is None:
-                return Err(
+                return _NotFound(
                     SchemaMismatch(
                         source=_SOURCE, detail=f"unresolved name (no alias): {display!r}"
                     )
                 )
-            return Ok(pool_id)
+            return _Matched(pool_id)
         case BasinHint(text):
             key = normalize(text)
             if key in crosswalk.ambiguous_hints:
-                return Err(SchemaMismatch(source=_SOURCE, detail=f"ambiguous basin hint: {text!r}"))
+                return _Ambiguous(
+                    SchemaMismatch(source=_SOURCE, detail=f"ambiguous basin hint: {text!r}")
+                )
             pool_id = crosswalk.basin_hint.get(key)
             if pool_id is None:
-                return Err(
+                return _NotFound(
                     SchemaMismatch(source=_SOURCE, detail=f"unresolved basin hint: {text!r}")
                 )
-            return Ok(pool_id)
+            return _Matched(pool_id)
         case _:  # pragma: no cover - exhaustiveness guard
             assert_never(ref)
+
+
+def resolve(ref: SourceRef, crosswalk: Crosswalk) -> Result[PoolId, ProviderError]:
+    """Resolve a ``SourceRef`` to exactly one ``PoolId`` by lookup, or a loud ``Err``.
+
+    Single-ref callers get ``Ok | Err``; both a benign miss and an ambiguous hint are ``Err``
+    here (see ``resolve_all`` for the batch resolver that keeps them apart)."""
+    resolution = _classify(ref, crosswalk)
+    match resolution:
+        case _Matched(pool_id):
+            return Ok(pool_id)
+        case _NotFound(error):
+            return Err(error)
+        case _Ambiguous(error):
+            return Err(error)
+        case _:  # pragma: no cover - exhaustiveness guard
+            assert_never(resolution)
 
 
 def _ref_label(ref: SourceRef) -> str:
@@ -121,32 +178,48 @@ def _ref_label(ref: SourceRef) -> str:
             assert_never(ref)
 
 
+@dataclass(frozen=True, slots=True)
+class ReconcileOutcome[Payload]:
+    """The result of resolving a batch of extracts: the pools we could key, and the benign
+    misses we could not (their display labels).
+
+    ``unresolved`` is a **required** field with no default — a caller cannot construct an
+    outcome that silently swallows a miss, and every consumer must decide what to do with the
+    unmatched labels. An *ambiguous* ref never lands here: it aborts the whole batch as an
+    ``Err`` (see ``resolve_all``), preserving never-attach-to-the-wrong-pool by type.
+    """
+
+    resolved: tuple[tuple[PoolId, Payload], ...]
+    unresolved: tuple[str, ...]
+
+
 def resolve_all[Payload](
     extracts: Iterable[tuple[SourceRef, Payload]], crosswalk: Crosswalk
-) -> Result[tuple[tuple[PoolId, Payload], ...], ProviderError]:
-    """Resolve every provider extract's ``SourceRef`` to a ``PoolId`` — loud on any miss.
+) -> Result[ReconcileOutcome[Payload], ProviderError]:
+    """Resolve every provider extract's ``SourceRef`` to a ``PoolId`` — resilient to benign
+    misses, fatal on ambiguity.
 
-    Lookup-only discipline: a single unresolved ref aborts the batch with a typed ``Err``
-    naming *all* the offenders, so a scrape can never silently attach its payload to the wrong
-    pool (or drop it unnoticed). On success returns the keyed payloads, which ``compose`` then
-    folds per pool.
+    A benign miss (a ``Name``/``Xref`` with no crosswalk entry) is collected into
+    ``ReconcileOutcome.unresolved`` (its display label) rather than aborting the batch, so one
+    unmatched WFS name no longer discards every good scrape. An **ambiguous** ref (one that
+    would attach to more than one pool) still aborts the whole batch with a typed ``Err``
+    naming the offender — a scrape can never silently attach its payload to the wrong pool. On
+    success returns the keyed payloads, which ``compose`` then folds per pool.
     """
     keyed: list[tuple[PoolId, Payload]] = []
     unresolved: list[str] = []
     for ref, payload in extracts:
-        match resolve(ref, crosswalk):
-            case Ok(pool_id):
+        resolution = _classify(ref, crosswalk)
+        match resolution:
+            case _Matched(pool_id):
                 keyed.append((pool_id, payload))
-            case Err(_):
+            case _NotFound(_):
                 unresolved.append(_ref_label(ref))
-    if unresolved:
-        return Err(
-            SchemaMismatch(
-                source=_SOURCE,
-                detail=f"unresolved scrape refs (no pool matched): {sorted(unresolved)}",
-            )
-        )
-    return Ok(tuple(keyed))
+            case _Ambiguous(error):
+                return Err(error)
+            case _:  # pragma: no cover - exhaustiveness guard
+                assert_never(resolution)
+    return Ok(ReconcileOutcome(resolved=tuple(keyed), unresolved=tuple(unresolved)))
 
 
 # --- crosswalk construction (the SOLE PoolId minting for lookup tables) ----------------

@@ -57,7 +57,7 @@ becomes reportable, not fatal. Owner sign-off given (the "continue" after A/B/C)
 
 | date | slice | status | divergence | tech debt | human review? |
 |------|-------|--------|------------|-----------|---------------|
-| —    | —     | —      | —          | —         | —             |
+| 2026-07-20 | D1 | done | none — `resolve_all -> Result[ReconcileOutcome, ProviderError]` (`unresolved` required); a typed `_Matched/_NotFound/_Ambiguous` classification (`_classify` + `assert_never`) makes ambiguous-vs-not-found STRUCTURAL — never-attach-to-wrong-pool holds by construction (only `BasinHint` can be ambiguous; `Name`/`Xref` are dict lookups). `resolve`'s public `Ok\|Err` behavior is unchanged | interim `cli.scrape_gold` shim keeps pre-D1 whole-batch-fail behavior (D2 rewires to real partial success). Discovery: scrape extracts are `Name` only → never ambiguous by construction → D2's ambiguous-aborts test needs a `BasinHint`/seeded-ambiguous crosswalk | no |
 
 ## Decisions & divergences
 

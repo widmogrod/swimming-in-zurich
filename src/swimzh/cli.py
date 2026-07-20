@@ -100,8 +100,18 @@ def scrape_gold(
         case Err(error):
             print(f"scrape reconcile failed: {describe(error)}", file=sys.stderr)
             return 1
-        case Ok(keyed):
-            composition = compose(curated, keyed)
+        case Ok(outcome):
+            # D1 interim: preserve the pre-D2 whole-batch-abort behaviour by treating any
+            # benign miss as fatal. D2 rewires this to real partial success — write
+            # outcome.resolved, report outcome.unresolved, exit non-zero iff it is non-empty.
+            if outcome.unresolved:
+                print(
+                    "scrape reconcile failed: unresolved scrape refs (no pool matched): "
+                    f"{sorted(outcome.unresolved)}",
+                    file=sys.stderr,
+                )
+                return 1
+            composition = compose(curated, outcome.resolved)
             write_schedules(
                 conn,
                 tuple((f.identity.facility_id, f) for f in composition.facilities),

@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+import pytest
+
 from swimzh.build.reconcile import (
     BasinHint,
     Crosswalk,
     Name,
+    ReconcileOutcome,
     SourceRef,
     Xref,
     build_basin_hint_index,
@@ -84,7 +87,7 @@ def test_crosswalk_resolve_method_delegates() -> None:
     assert _crosswalk().resolve(Name("city")) == Ok(PoolId("hallenbad-city"))
 
 
-# --- resolve_all: batch resolution, loud on any miss --------------------------------
+# --- resolve_all: resilient to benign misses, fatal on ambiguity --------------------
 
 
 def test_resolve_all_keys_every_extract_on_success() -> None:
@@ -93,19 +96,53 @@ def test_resolve_all_keys_every_extract_on_success() -> None:
         (Xref("crowdmonitor", "City"), "payload-b"),
     ]
     result = resolve_all(extracts, _crosswalk())
+    # An all-resolve batch: every pool in `resolved`, `unresolved` empty.
     assert result == Ok(
-        ((PoolId("hallenbad-city"), "payload-a"), (PoolId("hallenbad-city"), "payload-b"))
+        ReconcileOutcome(
+            resolved=(
+                (PoolId("hallenbad-city"), "payload-a"),
+                (PoolId("hallenbad-city"), "payload-b"),
+            ),
+            unresolved=(),
+        )
     )
 
 
-def test_resolve_all_is_loud_on_any_unresolved_ref() -> None:
-    # One good, one unresolvable -> the whole batch is a typed Err naming the offender; the
-    # caller never silently attaches "payload-b" to a guessed pool.
-    extracts = [(Name("Hallenbad City"), "payload-a"), (Name("Hallenbad Nonexistent"), "payload-b")]
+def test_resolve_all_collects_benign_miss_and_keeps_the_rest() -> None:
+    # A benign no-crosswalk miss no longer aborts the batch: the good scrape is kept in
+    # `resolved`, the unmatched name is reported (by display label) in `unresolved`.
+    extracts: list[tuple[SourceRef, str]] = [
+        (Name("Hallenbad City"), "payload-a"),
+        (Name("Hallenbad Nonexistent"), "payload-b"),
+    ]
+    result = resolve_all(extracts, _crosswalk())
+    assert result == Ok(
+        ReconcileOutcome(
+            resolved=((PoolId("hallenbad-city"), "payload-a"),),
+            unresolved=("Hallenbad Nonexistent",),
+        )
+    )
+
+
+def test_resolve_all_is_fatal_on_ambiguous_ref_naming_the_offender() -> None:
+    # An ambiguous ref (would attach to >1 pool) stays a hard Err — never a wrong-pool write,
+    # even though other refs in the batch resolve cleanly.
+    extracts: list[tuple[SourceRef, str]] = [
+        (Name("Hallenbad City"), "payload-a"),
+        (BasinHint("Twin Bad Schwimmerbecken"), "payload-b"),
+    ]
     result = resolve_all(extracts, _crosswalk())
     assert isinstance(result, Err)
     assert isinstance(result.error, SchemaMismatch)
-    assert "Hallenbad Nonexistent" in result.error.detail
+    assert "ambiguous" in result.error.detail.lower()
+    assert "Twin Bad Schwimmerbecken" in result.error.detail
+
+
+def test_resolve_all_unresolved_is_required_no_default() -> None:
+    # The required `unresolved` field means a caller cannot construct an outcome that
+    # silently swallows a miss.
+    with pytest.raises(TypeError):
+        ReconcileOutcome(resolved=())  # type: ignore[call-arg]
 
 
 # --- basin-hint index + crosswalk_from_rows -----------------------------------------
