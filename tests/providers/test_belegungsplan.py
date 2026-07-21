@@ -28,12 +28,14 @@ from swimzh.providers.belegungsplan import (
     _grid_band,
     _Header,
     _parse_header,
+    _parse_sectioned_basin,
     _parse_valid_from,
     _resolve,
     _segment_grid,
     _weekday_row,
     _Word,
     parse_belegungsplan,
+    parse_belegungsplan_sheet,
     scrape_belegungsplan,
 )
 
@@ -220,6 +222,146 @@ def test_kaeferberg_real_fixture_parses_uniform_four_lanes() -> None:
     assert parsed.plan.lanes_by_weekday is None
     assert parsed.plan.coverage.confidence is PlanConfidence.PARTIAL
     assert _check_invariants(parsed.plan.reservations, parsed.plan.lane_count) is None
+
+
+# --- Oerlikon sheets: single 8-lane grid + stacked Teil-sectioned basins (E3) --------
+#
+# Verified from the committed A2 PDFs (pdfplumber word extraction), NOT calibrated to whatever
+# the parser first emitted:
+#   * oerlikon-schwimmerbecken.pdf   — ONE basin, a clean uniform 8-lane × 7-day grid
+#     ("8 Bahnen" over every weekday, 56 = 7×8 data columns). NOT sectioned; `section` stays
+#     None. The old parser rejected it only because its title sits a line higher on the taller
+#     A2 sheet than the fixed A4 title window allowed.
+#   * oerlikon-nichtschwimmer-sprungbecken.pdf — TWO basins stacked side by side
+#     ("Nichtschwimmer" + "Sprungbecken", 14 = 2×7 weekday anchors). Each weekday column is
+#     genuinely split into "Teil 1 / Teil 2" — so each basin is a uniform 7×2 grid whose two
+#     lanes carry D's `section` labels. This is the only committed sheet that names sections.
+
+
+def _section_reservation_digest(reservations: tuple[LaneReservation, ...]) -> str:
+    """Like `_reservation_digest` but folds in `section` — the E3 golden anchor for the
+    Teil-sectioned Oerlikon basins."""
+
+    def key(r: LaneReservation) -> tuple[object, ...]:
+        return (
+            tuple(sorted(w.value for w in r.weekdays)),
+            r.time.start.isoformat(),
+            r.time.end.isoformat(),
+            tuple(sorted(r.lanes)),
+            repr(r.access),
+            r.section or "",
+        )
+
+    lines = [
+        f"{sorted(w.value for w in r.weekdays)}|{r.time.start}-{r.time.end}|"
+        f"{sorted(r.lanes)}|{r.access!r}|{r.section}"
+        for r in sorted(reservations, key=key)
+    ]
+    return hashlib.sha256("\n".join(lines).encode()).hexdigest()
+
+
+_OERLIKON_SCHWIMMER_DIGEST = "c951c1e66e312ca267d8763f7dcc4f392f45d6096d90efa33bf3d5d97650d4ca"
+_NICHTSCHWIMMER_DIGEST = "86edde12fcfc4452502fc3cf55f6ee2549cd557e4958f38d574ebba2d6b8c628"
+_SPRUNGBECKEN_DIGEST = "b9a762994cbbc00235e7f6403482ca6aeb96eb33db9c117293b60e1b7004bf0f"
+
+
+def test_oerlikon_schwimmerbecken_parses_uniform_eight_lanes() -> None:
+    # A2 sheet, single basin, clean uniform 8-lane × 7-day grid — no named sections.
+    result = parse_belegungsplan((FIXTURES / "oerlikon-schwimmerbecken.pdf").read_bytes())
+    assert isinstance(result, Ok), result
+    parsed = result.value
+    assert "Oerlikon" in parsed.basin_hint and "Schwimmer" in parsed.basin_hint
+    plan = parsed.plan
+    assert plan.lane_count == 8
+    assert plan.valid_from == date(2026, 1, 1)
+    assert plan.lanes_by_weekday is None  # uniform 7×8 fast path, not ragged/clipped
+    # No "Teil" sections on this sheet — every reservation stays section-free.
+    assert all(r.section is None for r in plan.reservations)
+    # Honest PARTIAL: some slots are blank (pool closed) — but no lane carries an unknown owner,
+    # so this is never a false COMPLETE hiding a dropped column.
+    assert plan.coverage.confidence is PlanConfidence.PARTIAL
+    assert plan.coverage.unresolved_lanes == frozenset()
+    assert _check_invariants(plan.reservations, plan.lane_count) is None
+    assert _reservation_digest(plan.reservations) == _OERLIKON_SCHWIMMER_DIGEST
+
+
+def test_oerlikon_schwimmerbecken_via_sheet_is_single_basin() -> None:
+    result = parse_belegungsplan_sheet((FIXTURES / "oerlikon-schwimmerbecken.pdf").read_bytes())
+    assert isinstance(result, Ok), result
+    assert len(result.value) == 1  # single-basin sheet -> 1-tuple
+    assert result.value[0].plan.lane_count == 8
+
+
+def test_oerlikon_sprungbecken_sheet_splits_into_two_sectioned_basins() -> None:
+    # The stacked sheet yields ONE ParsedPlan per basin, each a 2-lane grid whose lanes are the
+    # genuinely-named "Teil 1 / Teil 2" sections (this is where D's `section` earns its keep).
+    result = parse_belegungsplan_sheet(
+        (FIXTURES / "oerlikon-nichtschwimmer-sprungbecken.pdf").read_bytes()
+    )
+    assert isinstance(result, Ok), result
+    plans = result.value
+    assert len(plans) == 2
+    by_hint = {p.basin_hint: p.plan for p in plans}
+    assert any("Nichtschwimmer" in h for h in by_hint)
+    assert any("Sprungbecken" in h for h in by_hint)
+
+    for hint, plan in by_hint.items():
+        assert plan.lane_count == 2, hint
+        assert plan.valid_from == date(2025, 11, 26), hint
+        assert plan.lanes_by_weekday is None, hint
+        # Exactly the two named sections, each pinned to its own lane (Teil 1 -> lane 1,
+        # Teil 2 -> lane 2): sections never merge and no lane escapes 1..2.
+        assert {r.section for r in plan.reservations} == {"Teil 1", "Teil 2"}, hint
+        for r in plan.reservations:
+            expected_lane = 1 if r.section == "Teil 1" else 2
+            assert r.lanes == frozenset({expected_lane}), (hint, r.section, r.lanes)
+        assert plan.coverage.confidence is PlanConfidence.PARTIAL, hint
+        assert _check_invariants(plan.reservations, plan.lane_count) is None, hint
+
+
+def test_parse_belegungsplan_sheet_single_basin_matches_single_parser() -> None:
+    # A single-basin sheet (City) returns a 1-tuple byte-identical to `parse_belegungsplan`.
+    city = FIXTURE.read_bytes()
+    sheet = parse_belegungsplan_sheet(city)
+    assert isinstance(sheet, Ok)
+    assert len(sheet.value) == 1
+    assert _reservation_digest(sheet.value[0].plan.reservations) == _CITY_GOLDEN_DIGEST
+
+
+def test_parse_belegungsplan_sheet_unreadable_bytes_is_typed_error() -> None:
+    # A sheet-level parse still funnels every failure through a typed `Result` (no exceptions).
+    result = parse_belegungsplan_sheet(b"this is not a pdf")
+    assert isinstance(result, Err)
+    assert isinstance(result.error, ParseError)
+
+
+def test_parse_sectioned_basin_without_cells_is_schema_mismatch() -> None:
+    # A stacked-basin sub-grid with no data cells fails as a typed SchemaMismatch, never raising.
+    group = [_word(name, 100.0 + 50 * i, 40.0) for i, name in enumerate(["Mo", "Di", "Mi"])]
+    result = _parse_sectioned_basin(
+        words=group,  # only the weekday anchors, no digit cells below
+        group=group,
+        legend={1: "Öffentlichkeit"},
+        valid_from=None,
+        slots=[TimeRange(time(6, 0), time(6, 30))],
+        data_top=100.0,
+        spec=GridSpec(),
+        page_width=1190.0,
+    )
+    assert isinstance(result, Err)
+    assert isinstance(result.error, SchemaMismatch)
+    assert "no grid cells" in result.error.detail
+
+
+def test_oerlikon_sprungbecken_basins_are_golden() -> None:
+    result = parse_belegungsplan_sheet(
+        (FIXTURES / "oerlikon-nichtschwimmer-sprungbecken.pdf").read_bytes()
+    )
+    by_hint = {p.basin_hint: p.plan for p in result.unwrap_or_raise()}
+    nichtschwimmer = next(p for h, p in by_hint.items() if "Nichtschwimmer" in h)
+    sprungbecken = next(p for h, p in by_hint.items() if "Sprungbecken" in h)
+    assert _section_reservation_digest(nichtschwimmer.reservations) == _NICHTSCHWIMMER_DIGEST
+    assert _section_reservation_digest(sprungbecken.reservations) == _SPRUNGBECKEN_DIGEST
 
 
 # --- owner-relabel trap: an unknown code is never public ----------------------------

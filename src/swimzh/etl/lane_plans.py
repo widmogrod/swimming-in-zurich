@@ -13,7 +13,7 @@ from dataclasses import dataclass
 
 from swimzh.core.http import HttpClient
 from swimzh.core.result import Err, Ok
-from swimzh.providers.belegungsplan import ParsedPlan, scrape_belegungsplan
+from swimzh.providers.belegungsplan import ParsedPlan, scrape_belegungsplan_sheet
 
 # The city indoor pools publish per-basin Belegungspläne under a shared
 # `.../belegungsplaene/<slug>[-<basin>].pdf` path. Best-effort and UNVERIFIED — a wrong or
@@ -52,9 +52,11 @@ def scrape_lane_plans(client: HttpClient, urls: tuple[str, ...]) -> LanePlanRepo
     plans: list[ParsedPlan] = []
     skipped: list[str] = []
     for url in urls:
-        match scrape_belegungsplan(client, url):
+        # One sheet may stack several basins (Oerlikon's Nichtschwimmer-/Sprungbecken): the
+        # sheet parser returns one `ParsedPlan` per basin; a single-basin sheet returns one.
+        match scrape_belegungsplan_sheet(client, url):
             case Ok(parsed):
-                plans.append(parsed)
+                plans.extend(parsed)
             case Err(_):
                 skipped.append(url)
     return LanePlanReport(plans=tuple(plans), skipped=tuple(skipped))

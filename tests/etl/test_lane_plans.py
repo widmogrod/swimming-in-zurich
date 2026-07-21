@@ -69,6 +69,19 @@ def test_scrape_lane_plans_newly_listed_basins_all_parse_never_fatal() -> None:
     assert report.skipped == ()
 
 
+def test_scrape_lane_plans_expands_stacked_oerlikon_sheet_into_two_basins() -> None:
+    # The Oerlikon Nichtschwimmer-/Sprungbecken sheet stacks two basins; the sheet parser emits
+    # one ParsedPlan per basin, so one URL contributes TWO plans (E3 multi-basin segmentation).
+    sheet = (FIXTURES / "oerlikon-nichtschwimmer-sprungbecken.pdf").read_bytes()
+    client = _client(lambda _r: httpx.Response(200, content=sheet))
+    report = scrape_lane_plans(client, ("https://example.test/oerlikon-sprung.pdf",))
+    assert len(report.plans) == 2
+    assert report.skipped == ()
+    hints = {p.basin_hint for p in report.plans}
+    assert any("Nichtschwimmer" in h for h in hints)
+    assert any("Sprungbecken" in h for h in hints)
+
+
 def test_new_slugs_are_wired_into_the_scrape_url_list() -> None:
     listed = "\n".join(CITY_BELEGUNGSPLAN_URLS)
     for slug in NEW_SLUGS:

@@ -43,6 +43,10 @@ from swimzh.domain.schedule import TimeRange, Weekday
 
 _SOURCE = "belegungsplan"
 
+# A weekday-anchor gap wider than this multiple of the regular day pitch starts a new stacked
+# basin (Oerlikon's Nichtschwimmer-/Sprungbecken sit 1.35× apart vs. the 1.0× intra-grid pitch).
+_GROUP_GAP_RATIO = 1.3
+
 _WEEKDAY_NAMES: dict[str, Weekday] = {
     "montag": Weekday.MONDAY,
     "dienstag": Weekday.TUESDAY,
@@ -234,12 +238,22 @@ def _row_text(words: list[_Word]) -> str:
 def _basin_title(
     words: list[_Word], grid_x_min: float, grid_x_max: float, spec: GridSpec, weekday_top: float
 ) -> str:
-    """The title line ("Hallenbad City Schwimmerbecken"), a central band above the weekdays."""
-    band_top, band_bottom = weekday_top - 30, weekday_top - spec.title_gap
-    title_words = [
-        w for w in words if band_top < w.top < band_bottom and grid_x_min <= w.xc <= grid_x_max
+    """The title line ("Hallenbad City Schwimmerbecken"), the text row immediately above the
+    weekday row within the day-grid x-span. Picking the row *closest above* — rather than a
+    fixed pixel window — is page-relative: it adapts to A4-vs-A2 line spacing (City's title
+    sits 22 px above the weekday row, Oerlikon's taller A2 sheet 31 px) while still skipping
+    the higher "Übersicht Dauerbelegungen" strap-line, so City-family basin hints stay
+    byte-identical and the wider Oerlikon sheet's title is read."""
+    above = [
+        w
+        for w in words
+        if w.top < weekday_top - spec.title_gap and grid_x_min <= w.xc <= grid_x_max
     ]
-    return _row_text(title_words)
+    if not above:
+        return ""
+    target = max(_cluster([w.top for w in above], spec.y_tol))  # the row closest to the weekdays
+    row = [w for w in above if abs(w.top - target) <= spec.y_tol]
+    return _row_text(row)
 
 
 def _header_valid_from(words: list[_Word], grid_x_max: float, weekday_top: float) -> date | None:
@@ -544,10 +558,19 @@ def _lanes_on(grid: _Grid, weekday: Weekday) -> int:
     return grid.lanes_by_weekday.get(weekday, grid.lane_count)
 
 
-def _resolve(grid: _Grid, legend: dict[int, str]) -> _Resolved:
-    # (time, access) -> lanes, per weekday; then merge equal (time, lanes, access) across days.
-    per_day: dict[Weekday, dict[tuple[TimeRange, SessionAccess], set[int]]] = defaultdict(
-        lambda: defaultdict(set)
+def _resolve(
+    grid: _Grid, legend: dict[int, str], lane_sections: Mapping[int, str] | None = None
+) -> _Resolved:
+    # (time, access, section) -> lanes, per weekday; then merge equal keys across days. When
+    # `lane_sections` is None every section is None, so the grouping — and every emitted
+    # reservation — is byte-identical to the pre-section path. When a sectioned sheet maps a
+    # lane to a "Teil" label, that label enters the key so reservations in different sections
+    # never merge and each carries D's `section`.
+    def _section_of(lane: int) -> str | None:
+        return lane_sections.get(lane) if lane_sections is not None else None
+
+    per_day: dict[Weekday, dict[tuple[TimeRange, SessionAccess, str | None], set[int]]] = (
+        defaultdict(lambda: defaultdict(set))
     )
     resolved_total = 0
     unresolved_lanes: set[int] = set()
@@ -558,16 +581,20 @@ def _resolve(grid: _Grid, legend: dict[int, str]) -> _Resolved:
             if unresolved:
                 unresolved_lanes.add(lane)
             for span, access in runs:
-                per_day[weekday][(span, access)].add(lane)
+                per_day[weekday][(span, access, _section_of(lane))].add(lane)
 
-    merged: dict[tuple[TimeRange, frozenset[int], SessionAccess], set[Weekday]] = defaultdict(set)
+    merged: dict[tuple[TimeRange, frozenset[int], SessionAccess, str | None], set[Weekday]] = (
+        defaultdict(set)
+    )
     for weekday, blocks in per_day.items():
-        for (span, access), lanes in blocks.items():
-            merged[(span, frozenset(lanes), access)].add(weekday)
+        for (span, access, section), lanes in blocks.items():
+            merged[(span, frozenset(lanes), access, section)].add(weekday)
 
     reservations = tuple(
-        LaneReservation(weekdays=frozenset(weekdays), time=span, lanes=lanes, access=access)
-        for (span, lanes, access), weekdays in merged.items()
+        LaneReservation(
+            weekdays=frozenset(weekdays), time=span, lanes=lanes, access=access, section=section
+        )
+        for (span, lanes, access, section), weekdays in merged.items()
     )
     # Count cells honestly: a ragged grid contributes each weekday's own lane count, so a
     # movable-floor day with fewer lanes never inflates the denominator.
@@ -644,15 +671,34 @@ def _extract_words(pdf_bytes: bytes) -> Result[tuple[list[_Word], float], Provid
     return Ok((words, page_width))
 
 
-def parse_belegungsplan(
-    pdf_bytes: bytes, spec: GridSpec = _DEFAULT_GRID_SPEC
-) -> Result[ParsedPlan, ProviderError]:
-    """Parse a Belegungsplan PDF into a `ParsedPlan` (basin hint + `LanePlan`)."""
-    words_result = _extract_words(pdf_bytes)
-    if isinstance(words_result, Err):
-        return words_result
-    words, page_width = words_result.value
+def _plan_from_resolved(
+    resolved: _Resolved,
+    lane_count: int,
+    valid_from: date | None,
+    lanes_by_weekday: Mapping[Weekday, int] | None,
+) -> LanePlan:
+    """Assemble a `LanePlan` + its honest coverage from a resolved grid (shared by the single-
+    basin and per-section paths)."""
+    complete = resolved.cells_resolved == resolved.cells_total and not resolved.unresolved_lanes
+    coverage = PlanCoverage(
+        confidence=PlanConfidence.COMPLETE if complete else PlanConfidence.PARTIAL,
+        cells_total=resolved.cells_total,
+        cells_resolved=resolved.cells_resolved,
+        unresolved_lanes=resolved.unresolved_lanes,
+    )
+    return LanePlan(
+        lane_count=lane_count,
+        reservations=resolved.reservations,
+        valid_from=valid_from,
+        coverage=coverage,
+        fetched_at=None,
+        lanes_by_weekday=lanes_by_weekday,
+    )
 
+
+def _parse_single_basin(
+    words: list[_Word], spec: GridSpec, page_width: float
+) -> Result[ParsedPlan, ProviderError]:
     header_result = _parse_header(words, spec, page_width)
     if isinstance(header_result, Err):
         return header_result
@@ -672,22 +718,195 @@ def parse_belegungsplan(
     if invariant_error is not None:
         return Err(invariant_error)
 
-    complete = resolved.cells_resolved == resolved.cells_total and not resolved.unresolved_lanes
-    coverage = PlanCoverage(
-        confidence=PlanConfidence.COMPLETE if complete else PlanConfidence.PARTIAL,
-        cells_total=resolved.cells_total,
-        cells_resolved=resolved.cells_resolved,
-        unresolved_lanes=resolved.unresolved_lanes,
-    )
-    plan = LanePlan(
-        lane_count=grid.lane_count,
-        reservations=resolved.reservations,
-        valid_from=header.valid_from,
-        coverage=coverage,
-        fetched_at=None,
-        lanes_by_weekday=grid.lanes_by_weekday,
-    )
+    plan = _plan_from_resolved(resolved, grid.lane_count, header.valid_from, grid.lanes_by_weekday)
     return Ok(ParsedPlan(basin_hint=header.basin_hint, plan=plan))
+
+
+def parse_belegungsplan(
+    pdf_bytes: bytes, spec: GridSpec = _DEFAULT_GRID_SPEC
+) -> Result[ParsedPlan, ProviderError]:
+    """Parse a single-basin Belegungsplan PDF into a `ParsedPlan` (basin hint + `LanePlan`)."""
+    words_result = _extract_words(pdf_bytes)
+    if isinstance(words_result, Err):
+        return words_result
+    words, page_width = words_result.value
+    return _parse_single_basin(words, spec, page_width)
+
+
+# --- multi-basin / named-section (Teil) sheets --------------------------------------
+
+
+def _weekday_groups(anchors: list[_Word]) -> list[list[_Word]]:
+    """Split the detected weekday cells into one group per stacked basin. A sheet that lays
+    several basins side by side repeats the weekday row (e.g. Oerlikon's Nichtschwimmer- and
+    Sprungbecken: 14 anchors = 2×7); the basins are separated by an inter-basin x-gap markedly
+    wider than the regular day pitch, so a gap above `_GROUP_GAP_RATIO × median` starts a new
+    group. A normal single-basin sheet has one uniform pitch and yields a single group."""
+    ordered = sorted(anchors, key=lambda w: w.xc)
+    if len(ordered) < 2:
+        return [ordered]
+    gaps = [ordered[i + 1].xc - ordered[i].xc for i in range(len(ordered) - 1)]
+    median = sorted(gaps)[len(gaps) // 2]
+    groups: list[list[_Word]] = [[ordered[0]]]
+    for i in range(1, len(ordered)):
+        if gaps[i - 1] > _GROUP_GAP_RATIO * median:
+            groups.append([])
+        groups[-1].append(ordered[i])
+    return groups
+
+
+def _first_data_top(words: list[_Word], grid_x_min: float) -> float:
+    """The top of the first time-labelled slot row — the vertical start of the data grid. Cells
+    align to the left-gutter time labels, so anchoring on the earliest label top excludes the
+    section-header rows ("Teil", "1 2") that sit above it."""
+    rows: dict[int, list[_Word]] = defaultdict(list)
+    for w in words:
+        if w.xc < grid_x_min:
+            rows[round(w.top)].append(w)
+    tops = [
+        min(g.top for g in group)
+        for group in rows.values()
+        if _TIME_LABEL_RE.search(" ".join(g.text for g in sorted(group, key=lambda g: g.x0)))
+    ]
+    return min(tops) if tops else 0.0
+
+
+def _has_section_labels(
+    words: list[_Word], grid_x_min: float, grid_x_max: float, weekday_top: float, data_top: float
+) -> bool:
+    """Whether this basin's columns are named "Teil …" sections (between the weekday row and the
+    first data row, within the basin's x-span)."""
+    return any(
+        w.text.strip().lower() == "teil"
+        and grid_x_min <= w.xc <= grid_x_max
+        and weekday_top < w.top < data_top
+        for w in words
+    )
+
+
+def _parse_sectioned_basin(
+    words: list[_Word],
+    group: list[_Word],
+    legend: dict[int, str],
+    valid_from: date | None,
+    slots: list[TimeRange],
+    data_top: float,
+    spec: GridSpec,
+    page_width: float,
+) -> Result[ParsedPlan, ProviderError]:
+    """Parse one stacked basin: a clean `7 × sections` grid under its own weekday anchors. The
+    lane count is the number of section columns per weekday (2 for "Teil 1 / Teil 2"), read from
+    the geometry — this sheet family carries no "N Bahnen" header. Where the columns are named
+    "Teil", each lane maps to that section label (D's `section`); otherwise sections stay `None`
+    (stacked basins that simply aren't sub-divided)."""
+    grid_x_min, grid_x_max = _grid_band(group, spec, page_width)
+    weekday_top = min(w.top for w in group)
+    cells = [
+        w
+        for w in words
+        if w.text.isdigit() and grid_x_min < w.xc < grid_x_max and w.top >= data_top - spec.y_tol
+    ]
+    if not cells:
+        return Err(SchemaMismatch(source=_SOURCE, detail="no grid cells"))
+    columns = _cluster([w.xc for w in cells], spec.x_tol)
+    weekdays = len(group)
+    if weekdays == 0 or len(columns) % weekdays != 0:
+        return Err(
+            SchemaMismatch(
+                source=_SOURCE,
+                detail=f"{len(columns)} section columns not a multiple of {weekdays} weekdays",
+            )
+        )
+    sections = len(columns) // weekdays
+    if sections < 1:
+        return Err(SchemaMismatch(source=_SOURCE, detail="no section columns"))
+
+    rows = _cluster([w.top for w in cells], spec.y_tol)
+    if len(slots) < len(rows):
+        return Err(
+            SchemaMismatch(
+                source=_SOURCE,
+                detail=f"{len(rows)} slot rows but only {len(slots)} time labels",
+            )
+        )
+    used_slots = slots[: len(rows)]
+
+    basin_hint = _basin_title(words, grid_x_min, grid_x_max, spec, weekday_top)
+    if not basin_hint:
+        return Err(SchemaMismatch(source=_SOURCE, detail="no basin title"))
+
+    header = _Header(
+        basin_hint=basin_hint,
+        lane_count=sections,
+        valid_from=valid_from,
+        weekday_top=weekday_top,
+        bahnen_top=data_top,
+        grid_x_min=grid_x_min,
+        grid_x_max=grid_x_max,
+        weekday_centres=tuple(sorted(w.xc for w in group)),
+    )
+    grid = _uniform_grid(cells, columns, used_slots, spec, header)
+    named = _has_section_labels(words, grid_x_min, grid_x_max, weekday_top, data_top)
+    lane_sections = {lane: f"Teil {lane}" for lane in range(1, sections + 1)} if named else None
+    resolved = _resolve(grid, legend, lane_sections)
+    invariant_error = _check_invariants(resolved.reservations, grid.lane_count)
+    if invariant_error is not None:
+        return Err(invariant_error)
+
+    plan = _plan_from_resolved(resolved, grid.lane_count, valid_from, None)
+    return Ok(ParsedPlan(basin_hint=basin_hint, plan=plan))
+
+
+def parse_belegungsplan_sheet(
+    pdf_bytes: bytes, spec: GridSpec = _DEFAULT_GRID_SPEC
+) -> Result[tuple[ParsedPlan, ...], ProviderError]:
+    """Parse a Belegungsplan sheet into one `ParsedPlan` per basin.
+
+    A single-basin sheet (City family, Oerlikon-Schwimmerbecken) returns a 1-tuple identical to
+    `parse_belegungsplan`, so existing output is byte-for-byte unchanged. A sheet that stacks
+    several basins side by side (Oerlikon's Nichtschwimmer-/Sprungbecken) is segmented per basin
+    under the repeated weekday row; columns named "Teil 1 / Teil 2" record D's `section`. The
+    stacked grids share one right-hand legend, one valid-from date, and one left time-label
+    column. Best-effort: a basin sub-grid that can't be segmented is dropped, and only an empty
+    result surfaces the (typed) error — never fabricating a shape."""
+    words_result = _extract_words(pdf_bytes)
+    if isinstance(words_result, Err):
+        return words_result
+    words, page_width = words_result.value
+
+    anchors = _weekday_row(words)
+    groups = _weekday_groups(anchors) if anchors else []
+    if len(groups) < 2:
+        single = _parse_single_basin(words, spec, page_width)
+        if isinstance(single, Err):
+            return single
+        return Ok((single.value,))
+
+    weekday_top = min(w.top for w in anchors) if anchors else 0.0
+    grid_x_max = max(_grid_band(g, spec, page_width)[1] for g in groups)
+    legend = _parse_legend(words, grid_x_max, weekday_top)
+    if not legend:
+        return Err(SchemaMismatch(source=_SOURCE, detail="no legend"))
+    valid_from = _header_valid_from(words, grid_x_max, weekday_top)
+    left_edge = min(_grid_band(g, spec, page_width)[0] for g in groups)
+    slots = _time_labels(words, left_edge)
+    if not slots:
+        return Err(SchemaMismatch(source=_SOURCE, detail="no time labels"))
+    data_top = _first_data_top(words, left_edge)
+
+    plans: list[ParsedPlan] = []
+    first_error: ProviderError | None = None
+    for group in groups:
+        result = _parse_sectioned_basin(
+            words, group, legend, valid_from, slots, data_top, spec, page_width
+        )
+        if isinstance(result, Ok):
+            plans.append(result.value)
+        elif first_error is None:
+            first_error = result.error
+    if not plans:
+        return Err(first_error or SchemaMismatch(source=_SOURCE, detail="no basins parsed"))
+    return Ok(tuple(plans))
 
 
 # --- fetch + scrape -----------------------------------------------------------------
@@ -708,3 +927,14 @@ def scrape_belegungsplan(client: HttpClient, url: str) -> Result[ParsedPlan, Pro
             return Err(error)
         case Ok(raw):
             return parse_belegungsplan(raw)
+
+
+def scrape_belegungsplan_sheet(
+    client: HttpClient, url: str
+) -> Result[tuple[ParsedPlan, ...], ProviderError]:
+    """Fetch + parse a sheet that may stack several basins into one `ParsedPlan` per basin."""
+    match fetch_plan(client, url):
+        case Err(error):
+            return Err(error)
+        case Ok(raw):
+            return parse_belegungsplan_sheet(raw)
