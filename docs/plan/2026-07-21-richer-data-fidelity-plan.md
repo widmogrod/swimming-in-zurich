@@ -204,6 +204,7 @@ caveat where prose-derived; amenity chips in the all-pools table.
 | 2026-07-21 | B | done | none — signatures match Design. Clamp uses `now_time` (queried moment), not wall-clock; `/swim` `at` now optional w/ server-time default at boundary. Review round 1 fixed a blocking gap: derive-at-read grep-guard was extended to forbid `"timeline"` (old asserts missed the new key). | Multi-run timeline "arc" UI branch only covered at domain level; end-to-end HTTP coverage deferred to a slice seeding real multi-block plans (C/E) | yes |
 | 2026-07-21 | C | done | `facility_detail_out` gained a `prices: PriceTable \| None` param — `FacilityDetail` carries no price table (it rides on `Facility`), so the thin router passes `facility.prices` in (no domain change, no store re-read). `amenities` deferred to F (not on `FacilityDetail`). | Temp badge / PARSED_PROSE caveat have no live gold data until F wires prose extraction (proven at unit layer only). Detail-panel UI entry point currently only opens for cards with a parsed lane plan — a curated pool w/o a plan has no in-UI opener yet (endpoint fully works). | yes |
 | 2026-07-21 | D | done | **Declared PAUSE overridden** (owner directive — no stop). No `codec.py` edit needed: lane-plan serialization flows through boundary DTOs via `model_dump_json`, guarded by round-trip. Backward-compat via targeted `@model_serializer(mode="wrap")` pop of None keys (not global `exclude_none`). Read-side helpers do NOT yet consult `lanes_by_weekday` — deferred to E2. | `LanePlan` with a non-None dict `lanes_by_weekday` is unhashable (harmless today — nothing hashes it; revisit if a slice memoizes plans). Non-blocking suggestions: byte-fixture of a pre-D blob; docstring note on unhashability. | yes |
+| 2026-07-21 | E1 | done | **Käferberg now parses** (was a `SchemaMismatch` skip) — geometrically FORCED: City's grid reaches page-fraction 0.757, Käferberg's 0.685, so any right edge keeping City byte-identical admits Käferberg; excluding it would need a NEW gate beyond a geometry refactor. Verified by direct stash old-vs-new compare: City + Leimbach byte-identical, Bläsi still ragged. Käferberg is uniform 4-lane here (not movable-floor this term). `_segment_grid` per-weekday-column refactor deferred to E2. | `_DEFAULT_PAGE_WIDTH` fallback for direct callers of `_parse_header` (prod path always passes real width). City golden digest omits D's `section` (all-None on City today) — add to digest as cheap hardening. Käferberg PARTIAL data still needs the E3 pre-ship live-PDF spot-check. | yes |
 
 ## Decisions & divergences
 
@@ -213,6 +214,13 @@ caveat where prose-derived; amenity chips in the all-pools table.
   supported basin (accept a refresh-cadence tech-debt). #4 measured temp overrides nominal in the badge,
   nominal in a tooltip. #5 low-confidence `PARSED_PROSE` basins are shown in `/pools` detail (with
   caveat) but gated out of `/swim` options.
+- **2026-07-21 — E1 superset effect recalibrates E2 acceptance.** Removing the absolute A4 pixel clip made
+  **Käferberg parse under E1** (clean uniform 4-lane A3 grid — only the old 645px legend clip had rejected it).
+  So E2's declared acceptance "Vario/Bläsi/Käferberg parse (→ up to 5/8)" is now: **Käferberg already parses
+  (E1); E2's net-new positive parses from the committed fixtures are Vario + Bläsi.** Also: the "movable-floor
+  4/3" premise holds for Vario but the committed **Käferberg fixture is a uniform 4-lane grid this term** (no
+  ragged `lanes_by_weekday` to emit for it). Bläsi is the genuinely-ragged case (34 columns). E2 should target
+  Vario + Bläsi, add `lanes_by_weekday` where a basin is genuinely ragged, and pin Käferberg's now-parsing shape.
 - **2026-07-21 — worktree-collapse (environment divergence).** `/dev:implement` normally runs in a
   dedicated git worktree at `.claude/worktrees/plan-<feature>`. In this environment **subagents pin their
   working directory to the session's launch checkout**, not the orchestrator's post-`EnterWorktree` cwd, so

@@ -47,6 +47,23 @@ _WEEKDAY_NAMES: dict[str, Weekday] = {
     "samstag": Weekday.SATURDAY,
     "sonntag": Weekday.SUNDAY,
 }
+_WEEKDAY_ABBR: dict[str, Weekday] = {
+    "mo": Weekday.MONDAY,
+    "di": Weekday.TUESDAY,
+    "mi": Weekday.WEDNESDAY,
+    "do": Weekday.THURSDAY,
+    "fr": Weekday.FRIDAY,
+    "sa": Weekday.SATURDAY,
+    "so": Weekday.SUNDAY,
+}
+# Header rows use either the full ("Montag") or abbreviated ("Mo") weekday spelling; both
+# anchor the day-grid columns.
+_WEEKDAY_TOKENS: frozenset[str] = frozenset(_WEEKDAY_NAMES) | frozenset(_WEEKDAY_ABBR)
+
+# Fallback page width (A4 landscape, pdfplumber points) for direct/test callers that don't
+# supply one; the real parse path always passes the actual `page.width`. This is a page
+# dimension, not a grid band — the absolute A4 grid pixels are gone from `GridSpec`.
+_DEFAULT_PAGE_WIDTH = 841.92
 _MONTHS: dict[str, int] = {
     "januar": 1,
     "februar": 2,
@@ -67,17 +84,25 @@ _TIME_LABEL_RE = re.compile(r"(\d{1,2})\.(\d{2}).*?(\d{1,2})\.(\d{2})")
 
 @dataclass(frozen=True, slots=True)
 class GridSpec:
-    """Provider-local layout tolerances (pixels, pdfplumber top-left origin)."""
+    """Provider-local layout tolerances — page-relative, not absolute A4 pixels.
+
+    The day-grid x band is derived per-PDF from the detected weekday-row anchors (see
+    `_grid_band`); the two ratios below fence off the left time-label gutter and the
+    right-hand legend as fractions of the page width, so a wider (A3) or differently
+    margined sheet scales instead of relying on hard-coded City A4 pixels.
+    """
 
     x_tol: float = 5.0  # cluster digit x-centres into lane columns
     y_tol: float = 6.0  # cluster digit tops into slot rows
-    legend_x_min: float = 645.0  # right-hand legend / valid-from live beyond this x
-    central_x: tuple[float, float] = (70.0, 645.0)  # the day-grid x band
+    # Page-width fractions clamping the anchor-derived band (≈ old A4 70px / 645px on the
+    # 841.92pt A4-landscape sheet); the tighter of anchor edge and page fraction wins.
+    grid_margin_ratio: float = 70.0 / _DEFAULT_PAGE_WIDTH  # left time-label gutter
+    legend_margin_ratio: float = 645.0 / _DEFAULT_PAGE_WIDTH  # right legend / valid-from
     title_gap: float = 8.0  # basin title sits at least this far above the weekday row
     bahnen_gap: float = 5.0  # data cells sit at least this far below the "Bahnen" row
 
 
-_DEFAULT_GRID_SPEC = GridSpec()  # City layout tolerances; a module singleton for defaults
+_DEFAULT_GRID_SPEC = GridSpec()  # default layout tolerances; a module singleton for defaults
 
 
 @dataclass(frozen=True, slots=True)
@@ -99,6 +124,8 @@ class _Header:
     valid_from: date | None
     weekday_top: float
     bahnen_top: float
+    grid_x_min: float  # left edge of the day-grid band (page-relative, anchor-derived)
+    grid_x_max: float  # right edge / start of the legend gutter
 
 
 @dataclass(frozen=True, slots=True)
@@ -163,26 +190,56 @@ def _row_text(words: list[_Word]) -> str:
     return " ".join(w.text for w in sorted(words, key=lambda w: w.x0)).strip()
 
 
-def _basin_title(words: list[_Word], spec: GridSpec, weekday_top: float) -> str:
+def _basin_title(
+    words: list[_Word], grid_x_min: float, grid_x_max: float, spec: GridSpec, weekday_top: float
+) -> str:
     """The title line ("Hallenbad City Schwimmerbecken"), a central band above the weekdays."""
-    lo, hi = spec.central_x
     band_top, band_bottom = weekday_top - 30, weekday_top - spec.title_gap
-    title_words = [w for w in words if band_top < w.top < band_bottom and lo <= w.xc <= hi]
+    title_words = [
+        w for w in words if band_top < w.top < band_bottom and grid_x_min <= w.xc <= grid_x_max
+    ]
     return _row_text(title_words)
 
 
-def _header_valid_from(words: list[_Word], spec: GridSpec, weekday_top: float) -> date | None:
+def _header_valid_from(words: list[_Word], grid_x_max: float, weekday_top: float) -> date | None:
     """The "ab 01. Januar 2026" line — right of the grid, above the weekday row (clear of
     the legend, which begins lower down)."""
-    right = [w for w in words if w.xc > spec.legend_x_min and w.top < weekday_top]
+    right = [w for w in words if w.xc > grid_x_max and w.top < weekday_top]
     return _parse_valid_from(_row_text(right))
 
 
-def _parse_header(words: list[_Word], spec: GridSpec) -> Result[_Header, ProviderError]:
-    weekday_tops = [w.top for w in words if w.text.strip().lower() in _WEEKDAY_NAMES]
-    if not weekday_tops:
+def _weekday_row(words: list[_Word]) -> list[_Word] | None:
+    """The header's weekday cells (full or abbreviated names). Robust to stray weekday-like
+    words elsewhere: pick the densest same-top row, tie-broken by the topmost."""
+    rows: dict[int, list[_Word]] = defaultdict(list)
+    for w in words:
+        if w.text.strip().lower() in _WEEKDAY_TOKENS:
+            rows[round(w.top)].append(w)
+    if not rows:
+        return None
+    return max(rows.values(), key=lambda r: (len(r), -min(w.top for w in r)))
+
+
+def _grid_band(anchors: list[_Word], spec: GridSpec, page_width: float) -> tuple[float, float]:
+    """Derive the day-grid x band from the weekday anchors + page width. The band spans the
+    weekday-row centres extended by half a day-column each side, then clamped to the page's
+    left gutter / right legend margins so a long trailing annotation column can't leak in."""
+    centres = sorted(w.xc for w in anchors)
+    span = centres[-1] - centres[0]
+    half_day = span / (2 * (len(centres) - 1)) if len(centres) > 1 else 0.0
+    lo = max(centres[0] - half_day, page_width * spec.grid_margin_ratio)
+    hi = min(centres[-1] + half_day, page_width * spec.legend_margin_ratio)
+    return lo, hi
+
+
+def _parse_header(
+    words: list[_Word], spec: GridSpec, page_width: float = _DEFAULT_PAGE_WIDTH
+) -> Result[_Header, ProviderError]:
+    anchors = _weekday_row(words)
+    if not anchors:
         return Err(SchemaMismatch(source=_SOURCE, detail="no weekday header row"))
-    weekday_top = min(weekday_tops)
+    weekday_top = min(w.top for w in anchors)
+    grid_x_min, grid_x_max = _grid_band(anchors, spec, page_width)
 
     bahnen_tops = [w.top for w in words if w.text.lower() == "bahnen" and w.top > weekday_top]
     if not bahnen_tops:
@@ -193,7 +250,7 @@ def _parse_header(words: list[_Word], spec: GridSpec) -> Result[_Header, Provide
     if lane_count is None or lane_count < 1:
         return Err(SchemaMismatch(source=_SOURCE, detail="lane count not determinable"))
 
-    basin_hint = _basin_title(words, spec, weekday_top)
+    basin_hint = _basin_title(words, grid_x_min, grid_x_max, spec, weekday_top)
     if not basin_hint:
         return Err(SchemaMismatch(source=_SOURCE, detail="no basin title"))
 
@@ -201,9 +258,11 @@ def _parse_header(words: list[_Word], spec: GridSpec) -> Result[_Header, Provide
         _Header(
             basin_hint=basin_hint,
             lane_count=lane_count,
-            valid_from=_header_valid_from(words, spec, weekday_top),
+            valid_from=_header_valid_from(words, grid_x_max, weekday_top),
             weekday_top=weekday_top,
             bahnen_top=bahnen_top,
+            grid_x_min=grid_x_min,
+            grid_x_max=grid_x_max,
         )
     )
 
@@ -211,9 +270,9 @@ def _parse_header(words: list[_Word], spec: GridSpec) -> Result[_Header, Provide
 # --- legend -------------------------------------------------------------------------
 
 
-def _parse_legend(words: list[_Word], spec: GridSpec, weekday_top: float) -> dict[int, str]:
+def _parse_legend(words: list[_Word], grid_x_max: float, weekday_top: float) -> dict[int, str]:
     """code -> owner name, from the right-hand legend rows (blank names omitted)."""
-    legend_words = [w for w in words if w.xc > spec.legend_x_min and w.top > weekday_top]
+    legend_words = [w for w in words if w.xc > grid_x_max and w.top > weekday_top]
     rows: dict[int, list[_Word]] = defaultdict(list)
     for w in legend_words:
         rows[round(w.top)].append(w)
@@ -241,10 +300,10 @@ def _code_to_access(name: str) -> SessionAccess:
 # --- grid segmentation --------------------------------------------------------------
 
 
-def _time_labels(words: list[_Word], spec: GridSpec) -> list[TimeRange]:
+def _time_labels(words: list[_Word], grid_x_min: float) -> list[TimeRange]:
     # A label ("06.00 - 06.30") is split across several words on one row; group by row first,
     # then match the joined text — no single word carries the whole range.
-    label_words = [w for w in words if w.xc < spec.central_x[0]]
+    label_words = [w for w in words if w.xc < grid_x_min]
     rows: dict[int, list[_Word]] = defaultdict(list)
     for w in label_words:
         rows[round(w.top)].append(w)
@@ -266,12 +325,15 @@ def _time_labels(words: list[_Word], spec: GridSpec) -> list[TimeRange]:
     return labels
 
 
-def _cell_words(words: list[_Word], spec: GridSpec, bahnen_top: float) -> list[_Word]:
-    lo, hi = spec.central_x
+def _cell_words(
+    words: list[_Word], grid_x_min: float, grid_x_max: float, spec: GridSpec, bahnen_top: float
+) -> list[_Word]:
     return [
         w
         for w in words
-        if w.text.isdigit() and lo < w.xc < hi and w.top > bahnen_top + spec.bahnen_gap
+        if w.text.isdigit()
+        and grid_x_min < w.xc < grid_x_max
+        and w.top > bahnen_top + spec.bahnen_gap
     ]
 
 
@@ -285,7 +347,7 @@ class _Grid:
 def _segment_grid(
     words: list[_Word], spec: GridSpec, header: _Header
 ) -> Result[_Grid, ProviderError]:
-    cells = _cell_words(words, spec, header.bahnen_top)
+    cells = _cell_words(words, header.grid_x_min, header.grid_x_max, spec, header.bahnen_top)
     if not cells:
         return Err(SchemaMismatch(source=_SOURCE, detail="no grid cells"))
 
@@ -299,7 +361,7 @@ def _segment_grid(
             )
         )
     rows = _cluster([w.top for w in cells], spec.y_tol)
-    labels = _time_labels(words, spec)
+    labels = _time_labels(words, header.grid_x_min)
     if len(labels) < len(rows):
         return Err(
             SchemaMismatch(
@@ -433,7 +495,7 @@ def _check_invariants(
 # --- top-level parse ----------------------------------------------------------------
 
 
-def _extract_words(pdf_bytes: bytes) -> Result[list[_Word], ProviderError]:
+def _extract_words(pdf_bytes: bytes) -> Result[tuple[list[_Word], float], ProviderError]:
     try:
         import pdfplumber
     except ImportError:  # optional extra `swimzh[pdf]` not installed
@@ -449,7 +511,9 @@ def _extract_words(pdf_bytes: bytes) -> Result[list[_Word], ProviderError]:
         with pdfplumber.open(io.BytesIO(pdf_bytes)) as pdf:
             if not pdf.pages:
                 return Err(ParseError(source=_SOURCE, detail="empty PDF", raw_snippet=""))
-            raw = pdf.pages[0].extract_words()
+            page = pdf.pages[0]
+            raw = page.extract_words()
+            page_width = float(page.width)
     except Exception as exc:
         return Err(ParseError(source=_SOURCE, detail=f"unreadable PDF: {exc}", raw_snippet=""))
     words = [
@@ -458,7 +522,7 @@ def _extract_words(pdf_bytes: bytes) -> Result[list[_Word], ProviderError]:
     ]
     if not words:
         return Err(ParseError(source=_SOURCE, detail="unreadable PDF: no text", raw_snippet=""))
-    return Ok(words)
+    return Ok((words, page_width))
 
 
 def parse_belegungsplan(
@@ -468,14 +532,14 @@ def parse_belegungsplan(
     words_result = _extract_words(pdf_bytes)
     if isinstance(words_result, Err):
         return words_result
-    words = words_result.value
+    words, page_width = words_result.value
 
-    header_result = _parse_header(words, spec)
+    header_result = _parse_header(words, spec, page_width)
     if isinstance(header_result, Err):
         return header_result
     header = header_result.value
 
-    legend = _parse_legend(words, spec, header.weekday_top)
+    legend = _parse_legend(words, header.grid_x_max, header.weekday_top)
     if not legend:
         return Err(SchemaMismatch(source=_SOURCE, detail="no legend"))
 

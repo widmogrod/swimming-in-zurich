@@ -3,6 +3,7 @@ plus unit coverage of the header/grid/invariant seams and the typed error mappin
 
 from __future__ import annotations
 
+import hashlib
 import io
 import sys
 from collections.abc import Callable
@@ -24,11 +25,13 @@ from swimzh.providers.belegungsplan import (
     _check_invariants,
     _code_to_access,
     _Grid,
+    _grid_band,
     _Header,
     _parse_header,
     _parse_valid_from,
     _resolve,
     _segment_grid,
+    _weekday_row,
     _Word,
     parse_belegungsplan,
     scrape_belegungsplan,
@@ -99,13 +102,47 @@ def test_real_fixture_passes_disjointness(city_bytes: bytes) -> None:
     assert _check_invariants(plan.reservations, plan.lane_count) is None
 
 
-# --- newly-listed basins pinned by committed real fixtures (Slice A) -----------------
+def _reservation_digest(reservations: tuple[LaneReservation, ...]) -> str:
+    """Order-independent SHA-256 of the full reservation set — the golden anchor guarding
+    that E1's page-relative geometry produced *byte-identical* City output to the A4 parser."""
+
+    def key(r: LaneReservation) -> tuple[object, ...]:
+        return (
+            tuple(sorted(w.value for w in r.weekdays)),
+            r.time.start.isoformat(),
+            r.time.end.isoformat(),
+            tuple(sorted(r.lanes)),
+            repr(r.access),
+        )
+
+    lines = [
+        f"{sorted(w.value for w in r.weekdays)}|{r.time.start}-{r.time.end}|"
+        f"{sorted(r.lanes)}|{r.access!r}"
+        for r in sorted(reservations, key=key)
+    ]
+    return hashlib.sha256("\n".join(lines).encode()).hexdigest()
+
+
+# Captured from the pre-refactor (absolute-A4-pixel) parser. E1 must not move a single byte.
+_CITY_GOLDEN_DIGEST = "ce91c0fa5394b33d90ba24af8f47f1736c35c95c259c59419c60d6c311aec1b6"
+
+
+def test_city_reservations_are_byte_identical_golden(city_bytes: bytes) -> None:
+    plan = parse_belegungsplan(city_bytes).unwrap_or_raise().plan
+    assert len(plan.reservations) == 43
+    assert _reservation_digest(plan.reservations) == _CITY_GOLDEN_DIGEST
+
+
+# --- newly-listed basins pinned by committed real fixtures (Slice A / E1) -------------
 #
-# Reality pinned against the live PDFs (verified 2026-07-21): only Leimbach parses under the
-# current City-A4 geometry — as a real, PARTIAL LanePlan. Bläsi/Käferberg are movable-floor
-# basins whose per-weekday lane counts make the grid ragged (fewer than 7×lane_count columns),
-# so they are typed `SchemaMismatch` skips until the anchor-derived parser (Slice E2). Either
-# way scrape_lane_plans downgrades a failed parse to a reported skip, never fatal.
+# Reality pinned against the live PDFs. Leimbach parses as a real PARTIAL LanePlan (byte-for-
+# byte unchanged by E1's page-relative geometry — see the golden guard below). Bläsi is a
+# genuinely ragged movable-floor grid (34 ≠ 7×5 columns) → still a typed `SchemaMismatch`
+# skip until Slice E2. Käferberg, however, is a *clean* 4×7 grid printed on an A3 sheet: the
+# old parser rejected it only because its absolute 645px A4 legend clip chopped the wider
+# page. E1's page-relative band (derived from the weekday anchors, not A4 pixels) is a
+# superset — it now parses Käferberg as PARTIAL. City + Leimbach remain byte-identical. A
+# failed parse is still downgraded by scrape_lane_plans to a reported skip, never fatal.
 
 
 def test_leimbach_real_fixture_parses_to_partial_plan() -> None:
@@ -125,14 +162,20 @@ def test_blaesi_real_fixture_is_schema_mismatch_until_slice_e() -> None:
     result = parse_belegungsplan((FIXTURES / "blaesi.pdf").read_bytes())
     assert isinstance(result, Err)
     assert isinstance(result.error, SchemaMismatch)
-    assert "columns" in result.error.detail  # ragged movable-floor grid
+    assert "columns" in result.error.detail  # genuinely ragged movable-floor grid
 
 
-def test_kaeferberg_real_fixture_is_schema_mismatch_until_slice_e() -> None:
+def test_kaeferberg_real_fixture_parses_under_page_relative_geometry() -> None:
+    # E1 divergence: Käferberg is a clean 4×7 A3 grid the old A4-pixel clip accidentally hid.
+    # A faithful page-relative refactor cannot both keep City byte-identical AND fail this
+    # sheet (City's grid reaches a *larger* page-fraction than Käferberg's), so E1 parses it.
     result = parse_belegungsplan((FIXTURES / "kaeferberg.pdf").read_bytes())
-    assert isinstance(result, Err)
-    assert isinstance(result.error, SchemaMismatch)
-    assert "columns" in result.error.detail  # ragged movable-floor grid
+    assert isinstance(result, Ok), result
+    parsed = result.value
+    assert "Käferberg" in parsed.basin_hint
+    assert parsed.plan.lane_count == 4
+    assert parsed.plan.coverage.confidence is PlanConfidence.PARTIAL
+    assert _check_invariants(parsed.plan.reservations, parsed.plan.lane_count) is None
 
 
 # --- owner-relabel trap: an unknown code is never public ----------------------------
@@ -240,12 +283,76 @@ def test_parse_header_missing_title_is_schema_mismatch() -> None:
     assert isinstance(result.error, SchemaMismatch)
 
 
+# --- page-relative geometry (E1) ----------------------------------------------------
+
+
+def test_gridspec_has_no_absolute_a4_pixel_bands() -> None:
+    # The A4 pixel constants (central_x / legend_x_min absolute values) are gone; the band
+    # is derived page-relative, so only ratios/tolerances survive on GridSpec.
+    spec = GridSpec()
+    assert not hasattr(spec, "central_x")
+    assert not hasattr(spec, "legend_x_min")
+    assert 0.0 < spec.grid_margin_ratio < spec.legend_margin_ratio < 1.0
+
+
+def test_grid_band_is_derived_from_weekday_anchors() -> None:
+    # Seven anchors spaced 50 apart (centres 200..500) sit clear of both page margins, so the
+    # band is the pure anchor derivation: [c0 - half_day, c6 + half_day], half_day = span/12.
+    anchors = [_word("x", 200.0 + 50 * i, 60.0, width=0.0) for i in range(7)]
+    lo, hi = _grid_band(anchors, GridSpec(), page_width=841.92)
+    assert lo == pytest.approx(175.0)  # 200 - 300/12
+    assert hi == pytest.approx(525.0)  # 500 + 300/12
+
+
+def test_grid_band_right_edge_clamped_by_page_legend_margin() -> None:
+    # Anchors whose half-day extension would overrun the legend gutter get clamped to it
+    # (this is exactly what fences off Leimbach's trailing annotation column).
+    anchors = [_word("x", 120.0 + 90 * i, 60.0, width=0.0) for i in range(7)]
+    _lo, hi = _grid_band(anchors, GridSpec(), page_width=841.92)
+    assert hi == pytest.approx(841.92 * (645.0 / 841.92))  # legend margin, not c6 + 45
+
+
+def test_weekday_row_recognizes_abbreviated_names() -> None:
+    # A header spelled "Mo Di Mi Do Fr Sa So" is recognised as the weekday anchor row.
+    abbr = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"]
+    words = [_word(name, 100.0 + 80 * i, 60.0) for i, name in enumerate(abbr)]
+    row = _weekday_row(words)
+    assert row is not None
+    assert len(row) == 7
+
+
+def test_weekday_row_picks_densest_row_over_stray_weekday_words() -> None:
+    # A stray "So" higher up (e.g. prose) must not be mistaken for the header row.
+    words = [_word("So", 300.0, 20.0)]  # stray, topmost but alone
+    words += [_word(name.capitalize(), 90.0 + 80 * i, 60.0) for i, name in enumerate(_DAYS)]
+    row = _weekday_row(words)
+    assert row is not None
+    assert len(row) == 7  # the full 7-cell row, not the lone stray
+    assert min(w.top for w in row) == 60.0
+
+
+def test_parse_header_reads_abbreviated_weekday_header() -> None:
+    abbr = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"]
+    words = [_word(name, 90.0 + 80 * i, 60.0) for i, name in enumerate(abbr)]
+    words += [_word("6", 88.0, 74.0), _word("Bahnen", 97.0, 74.0)]
+    words += [_word("Hallenbad", 200.0, 40.0), _word("Oerlikon", 250.0, 40.0)]
+    header = _parse_header(words, GridSpec()).unwrap_or_raise()
+    assert header.lane_count == 6
+    assert header.basin_hint == "Hallenbad Oerlikon"
+
+
 # --- grid segmentation seams --------------------------------------------------------
 
 
 def _header(lane_count: int = 6) -> _Header:
     return _Header(
-        basin_hint="X", lane_count=lane_count, valid_from=None, weekday_top=60.0, bahnen_top=74.0
+        basin_hint="X",
+        lane_count=lane_count,
+        valid_from=None,
+        weekday_top=60.0,
+        bahnen_top=74.0,
+        grid_x_min=70.0,
+        grid_x_max=645.0,
     )
 
 
@@ -378,8 +485,9 @@ def test_missing_pdfplumber_is_provider_specific(monkeypatch: pytest.MonkeyPatch
 
 
 class _FakePage:
-    def __init__(self, words: list[dict[str, object]]) -> None:
+    def __init__(self, words: list[dict[str, object]], width: float = 841.92) -> None:
         self._words = words
+        self.width = width
 
     def extract_words(self) -> list[dict[str, object]]:
         return self._words

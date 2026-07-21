@@ -48,8 +48,9 @@ def test_scrape_lane_plans_skips_failed_pdf_best_effort() -> None:
 
 
 def test_scrape_lane_plans_newly_listed_basins_partial_parse_never_fatal() -> None:
-    """Slice A wiring: of the three newly-listed basins, only Leimbach parses; the ragged
-    movable-floor Bläsi/Käferberg sheets are typed skips (never fatal, counted in `skipped`)."""
+    """Of the three newly-listed basins, Leimbach and Käferberg parse under E1's page-relative
+    geometry (Käferberg is a clean 4×7 A3 grid the old A4-pixel clip had hidden); only the
+    genuinely ragged Bläsi sheet is a typed skip — never fatal, counted in `skipped`."""
     by_slug = {slug: (FIXTURES / f"{slug}.pdf").read_bytes() for slug in NEW_SLUGS}
 
     def handler(request: httpx.Request) -> httpx.Response:
@@ -60,12 +61,11 @@ def test_scrape_lane_plans_newly_listed_basins_partial_parse_never_fatal() -> No
     urls = tuple(f"https://example.test/{slug}.pdf" for slug in NEW_SLUGS)
     report = scrape_lane_plans(client, urls)
 
-    assert [p.basin_hint for p in report.plans if "Leimbach" in p.basin_hint]
-    assert len(report.plans) == 1  # only Leimbach parses under the current geometry
-    assert report.skipped == (
-        "https://example.test/blaesi.pdf",
-        "https://example.test/kaeferberg.pdf",
-    )
+    hints = {p.basin_hint for p in report.plans}
+    assert any("Leimbach" in h for h in hints)
+    assert any("Käferberg" in h for h in hints)
+    assert len(report.plans) == 2  # Leimbach + Käferberg parse under E1's page-relative band
+    assert report.skipped == ("https://example.test/blaesi.pdf",)
 
 
 def test_new_slugs_are_wired_into_the_scrape_url_list() -> None:
