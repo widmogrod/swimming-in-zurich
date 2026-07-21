@@ -1,6 +1,6 @@
 ---
 type: plan
-status: in-progress      # draft -> approved -> in-progress -> done
+status: done             # draft -> approved -> in-progress -> done
 created: 2026-07-21
 feature: richer-data-fidelity
 branch: plan/richer-data-fidelity
@@ -284,4 +284,35 @@ caveat where prose-derived; amenity chips in the all-pools table.
 
 ## Summary
 
-Written at `done`; distilled into `docs/summaries/richer-data-fidelity.md`.
+All 8 slices landed (A, B, C, D, E1, E2, E3, F), each through adversarial review + the full QA gate;
+coverage held ≥95% throughout (final 95.52%). Distilled into `docs/summaries/richer-data-fidelity.md`.
+
+**What shipped, against the three fidelity seams:**
+- **Query-time collapse (B)** — fixed. Lane availability is now clamped to the *queried moment* (`now_time`,
+  not wall-clock), and a derived `LaneAvailabilityTimeline` rides on each `SwimOption`; `/swim` `at` became
+  optional with a server-time default at the boundary.
+- **API-boundary collapse (C, F)** — fixed. `/pools/{id}` now surfaces basins/features/lockers/prices/
+  provenance + the new richer fields; the UI detail panel renders temp/size/diving/amenity/accessibility with
+  a PARSED_PROSE caveat.
+- **Extraction (A, E1, E2, E3, F)** — the parser went from City-A4-only to **8/8 listed basins** via a
+  page-relative, anchor-derived geometry (E1), per-weekday ragged handling (E2), and multi-basin/Teil
+  sectioning (E3). The dead `parse_infrastruktur` path was wired into the build (F), minting PARSED_PROSE
+  basins + Features for location-only pools.
+
+**Model fidelity (D, F)** — additive, lockstep, round-trip-guarded: `lanes_by_weekday`, `section`,
+`measured_temp_c`, `diving_platforms_m`, `accessibility`, `last_admission_before`, `FeatureKind` growth.
+
+**The load-bearing catch:** E2 review found the geometry was silently DROPPING the rightmost (Sunday) lane on
+every A4 sheet wider than City — Vario shipped a false `COMPLETE`, Bläsi a fabricated ragged floor. Fixed;
+evidence showed **all committed sheets are genuinely uniform** and the earlier "movable-floor/ragged" premises
+were clip artifacts. Consequence: `lanes_by_weekday` has real code but no real-fixture example (synthetic
+test only); `section` gained real data via Oerlikon Sprungbecken's Teil 1/2.
+
+**Carried risks / open items (NOT closed by this run):**
+- **The mandated live-PDF spot-check (E3 pause) was OVERRIDDEN and is still owed** for all 8 parsed basins —
+  fixtures can't catch a mis-anchored column. Do this before treating lane data as authoritative.
+- `pause_after: [D, E3]` were both overridden per owner directive (see Decisions).
+- `apply_physicals` intentionally unwired (no sound call site — adjudicated on evidence).
+- `measured_temp_c` field/UI exist but no live producer; `ScrapedAspects` widened but the live scraper doesn't
+  yet populate the new aspects; amenity chips are in the detail panel, not the `/pools` list.
+- The run collapsed the dedicated worktree into the primary checkout (subagent cwd pinning; see Decisions).
