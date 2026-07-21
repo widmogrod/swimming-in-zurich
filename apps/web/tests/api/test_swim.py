@@ -79,10 +79,14 @@ def test_invalid_gender_is_400() -> None:
     assert response.status_code == 400
 
 
-def test_missing_at_is_422() -> None:
+def test_missing_at_defaults_to_server_time() -> None:
+    # `at` is optional: a bare /swim answers using server time (Europe/Zurich) instead of
+    # 422-ing. The answer shape is the same as an explicit `at`.
     with TestClient(app) as client:
         response = client.get("/swim")
-    assert response.status_code == 422
+    assert response.status_code == 200
+    body = response.json()
+    assert {"options", "statuses", "warnings", "notices"} <= set(body)
 
 
 def test_lat_without_lon_is_400() -> None:

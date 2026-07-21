@@ -104,6 +104,9 @@ _PAGE = """<!doctype html>
     padding: .04rem .4rem; background: #16a34a22; color: #15803d; border: 1px solid #16a34a55; }
   .lanebadge .lpub { font-weight: 600; }
   .lanebadge .lpartial { opacity: .8; font-style: italic; }
+  /* the arc variant: lane split CHANGES during the session ("4/6 then 2/6 after 18:00") — amber
+     to read as "watch the time", distinct from the steady-state green glance badge. */
+  .lanebadge.lanearc { background: #b4530922; color: #b45309; border-color: #b4530955; }
   /* --- facility-detail lane panel (Belegungsplan): per-lane timeline, best time, roster --- */
   .lanesched { margin-top: .4rem; }
   .lanesched > summary { cursor: pointer; font-size: .82rem; opacity: .85; }
@@ -412,6 +415,25 @@ function laneBadgeHTML(o) {
   const partial = la.partial ? ' <span class="lpartial">partial</span>' : '';
   return `<span class="lanebadge"><span class="lpub">${esc(la.public_lanes)}/${esc(la.lane_count)}</span> lanes public${until}${partial}</span>`;
 }
+// Lane-availability ARC across the whole session (Belegungsplan timeline): collapses the
+// per-boundary segments into distinct public-count runs and renders "4/6 then 2/6 after 18:00".
+// Only shown when the public count actually CHANGES during the session (>=2 runs) — otherwise
+// the single glance badge (laneBadgeHTML) already says it. Absent (null) => no arc.
+function laneTimelineHTML(o) {
+  const tl = o.lane_timeline;
+  if (!tl || !tl.segments.length) return '';
+  const runs = [];
+  for (const s of tl.segments) {
+    const last = runs[runs.length - 1];
+    if (last && last.public_lanes === s.public_lanes && last.lane_count === s.lane_count) last.end = s.end;
+    else runs.push({ start: s.start, end: s.end, public_lanes: s.public_lanes, lane_count: s.lane_count });
+  }
+  if (runs.length < 2) return '';  // constant across the session — the glance badge covers it
+  const txt = runs.map((r, i) =>
+    i === 0 ? `${esc(r.public_lanes)}/${esc(r.lane_count)}`
+            : `then ${esc(r.public_lanes)}/${esc(r.lane_count)} after ${esc(r.start)}`).join(' ');
+  return `<span class="lanebadge lanearc" title="lane availability changes during this session">↺ ${txt}</span>`;
+}
 // --- Facility-detail lane panel (Belegungsplan derivations) -----------------------------
 // A basin whose OptionOut carries lane_availability has a parsed plan, so its /pools/{id}
 // facility detail carries a per-basin lane panel: the "best time to come" window, the per-
@@ -488,6 +510,7 @@ function optionCard(o) {
       ${meta ? '&nbsp; · ' + meta : ''}
       &nbsp; ${lenTagHTML(o)}
       ${laneBadgeHTML(o)}
+      ${laneTimelineHTML(o)}
     </div>
     <div class="reason">${esc(o.reason)}</div>
     ${poolDetailHTML(o.facility)}

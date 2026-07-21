@@ -205,6 +205,10 @@ def test_occupancy_and_lane_availability_never_leak_into_gold(
         assert "occupancy" not in dumped
         assert "lane_availability" not in dumped
         assert "laneavailability" not in dumped
+        # The query-time TIMELINE is likewise derived-only. Its serialized keys would be
+        # `lane_timeline`/`segments` — none containing "lane_availability" — so the guard must
+        # forbid "timeline" explicitly, else a timeline leaked into the codec DTO stays green.
+        assert "timeline" not in dumped
     # The stored plan itself must still be present (proves the guard rejects the derived type,
     # not lane data wholesale).
     assert "lane_plan" in codec.dumps(with_plan).lower()

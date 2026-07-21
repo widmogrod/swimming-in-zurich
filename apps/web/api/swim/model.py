@@ -16,6 +16,25 @@ class LaneAvailabilityOut(BaseModel):
     partial: bool  # the slot touches an unresolved lane, so the counts may be incomplete
 
 
+class LaneTimelineSegmentOut(BaseModel):
+    """One constant-availability sub-window of a session — the lane split between two
+    reservation boundaries. A derived, never-persisted projection of the stored plan."""
+
+    start: str  # "HH:MM"
+    end: str  # "HH:MM"
+    lane_count: int
+    public_lanes: int
+    reserved_lanes: int
+    partial: bool
+
+
+class LaneTimelineOut(BaseModel):
+    """The session's lane split as it changes across the session (one segment per boundary),
+    so the UI can render "4/6 then 2/6 after 18:00" instead of a single collapsed count."""
+
+    segments: list[LaneTimelineSegmentOut]
+
+
 class OptionOut(BaseModel):
     facility: str
     facility_id: str  # stable id for the facility-detail (/pools/{id}) lane-panel fetch
@@ -36,6 +55,9 @@ class OptionOut(BaseModel):
     curated: bool  # True = hand-curated, False = scraped
     # None = the basin has no parsed Belegungsplan; otherwise the lane-availability badge.
     lane_availability: LaneAvailabilityOut | None = None
+    # None = no parsed plan; otherwise the per-boundary lane split across the whole session,
+    # for the "4/6 then 2/6 after 18:00" arc.
+    lane_timeline: LaneTimelineOut | None = None
 
 
 class StatusOut(BaseModel):

@@ -375,7 +375,11 @@ def _planned_facility() -> Facility:
     )
 
 
-def test_lane_availability_attached_at_session_time(dataset: Dataset) -> None:
+def test_lane_availability_clamps_to_session_start_when_query_is_outside(
+    dataset: Dataset,
+) -> None:
+    # _TUESDAY is 12:00 but the session is 06:00–08:00, so the queried moment is OUTSIDE it and
+    # the point eval clamps to the session start (06:00) — lanes 1–2 club, 3–6 public.
     result = find_swim_options(
         SwimQuery(person=ADULT, at=_TUESDAY), (_planned_facility(),), dataset.calendar
     )
@@ -389,6 +393,107 @@ def test_lane_availability_attached_at_session_time(dataset: Dataset) -> None:
         public_until=time(8, 0),
         partial=False,
     )
+
+
+def _timeline_facility() -> Facility:
+    """A basin open Tue 06:00–22:00: all six lanes public until 18:00, when a club takes 2 —
+    so 12:00 (6 public) and 18:00 (4 public) must report DIFFERENT counts."""
+    rule = ScheduleRule(
+        weekdays=frozenset({Weekday.TUESDAY}),
+        time=TimeRange(time(6, 0), time(22, 0)),
+        access=PublicSwim(),
+    )
+    plan = LanePlan(
+        lane_count=6,
+        reservations=(
+            LaneReservation(
+                weekdays=frozenset({Weekday.TUESDAY}),
+                time=TimeRange(time(6, 0), time(18, 0)),
+                lanes=frozenset({1, 2, 3, 4, 5, 6}),
+                access=PublicSwim(),
+            ),
+            LaneReservation(
+                weekdays=frozenset({Weekday.TUESDAY}),
+                time=TimeRange(time(18, 0), time(22, 0)),
+                lanes=frozenset({1, 2, 3, 4}),
+                access=PublicSwim(),
+            ),
+            LaneReservation(
+                weekdays=frozenset({Weekday.TUESDAY}),
+                time=TimeRange(time(18, 0), time(22, 0)),
+                lanes=frozenset({5, 6}),
+                access=ClubReserved(club="ASVZ"),
+            ),
+        ),
+        valid_from=date(2026, 1, 1),
+        coverage=PlanCoverage(
+            confidence=PlanConfidence.COMPLETE, cells_total=1344, cells_resolved=1344
+        ),
+    )
+    return Facility(
+        identity=PoolIdentity(
+            facility_id=PoolId("timeline-test"),
+            name="Hallenbad Timeline-Test",
+            kind=PoolKind.INDOOR,
+        ),
+        address="Bahnstrasse 2, Zürich",
+        provenance=Provenance(source="test", curated=True),
+        basins=(
+            Basin(
+                basin_id=BasinId("timeline-main"),
+                name="Schwimmerbecken",
+                rules=(rule,),
+                lane_plan=plan,
+            ),
+        ),
+    )
+
+
+def test_lane_availability_clamped_to_queried_moment_not_wall_clock(dataset: Dataset) -> None:
+    # THE 12:00 == 18:00 FIX. Both queries share the SAME 06:00–22:00 session; only the queried
+    # time-of-day differs. The point eval must clamp to `now_time` (the queried moment), so
+    # 18:00 reports fewer public lanes than 12:00 — and this holds regardless of the wall-clock
+    # time the test runs, because the clamp reads `at`, never `datetime.now()`.
+    facility = (_timeline_facility(),)
+    at_noon = datetime(2026, 9, 15, 12, 0, tzinfo=ZURICH)  # a Tuesday
+    at_evening = datetime(2026, 9, 15, 18, 0, tzinfo=ZURICH)
+
+    noon = find_swim_options(SwimQuery(person=ADULT, at=at_noon), facility, dataset.calendar)
+    evening = find_swim_options(SwimQuery(person=ADULT, at=at_evening), facility, dataset.calendar)
+
+    noon_avail = noon.options[0].lane_availability
+    evening_avail = evening.options[0].lane_availability
+    assert noon_avail is not None and evening_avail is not None
+    assert noon_avail.public_lanes == 6
+    assert evening_avail.public_lanes == 4
+    assert evening_avail.public_lanes < noon_avail.public_lanes
+
+
+def test_lane_timeline_attached_across_the_whole_session(dataset: Dataset) -> None:
+    # The derived timeline spans the whole session independent of the queried moment: one
+    # segment per reservation boundary (06:00–18:00 = 6 public, 18:00–22:00 = 4 public).
+    result = find_swim_options(
+        SwimQuery(person=ADULT, at=datetime(2026, 9, 15, 12, 0, tzinfo=ZURICH)),
+        (_timeline_facility(),),
+        dataset.calendar,
+    )
+    timeline = result.options[0].lane_timeline
+    assert timeline is not None
+    assert [(s.time.start, s.time.end) for s in timeline.segments] == [
+        (time(6, 0), time(18, 0)),
+        (time(18, 0), time(22, 0)),
+    ]
+    assert [s.availability.public_lanes for s in timeline.segments] == [6, 4]
+
+
+def test_no_lane_timeline_without_a_plan(dataset: Dataset) -> None:
+    result = find_swim_options(
+        SwimQuery(person=ADULT, at=datetime(2026, 9, 14, 12, 0, tzinfo=ZURICH)),
+        dataset.facilities,
+        dataset.calendar,
+    )
+    assert result.options
+    assert all(o.lane_timeline is None for o in result.options)
 
 
 def test_lane_availability_not_gated_to_now(dataset: Dataset) -> None:

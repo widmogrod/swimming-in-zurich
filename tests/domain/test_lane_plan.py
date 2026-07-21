@@ -18,6 +18,7 @@ from swimzh.domain.lane_plan import (
     PlanConfidence,
     PlanCoverage,
     lane_availability_at,
+    lane_availability_timeline,
 )
 from swimzh.domain.schedule import TimeRange, Weekday
 
@@ -238,3 +239,69 @@ def test_owners_are_distinct_non_public_and_lane_ordered() -> None:
 def test_slot_boundaries_are_half_open(t: time, expected_public: int) -> None:
     # TimeRange.contains is [start, end): 06:00 is in, 08:00 is out.
     assert lane_availability_at(CITY_TUE, Weekday.TUESDAY, t).public_lanes == expected_public
+
+
+# A single all-day public session whose lane split changes at 18:00 (a club takes lanes 5–6).
+_TIMELINE_PLAN = _plan(
+    (
+        LaneReservation(
+            weekdays=frozenset({Weekday.TUESDAY}),
+            time=TimeRange(time(6, 0), time(18, 0)),
+            lanes=frozenset({1, 2, 3, 4, 5, 6}),
+            access=PublicSwim(),
+        ),
+        LaneReservation(
+            weekdays=frozenset({Weekday.TUESDAY}),
+            time=TimeRange(time(18, 0), time(22, 0)),
+            lanes=frozenset({1, 2, 3, 4}),
+            access=PublicSwim(),
+        ),
+        LaneReservation(
+            weekdays=frozenset({Weekday.TUESDAY}),
+            time=TimeRange(time(18, 0), time(22, 0)),
+            lanes=frozenset({5, 6}),
+            access=ClubReserved(club="ASVZ"),
+        ),
+    )
+)
+
+
+def test_timeline_cuts_at_reservation_boundaries() -> None:
+    tl = lane_availability_timeline(
+        _TIMELINE_PLAN, Weekday.TUESDAY, TimeRange(time(6, 0), time(22, 0))
+    )
+    # One cut at the only interior boundary (18:00): two constant-availability sub-windows.
+    assert [(s.time.start, s.time.end) for s in tl.segments] == [
+        (time(6, 0), time(18, 0)),
+        (time(18, 0), time(22, 0)),
+    ]
+    assert [s.availability.public_lanes for s in tl.segments] == [6, 4]
+    assert tl.weekday is Weekday.TUESDAY
+
+
+def test_timeline_segment_availability_is_constant_across_its_window() -> None:
+    # The half-open reservations guarantee no boundary lies strictly inside a segment, so the
+    # value at the segment START holds throughout — spot-check the mid-point matches.
+    tl = lane_availability_timeline(
+        _TIMELINE_PLAN, Weekday.TUESDAY, TimeRange(time(6, 0), time(22, 0))
+    )
+    first = tl.segments[0]
+    assert first.availability == lane_availability_at(_TIMELINE_PLAN, Weekday.TUESDAY, time(12, 0))
+    second = tl.segments[1]
+    assert second.availability == lane_availability_at(_TIMELINE_PLAN, Weekday.TUESDAY, time(20, 0))
+
+
+def test_timeline_window_narrower_than_the_plan_is_respected() -> None:
+    # `within` clips the timeline: an 06:00–12:00 window never sees the 18:00 boundary.
+    tl = lane_availability_timeline(
+        _TIMELINE_PLAN, Weekday.TUESDAY, TimeRange(time(6, 0), time(12, 0))
+    )
+    assert [(s.time.start, s.time.end) for s in tl.segments] == [(time(6, 0), time(12, 0))]
+    assert tl.segments[0].availability.public_lanes == 6
+
+
+def test_timeline_of_a_constant_session_is_a_single_segment() -> None:
+    # CITY_TUE has a single 06:00–08:00 block; within it the split never changes → one segment.
+    tl = lane_availability_timeline(CITY_TUE, Weekday.TUESDAY, TimeRange(time(6, 0), time(8, 0)))
+    assert len(tl.segments) == 1
+    assert tl.segments[0].availability.public_lanes == 4

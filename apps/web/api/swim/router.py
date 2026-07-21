@@ -20,7 +20,9 @@ _GENDERS = {"female": Gender.FEMALE, "male": Gender.MALE, "diverse": Gender.DIVE
 @router.get("/swim", response_model=AnswerOut)
 def swim(
     request: Request,
-    at: datetime,
+    # `at` is OPTIONAL: an absent moment means "now" — the service materialises server time
+    # (Europe/Zurich) once at the boundary, so a bare /swim answers instead of 422-ing.
+    at: datetime | None = None,
     gender: str | None = None,
     age: int | None = None,
     lat: float | None = None,

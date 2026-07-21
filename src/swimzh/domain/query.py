@@ -26,7 +26,14 @@ from swimzh.domain.access import EligibilityResult, eligibility
 from swimzh.domain.calendar import ZurichCalendar
 from swimzh.domain.catalog import RosterEntry
 from swimzh.domain.geo import GeoPoint, haversine_km
-from swimzh.domain.lane_plan import LaneAvailability, LanePanel, lane_availability_at, lane_panel
+from swimzh.domain.lane_plan import (
+    LaneAvailability,
+    LaneAvailabilityTimeline,
+    LanePanel,
+    lane_availability_at,
+    lane_availability_timeline,
+    lane_panel,
+)
 from swimzh.domain.lockers import LockerOption
 from swimzh.domain.models import (
     Basin,
@@ -142,8 +149,12 @@ class SwimOption:
     live_occupancy: OccupancyResult | None = None
     # None = the basin has no parsed lane plan. A `LaneAvailability` is a pure derivation of
     # the STORED recurring plan, so — unlike live_occupancy — it is attached for ANY query
-    # time (incl. future dates), computed at the resolved session's start.
+    # time (incl. future dates), computed at the QUERIED moment clamped into the session.
     lane_availability: LaneAvailability | None = None
+    # The full lane split across the session (one segment per reservation boundary), also a
+    # pure derivation of the stored plan — never stored. Powers the "4/6 then 2/6 after 18:00"
+    # arc. None when the basin has no parsed plan.
+    lane_timeline: LaneAvailabilityTimeline | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -250,13 +261,21 @@ def find_swim_options(
                 case OpenDay(sessions):
                     for session in sessions:
                         produced = True
-                        lane_avail = (
-                            lane_availability_at(
-                                basin.lane_plan, Weekday(day.weekday()), session.time.start
+                        # Clamp the point eval to the QUERIED moment (`now_time`, the queried
+                        # time-of-day already used by `open_at_query_time`) when it falls in the
+                        # session, else the session start — so 12:00 and 18:00 report different
+                        # lane splits. NOT the wall-clock `now` (that is reserved for occupancy
+                        # freshness); using it would collapse a future/other-time query back to
+                        # `session.time.start`.
+                        weekday = Weekday(day.weekday())
+                        t = now_time if session.time.contains(now_time) else session.time.start
+                        lane_avail: LaneAvailability | None = None
+                        lane_timeline: LaneAvailabilityTimeline | None = None
+                        if basin.lane_plan is not None:
+                            lane_avail = lane_availability_at(basin.lane_plan, weekday, t)
+                            lane_timeline = lane_availability_timeline(
+                                basin.lane_plan, weekday, session.time
                             )
-                            if basin.lane_plan is not None
-                            else None
-                        )
                         options.append(
                             SwimOption(
                                 facility_id=facility.identity.facility_id,
@@ -280,6 +299,7 @@ def find_swim_options(
                                 provenance=facility.provenance,
                                 live_occupancy=live,
                                 lane_availability=lane_avail,
+                                lane_timeline=lane_timeline,
                             )
                         )
 

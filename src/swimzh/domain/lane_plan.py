@@ -156,6 +156,50 @@ def lane_availability_at(plan: LanePlan, weekday: Weekday, t: time) -> LaneAvail
     )
 
 
+@dataclass(frozen=True, slots=True)
+class LaneSlotAvailability:
+    """One sub-window of a session over which the lane split is constant — the `time` range
+    paired with the `LaneAvailability` that holds throughout it."""
+
+    time: TimeRange
+    availability: LaneAvailability
+
+
+@dataclass(frozen=True, slots=True)
+class LaneAvailabilityTimeline:
+    """A session's lane split as it evolves across the session: one `LaneSlotAvailability`
+    per sub-window between reservation boundaries. A pure derivation of the stored plan —
+    never stored — so a single "06:00–22:00 public" session that hands lanes to a club at
+    18:00 reads as "4/6 then 2/6 after 18:00" instead of one collapsed count."""
+
+    weekday: Weekday
+    segments: tuple[LaneSlotAvailability, ...]
+
+
+def lane_availability_timeline(
+    plan: LanePlan, weekday: Weekday, within: TimeRange
+) -> LaneAvailabilityTimeline:
+    """Cut `within` at every reservation boundary (on `weekday`) that falls strictly inside
+    it, and evaluate `lane_availability_at` per sub-window. Reservations are half-open, so no
+    boundary lies strictly inside a sub-window and the availability at the sub-window's start
+    holds across the whole sub-window. Pure; never stored."""
+    bounds = {within.start, within.end}
+    for r in plan.reservations:
+        if weekday not in r.weekdays:
+            continue
+        for edge in (r.time.start, r.time.end):
+            if within.start < edge < within.end:
+                bounds.add(edge)
+    segments = tuple(
+        LaneSlotAvailability(
+            time=TimeRange(lo, hi),
+            availability=lane_availability_at(plan, weekday, lo),
+        )
+        for lo, hi in pairwise(sorted(bounds))
+    )
+    return LaneAvailabilityTimeline(weekday=weekday, segments=segments)
+
+
 # --- Facility-detail derivations (pure; DTO-free, never stored) --------------------------
 #
 # Three richer projections of the SAME stored `LanePlan` for the facility-detail panel — a

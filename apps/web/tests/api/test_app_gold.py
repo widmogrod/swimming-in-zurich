@@ -117,6 +117,32 @@ def test_lane_availability_badge_surfaces_through_the_swim_endpoint(
     assert any(o["lane_availability"] is None for o in options)
 
 
+def test_lane_timeline_surfaces_through_the_swim_endpoint(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    db = _gold_db_with_lane_plan(tmp_path)
+
+    monkeypatch.setenv("SWIMZH_GOLD_DB", str(db))
+    with TestClient(app) as client:
+        response = client.get(
+            "/swim", params={"at": "2026-09-14T20:30", "gender": "female", "age": 34}
+        )
+    assert response.status_code == 200
+    options = response.json()["options"]
+    city_50m = [
+        o for o in options if o["facility"] == "Hallenbad City" and o["basin"] == "50m-Becken"
+    ]
+    assert city_50m
+    timeline = city_50m[0]["lane_timeline"]
+    assert timeline is not None
+    # The seeded plan is constant all day, so the 11:00–22:00 session is one segment (4 public).
+    assert timeline["segments"]
+    assert timeline["segments"][0]["public_lanes"] == 4
+    assert timeline["segments"][0]["lane_count"] == 6
+    # No-plan options carry no timeline, never an invented one.
+    assert any(o["lane_timeline"] is None for o in options)
+
+
 def test_facility_detail_lane_panel_surfaces_through_pools_endpoint(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

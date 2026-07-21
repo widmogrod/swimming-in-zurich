@@ -201,6 +201,7 @@ caveat where prose-derived; amenity chips in the all-pools table.
 | date | slice | status | divergence | tech debt | human review? |
 |------|-------|--------|------------|-----------|---------------|
 | 2026-07-21 | A | done | Leimbach parses (`PARTIAL`) but is uncurated → lands in `unmatched`; `/pools/{leimbach}` lane_panels clause deferred (plan pre-authorized). Bläsi/Käferberg = typed `SchemaMismatch` skips until E2. Current real parse count: **6 of 8** listed basins (City-Schwimmerbecken + Leimbach). | 3 real-PDF fixtures committed (refresh-cadence debt, dec#3); Bläsi/Käferberg tests pin `SchemaMismatch` — flip to positive-parse when E2 lands | yes |
+| 2026-07-21 | B | done | none — signatures match Design. Clamp uses `now_time` (queried moment), not wall-clock; `/swim` `at` now optional w/ server-time default at boundary. Review round 1 fixed a blocking gap: derive-at-read grep-guard was extended to forbid `"timeline"` (old asserts missed the new key). | Multi-run timeline "arc" UI branch only covered at domain level; end-to-end HTTP coverage deferred to a slice seeding real multi-block plans (C/E) | yes |
 
 ## Decisions & divergences
 
