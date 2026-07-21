@@ -1,9 +1,12 @@
 ---
 type: plan
-status: approved          # draft -> approved -> in-progress -> done
+status: in-progress       # draft -> approved -> in-progress -> done
 created: 2026-07-21
 updated: 2026-07-22
 feature: lane-plan-reconciliation
+branch: plan/lane-plan-reconciliation
+worktree: .claude/worktrees/plan-lane-plan-reconciliation
+base_branch: main
 gates:
   qa: full               # ruff, format, mypy strict, pytest+coverage floor (95), CRAP
   review: adversarial    # critic subagent must find no blocking issues
