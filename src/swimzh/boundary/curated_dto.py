@@ -9,9 +9,15 @@ from __future__ import annotations
 
 from datetime import date, datetime, time
 from decimal import Decimal
-from typing import Annotated, Literal
+from typing import Annotated, Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    SerializerFunctionWrapHandler,
+    model_serializer,
+)
 
 _Weekday = Literal["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
 _Scope = Literal["always", "school_term", "school_holiday"]
@@ -131,6 +137,16 @@ class LaneReservationDTO(_Strict):
     end: time
     lanes: list[int]
     access: AccessDTO
+    section: str | None = None
+
+    @model_serializer(mode="wrap")
+    def _serialize(self, handler: SerializerFunctionWrapHandler) -> dict[str, Any]:
+        # Additive-and-invisible: a `None` `section` must not appear in the payload, so a
+        # pre-existing reservation serialises to exactly the same bytes as before this field.
+        data: dict[str, Any] = handler(self)
+        if self.section is None:
+            data.pop("section", None)
+        return data
 
 
 class PlanCoverageDTO(_Strict):
@@ -146,6 +162,16 @@ class LanePlanDTO(_Strict):
     valid_from: date | None = None
     coverage: PlanCoverageDTO
     fetched_at: datetime | None = None
+    lanes_by_weekday: dict[_Weekday, int] | None = None
+
+    @model_serializer(mode="wrap")
+    def _serialize(self, handler: SerializerFunctionWrapHandler) -> dict[str, Any]:
+        # Additive-and-invisible: a `None` `lanes_by_weekday` must not appear in the payload, so
+        # an existing uniform plan serialises to exactly the same bytes as before this field.
+        data: dict[str, Any] = handler(self)
+        if self.lanes_by_weekday is None:
+            data.pop("lanes_by_weekday", None)
+        return data
 
 
 class BasinDTO(_Strict):

@@ -283,6 +283,7 @@ def lane_reservation_from_dto(dto: LaneReservationDTO) -> LaneReservation:
         time=time_range(dto.start, dto.end),
         lanes=frozenset(dto.lanes),
         access=access_from_dto(dto.access),
+        section=dto.section,
     )
 
 
@@ -293,6 +294,7 @@ def lane_reservation_to_dto(reservation: LaneReservation) -> LaneReservationDTO:
         end=reservation.time.end,
         lanes=sorted(reservation.lanes),
         access=access_to_dto(reservation.access),
+        section=reservation.section,
     )
 
 
@@ -321,6 +323,11 @@ def lane_plan_from_dto(dto: LanePlanDTO) -> LanePlan:
         valid_from=dto.valid_from,
         coverage=plan_coverage_from_dto(dto.coverage),
         fetched_at=dto.fetched_at,
+        lanes_by_weekday=(
+            {_WEEKDAY_FROM[w]: n for w, n in dto.lanes_by_weekday.items()}
+            if dto.lanes_by_weekday is not None
+            else None
+        ),
     )
 
 
@@ -331,6 +338,12 @@ def lane_plan_to_dto(plan: LanePlan) -> LanePlanDTO:
         valid_from=plan.valid_from,
         coverage=plan_coverage_to_dto(plan.coverage),
         fetched_at=plan.fetched_at,
+        lanes_by_weekday=(
+            # Serialise in weekday order so a set map has one canonical, stable form.
+            {_WEEKDAY_TO[w]: plan.lanes_by_weekday[w] for w in sorted(plan.lanes_by_weekday)}
+            if plan.lanes_by_weekday is not None
+            else None
+        ),
     )
 
 

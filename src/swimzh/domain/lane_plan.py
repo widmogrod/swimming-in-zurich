@@ -15,6 +15,7 @@ lives object-level in `PlanCoverage`, so *closed* (not represented) stays distin
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from datetime import date, datetime, time
 from enum import Enum
@@ -38,12 +39,17 @@ class LaneReservation:
     Isomorphic to a `ScheduleRule` plus a `lanes` axis. `lanes` is 1-based; both frozensets
     are serialised sorted so the gold round-trip is exact. Only `PublicSwim`,
     `SchoolReserved`, and `ClubReserved` are emitted by the parser (enforced there).
+
+    `section` names the sheet's sub-section this region belongs to (e.g. "Teil 1" when a
+    Belegungsplan stacks several named sections); `None` — the default — means the sheet had
+    no named sections, keeping every pre-existing reservation unchanged.
     """
 
     weekdays: frozenset[Weekday]
     time: TimeRange
     lanes: frozenset[int]
     access: SessionAccess
+    section: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -63,13 +69,20 @@ class PlanCoverage:
 
 @dataclass(frozen=True, slots=True)
 class LanePlan:
-    """A basin's parsed lane-reservation plan — STORED in gold (static/recurring)."""
+    """A basin's parsed lane-reservation plan — STORED in gold (static/recurring).
+
+    `lane_count` is the uniform lane count. `lanes_by_weekday` overrides it per weekday for
+    movable-floor basins whose usable lane count differs by day (e.g. 4 lanes weekdays / 3
+    weekends); `None` — the default — means the count is uniform, so every pre-existing plan is
+    unchanged. A weekday absent from a non-`None` map falls back to `lane_count`.
+    """
 
     lane_count: int
     reservations: tuple[LaneReservation, ...]
     valid_from: date | None
     coverage: PlanCoverage
     fetched_at: datetime | None = None
+    lanes_by_weekday: Mapping[Weekday, int] | None = None
 
 
 # --- Derived (query-time, DTO-free, never stored) ---------------------------------------

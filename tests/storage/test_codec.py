@@ -174,6 +174,89 @@ def test_roundtrip_basin_carrying_a_lane_plan(facilities: tuple[Facility, ...]) 
     assert back.basins[0].lane_plan == plan
 
 
+def test_roundtrip_plan_with_lanes_by_weekday_and_sectioned_reservation(
+    facilities: tuple[Facility, ...],
+) -> None:
+    # Slice D fidelity: a movable-floor plan (ragged `lanes_by_weekday`) carrying a reservation
+    # tagged with a named `section` must survive dumps -> loads EXACTLY (deep equality).
+    plan = LanePlan(
+        lane_count=4,
+        reservations=(
+            LaneReservation(
+                weekdays=frozenset({Weekday.MONDAY, Weekday.WEDNESDAY}),
+                time=TimeRange(time(6, 0), time(8, 0)),
+                lanes=frozenset({1, 2}),
+                access=ClubReserved(club="ASVZ"),
+                section="Teil 1",
+            ),
+            LaneReservation(
+                weekdays=frozenset({Weekday.SATURDAY}),
+                time=TimeRange(time(9, 0), time(12, 0)),
+                lanes=frozenset({1, 2, 3}),
+                access=PublicSwim(),
+                section="Teil 2",
+            ),
+        ),
+        valid_from=date(2026, 1, 1),
+        coverage=PlanCoverage(
+            confidence=PlanConfidence.COMPLETE, cells_total=100, cells_resolved=100
+        ),
+        lanes_by_weekday={
+            Weekday.MONDAY: 4,
+            Weekday.WEDNESDAY: 4,
+            Weekday.SATURDAY: 3,
+        },
+    )
+    base = facilities[0]
+    facility = replace(base, basins=(replace(base.basins[0], lane_plan=plan), *base.basins[1:]))
+    back = codec.loads(codec.dumps(facility))
+    assert back == facility
+    round_tripped = back.basins[0].lane_plan
+    assert round_tripped is not None
+    assert round_tripped == plan
+    assert round_tripped.lanes_by_weekday == {
+        Weekday.MONDAY: 4,
+        Weekday.WEDNESDAY: 4,
+        Weekday.SATURDAY: 3,
+    }
+    assert {r.section for r in round_tripped.reservations} == {"Teil 1", "Teil 2"}
+
+
+def test_uniform_plan_serializes_without_the_new_slice_d_keys(
+    facilities: tuple[Facility, ...],
+) -> None:
+    # Backward-compat guard: an existing uniform plan (both new fields defaulting to None) must
+    # add NOTHING to the payload — the serialized form is byte-identical to pre-Slice-D gold, so
+    # old blobs still load and re-dump identically. Explicitly forbid the new keys.
+    plan = LanePlan(
+        lane_count=6,
+        reservations=(
+            LaneReservation(
+                weekdays=frozenset({Weekday.TUESDAY}),
+                time=TimeRange(time(6, 0), time(8, 0)),
+                lanes=frozenset({1, 2}),
+                access=ClubReserved(club="ASVZ"),
+            ),
+        ),
+        valid_from=date(2026, 1, 1),
+        coverage=PlanCoverage(
+            confidence=PlanConfidence.COMPLETE, cells_total=1344, cells_resolved=1344
+        ),
+    )
+    base = facilities[0]
+    facility = replace(base, basins=(replace(base.basins[0], lane_plan=plan), *base.basins[1:]))
+    dumped = codec.dumps(facility)
+    assert '"lanes_by_weekday"' not in dumped
+    assert '"section"' not in dumped
+    # And it still round-trips exactly with both new fields None.
+    back = codec.loads(dumped)
+    assert back == facility
+    restored = back.basins[0].lane_plan
+    assert restored is not None
+    assert restored.lanes_by_weekday is None
+    assert all(r.section is None for r in restored.reservations)
+
+
 def test_occupancy_and_lane_availability_never_leak_into_gold(
     facilities: tuple[Facility, ...],
 ) -> None:

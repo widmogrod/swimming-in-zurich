@@ -182,6 +182,62 @@ def test_lane_plan_round_trips_with_coverage() -> None:
     assert back.model_copy(update={"coverage": dto.coverage}) == dto
 
 
+def test_lane_reservation_section_maps_both_ways() -> None:
+    # Slice D: a named `section` ("Teil 1") must survive DTO -> domain -> DTO in both directions.
+    dto = LaneReservationDTO(
+        weekdays=["tue"],
+        start=time(6, 0),
+        end=time(8, 0),
+        lanes=[1, 2],
+        access=ClubReservedDTO(type="club_reserved", club="ASVZ"),
+        section="Teil 1",
+    )
+    reservation = mapping.lane_reservation_from_dto(dto)
+    assert reservation.section == "Teil 1"
+    assert mapping.lane_reservation_to_dto(reservation) == dto
+
+    # ... and the default `None` stays `None` in both directions (existing plans untouched).
+    plain = LaneReservationDTO(
+        weekdays=["tue"],
+        start=time(6, 0),
+        end=time(8, 0),
+        lanes=[1, 2],
+        access=ClubReservedDTO(type="club_reserved", club="ASVZ"),
+    )
+    assert mapping.lane_reservation_from_dto(plain).section is None
+    assert mapping.lane_reservation_to_dto(mapping.lane_reservation_from_dto(plain)) == plain
+
+
+def test_lane_plan_lanes_by_weekday_maps_both_ways() -> None:
+    # Slice D: a ragged movable-floor map must survive DTO -> domain -> DTO, with the domain
+    # side keyed by the `Weekday` enum and re-serialised in weekday order.
+    dto = LanePlanDTO(
+        lane_count=4,
+        reservations=[
+            LaneReservationDTO(
+                weekdays=["sat"],
+                start=time(9, 0),
+                end=time(12, 0),
+                lanes=[1, 2, 3],
+                access=PublicDTO(type="public"),
+            )
+        ],
+        valid_from=date(2026, 1, 1),
+        coverage=PlanCoverageDTO(confidence="complete", cells_total=100, cells_resolved=100),
+        lanes_by_weekday={"sat": 3, "mon": 4},
+    )
+    plan = mapping.lane_plan_from_dto(dto)
+    assert plan.lanes_by_weekday == {Weekday.SATURDAY: 3, Weekday.MONDAY: 4}
+    back = mapping.lane_plan_to_dto(plan)
+    assert back.lanes_by_weekday == {"mon": 4, "sat": 3}  # weekday-ordered, canonical
+    assert back == dto
+
+    # ... and the default `None` stays `None` in both directions (uniform plans untouched).
+    uniform = dto.model_copy(update={"lanes_by_weekday": None})
+    assert mapping.lane_plan_from_dto(uniform).lanes_by_weekday is None
+    assert mapping.lane_plan_to_dto(mapping.lane_plan_from_dto(uniform)) == uniform
+
+
 # --- token-table parity (no enum member silently unmapped) --------------------------
 
 
