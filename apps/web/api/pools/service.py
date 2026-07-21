@@ -4,15 +4,22 @@ from __future__ import annotations
 
 from apps.web.api.pools.model import (
     BasinLanePanelOut,
+    BasinOut,
     ClubSlotOut,
     FacilityDetailOut,
+    FeatureStatusOut,
     LaneDayViewOut,
     LanePanelOut,
     LaneSegmentOut,
     LaneStripOut,
+    LockerOut,
     PoolOut,
     PoolsOut,
+    PriceEntryOut,
+    PriceTableOut,
+    ProvenanceOut,
     PublicWindowOut,
+    TimeRangeOut,
 )
 from swimzh.domain.access import PublicSwim
 from swimzh.domain.catalog import RosterEntry
@@ -23,8 +30,11 @@ from swimzh.domain.lane_plan import (
     PublicWindow,
     owner_label,
 )
-from swimzh.domain.query import BasinLanePanel, FacilityDetail
-from swimzh.domain.schedule import TimeRange
+from swimzh.domain.lockers import LockerOption
+from swimzh.domain.models import Basin, Provenance
+from swimzh.domain.pricing import PriceTable
+from swimzh.domain.query import BasinLanePanel, FacilityDetail, FeatureStatus
+from swimzh.domain.schedule import ClosedDay, OpenDay, TimeRange
 
 
 def _pool_out(row: RosterEntry) -> PoolOut:
@@ -105,13 +115,98 @@ def _basin_panel_out(basin_panel: BasinLanePanel) -> BasinLanePanelOut:
     )
 
 
-def facility_detail_out(detail: FacilityDetail) -> FacilityDetailOut:
-    """Shape the domain facility-detail answer for the API, surfacing the per-basin lane
-    panels (day timeline + best public time + club roster)."""
+def _basin_out(basin: Basin) -> BasinOut:
+    dims = basin.dimensions
+    return BasinOut(
+        basin_id=str(basin.basin_id),
+        name=basin.name,
+        kind=basin.kind.value,
+        length_m=float(dims.length_m) if dims is not None else None,
+        width_m=float(dims.width_m) if dims is not None and dims.width_m is not None else None,
+        lanes=basin.lanes,
+        nominal_temp_c=float(basin.nominal_temp_c) if basin.nominal_temp_c is not None else None,
+        physical_source=basin.physical_source.value,
+    )
+
+
+def _feature_status_out(status: FeatureStatus) -> FeatureStatusOut:
+    feature = status.feature
+    hours: list[TimeRangeOut] = []
+    closed_reason: str | None = None
+    # `schedule` is the queried day's resolution (or None when the feature states no hours).
+    match status.schedule:
+        case OpenDay(sessions):
+            start_end = (_hhmm(s.time) for s in sessions)
+            hours = [TimeRangeOut(start=start, end=end) for start, end in start_end]
+        case ClosedDay(reason):
+            closed_reason = reason
+        case None:
+            pass
+    return FeatureStatusOut(
+        kind=feature.kind.value,
+        name=feature.name,
+        surcharge_chf=float(feature.surcharge_chf) if feature.surcharge_chf is not None else None,
+        temp_c=float(feature.temp_c) if feature.temp_c is not None else None,
+        note=feature.note,
+        open_now=status.open_at_query_time,
+        hours=hours,
+        closed_reason=closed_reason,
+    )
+
+
+def _locker_out(locker: LockerOption) -> LockerOut:
+    return LockerOut(
+        category=locker.category.value,
+        fee_chf=float(locker.fee_chf) if locker.fee_chf is not None else None,
+        deposit_chf=float(locker.deposit_chf) if locker.deposit_chf is not None else None,
+        period=locker.period,
+        mechanism=locker.mechanism.value if locker.mechanism is not None else None,
+        raw=locker.raw,
+    )
+
+
+def _price_table_out(table: PriceTable) -> PriceTableOut:
+    return PriceTableOut(
+        entries=[
+            PriceEntryOut(
+                category=e.category.value, amount_chf=float(e.amount_chf), display=e.display
+            )
+            for e in table.entries
+        ],
+        valid_as_of=table.valid_as_of.isoformat() if table.valid_as_of is not None else None,
+        source_url=table.source_url,
+    )
+
+
+def _provenance_out(provenance: Provenance) -> ProvenanceOut:
+    return ProvenanceOut(
+        source=provenance.source,
+        curated=provenance.curated,
+        valid_as_of=(
+            provenance.valid_as_of.isoformat() if provenance.valid_as_of is not None else None
+        ),
+        fetched_at=provenance.fetched_at.isoformat() if provenance.fetched_at is not None else None,
+    )
+
+
+def facility_detail_out(detail: FacilityDetail, prices: PriceTable | None) -> FacilityDetailOut:
+    """Shape the domain facility-detail answer for the API: the physical basins (size, lanes,
+    water temperature + `physical_source` caveat), features with hours resolved for the queried
+    moment, lockers, the facility price table, provenance, and the per-basin lane panels.
+
+    Every field is a pure projection of what the domain already computes; `prices` is the
+    facility's own `PriceTable` (the query surface computes a per-person `price` inside
+    `find_swim_options`, but the price *table* rides on the `Facility`, so the thin router hands
+    it in rather than re-reading the store)."""
     return FacilityDetailOut(
         facility_id=str(detail.facility_id),
         facility_name=detail.facility_name,
         address=detail.address,
         website=detail.website,
+        basins=[_basin_out(b) for b in detail.basins],
+        features=[_feature_status_out(f) for f in detail.features],
+        lockers=[_locker_out(locker) for locker in detail.lockers],
+        prices=_price_table_out(prices) if prices is not None else None,
+        provenance=_provenance_out(detail.provenance),
         lane_panels=[_basin_panel_out(p) for p in detail.lane_panels],
     )

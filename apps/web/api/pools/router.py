@@ -42,4 +42,4 @@ def pool_detail(
     if facility is None:
         raise HTTPException(status_code=404, detail=f"unknown facility {facility_id!r}")
     when = at if at is not None else datetime.now(_ZURICH)
-    return facility_detail_out(facility_detail(facility, when, data.calendar()))
+    return facility_detail_out(facility_detail(facility, when, data.calendar()), facility.prices)

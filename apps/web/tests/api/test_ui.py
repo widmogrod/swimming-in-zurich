@@ -104,6 +104,33 @@ def test_facility_detail_lane_panel_renders_conditionally() -> None:
     assert ".lanepanel" in page and ".besttime" in page and ".lanestrip" in page
 
 
+def test_pool_detail_panel_renders_basins_features_lockers_prices() -> None:
+    """Slice C: the /pools/{id} detail panel renders the physical statics — basin cards with a
+    prominent water-temperature badge + size/lane chips + a PARSED_PROSE caveat where the
+    physicals were auto-extracted, a feature "open now?" pill with hours, lockers, and prices."""
+    with TestClient(app) as client:
+        page = client.get("/").text
+    # The panel composes basins/features/lockers/prices, then lane plans.
+    assert "function facilityDetailHTML(d)" in page
+    assert "box.innerHTML = facilityDetailHTML(d);" in page
+    # Basin cards: a temperature badge gated on the datum, size/lane chips, the PARSED_PROSE caveat.
+    assert "function basinCardHTML(b)" in page
+    assert "b.nominal_temp_c != null" in page
+    assert "tempbadge" in page and ".tempbadge" in page  # render + its own style
+    assert "sizechip" in page and "lane${b.lanes === 1 ? '' : 's'}" in page
+    assert "b.physical_source === 'parsed_prose'" in page
+    assert "PARSED_PROSE" in page and "parsedcaveat" in page
+    # Feature "open now?" pill (green open / grey closed), driven by open_now, with hours.
+    assert "function featureRowHTML(fe)" in page
+    assert "fe.open_now === true" in page
+    assert "openpill open" in page and "openpill closed" in page
+    assert ".openpill.open { background: #15803d; }" in page
+    # Lockers and prices each render from the detail response.
+    assert "function lockerRowHTML(l)" in page
+    assert "function priceTableHTML(pt)" in page
+    assert "Prices checked" in page
+
+
 def test_tourist_tab_renders_primer_and_glossary() -> None:
     """S1/S3: the newcomer tab leads with a plain-language primer — one always-visible
     how-to-enter line, then a glossary (pool types keyed off `kind`, slots from

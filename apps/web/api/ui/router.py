@@ -125,6 +125,27 @@ _PAGE = """<!doctype html>
   .roster { margin-top: .3rem; }
   .roster .rrow { padding: .1rem 0; }
   .roster .rclub { font-weight: 600; }
+  /* --- facility-detail statics (basins, features, lockers, prices) in the /pools/{id} panel --- */
+  .basincard { border: 1px solid #8886; border-radius: .4rem; padding: .5rem .7rem; margin: .4rem 0; }
+  .basincard .basinhead { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; }
+  .basincard .basinname { font-weight: 600; }
+  /* the prominent water-temperature badge (Decision #4: nominal here, tooltip carries the source) */
+  .tempbadge { display: inline-block; font-weight: 700; font-size: .95rem; white-space: nowrap;
+    padding: .1rem .55rem; border-radius: 1rem; background: #0ea5e922; color: #0369a1;
+    border: 1px solid #0ea5e955; }
+  .basinchips { display: flex; flex-wrap: wrap; gap: .35rem; margin-top: .35rem; }
+  .sizechip { display: inline-block; font-family: var(--mono); font-size: .74rem; white-space: nowrap;
+    border: 1px solid #8886; border-radius: .3rem; padding: .04rem .4rem; opacity: .9; }
+  /* the honesty caveat where a basin's physicals were auto-extracted from prose, not curated */
+  .parsedcaveat { display: inline-block; font-size: .72rem; margin-top: .3rem; color: #b45309;
+    background: #b4530922; border: 1px solid #b4530955; border-radius: .3rem; padding: .04rem .4rem; }
+  .featurerow, .lockerrow, .pricerow { font-size: .82rem; padding: .15rem 0; }
+  .pricerow .pricecat { display: inline-block; min-width: 4.5rem; font-family: var(--mono); opacity: .7; }
+  /* "open now?" pill for a facility feature — green open / grey closed, never opacity-only */
+  .openpill { font-family: var(--mono); font-size: .7rem; font-weight: 700; color: #fff;
+    padding: .06rem .45rem; border-radius: 1rem; white-space: nowrap; }
+  .openpill.open { background: #15803d; }
+  .openpill.closed { background: #6b7280; }
   .card .metaline { font-size: .85rem; opacity: .85; margin-top: .2rem; }
   .card .reason { font-size: .8rem; opacity: .65; margin-top: .2rem; }
   /* pool-as-object detail line: address · tel · official ↗ · directions ↗ */
@@ -472,20 +493,83 @@ function basinPanelHTML(bp) {
     + '<div class="lptitle">Club roster (this week)</div>' + rosterHTML(p.roster)
     + '</div>';
 }
-// Fetch /pools/{facility_id} once per <details> and render its lane panels. The `at` moment
-// selects the weekday shown; we pass the Find form's "When" so the panel matches the search.
+// --- Facility-detail statics (basins, features, lockers, prices) ------------------------
+// /pools/{id} now carries the physical facts the domain already computes: each basin's size,
+// lane count and DESIGN water temperature (with a curated-vs-parsed_prose honesty caveat),
+// the facility's features with hours resolved for the queried moment, its lockers, and its
+// price table. Rendered in the same lazy detail panel as the lane plans.
+// One basin card: name + a prominent water-temperature badge, then size/lane/kind chips, then
+// the PARSED_PROSE caveat when the physicals were auto-extracted (not hand-verified).
+function basinCardHTML(b) {
+  const temp = b.nominal_temp_c != null
+    ? `<span class="tempbadge" title="design (nominal) temperature, not a live reading">🌡 ${esc(b.nominal_temp_c)}°C</span>`
+    : '';
+  const chips = [];
+  if (b.length_m != null)
+    chips.push(`<span class="sizechip">${esc(b.length_m)}${b.width_m != null ? ' × ' + esc(b.width_m) : ''} m</span>`);
+  if (b.lanes != null) chips.push(`<span class="sizechip">${esc(b.lanes)} lane${b.lanes === 1 ? '' : 's'}</span>`);
+  if (b.kind) chips.push(`<span class="sizechip">${esc(b.kind)}</span>`);
+  // physical_source === 'parsed_prose' => auto-extracted, unverified: say so plainly.
+  const caveat = b.physical_source === 'parsed_prose'
+    ? '<div class="parsedcaveat">PARSED_PROSE — auto-extracted from the pool page, not hand-verified</div>'
+    : '';
+  return `<div class="basincard"><div class="basinhead"><span class="basinname">${esc(b.name)}</span>${temp}</div>`
+    + `<div class="basinchips">${chips.join('')}</div>${caveat}</div>`;
+}
+// One feature row: name + an "open now?" pill (green open / grey closed / omitted when the
+// feature states no separate hours), then its resolved hours, surcharge and temperature.
+function featureRowHTML(fe) {
+  const pill = fe.open_now === true ? '<span class="openpill open">open now</span>'
+    : fe.open_now === false ? '<span class="openpill closed">closed now</span>' : '';
+  const hours = fe.hours && fe.hours.length
+    ? ' <span class="muted">' + fe.hours.map(h => esc(h.start) + '–' + esc(h.end)).join(', ') + '</span>'
+    : (fe.closed_reason ? ' <span class="muted">' + esc(fe.closed_reason) + '</span>' : '');
+  const extra = [fe.surcharge_chf != null ? '+CHF ' + esc(fe.surcharge_chf) : null,
+    fe.temp_c != null ? esc(fe.temp_c) + '°C' : null].filter(Boolean).map(esc).join(' · ');
+  return `<div class="featurerow"><b>${esc(fe.name)}</b> ${pill}${hours}${extra ? ' · ' + extra : ''}</div>`;
+}
+// One locker row: category, then fee (or "free") + refundable deposit + rental period.
+function lockerRowHTML(l) {
+  const fee = l.fee_chf != null ? 'CHF ' + esc(l.fee_chf) : 'free';
+  const dep = l.deposit_chf != null ? ' · deposit CHF ' + esc(l.deposit_chf) : '';
+  const per = l.period ? ' · ' + esc(l.period) : '';
+  return `<div class="lockerrow"><b>${esc(l.category)}</b>: ${fee}${dep}${per}</div>`;
+}
+// The facility price table: one row per age-band entry, plus a "checked on" freshness line.
+function priceTableHTML(pt) {
+  const rows = pt.entries.map(e =>
+    `<div class="pricerow"><span class="pricecat">${esc(e.category)}</span> ${esc(e.display)}</div>`).join('');
+  const when = pt.valid_as_of ? `<div class="muted">Prices checked ${esc(pt.valid_as_of)}</div>` : '';
+  return rows + when;
+}
+// Compose the whole facility-detail panel: basins, features, lockers, prices, then lane plans.
+function facilityDetailHTML(d) {
+  let h = '';
+  if (d.basins && d.basins.length)
+    h += '<div class="lptitle">Basins</div>' + d.basins.map(basinCardHTML).join('');
+  if (d.features && d.features.length)
+    h += '<div class="lptitle">Facilities &amp; amenities</div>' + d.features.map(featureRowHTML).join('');
+  if (d.lockers && d.lockers.length)
+    h += '<div class="lptitle">Lockers</div>' + d.lockers.map(lockerRowHTML).join('');
+  if (d.prices && d.prices.entries && d.prices.entries.length)
+    h += '<div class="lptitle">Prices</div>' + priceTableHTML(d.prices);
+  if (d.lane_panels && d.lane_panels.length)
+    h += '<div class="lptitle">Lane plans</div>' + d.lane_panels.map(basinPanelHTML).join('');
+  return h || '<p class="muted">No further detail for this pool yet.</p>';
+}
+// Fetch /pools/{facility_id} once per <details> and render its full facility detail (physical
+// basins + water temperature, features, lockers, prices, and any lane panels). The `at` moment
+// selects the weekday/hours shown; we pass the Find form's "When" so the panel matches the search.
 async function loadLanePanel(el) {
   if (el.dataset.loaded) return;
   el.dataset.loaded = '1';
   const id = el.dataset.facilityId, at = el.dataset.at;
   const box = el.querySelector('.lanepanel-slot');
-  box.innerHTML = '<p class="muted">Loading lane plan…</p>';
+  box.innerHTML = '<p class="muted">Loading pool detail…</p>';
   const r = await fetch('/pools/' + encodeURIComponent(id) + (at ? '?at=' + encodeURIComponent(at) : ''));
-  if (!r.ok) { box.innerHTML = '<p class="muted">Lane plan unavailable.</p>'; return; }
+  if (!r.ok) { box.innerHTML = '<p class="muted">Pool detail unavailable.</p>'; return; }
   const d = await r.json();
-  box.innerHTML = d.lane_panels.length
-    ? d.lane_panels.map(basinPanelHTML).join('')
-    : '<p class="muted">No lane plan for this pool yet.</p>';
+  box.innerHTML = facilityDetailHTML(d);
 }
 // Wire every lane-schedule <details> in a container to lazy-load on first open.
 function wireLanePanels(container) {
