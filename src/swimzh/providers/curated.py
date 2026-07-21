@@ -93,6 +93,8 @@ def _map_facility(dto: FacilityDTO, identity: PoolIdentity) -> Facility:
         website=dto.website,
         features=tuple(mapping.feature_from_dto(f) for f in dto.features),
         lockers=tuple(mapping.locker_from_dto(lo) for lo in dto.lockers),
+        accessibility=dto.accessibility,
+        last_admission_before=dto.last_admission_before,
     )
 
 

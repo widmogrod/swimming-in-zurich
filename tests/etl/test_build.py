@@ -16,7 +16,7 @@ from dataclasses import replace
 from pathlib import Path
 
 from swimzh.core.result import Ok
-from swimzh.domain.models import Facility, PoolId
+from swimzh.domain.models import BasinSource, Facility, PoolId
 from swimzh.etl.build import build_store
 from swimzh.providers.curated import load_dataset
 from swimzh.storage import catalog_json
@@ -48,9 +48,12 @@ def test_pool_facility_doc_read_matches_curated_dataset_modulo_geo(tmp_path: Pat
     new_read = {str(f.identity.facility_id): f for f in GoldRepository(conn).load_all()}
     curated = _curated_yaml_facilities()
 
-    # Same curated pools land on the read path — nothing dropped or invented by the flip.
-    assert set(new_read) == set(curated)
-    assert set(new_read) == {
+    # The curated (scheduled) pools land on the read path — nothing dropped or invented by the
+    # flip. Slice F additionally puts SCHEDULE-LESS prose pools on the read path; isolate the
+    # scheduled ones (those with a schedule rule) for the curated-parity comparison.
+    scheduled = {pid: f for pid, f in new_read.items() if any(b.rules for b in f.basins)}
+    assert set(scheduled) == set(curated)
+    assert set(scheduled) == {
         "hallenbad-city",
         "hallenbad-oerlikon",
         "hallenbad-bungertwies",
@@ -59,8 +62,17 @@ def test_pool_facility_doc_read_matches_curated_dataset_modulo_geo(tmp_path: Pat
 
     # Everything but geo is identical: the schedule/identity/basins/prices the read path serves
     # is unchanged by the flip.
-    for pool_id in new_read:
-        assert _without_geo(new_read[pool_id]) == _without_geo(curated[pool_id]), pool_id
+    for pool_id in scheduled:
+        assert _without_geo(scheduled[pool_id]) == _without_geo(curated[pool_id]), pool_id
+
+    # Pin the EXACT set of Slice-F prose pools (location-only pools whose WFS prose names basins).
+    # A catalog regeneration that changes which pools carry basin prose must surface here, not
+    # slip in silently — every prose pool is schedule-less and PARSED_PROSE.
+    prose = {pid for pid, f in new_read.items() if not any(b.rules for b in f.basins)}
+    assert prose == {"hallenbad-altstetten", "strandbad-tiefenbrunnen"}
+    for pid in prose:
+        basins = new_read[pid].basins
+        assert basins and all(b.physical_source is BasinSource.PARSED_PROSE for b in basins)
 
 
 def test_geo_divergence_is_by_design_catalog_over_yaml(tmp_path: Path) -> None:
@@ -75,12 +87,14 @@ def test_geo_divergence_is_by_design_catalog_over_yaml(tmp_path: Path) -> None:
         for e in catalog_json.loads((DATA_DIR / "catalog.json").read_text(encoding="utf-8"))
     }
 
-    # The read path (pool.facility_doc) serves the authoritative committed-catalog geo…
+    # The read path (pool.facility_doc) serves the authoritative committed-catalog geo — for the
+    # curated pools AND the Slice-F prose pools (both stamp `entry.geo`).
     for pool_id, facility in new_read.items():
         assert facility.geo == catalog[pool_id]
 
-    # …and for the 3 shifted pools that is genuinely different from the curated YAML geo.
-    diverged = {pid for pid in new_read if new_read[pid].geo != curated[pid].geo}
+    # …and for the 3 shifted pools that is genuinely different from the curated YAML geo. Only the
+    # curated pools have a YAML geo to diverge from (prose pools have no curated counterpart).
+    diverged = {pid for pid in curated if new_read[pid].geo != curated[pid].geo}
     assert diverged == _GEO_SHIFTED
 
 

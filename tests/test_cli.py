@@ -137,9 +137,11 @@ def test_scrape_gold_composes_onto_built_store(tmp_path: Path) -> None:
         fetched_at=FETCHED_AT,
     )
     assert code == 0
-    # No second row for City: the scrape composed onto the curated pool (still 4 curated).
+    # No second row for City: the scrape composed onto the curated pool. The read path holds 4
+    # curated pools + 2 Slice-F prose pools = 6 (and exactly one City row, no long-slug duplicate).
     facilities = GoldRepository(open_db(db)).load_all()
-    assert len(facilities) == 4
+    assert len(facilities) == 6
+    assert sum(1 for f in facilities if str(f.identity.facility_id) == "hallenbad-city") == 1
 
 
 def test_scrape_gold_wires_scraped_only_pool_onto_read_path(tmp_path: Path) -> None:
@@ -151,8 +153,10 @@ def test_scrape_gold_wires_scraped_only_pool_onto_read_path(tmp_path: Path) -> N
     db = tmp_path / "gold.sqlite"
     assert build(db_path=db, data_dir=DATA_DIR) == 0
     altstetten = reconstruct_pool_id("hallenbad-altstetten")
-    # Uncurated before the scrape: no schedule blob on the read path.
-    assert GoldRepository(open_db(db)).get(altstetten) is None
+    # Uncurated before the scrape: Slice F gives it a SCHEDULE-LESS prose blob, so it may be
+    # present on the read path but carries no schedule rule yet.
+    before = GoldRepository(open_db(db)).get(altstetten)
+    assert before is None or not any(b.rules for b in before.basins)
 
     code = scrape_gold(
         db_path=db,
@@ -309,8 +313,10 @@ def test_scrape_gold_partial_success_writes_matched_reports_unmatched(
     db = tmp_path / "gold.sqlite"
     assert build(db_path=db, data_dir=DATA_DIR) == 0
     altstetten = reconstruct_pool_id("hallenbad-altstetten")
-    # Scraped-only pool: absent from the read path before the scrape.
-    assert GoldRepository(open_db(db)).get(altstetten) is None
+    # Scraped-only pool: before the scrape it carries at most a SCHEDULE-LESS Slice-F prose blob
+    # (no rule), so no scraped schedule is on the read path yet.
+    before = GoldRepository(open_db(db)).get(altstetten)
+    assert before is None or not any(b.rules for b in before.basins)
 
     code = scrape_gold(
         db_path=db,
@@ -449,8 +455,13 @@ def test_build_produces_complete_offline_store(tmp_path: Path) -> None:
     # The curated facilities land on the read path (`pool.facility_doc`) — no network needed.
     dataset = load_dataset(DATA_DIR)
     assert isinstance(dataset, Ok)
-    stored = {f.identity.facility_id for f in GoldRepository(conn).load_all()}
-    assert stored == {f.identity.facility_id for f in dataset.value.facilities}
+    facilities = GoldRepository(conn).load_all()
+    # The curated (scheduled) facilities land on the read path…
+    scheduled = {f.identity.facility_id for f in facilities if any(b.rules for b in f.basins)}
+    assert scheduled == {f.identity.facility_id for f in dataset.value.facilities}
+    # …plus Slice-F schedule-less prose pools (a superset of the curated set).
+    stored = {f.identity.facility_id for f in facilities}
+    assert stored >= scheduled
 
 
 def test_build_via_main_offline(tmp_path: Path) -> None:

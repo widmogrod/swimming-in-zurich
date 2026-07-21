@@ -90,6 +90,8 @@ class BasinOut(BaseModel):
     width_m: float | None
     lanes: int | None
     nominal_temp_c: float | None  # the basin's DESIGN temperature (not a live reading)
+    measured_temp_c: float | None  # an actually-measured reading; overrides nominal in the badge
+    diving_platforms_m: list[float]  # board/platform heights, e.g. [1, 3, 5]; empty when none
     # Honesty caveat: "curated" (hand-verified) vs "parsed_prose" (auto-extracted, unverified).
     physical_source: str
 
@@ -150,3 +152,6 @@ class FacilityDetailOut(BaseModel):
     provenance: ProvenanceOut
     # One panel per basin that carries a parsed Belegungsplan; empty when none do.
     lane_panels: list[BasinLanePanelOut]
+    amenities: list[str]  # facility amenity tags (sorted); empty when none recorded
+    accessibility: str | None  # free-text accessibility note; None when unknown
+    last_admission_before_min: int | None  # minutes before closing that admission stops

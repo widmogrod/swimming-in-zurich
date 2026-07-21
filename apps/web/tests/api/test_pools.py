@@ -165,6 +165,34 @@ def test_facility_detail_out_surfaces_temp_and_parsed_prose_caveat() -> None:
     assert out.provenance.curated is False and out.provenance.valid_as_of == "2026-07-01"
 
 
+def test_parsed_prose_pool_shows_in_detail_but_never_a_swim_option() -> None:
+    """Slice F / Decision #5 acceptance: a location-only pool whose WFS prose names basins gains
+    auto-extracted PARSED_PROSE basins visible in `/pools/{id}` detail (with caveat), yet produces
+    NO `/swim` option — it stays reported `uncurated`, never conflated with a real session."""
+    swim_params = {
+        "at": "2026-09-15T09:00",
+        "gender": "female",
+        "age": 34,
+        "eligible_only": "false",
+    }
+    with TestClient(app) as client:
+        detail = client.get("/pools/hallenbad-altstetten", params={"at": "2026-09-15T09:00"}).json()
+        swim = client.get("/swim", params=swim_params).json()
+
+    # Detail: the auto-extracted basins are present and EVERY one is tagged parsed_prose (which
+    # drives the honesty caveat), including the diving basin with its platform heights.
+    assert detail["basins"], "prose pool must surface its auto-extracted basins in detail"
+    assert all(b["physical_source"] == "parsed_prose" for b in detail["basins"])
+    diving = [b for b in detail["basins"] if b["kind"] == "diving"]
+    assert diving and diving[0]["diving_platforms_m"] == [1.0, 3.0, 5.0]
+
+    # /swim: the gate. Never an option; reported `uncurated` instead — the test fails the moment a
+    # PARSED_PROSE basin leaks into an option.
+    assert "Hallenbad Altstetten" not in {o["facility"] for o in swim["options"]}
+    uncurated = {s["facility"] for s in swim["statuses"] if s["status"] == "uncurated"}
+    assert "Hallenbad Altstetten" in uncurated
+
+
 def test_access_types_explained() -> None:
     with TestClient(app) as client:
         response = client.get("/access-types")

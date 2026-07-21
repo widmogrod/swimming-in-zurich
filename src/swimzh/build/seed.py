@@ -24,10 +24,24 @@ from dataclasses import replace
 from swimzh.build.reconcile import Crosswalk, build_basin_hint_index
 from swimzh.core.normalize import normalize
 from swimzh.domain.catalog import PoolCatalogEntry
-from swimzh.domain.models import Facility, PoolId
+from swimzh.domain.models import (
+    BasinId,
+    Facility,
+    PoolId,
+    PoolIdentity,
+    PoolKind,
+    Provenance,
+)
 from swimzh.domain.registry import Registry
+from swimzh.providers.infrastruktur import (
+    basin_from_physical,
+    parse_features,
+    parse_infrastruktur,
+)
 from swimzh.storage import codec
 from swimzh.storage.rows import PoolAliasRow, PoolRow, PoolSpine, PoolXrefRow
+
+_PROSE_SOURCE = "infrastruktur"
 
 
 def build_spine(
@@ -65,7 +79,18 @@ def build_spine(
         # Curated-wins on kind: a hand-authored registry kind (richer/verified) overrides the
         # generic WFS catalog kind; catalog is the authority only where no curation exists.
         kind = identity.kind if identity is not None else entry.kind
-        facility_doc = codec.dumps(facility) if facility is not None else None
+
+        # Curated pool -> serialize its curated facility. Otherwise, best-effort prose extraction:
+        # a location-only pool whose WFS `infrastruktur` prose (carried on `entry.description`)
+        # names swimmable basins gains an auto-extracted, SCHEDULE-LESS facility (PARSED_PROSE
+        # basins + amenity Features). Offline, from committed inputs only. `PoolId` is minted here
+        # (an allowed seam), exactly as for the curated rows.
+        facility_doc: str | None
+        if facility is not None:
+            facility_doc = codec.dumps(facility)
+        else:
+            prose = _prose_facility(entry, pool_id, kind)
+            facility_doc = codec.dumps(prose) if prose is not None else None
 
         pools.append(
             PoolRow(
@@ -105,6 +130,35 @@ def build_spine(
                 xrefs.append(PoolXrefRow(pool_id=pool_id, namespace=namespace, ext_id=ext_id))
 
     return PoolSpine(pools=tuple(pools), aliases=tuple(aliases), xrefs=tuple(xrefs))
+
+
+def _prose_facility(entry: PoolCatalogEntry, pool_id: PoolId, kind: PoolKind) -> Facility | None:
+    """Extract a schedule-less ``Facility`` from a location-only pool's WFS ``infrastruktur``
+    prose (``entry.description``). Returns ``None`` when the prose names no swimmable basin — a
+    facility must have water, so amenity-only prose (a lone "Restaurant") does not mint one, and
+    the pool stays purely location-only (no ``facility_doc``).
+
+    Because every parsed basin is schedule-less (``basin_from_physical``), the derived facility is
+    ``uncurated`` (``codec.is_curated`` needs a rule) and produces no ``/swim`` option — it is
+    surfaced only in ``/pools/{id}`` detail, with the PARSED_PROSE caveat (Decision #5).
+    """
+    if entry.description is None:
+        return None
+    physicals = parse_infrastruktur(entry.description)
+    if not physicals:
+        return None
+    basins = tuple(
+        basin_from_physical(physical, BasinId(f"{entry.pool_id}-prose-{index}"))
+        for index, physical in enumerate(physicals)
+    )
+    return Facility(
+        identity=PoolIdentity(facility_id=pool_id, name=entry.name, kind=kind),
+        address=entry.address,
+        provenance=Provenance(source=_PROSE_SOURCE, curated=False),
+        basins=basins,
+        geo=entry.geo,
+        features=parse_features(entry.description),
+    )
 
 
 def build_crosswalk(spine: PoolSpine, facilities: tuple[Facility, ...]) -> Crosswalk:

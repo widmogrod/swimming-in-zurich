@@ -53,10 +53,13 @@ def test_scraping_a_schedule_flips_curation_and_serves_it(
     assert isinstance(build_store(DATA_DIR, db), Ok)
     altstetten = reconstruct_pool_id("hallenbad-altstetten")
 
-    # Precondition — uncurated everywhere: no schedule blob, roster flag False, `/swim` reports
-    # it `uncurated` (never an option).
+    # Precondition — uncurated everywhere: roster flag False, `/swim` reports it `uncurated` (never
+    # an option). Slice F gives it a SCHEDULE-LESS prose blob (auto-extracted PARSED_PROSE basins),
+    # so the blob is present but carries no rule — curation still derives False, Decision #5 keeps
+    # it out of `/swim`.
     assert _curated_flags(db)["hallenbad-altstetten"] is False
-    assert GoldRepository(open_db(db)).get(altstetten) is None
+    pre = GoldRepository(open_db(db)).get(altstetten)
+    assert pre is not None and not any(b.rules for b in pre.basins)
     monkeypatch.setenv("SWIMZH_GOLD_DB", str(db))
     with TestClient(app) as client:
         before = client.get("/swim", params=_SWIM).json()

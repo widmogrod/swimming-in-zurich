@@ -140,6 +140,9 @@ _FEATURE_KIND_TO: dict[FeatureKind, _FeatureKind] = {
     FeatureKind.WELLNESS: "wellness",
     FeatureKind.SLIDE: "slide",
     FeatureKind.HOT_TUB: "hot_tub",
+    FeatureKind.TERRACE: "terrace",
+    FeatureKind.REST: "rest",
+    FeatureKind.GASTRONOMY: "gastronomy",
 }
 _LOCKER_CATEGORY_FROM: dict[str, LockerCategory] = {c.value: c for c in LockerCategory}
 _LOCKER_CATEGORY_TO: dict[LockerCategory, _LockerCategory] = {
@@ -357,6 +360,8 @@ def basin_from_dto(dto: BasinDTO) -> Basin:
         dimensions=dimensions_from_dto(dto.dimensions) if dto.dimensions is not None else None,
         lanes=dto.lanes,
         nominal_temp_c=dto.nominal_temp_c,
+        measured_temp_c=dto.measured_temp_c,
+        diving_platforms_m=tuple(dto.diving_platforms_m),
         physical_source=_BASIN_SOURCE_FROM[dto.physical_source],
         lane_plan=lane_plan_from_dto(dto.lane_plan) if dto.lane_plan is not None else None,
     )
@@ -372,6 +377,8 @@ def basin_to_dto(basin: Basin) -> BasinDTO:
         dimensions=dimensions_to_dto(basin.dimensions) if basin.dimensions is not None else None,
         lanes=basin.lanes,
         nominal_temp_c=basin.nominal_temp_c,
+        measured_temp_c=basin.measured_temp_c,
+        diving_platforms_m=list(basin.diving_platforms_m),
         physical_source=_BASIN_SOURCE_TO[basin.physical_source],
         lane_plan=lane_plan_to_dto(basin.lane_plan) if basin.lane_plan is not None else None,
     )

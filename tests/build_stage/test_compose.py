@@ -12,6 +12,7 @@ end-to-end in ``tests/test_cli.py``.
 
 from __future__ import annotations
 
+from dataclasses import replace
 from datetime import date, datetime, time
 from decimal import Decimal
 from zoneinfo import ZoneInfo
@@ -19,10 +20,13 @@ from zoneinfo import ZoneInfo
 from swimzh.build.compose import ScrapedAspects, compose
 from swimzh.domain.access import PublicSwim
 from swimzh.domain.geo import GeoPoint
+from swimzh.domain.lockers import LockerCategory, LockerOption
 from swimzh.domain.models import (
     Basin,
     BasinId,
     Facility,
+    Feature,
+    FeatureKind,
     PoolId,
     PoolIdentity,
     PoolKind,
@@ -123,6 +127,28 @@ def test_scraped_only_pool_passes_through() -> None:
     assert merged.basins[0].rules == scraped.basins[0].rules
     assert merged.prices == _price("8.00")
     assert merged.provenance.curated is False
+
+
+def test_scraped_features_and_lockers_survive_compose_onto_non_curated_base() -> None:
+    # Slice F acceptance: the widened ScrapedAspects (features/lockers/website/amenities/
+    # accessibility) fold through compose onto a scraped-only (non-curated) base.
+    sauna = Feature(kind=FeatureKind.SAUNA, name="Sauna", surcharge_chf=Decimal("10.00"))
+    locker = LockerOption(category=LockerCategory.VALUABLES, fee_chf=Decimal("2.00"))
+    scraped = replace(
+        _scraped_city(prices=None),
+        features=(sauna,),
+        lockers=(locker,),
+        website="https://example.test/pool",
+        amenities=frozenset({"wifi"}),
+        accessibility="barrierefrei",
+    )
+    result = compose((), ((CITY, scraped),))
+    merged = result.facilities[0]
+    assert merged.features == (sauna,)
+    assert merged.lockers == (locker,)
+    assert merged.website == "https://example.test/pool"
+    assert merged.amenities == frozenset({"wifi"})
+    assert merged.accessibility == "barrierefrei"
 
 
 def test_output_is_ordered_by_canonical_id() -> None:

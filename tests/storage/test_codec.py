@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import replace
-from datetime import date, datetime, time
+from datetime import date, datetime, time, timedelta
 from decimal import Decimal
 from pathlib import Path
 from zoneinfo import ZoneInfo
@@ -92,6 +92,42 @@ def test_roundtrip_covers_every_physical_basin_field(facilities: tuple[Facility,
     assert first.lanes == 6
     assert first.nominal_temp_c == Decimal("30.5")
     assert first.physical_source is BasinSource.PARSED_PROSE
+
+
+def test_roundtrip_covers_slice_f_basin_and_facility_fields(
+    facilities: tuple[Facility, ...],
+) -> None:
+    # Slice F additive fields (measured temp, diving heights, accessibility, last admission)
+    # round-trip EXACTLY through the gold codec.
+    base = facilities[0]
+    basin = replace(
+        base.basins[0],
+        nominal_temp_c=Decimal("28"),
+        measured_temp_c=Decimal("26.5"),
+        diving_platforms_m=(Decimal("1"), Decimal("3"), Decimal("5")),
+    )
+    facility = replace(
+        base,
+        basins=(basin, *base.basins[1:]),
+        accessibility="barrierefrei, Lift zum Becken",
+        last_admission_before=timedelta(minutes=30),
+    )
+    back = codec.loads(codec.dumps(facility))
+    assert back == facility
+    assert back.basins[0].measured_temp_c == Decimal("26.5")
+    assert back.basins[0].diving_platforms_m == (Decimal("1"), Decimal("3"), Decimal("5"))
+    assert back.accessibility == "barrierefrei, Lift zum Becken"
+    assert back.last_admission_before == timedelta(minutes=30)
+
+
+def test_basin_without_slice_f_fields_serializes_without_the_new_keys(
+    facilities: tuple[Facility, ...],
+) -> None:
+    # Additive-and-invisible guard (mirrors the Slice-D lane-plan guard): a basin with neither
+    # Slice-F basin field set must add NOTHING to the payload, so pre-Slice-F gold is byte-stable.
+    dumped = codec.dumps(facilities[0])
+    assert '"measured_temp_c"' not in dumped
+    assert '"diving_platforms_m"' not in dumped
 
 
 def test_curated_city_carries_facility_level_statics(facilities: tuple[Facility, ...]) -> None:

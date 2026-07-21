@@ -9,7 +9,7 @@ directions. `dumps(f)` / `loads(s)` are exact inverses (verified by a round-trip
 
 from __future__ import annotations
 
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 
 from pydantic import BaseModel, ConfigDict
 
@@ -86,6 +86,14 @@ class StoredFacilityDTO(BaseModel):
     website: str | None
     features: list[FeatureDTO]
     lockers: list[LockerOptionDTO]
+    # Slice F additive facility-level statics. Defaulted so a pre-Slice-F gold blob (which lacks
+    # these keys) still validates under `extra="forbid"` and re-dumps faithfully. NOTE: these are
+    # emitted UNCONDITIONALLY (as `null` when unset), matching the existing facility-level optional
+    # keys (`website`, `prices`, …) — NOT popped when None. The Slice-D-style pop-when-default
+    # serializer is applied only to the deeply-nested basin/lane-plan DTOs, whose byte-stability
+    # the round-trip fixtures assert; facility-level keys carry no such byte-identity contract.
+    accessibility: str | None = None
+    last_admission_before: timedelta | None = None
 
 
 def to_stored(facility: Facility) -> StoredFacilityDTO:
@@ -116,6 +124,8 @@ def to_stored(facility: Facility) -> StoredFacilityDTO:
         website=facility.website,
         features=[mapping.feature_to_dto(f) for f in facility.features],
         lockers=[mapping.locker_to_dto(lo) for lo in facility.lockers],
+        accessibility=facility.accessibility,
+        last_admission_before=facility.last_admission_before,
     )
 
 
@@ -150,6 +160,8 @@ def from_stored(stored: StoredFacilityDTO) -> Facility:
         website=stored.website,
         features=tuple(mapping.feature_from_dto(f) for f in stored.features),
         lockers=tuple(mapping.locker_from_dto(lo) for lo in stored.lockers),
+        accessibility=stored.accessibility,
+        last_admission_before=stored.last_admission_before,
     )
 
 

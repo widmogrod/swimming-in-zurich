@@ -7,7 +7,7 @@ union so the boundary and the domain stay in one-to-one correspondence.
 
 from __future__ import annotations
 
-from datetime import date, datetime, time
+from datetime import date, datetime, time, timedelta
 from decimal import Decimal
 from typing import Annotated, Any, Literal
 
@@ -29,7 +29,9 @@ _BasinKind = Literal[
 ]
 _BasinSource = Literal["curated", "parsed_prose"]
 _PlanConfidence = Literal["complete", "partial"]
-_FeatureKind = Literal["sauna", "steam_bath", "wellness", "slide", "hot_tub"]
+_FeatureKind = Literal[
+    "sauna", "steam_bath", "wellness", "slide", "hot_tub", "terrace", "rest", "gastronomy"
+]
 _LockerCategory = Literal["wardrobe", "valuables", "laundry"]
 _LockerMechanism = Literal["coin", "key", "chip", "wristband", "other"]
 
@@ -183,8 +185,22 @@ class BasinDTO(_Strict):
     dimensions: DimensionsDTO | None = None
     lanes: int | None = None
     nominal_temp_c: Decimal | None = None
+    measured_temp_c: Decimal | None = None
+    diving_platforms_m: list[Decimal] = []
     physical_source: _BasinSource = "curated"
     lane_plan: LanePlanDTO | None = None
+
+    @model_serializer(mode="wrap")
+    def _serialize(self, handler: SerializerFunctionWrapHandler) -> dict[str, Any]:
+        # Additive-and-invisible (like Slice D): a basin with neither Slice-F field set must
+        # serialise to exactly the same bytes as a pre-Slice-F basin, so existing gold blobs
+        # round-trip byte-identically. Drop the defaults (`None` / empty list) from the payload.
+        data: dict[str, Any] = handler(self)
+        if self.measured_temp_c is None:
+            data.pop("measured_temp_c", None)
+        if not self.diving_platforms_m:
+            data.pop("diving_platforms_m", None)
+        return data
 
 
 # --- features & lockers (facility-level statics) ----------------------------------
@@ -248,6 +264,8 @@ class FacilityDTO(_Strict):
     website: str | None = None
     features: list[FeatureDTO] = []
     lockers: list[LockerOptionDTO] = []
+    accessibility: str | None = None
+    last_admission_before: timedelta | None = None
 
 
 # --- registry & calendar ----------------------------------------------------------

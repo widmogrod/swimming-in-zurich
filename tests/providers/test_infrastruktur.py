@@ -8,9 +8,21 @@ from datetime import time
 from decimal import Decimal
 
 from swimzh.domain.access import PublicSwim
-from swimzh.domain.models import Basin, BasinId, BasinKind, BasinSource, Dimensions
+from swimzh.domain.models import (
+    Basin,
+    BasinId,
+    BasinKind,
+    BasinSource,
+    Dimensions,
+    FeatureKind,
+)
 from swimzh.domain.schedule import ScheduleRule, TimeRange, Weekday
-from swimzh.providers.infrastruktur import apply_physicals, parse_infrastruktur
+from swimzh.providers.infrastruktur import (
+    apply_physicals,
+    basin_from_physical,
+    parse_features,
+    parse_infrastruktur,
+)
 
 # The real sample from the plan (Hallenbad-style WFS prose).
 SAMPLE = (
@@ -94,3 +106,43 @@ def test_apply_physicals_marks_parsed_prose_and_keeps_schedule() -> None:
     assert enriched.rules == basin.rules
     assert enriched.basin_id == basin.basin_id
     assert enriched.name == basin.name
+
+
+def test_diving_platform_heights_parsed_and_not_read_as_a_dimension() -> None:
+    (basin,) = parse_infrastruktur("Sprungbecken 1/3/5m")
+    assert basin.kind is BasinKind.DIVING
+    assert basin.diving_platforms_m == (Decimal("1"), Decimal("3"), Decimal("5"))
+    # The "5m" of the slash-list must NOT be misread as a basin length.
+    assert basin.dimensions is None
+
+
+def test_basin_from_physical_is_schedule_less_and_parsed_prose() -> None:
+    (parsed, *_rest) = parse_infrastruktur(SAMPLE)
+    basin = basin_from_physical(parsed, BasinId("altstetten-prose-0"))
+    # Decision #5 gate lives in the data: a prose basin carries NO rules, so it can never yield a
+    # /swim session, while its physicals + PARSED_PROSE tag survive for the detail view.
+    assert basin.rules == ()
+    assert basin.physical_source is BasinSource.PARSED_PROSE
+    assert basin.kind is BasinKind.LAP
+    assert basin.lanes == 6
+    assert basin.nominal_temp_c == Decimal("28")
+    assert basin.basin_id == BasinId("altstetten-prose-0")
+
+
+def test_parse_features_extracts_non_basin_amenities() -> None:
+    prose = (
+        "Nichtschwimmerbecken 30°C, Wärme-Innenbad mit Sprudelliegen, "
+        "Rutschbahn 110m, Gartensauna, Dampfbad, Sonnenterrasse, Restaurant"
+    )
+    kinds = {f.kind for f in parse_features(prose)}
+    # The basin segment is NOT a feature; the amenity segments each map to a FeatureKind.
+    assert FeatureKind.HOT_TUB in kinds  # Sprudelliegen
+    assert FeatureKind.SLIDE in kinds  # Rutschbahn
+    assert FeatureKind.SAUNA in kinds  # Gartensauna
+    assert FeatureKind.STEAM_BATH in kinds  # Dampfbad
+    assert FeatureKind.TERRACE in kinds  # Sonnenterrasse
+    assert FeatureKind.GASTRONOMY in kinds  # Restaurant
+
+
+def test_parse_features_ignores_noise() -> None:
+    assert parse_features("Nichtschwimmerbecken 30°C, Volleyballnetz, 3 Flosse") == ()

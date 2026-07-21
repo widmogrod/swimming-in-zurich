@@ -15,7 +15,7 @@ from swimzh.build.reconcile import Name, Xref
 from swimzh.build.seed import build_crosswalk, build_spine
 from swimzh.core.result import Ok
 from swimzh.domain.catalog import PoolCatalogEntry
-from swimzh.domain.models import PoolId, PoolKind
+from swimzh.domain.models import BasinSource, PoolId, PoolKind
 from swimzh.providers.curated import Dataset, load_dataset
 from swimzh.storage import catalog_json, codec
 from swimzh.storage.rows import PoolSpine
@@ -63,30 +63,54 @@ def test_curation_status_is_derived(spine: PoolSpine, dataset: Dataset) -> None:
     assert sum(1 for p in spine.pools if not codec.is_curated(p.facility_doc)) == 53
 
 
-def test_curated_pools_carry_a_facility_blob_uncurated_do_not(spine: PoolSpine) -> None:
+def test_curated_pools_carry_a_facility_blob_uncurated_carry_at_most_prose(
+    spine: PoolSpine,
+) -> None:
     for p in spine.pools:
         if codec.is_curated(p.facility_doc):
             assert p.facility_doc is not None
-        else:
-            assert p.facility_doc is None
+        elif p.facility_doc is not None:
+            # Slice F: a location-only pool may carry a SCHEDULE-LESS prose blob (auto-extracted
+            # PARSED_PROSE basins). Present but uncurated — every basin has no rule (so it yields
+            # no `/swim` option) and is tagged PARSED_PROSE (Decision #5).
+            facility = codec.loads(p.facility_doc)
+            assert not any(b.rules for b in facility.basins)
+            assert facility.basins  # a prose blob is only minted when the prose named a basin
+            assert all(b.physical_source is BasinSource.PARSED_PROSE for b in facility.basins)
 
 
 def test_facility_doc_geo_equals_committed_catalog_geo(
     spine: PoolSpine, catalog: tuple[PoolCatalogEntry, ...]
 ) -> None:
-    # B1 parity: the geo carried inside `pool.facility_doc` for every curated pool equals the
-    # committed `data/catalog.json` (= WFS) geo — compared OFFLINE against the committed catalog,
-    # never a live WFS merge. This is the coordinate the offline read path serves (Plan C deleted
-    # the `facility` table), so it must match the authoritative catalog here.
+    # B1 parity: the geo carried inside `pool.facility_doc` equals the committed `data/catalog.json`
+    # (= WFS) geo — compared OFFLINE against the committed catalog, never a live WFS merge. This is
+    # the coordinate the offline read path serves (Plan C deleted the `facility` table), so it must
+    # match the authoritative catalog here. Slice F extends the blob-bearing set beyond the 4
+    # curated pools (prose pools also stamp `entry.geo`), so the parity is asserted for every blob.
     catalog_geo = {e.pool_id: e.geo for e in catalog}
-    curated_rows = [p for p in spine.pools if p.facility_doc is not None]
-    assert len(curated_rows) == 4
-    for row in curated_rows:
-        entry_geo = catalog_geo[str(row.id)]
-        assert entry_geo is not None  # all 4 curated pools are in the catalog with coords
+    rows_with_doc = [p for p in spine.pools if p.facility_doc is not None]
+    assert len(rows_with_doc) >= 4  # the 4 curated pools, plus any Slice-F prose pools
+    for row in rows_with_doc:
         assert row.facility_doc is not None
         facility = codec.loads(row.facility_doc)
-        assert facility.geo == entry_geo
+        assert facility.geo == catalog_geo[str(row.id)]
+
+
+def test_build_extracts_parsed_prose_basins_for_a_location_only_pool(spine: PoolSpine) -> None:
+    # Slice F acceptance: Hallenbad Altstetten is in the catalog but absent from the curated
+    # dataset (location-only). Its WFS `infrastruktur` prose names swimmable basins, so the build
+    # mints a SCHEDULE-LESS facility of PARSED_PROSE basins + amenity features.
+    row = next(p for p in spine.pools if p.id == PoolId("hallenbad-altstetten"))
+    assert row.facility_doc is not None
+    facility = codec.loads(row.facility_doc)
+    assert facility.provenance.curated is False
+    assert facility.basins  # the prose named basins
+    assert all(b.physical_source is BasinSource.PARSED_PROSE for b in facility.basins)
+    assert all(b.rules == () for b in facility.basins)  # schedule-less (Decision #5)
+    # The diving basin carries its parsed platform heights, and amenity Features were emitted.
+    diving = next(b for b in facility.basins if b.diving_platforms_m)
+    assert diving.diving_platforms_m  # e.g. (1, 3, 5) from "Sprungbecken 1/3/5m"
+    assert facility.features  # sauna/steam/slide/… from the non-Becken segments
 
 
 def test_kaeferberg_kind_is_curated_wins_thermal(spine: PoolSpine) -> None:

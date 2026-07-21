@@ -254,6 +254,13 @@ def find_swim_options(
         produced = False
 
         for basin in facility.basins:
+            # Decision #5 gate: a basin with NO schedule rules has no verified session data — e.g.
+            # a `PARSED_PROSE` basin whose physicals were auto-extracted from WFS prose. It is
+            # surfaced in `/pools/{id}` detail (with its caveat) but MUST NOT yield a `/swim`
+            # option. Skip it here explicitly, before `resolve_basin` — so it neither produces an
+            # option nor a spurious "closed" status (a prose-only facility flows to `uncurated`).
+            if not basin.rules:
+                continue
             schedule = resolve_basin(facility, basin, day, calendar)
             match schedule:
                 case ClosedDay(reason):
@@ -374,6 +381,9 @@ class FacilityDetail:
     lockers: tuple[LockerOption, ...]
     provenance: Provenance
     lane_panels: tuple[BasinLanePanel, ...] = field(default_factory=tuple)
+    amenities: tuple[str, ...] = field(default_factory=tuple)
+    accessibility: str | None = None
+    last_admission_before: timedelta | None = None
 
 
 def _feature_status(
@@ -414,6 +424,9 @@ def facility_detail(facility: Facility, at: datetime, calendar: ZurichCalendar) 
         lockers=facility.lockers,
         provenance=facility.provenance,
         lane_panels=lane_panels,
+        amenities=tuple(sorted(facility.amenities)),
+        accessibility=facility.accessibility,
+        last_admission_before=facility.last_admission_before,
     )
 
 
@@ -422,8 +435,14 @@ def _uncurated_statuses(
 ) -> list[FacilityStatus]:
     """`uncurated = roster − scheduled`: every roster pool whose canonical id is not among the
     curated facilities resolved this query. Identity is known (the roster), the schedule is
-    not — so it is `uncurated`, distinct from a curated pool that is `closed` today."""
-    scheduled_ids = {str(f.identity.facility_id) for f in facilities}
+    not — so it is `uncurated`, distinct from a curated pool that is `closed` today.
+
+    "Scheduled" is a facility carrying at least one basin with a schedule rule — NOT merely a
+    facility_doc: a prose-only pool (auto-extracted PARSED_PROSE basins, no rules — Decision #5)
+    has a facility_doc but no schedule, so it stays `uncurated` here, never silently dropped."""
+    scheduled_ids = {
+        str(f.identity.facility_id) for f in facilities if any(basin.rules for basin in f.basins)
+    }
     return [
         FacilityStatus(
             facility_id=reconstruct_pool_id(row.entry.pool_id),

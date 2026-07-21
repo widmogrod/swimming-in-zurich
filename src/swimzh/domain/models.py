@@ -9,7 +9,7 @@ and access rules. Closures and public-holiday policy sit at the facility level.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from decimal import Decimal
 from enum import Enum
 from typing import NewType
@@ -144,6 +144,12 @@ class Basin:
     dimensions: Dimensions | None = None
     lanes: int | None = None  # "(6 Bahnen)"
     nominal_temp_c: Decimal | None = None  # "28°C" — a design target, NOT a live reading
+    # A distinct, actually-measured water temperature (e.g. a scraped "aktuell 26°C" reading), as
+    # opposed to the `nominal_temp_c` design target. Kept separate so the UI can show the measured
+    # value while a tooltip still carries the nominal one (decision #4). `physical_source` tags the
+    # honesty of the basin's physicals as a whole (curated vs prose-scraped).
+    measured_temp_c: Decimal | None = None
+    diving_platforms_m: tuple[Decimal, ...] = ()  # e.g. (1, 3, 5) from "Sprungbecken 1/3/5m"
     physical_source: BasinSource = BasinSource.CURATED
     lane_plan: LanePlan | None = None  # parsed per-basin Belegungsplan (static/recurring)
 
@@ -158,6 +164,9 @@ class FeatureKind(Enum):
     WELLNESS = "wellness"
     SLIDE = "slide"
     HOT_TUB = "hot_tub"
+    TERRACE = "terrace"  # Sonnenterrasse / sun deck
+    REST = "rest"  # Liegewiese / Sandstrand — a rest/sunbathing area
+    GASTRONOMY = "gastronomy"  # Restaurant / kiosk / café
 
 
 @dataclass(frozen=True, slots=True)
@@ -189,3 +198,8 @@ class Facility:
     website: str | None = None  # static (WFS `www` / official pool page)
     features: tuple[Feature, ...] = field(default_factory=tuple)
     lockers: tuple[LockerOption, ...] = field(default_factory=tuple)
+    # Free-text accessibility note ("barrierefrei", "Lift zum Becken") — static, best-effort.
+    accessibility: str | None = None
+    # How long before closing the last admission is (e.g. 30 min). `timedelta` so the UI can render
+    # it against the resolved closing time rather than hard-coding a clock.
+    last_admission_before: timedelta | None = None

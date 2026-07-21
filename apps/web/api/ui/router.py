@@ -501,13 +501,21 @@ function basinPanelHTML(bp) {
 // One basin card: name + a prominent water-temperature badge, then size/lane/kind chips, then
 // the PARSED_PROSE caveat when the physicals were auto-extracted (not hand-verified).
 function basinCardHTML(b) {
-  const temp = b.nominal_temp_c != null
-    ? `<span class="tempbadge" title="design (nominal) temperature, not a live reading">🌡 ${esc(b.nominal_temp_c)}°C</span>`
-    : '';
+  // Decision #4: a MEASURED reading wins the prominent badge; the nominal (design) value moves to
+  // the tooltip. With only a nominal value, show it (labelled "design"). No temp => no badge.
+  let temp = '';
+  if (b.measured_temp_c != null) {
+    const nom = b.nominal_temp_c != null ? ` (design ${esc(b.nominal_temp_c)}°C)` : '';
+    temp = `<span class="tempbadge" title="measured water temperature${nom}">🌡 ${esc(b.measured_temp_c)}°C</span>`;
+  } else if (b.nominal_temp_c != null) {
+    temp = `<span class="tempbadge" title="design (nominal) temperature, not a live reading">🌡 ${esc(b.nominal_temp_c)}°C</span>`;
+  }
   const chips = [];
   if (b.length_m != null)
     chips.push(`<span class="sizechip">${esc(b.length_m)}${b.width_m != null ? ' × ' + esc(b.width_m) : ''} m</span>`);
   if (b.lanes != null) chips.push(`<span class="sizechip">${esc(b.lanes)} lane${b.lanes === 1 ? '' : 's'}</span>`);
+  if (b.diving_platforms_m && b.diving_platforms_m.length)
+    chips.push(`<span class="sizechip">🤿 ${b.diving_platforms_m.map(esc).join('/')} m</span>`);
   if (b.kind) chips.push(`<span class="sizechip">${esc(b.kind)}</span>`);
   // physical_source === 'parsed_prose' => auto-extracted, unverified: say so plainly.
   const caveat = b.physical_source === 'parsed_prose'
@@ -542,9 +550,20 @@ function priceTableHTML(pt) {
   const when = pt.valid_as_of ? `<div class="muted">Prices checked ${esc(pt.valid_as_of)}</div>` : '';
   return rows + when;
 }
+// Amenity chips + accessibility + last-admission note — the facility-level statics F extracted.
+function facilityExtrasHTML(d) {
+  let h = '';
+  if (d.amenities && d.amenities.length)
+    h += '<div class="basinchips">' + d.amenities.map(a => `<span class="sizechip">${esc(a)}</span>`).join('') + '</div>';
+  if (d.accessibility)
+    h += `<div class="featurerow">♿ ${esc(d.accessibility)}</div>`;
+  if (d.last_admission_before_min != null)
+    h += `<div class="muted">Last admission ${esc(d.last_admission_before_min)} min before closing</div>`;
+  return h;
+}
 // Compose the whole facility-detail panel: basins, features, lockers, prices, then lane plans.
 function facilityDetailHTML(d) {
-  let h = '';
+  let h = facilityExtrasHTML(d);
   if (d.basins && d.basins.length)
     h += '<div class="lptitle">Basins</div>' + d.basins.map(basinCardHTML).join('');
   if (d.features && d.features.length)

@@ -21,9 +21,11 @@ from enum import Enum
 from typing import Any
 
 from swimzh.domain.geo import GeoPoint
+from swimzh.domain.lockers import LockerOption
 from swimzh.domain.models import (
     Basin,
     Facility,
+    Feature,
     Notice,
     PoolId,
     PoolIdentity,
@@ -55,6 +57,13 @@ class ScrapedAspects:
     notices: tuple[Notice, ...]
     prices: PriceTable | None
     fetched_at: datetime
+    # Slice F: richer scraped statics, folded per-aspect like the rest (defaulting empty/None so
+    # existing scrape call-sites are unchanged and a curated pool keeps its curated values).
+    features: tuple[Feature, ...] = ()
+    lockers: tuple[LockerOption, ...] = ()
+    website: str | None = None
+    amenities: frozenset[str] = frozenset()
+    accessibility: str | None = None
 
 
 class Source(Enum):
@@ -99,6 +108,11 @@ _ASPECTS: tuple[_Aspect, ...] = (
     _Aspect("closures", _is_nonempty, CURATED_WINS),
     _Aspect("notices", _is_nonempty, CURATED_WINS),
     _Aspect("geo", _is_not_none, CURATED_WINS),
+    _Aspect("features", _is_nonempty, CURATED_WINS),
+    _Aspect("lockers", _is_nonempty, CURATED_WINS),
+    _Aspect("website", _is_not_none, CURATED_WINS),
+    _Aspect("amenities", _is_nonempty, CURATED_WINS),
+    _Aspect("accessibility", _is_not_none, CURATED_WINS),
 )
 
 
@@ -127,6 +141,11 @@ def _scraped_facility(pool_id: PoolId, aspects: ScrapedAspects) -> Facility:
         public_holiday_policy=HolidayPolicy.NORMAL,
         prices=aspects.prices,
         notices=aspects.notices,
+        website=aspects.website,
+        features=aspects.features,
+        lockers=aspects.lockers,
+        amenities=aspects.amenities,
+        accessibility=aspects.accessibility,
     )
 
 

@@ -125,6 +125,10 @@ def _basin_out(basin: Basin) -> BasinOut:
         width_m=float(dims.width_m) if dims is not None and dims.width_m is not None else None,
         lanes=basin.lanes,
         nominal_temp_c=float(basin.nominal_temp_c) if basin.nominal_temp_c is not None else None,
+        measured_temp_c=(
+            float(basin.measured_temp_c) if basin.measured_temp_c is not None else None
+        ),
+        diving_platforms_m=[float(h) for h in basin.diving_platforms_m],
         physical_source=basin.physical_source.value,
     )
 
@@ -209,4 +213,11 @@ def facility_detail_out(detail: FacilityDetail, prices: PriceTable | None) -> Fa
         prices=_price_table_out(prices) if prices is not None else None,
         provenance=_provenance_out(detail.provenance),
         lane_panels=[_basin_panel_out(p) for p in detail.lane_panels],
+        amenities=list(detail.amenities),
+        accessibility=detail.accessibility,
+        last_admission_before_min=(
+            int(detail.last_admission_before.total_seconds() // 60)
+            if detail.last_admission_before is not None
+            else None
+        ),
     )
