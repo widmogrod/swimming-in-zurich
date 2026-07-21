@@ -27,9 +27,9 @@ _BELEGUNGSPLAENE = (
 # Verified per-basin Belegungsplan PDFs for the curated city indoor pools. Hints that don't
 # reconcile to a curated basin (e.g. the Variobecken, uncurated pools) are reported, not fatal.
 # The leimbach/blaesi/kaeferberg sheets are published but their pools are not yet curated: a
-# parsed Leimbach plan currently lands in `unmatched` (no curated basin), while the ragged
-# movable-floor Bläsi/Käferberg grids don't parse under the City-A4 geometry yet (Slice E) — all
-# three are best-effort and non-fatal (reported skip / unmatched), never abort a batch scrape.
+# parsed plan lands in `unmatched` (no curated basin). Since Slice E2's anchor-derived grid band
+# (no A4 legend clip) all three parse as uniform lane grids — all best-effort and non-fatal
+# (reported skip / unmatched), never aborting a batch scrape.
 CITY_BELEGUNGSPLAN_URLS: tuple[str, ...] = (
     f"{_BELEGUNGSPLAENE}/city-schwimmerbecken.pdf",
     f"{_BELEGUNGSPLAENE}/city-variobecken.pdf",

@@ -47,10 +47,10 @@ def test_scrape_lane_plans_skips_failed_pdf_best_effort() -> None:
     assert report.skipped == ("https://example.test/bad.pdf",)
 
 
-def test_scrape_lane_plans_newly_listed_basins_partial_parse_never_fatal() -> None:
-    """Of the three newly-listed basins, Leimbach and Käferberg parse under E1's page-relative
-    geometry (Käferberg is a clean 4×7 A3 grid the old A4-pixel clip had hidden); only the
-    genuinely ragged Bläsi sheet is a typed skip — never fatal, counted in `skipped`."""
+def test_scrape_lane_plans_newly_listed_basins_all_parse_never_fatal() -> None:
+    """Since Slice E2's anchor-derived grid band all three newly-listed basins parse as uniform
+    lane grids (the old A4 legend clip had dropped Bläsi's Sunday lane and hidden the sheet).
+    None is fatal — a fetch/parse failure would still be counted in `skipped`, never abort."""
     by_slug = {slug: (FIXTURES / f"{slug}.pdf").read_bytes() for slug in NEW_SLUGS}
 
     def handler(request: httpx.Request) -> httpx.Response:
@@ -64,8 +64,9 @@ def test_scrape_lane_plans_newly_listed_basins_partial_parse_never_fatal() -> No
     hints = {p.basin_hint for p in report.plans}
     assert any("Leimbach" in h for h in hints)
     assert any("Käferberg" in h for h in hints)
-    assert len(report.plans) == 2  # Leimbach + Käferberg parse under E1's page-relative band
-    assert report.skipped == ("https://example.test/blaesi.pdf",)
+    assert any("Bläsi" in h for h in hints)
+    assert len(report.plans) == 3  # all three parse under E2's per-weekday segmentation
+    assert report.skipped == ()
 
 
 def test_new_slugs_are_wired_into_the_scrape_url_list() -> None:

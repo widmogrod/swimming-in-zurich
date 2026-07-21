@@ -6,16 +6,20 @@ the basin name, the lane count ("6 Bahnen"), and a valid-from date ("ab 01. Janu
 and a right-hand legend mapping codes to owner names.
 
 `pdfplumber` reconstructs per-word bounding boxes; this module clusters the digit
-x-coordinates into 7×N lane columns and their y-coordinates into slot rows, maps each cell
-to an owner via the legend, RLE-compresses contiguous same-owner regions into
-`LaneReservation`s, then runs two invariants (per-slot lane disjointness, lanes ⊆ {1..N})
-before returning. Every failure is a typed `ProviderError` (no new variants):
+x-coordinates into lane columns and their y-coordinates into slot rows, maps each cell to an
+owner via the legend, RLE-compresses contiguous same-owner regions into `LaneReservation`s,
+then runs two invariants (per-slot lane disjointness, lanes ⊆ {1..N}) before returning. A
+clean 7×N rectangle takes a uniform fast path; a movable-floor / truncated sheet whose day
+columns are ragged is segmented **per weekday** under the detected anchors, so the lane count
+may differ by day (`LanePlan.lanes_by_weekday`) — unresolved columns are counted honestly in
+coverage (`PlanCoverage.PARTIAL`), never fabricated. Every failure is a typed `ProviderError`
+(no new variants):
 
   * missing `pdfplumber`                         -> `ProviderSpecific`
   * undecodable / no-text PDF                     -> `ParseError` ("unreadable PDF")
-  * header/legend/grid missing or layout changed  -> `SchemaMismatch`
+  * header/legend missing, no cells, no slot rows -> `SchemaMismatch`
   * disjointness / ⊆ violation                    -> `ParseError`
-  * low-but-nonzero coverage                       -> `Ok` + `PlanCoverage.PARTIAL`
+  * ragged floors / low-but-nonzero coverage      -> `Ok` + `PlanCoverage.PARTIAL`
 
 An unrecognised owner label is **never** treated as public: that lane at that slot is left
 unresolved (counted in `PlanCoverage`), preserving the three-way distinction between public
@@ -26,6 +30,7 @@ from __future__ import annotations
 
 import re
 from collections import defaultdict
+from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import date, time
 
@@ -87,17 +92,19 @@ class GridSpec:
     """Provider-local layout tolerances — page-relative, not absolute A4 pixels.
 
     The day-grid x band is derived per-PDF from the detected weekday-row anchors (see
-    `_grid_band`); the two ratios below fence off the left time-label gutter and the
-    right-hand legend as fractions of the page width, so a wider (A3) or differently
-    margined sheet scales instead of relying on hard-coded City A4 pixels.
+    `_grid_band`): the right edge follows the anchors (half a day-column past the last
+    weekday), which lands between the final lane and the right-hand legend on every observed
+    sheet. Only the left `grid_margin_ratio` fences off the time-label gutter as a page-width
+    fraction, so a wider (A3) or differently margined sheet scales instead of relying on
+    hard-coded City A4 pixels. There is deliberately no *right* page-fraction clamp: a fixed
+    fraction calibrated to City's A4 legend (645px) cut INSIDE the day band of any wider
+    A4-landscape sheet, silently dropping its rightmost (Sunday) lane column.
     """
 
     x_tol: float = 5.0  # cluster digit x-centres into lane columns
     y_tol: float = 6.0  # cluster digit tops into slot rows
-    # Page-width fractions clamping the anchor-derived band (≈ old A4 70px / 645px on the
-    # 841.92pt A4-landscape sheet); the tighter of anchor edge and page fraction wins.
-    grid_margin_ratio: float = 70.0 / _DEFAULT_PAGE_WIDTH  # left time-label gutter
-    legend_margin_ratio: float = 645.0 / _DEFAULT_PAGE_WIDTH  # right legend / valid-from
+    grid_margin_ratio: float = 70.0 / _DEFAULT_PAGE_WIDTH  # left time-label gutter fraction
+    lane_merge_ratio: float = 0.5  # merge a sub-pitch column fragment (< this × lane pitch)
     title_gap: float = 8.0  # basin title sits at least this far above the weekday row
     bahnen_gap: float = 5.0  # data cells sit at least this far below the "Bahnen" row
 
@@ -126,6 +133,7 @@ class _Header:
     bahnen_top: float
     grid_x_min: float  # left edge of the day-grid band (page-relative, anchor-derived)
     grid_x_max: float  # right edge / start of the legend gutter
+    weekday_centres: tuple[float, ...] = ()  # detected weekday-anchor x-centres, ascending
 
 
 @dataclass(frozen=True, slots=True)
@@ -153,6 +161,39 @@ def _cluster(values: list[float], tol: float) -> list[float]:
 
 def _nearest(value: float, centres: list[float]) -> int:
     return min(range(len(centres)), key=lambda i: abs(centres[i] - value))
+
+
+def _cluster_counts(values: list[float], tol: float) -> list[tuple[float, int]]:
+    """Like `_cluster`, but also carry each cluster's support (member count)."""
+    ordered = sorted(values)
+    groups: list[list[float]] = [[ordered[0]]]
+    for v in ordered[1:]:
+        if v - groups[-1][-1] <= tol:
+            groups[-1].append(v)
+        else:
+            groups.append([v])
+    return [(sum(g) / len(g), len(g)) for g in groups]
+
+
+def _lane_columns(values: list[float], spec: GridSpec) -> list[float]:
+    """Per-weekday lane column centres, robust to a lone sub-pitch fragment. Cluster the cell
+    x-centres, then fold any fragment sitting much closer than the lane pitch to its neighbour
+    (a stray digit, e.g. Leimbach's single misplaced cell) into that neighbour, weighted by
+    support — so a real 5-lane day is not mis-read as 6."""
+    columns = _cluster_counts(values, spec.x_tol)
+    if len(columns) < 3:
+        return [c for c, _ in columns]
+    gaps = sorted(columns[i + 1][0] - columns[i][0] for i in range(len(columns) - 1))
+    pitch = gaps[len(gaps) // 2]  # median gap ≈ the regular lane pitch
+    merged: list[tuple[float, int]] = [columns[0]]
+    for centre, n in columns[1:]:
+        prev_centre, prev_n = merged[-1]
+        if centre - prev_centre < spec.lane_merge_ratio * pitch:
+            total = prev_n + n
+            merged[-1] = ((prev_centre * prev_n + centre * n) / total, total)
+        else:
+            merged.append((centre, n))
+    return [c for c, _ in merged]
 
 
 # --- header -------------------------------------------------------------------------
@@ -222,13 +263,16 @@ def _weekday_row(words: list[_Word]) -> list[_Word] | None:
 
 def _grid_band(anchors: list[_Word], spec: GridSpec, page_width: float) -> tuple[float, float]:
     """Derive the day-grid x band from the weekday anchors + page width. The band spans the
-    weekday-row centres extended by half a day-column each side, then clamped to the page's
-    left gutter / right legend margins so a long trailing annotation column can't leak in."""
+    weekday-row centres extended by half a day-column each side. The left edge is additionally
+    clamped to the page's time-label gutter; the right edge is left purely anchor-derived —
+    half a day past the last weekday centre lands between the final lane and the legend on
+    every observed sheet, whereas a fixed page-fraction clamp (calibrated to City's A4 legend)
+    would cut inside a wider sheet's band and drop its rightmost lane."""
     centres = sorted(w.xc for w in anchors)
     span = centres[-1] - centres[0]
     half_day = span / (2 * (len(centres) - 1)) if len(centres) > 1 else 0.0
     lo = max(centres[0] - half_day, page_width * spec.grid_margin_ratio)
-    hi = min(centres[-1] + half_day, page_width * spec.legend_margin_ratio)
+    hi = centres[-1] + half_day
     return lo, hi
 
 
@@ -239,6 +283,7 @@ def _parse_header(
     if not anchors:
         return Err(SchemaMismatch(source=_SOURCE, detail="no weekday header row"))
     weekday_top = min(w.top for w in anchors)
+    weekday_centres = tuple(sorted(w.xc for w in anchors))
     grid_x_min, grid_x_max = _grid_band(anchors, spec, page_width)
 
     bahnen_tops = [w.top for w in words if w.text.lower() == "bahnen" and w.top > weekday_top]
@@ -263,6 +308,7 @@ def _parse_header(
             bahnen_top=bahnen_top,
             grid_x_min=grid_x_min,
             grid_x_max=grid_x_max,
+            weekday_centres=weekday_centres,
         )
     )
 
@@ -341,7 +387,81 @@ def _cell_words(
 class _Grid:
     codes: dict[tuple[Weekday, int, int], int]  # (weekday, lane, row) -> code
     slots: list[TimeRange]  # per row index
-    lane_count: int
+    lane_count: int  # uniform / nominal lane count (the RLE + invariant ceiling)
+    # Per-weekday lane counts for a ragged (movable-floor) grid; `None` when every weekday
+    # shares `lane_count`. A weekday absent from a non-`None` map falls back to `lane_count`.
+    lanes_by_weekday: Mapping[Weekday, int] | None = None
+
+
+def _weekday_bounds(header: _Header) -> list[float]:
+    """The per-weekday x cut lines: the grid's left edge, the midpoints between adjacent
+    weekday anchors, and the grid's right edge — so each weekday owns exactly the band around
+    its own anchor."""
+    centres = header.weekday_centres
+    mids = [(centres[i] + centres[i + 1]) / 2 for i in range(len(centres) - 1)]
+    return [header.grid_x_min, *mids, header.grid_x_max]
+
+
+def _uniform_grid(
+    cells: list[_Word],
+    columns: list[float],
+    slots: list[TimeRange],
+    spec: GridSpec,
+    header: _Header,
+) -> _Grid:
+    """The clean `7×lane_count` rectangle: global column clustering divided evenly across the
+    seven days. This is the pre-E2 path, kept byte-for-byte so a basin whose grid is already a
+    clean rectangle (City COMPLETE, Käferberg PARTIAL) is unchanged."""
+    rows = _cluster([w.top for w in cells], spec.y_tol)[: len(slots)]
+    codes: dict[tuple[Weekday, int, int], int] = {}
+    for w in cells:
+        col = _nearest(w.xc, columns)
+        row = _nearest(w.top, rows)
+        weekday = Weekday(col // header.lane_count)
+        lane = (col % header.lane_count) + 1
+        codes[(weekday, lane, row)] = int(w.text)
+    return _Grid(codes=codes, slots=slots, lane_count=header.lane_count)
+
+
+def _ragged_grid(
+    cells: list[_Word], slots: list[TimeRange], spec: GridSpec, header: _Header
+) -> _Grid:
+    """A movable-floor / truncated grid whose day columns don't form a clean `7×lane_count`
+    rectangle: segment the cells per weekday under the detected anchors and cluster each day's
+    lanes independently, so the lane count may differ by weekday. Unfilled columns simply
+    aren't represented (their cells stay unresolved, counted honestly in coverage — never
+    fabricated as public). When the counts genuinely differ across days, `lanes_by_weekday`
+    records the ragged shape (storing all seven days); when every day agrees it stays `None`
+    and the grid is uniform after all."""
+    rows = _cluster([w.top for w in cells], spec.y_tol)[: len(slots)]
+    bounds = _weekday_bounds(header)
+    per_day_cols: dict[Weekday, list[float]] = {}
+    for i, weekday in enumerate(Weekday):
+        lo, hi = bounds[i], bounds[i + 1]
+        day_cells = [w for w in cells if lo <= w.xc < hi]
+        per_day_cols[weekday] = _lane_columns([w.xc for w in day_cells], spec) if day_cells else []
+
+    counts = {wd: len(cols) for wd, cols in per_day_cols.items()}
+    lane_count = max(header.lane_count, max(counts.values()))
+    ragged = len(set(counts.values())) > 1
+
+    codes: dict[tuple[Weekday, int, int], int] = {}
+    for i, weekday in enumerate(Weekday):
+        cols = per_day_cols[weekday]
+        if not cols:
+            continue
+        lo, hi = bounds[i], bounds[i + 1]
+        for w in cells:
+            if lo <= w.xc < hi:
+                lane = _nearest(w.xc, cols) + 1
+                row = _nearest(w.top, rows)
+                codes[(weekday, lane, row)] = int(w.text)
+    return _Grid(
+        codes=codes,
+        slots=slots,
+        lane_count=lane_count,
+        lanes_by_weekday=dict(counts) if ragged else None,
+    )
 
 
 def _segment_grid(
@@ -351,15 +471,6 @@ def _segment_grid(
     if not cells:
         return Err(SchemaMismatch(source=_SOURCE, detail="no grid cells"))
 
-    columns = _cluster([w.xc for w in cells], spec.x_tol)
-    expected = 7 * header.lane_count
-    if len(columns) != expected:
-        return Err(
-            SchemaMismatch(
-                source=_SOURCE,
-                detail=f"grid has {len(columns)} columns, expected 7×{header.lane_count}",
-            )
-        )
     rows = _cluster([w.top for w in cells], spec.y_tol)
     labels = _time_labels(words, header.grid_x_min)
     if len(labels) < len(rows):
@@ -371,14 +482,12 @@ def _segment_grid(
         )
     slots = labels[: len(rows)]
 
-    codes: dict[tuple[Weekday, int, int], int] = {}
-    for w in cells:
-        col = _nearest(w.xc, columns)
-        row = _nearest(w.top, rows)
-        weekday = Weekday(col // header.lane_count)
-        lane = (col % header.lane_count) + 1
-        codes[(weekday, lane, row)] = int(w.text)
-    return Ok(_Grid(codes=codes, slots=slots, lane_count=header.lane_count))
+    columns = _cluster([w.xc for w in cells], spec.x_tol)
+    if len(columns) == 7 * header.lane_count:
+        return Ok(_uniform_grid(cells, columns, slots, spec, header))
+    # A ragged / truncated grid (movable floor, clipped edge column) no longer aborts as a
+    # `SchemaMismatch`: segment it per weekday and let unresolved cells surface as PARTIAL.
+    return Ok(_ragged_grid(cells, slots, spec, header))
 
 
 # --- RLE + coverage -----------------------------------------------------------------
@@ -427,6 +536,14 @@ def _column_runs(
     return runs, resolved, unresolved
 
 
+def _lanes_on(grid: _Grid, weekday: Weekday) -> int:
+    """The lane count in force on `weekday`: the per-weekday override for a ragged grid,
+    else the uniform `lane_count`."""
+    if grid.lanes_by_weekday is None:
+        return grid.lane_count
+    return grid.lanes_by_weekday.get(weekday, grid.lane_count)
+
+
 def _resolve(grid: _Grid, legend: dict[int, str]) -> _Resolved:
     # (time, access) -> lanes, per weekday; then merge equal (time, lanes, access) across days.
     per_day: dict[Weekday, dict[tuple[TimeRange, SessionAccess], set[int]]] = defaultdict(
@@ -435,7 +552,7 @@ def _resolve(grid: _Grid, legend: dict[int, str]) -> _Resolved:
     resolved_total = 0
     unresolved_lanes: set[int] = set()
     for weekday in Weekday:
-        for lane in range(1, grid.lane_count + 1):
+        for lane in range(1, _lanes_on(grid, weekday) + 1):
             runs, resolved, unresolved = _column_runs(grid, legend, weekday, lane)
             resolved_total += resolved
             if unresolved:
@@ -452,7 +569,9 @@ def _resolve(grid: _Grid, legend: dict[int, str]) -> _Resolved:
         LaneReservation(weekdays=frozenset(weekdays), time=span, lanes=lanes, access=access)
         for (span, lanes, access), weekdays in merged.items()
     )
-    cells_total = len(grid.slots) * 7 * grid.lane_count
+    # Count cells honestly: a ragged grid contributes each weekday's own lane count, so a
+    # movable-floor day with fewer lanes never inflates the denominator.
+    cells_total = len(grid.slots) * sum(_lanes_on(grid, wd) for wd in Weekday)
     return _Resolved(
         reservations=reservations,
         cells_total=cells_total,
@@ -549,7 +668,7 @@ def parse_belegungsplan(
     grid = grid_result.value
 
     resolved = _resolve(grid, legend)
-    invariant_error = _check_invariants(resolved.reservations, header.lane_count)
+    invariant_error = _check_invariants(resolved.reservations, grid.lane_count)
     if invariant_error is not None:
         return Err(invariant_error)
 
@@ -561,11 +680,12 @@ def parse_belegungsplan(
         unresolved_lanes=resolved.unresolved_lanes,
     )
     plan = LanePlan(
-        lane_count=header.lane_count,
+        lane_count=grid.lane_count,
         reservations=resolved.reservations,
         valid_from=header.valid_from,
         coverage=coverage,
         fetched_at=None,
+        lanes_by_weekday=grid.lanes_by_weekday,
     )
     return Ok(ParsedPlan(basin_hint=header.basin_hint, plan=plan))
 

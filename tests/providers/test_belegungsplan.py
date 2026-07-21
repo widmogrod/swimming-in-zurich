@@ -145,6 +145,13 @@ def test_city_reservations_are_byte_identical_golden(city_bytes: bytes) -> None:
 # failed parse is still downgraded by scrape_lane_plans to a reported skip, never fatal.
 
 
+# Leimbach parses UNIFORM-5. Its 5th Sunday lane (x≈648) sits just right of City's old A4
+# legend clamp, so the pre-E2 parser silently dropped it AND a stray Wednesday cell had
+# mis-shaped the grid; the E2 anchor-derived band restores the lane and the fragment-merge
+# absorbs the stray, so this golden differs from the (buggy) E1 digest. See the header note.
+_LEIMBACH_GOLDEN_DIGEST = "5be0f339fbbdfca3f0c96a2490d18f8f4cf19a474697355bdda82ccf41c2f570"
+
+
 def test_leimbach_real_fixture_parses_to_partial_plan() -> None:
     result = parse_belegungsplan((FIXTURES / "leimbach.pdf").read_bytes())
     assert isinstance(result, Ok), result
@@ -158,22 +165,59 @@ def test_leimbach_real_fixture_parses_to_partial_plan() -> None:
     assert _check_invariants(parsed.plan.reservations, parsed.plan.lane_count) is None
 
 
-def test_blaesi_real_fixture_is_schema_mismatch_until_slice_e() -> None:
+def test_leimbach_reservations_are_uniform_five_golden() -> None:
+    # Leimbach is uniform 5 lanes every day (its Sunday 5th lane restored by the anchor band).
+    # Pin the exact reservation set + `lanes_by_weekday=None` so the shape can't silently drift.
+    plan = parse_belegungsplan((FIXTURES / "leimbach.pdf").read_bytes()).unwrap_or_raise().plan
+    assert plan.lanes_by_weekday is None
+    assert _reservation_digest(plan.reservations) == _LEIMBACH_GOLDEN_DIGEST
+
+
+def test_blaesi_real_fixture_parses_uniform_five_lanes() -> None:
+    # E2 net-new parse. Bläsi's real Sunday 5th lane (x≈657) sits just right of the old City-A4
+    # legend clamp, which had dropped it and made the sheet look 34-column ragged. With the
+    # anchor-derived band the sheet is UNIFORM 5 lanes every day — `lanes_by_weekday` stays
+    # None (the earlier {Sun:4} shape was a clip artifact, not a movable floor). PARTIAL: some
+    # cells carry owners the legend doesn't resolve.
     result = parse_belegungsplan((FIXTURES / "blaesi.pdf").read_bytes())
-    assert isinstance(result, Err)
-    assert isinstance(result.error, SchemaMismatch)
-    assert "columns" in result.error.detail  # genuinely ragged movable-floor grid
+    assert isinstance(result, Ok), result
+    parsed = result.value
+    assert "Bläsi" in parsed.basin_hint
+    assert parsed.plan.lane_count == 5
+    assert parsed.plan.lanes_by_weekday is None
+    assert parsed.plan.coverage.cells_total == 32 * 7 * 5  # a full uniform-5 grid, Sunday incl.
+    assert parsed.plan.coverage.confidence is PlanConfidence.PARTIAL
+    assert _check_invariants(parsed.plan.reservations, parsed.plan.lane_count) is None
 
 
-def test_kaeferberg_real_fixture_parses_under_page_relative_geometry() -> None:
-    # E1 divergence: Käferberg is a clean 4×7 A3 grid the old A4-pixel clip accidentally hid.
-    # A faithful page-relative refactor cannot both keep City byte-identical AND fail this
-    # sheet (City's grid reaches a *larger* page-fraction than Käferberg's), so E1 parses it.
+def test_variobecken_real_fixture_parses_uniform_four_lanes() -> None:
+    # E2 net-new parse. The City Variobecken's real Sunday 4th lane (x≈661, 32/32 public cells)
+    # sits just right of the old A4 legend clamp, which dropped it and falsely reported a 4/3
+    # movable floor. With the anchor-derived band the sheet is UNIFORM 4 lanes every day —
+    # `lanes_by_weekday` stays None — and every cell resolves, so it is genuinely COMPLETE
+    # (a true COMPLETE now, not a COMPLETE hiding a silently-clipped public lane).
+    result = parse_belegungsplan((FIXTURES / "city-variobecken.pdf").read_bytes())
+    assert isinstance(result, Ok), result
+    parsed = result.value
+    assert "Vario" in parsed.basin_hint
+    assert parsed.plan.lane_count == 4
+    assert parsed.plan.lanes_by_weekday is None
+    assert parsed.plan.coverage.cells_total == 32 * 7 * 4  # full uniform-4 grid, Sunday incl.
+    assert parsed.plan.coverage.cells_resolved == parsed.plan.coverage.cells_total
+    assert parsed.plan.coverage.confidence is PlanConfidence.COMPLETE
+    assert _check_invariants(parsed.plan.reservations, parsed.plan.lane_count) is None
+
+
+def test_kaeferberg_real_fixture_parses_uniform_four_lanes() -> None:
+    # E1 made Käferberg parse (clean 4×7 A3 grid the old A4-pixel clip had hidden). E2 pins its
+    # now-parsing shape: it takes the uniform fast path (28 = 7×4 columns), so despite being an
+    # A3 sheet it is uniform — `lanes_by_weekday` stays None — not ragged this term.
     result = parse_belegungsplan((FIXTURES / "kaeferberg.pdf").read_bytes())
     assert isinstance(result, Ok), result
     parsed = result.value
     assert "Käferberg" in parsed.basin_hint
     assert parsed.plan.lane_count == 4
+    assert parsed.plan.lanes_by_weekday is None
     assert parsed.plan.coverage.confidence is PlanConfidence.PARTIAL
     assert _check_invariants(parsed.plan.reservations, parsed.plan.lane_count) is None
 
@@ -288,15 +332,17 @@ def test_parse_header_missing_title_is_schema_mismatch() -> None:
 
 def test_gridspec_has_no_absolute_a4_pixel_bands() -> None:
     # The A4 pixel constants (central_x / legend_x_min absolute values) are gone; the band
-    # is derived page-relative, so only ratios/tolerances survive on GridSpec.
+    # is derived page-relative, so only ratios/tolerances survive on GridSpec. There is no
+    # right-hand legend page-fraction (it clipped wider sheets) — only the left gutter.
     spec = GridSpec()
     assert not hasattr(spec, "central_x")
     assert not hasattr(spec, "legend_x_min")
-    assert 0.0 < spec.grid_margin_ratio < spec.legend_margin_ratio < 1.0
+    assert not hasattr(spec, "legend_margin_ratio")
+    assert 0.0 < spec.grid_margin_ratio < 1.0
 
 
 def test_grid_band_is_derived_from_weekday_anchors() -> None:
-    # Seven anchors spaced 50 apart (centres 200..500) sit clear of both page margins, so the
+    # Seven anchors spaced 50 apart (centres 200..500) sit clear of the left margin, so the
     # band is the pure anchor derivation: [c0 - half_day, c6 + half_day], half_day = span/12.
     anchors = [_word("x", 200.0 + 50 * i, 60.0, width=0.0) for i in range(7)]
     lo, hi = _grid_band(anchors, GridSpec(), page_width=841.92)
@@ -304,12 +350,12 @@ def test_grid_band_is_derived_from_weekday_anchors() -> None:
     assert hi == pytest.approx(525.0)  # 500 + 300/12
 
 
-def test_grid_band_right_edge_clamped_by_page_legend_margin() -> None:
-    # Anchors whose half-day extension would overrun the legend gutter get clamped to it
-    # (this is exactly what fences off Leimbach's trailing annotation column).
-    anchors = [_word("x", 120.0 + 90 * i, 60.0, width=0.0) for i in range(7)]
+def test_grid_band_right_edge_follows_anchors_not_a_page_fraction() -> None:
+    # The right edge is purely anchor-derived (c6 + half_day) — never clamped to a City-A4
+    # legend fraction, which would cut INSIDE a wider sheet's band and drop its Sunday lane.
+    anchors = [_word("x", 120.0 + 90 * i, 60.0, width=0.0) for i in range(7)]  # centres 120..660
     _lo, hi = _grid_band(anchors, GridSpec(), page_width=841.92)
-    assert hi == pytest.approx(841.92 * (645.0 / 841.92))  # legend margin, not c6 + 45
+    assert hi == pytest.approx(660.0 + 540.0 / 12)  # c6 + half_day = 705, NOT the old 645 clamp
 
 
 def test_weekday_row_recognizes_abbreviated_names() -> None:
@@ -353,6 +399,7 @@ def _header(lane_count: int = 6) -> _Header:
         bahnen_top=74.0,
         grid_x_min=70.0,
         grid_x_max=645.0,
+        weekday_centres=tuple(110.0 + 80.0 * i for i in range(7)),  # 7 evenly-spaced anchors
     )
 
 
@@ -363,13 +410,42 @@ def test_segment_grid_no_cells_is_schema_mismatch() -> None:
     assert "no grid cells" in result.error.detail
 
 
-def test_segment_grid_wrong_column_count_is_schema_mismatch() -> None:
-    # Three digit columns where 7×6 = 42 are required.
-    cells = [_word("1", 100.0 + 20 * c, 100.0, width=1.0) for c in range(3)]
-    result = _segment_grid(cells, GridSpec(), _header())
-    assert isinstance(result, Err)
-    assert isinstance(result.error, SchemaMismatch)
-    assert "columns" in result.error.detail
+def _ragged_grid_words(sunday_lanes: int = 1) -> list[_Word]:
+    """A 2-lane-nominal grid across 2 slots where Sunday carries `sunday_lanes` lanes — a
+    deliberately ragged/truncated day grid (E2). Two left-gutter time-label rows name the
+    slots; every cell is code 1 (public)."""
+    words: list[_Word] = []
+    for row, top in enumerate((100.0, 120.0)):
+        for weekday, centre in enumerate(110.0 + 80.0 * i for i in range(7)):
+            lanes = sunday_lanes if weekday == 6 else 2
+            offsets = [0.0] if lanes == 1 else [-8.0, 8.0]
+            for off in offsets:
+                words.append(_word("1", centre + off, top, width=1.0))
+        label = "06.00" if row == 0 else "06.30"
+        second = "06.30" if row == 0 else "07.00"
+        words += [_word(label, 20.0, top), _word("-", 45.0, top), _word(second, 52.0, top)]
+    return words
+
+
+def test_segment_grid_ragged_columns_resolve_per_weekday_not_schema_mismatch() -> None:
+    # A grid whose day columns don't form a clean 7×lane_count rectangle (Sunday truncated to
+    # one lane) no longer aborts as a SchemaMismatch — it segments per weekday and records the
+    # ragged shape. This is exactly the movable-floor case E2 unlocks.
+    result = _segment_grid(_ragged_grid_words(sunday_lanes=1), GridSpec(), _header(lane_count=2))
+    assert isinstance(result, Ok), result
+    grid = result.value
+    assert grid.lanes_by_weekday is not None
+    assert grid.lanes_by_weekday[Weekday.SUNDAY] == 1
+    assert grid.lanes_by_weekday[Weekday.MONDAY] == 2
+
+
+def test_ragged_grid_counts_cells_honestly_and_is_partial() -> None:
+    # The truncated Sunday lane contributes fewer cells to the denominator (never fabricated),
+    # so coverage stays honest: 2 slots × (6 days × 2 + 1 Sunday lane) = 26 cells, all public.
+    grid = _segment_grid(_ragged_grid_words(sunday_lanes=1), GridSpec(), _header(lane_count=2))
+    resolved = _resolve(grid.unwrap_or_raise(), {1: "Öffentlichkeit"})
+    assert resolved.cells_total == 2 * (6 * 2 + 1)
+    assert resolved.cells_resolved == resolved.cells_total
 
 
 def test_segment_grid_missing_time_labels_is_schema_mismatch() -> None:
