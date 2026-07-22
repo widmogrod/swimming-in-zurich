@@ -231,6 +231,7 @@ Appended by /dev:implement after each slice — never rewritten. Newest row last
 | date | slice | status | divergence from plan | tech debt created | human review? |
 |------|-------|--------|----------------------|-------------------|---------------|
 | 2026-07-22 | S1 | done | worktree relocated into main checkout (subagent cwd targeted the main repo, not the worktree); `index_bound_plans` two-plans→one-basin guard tested directly (structurally unreachable via the single-basin join until S2) | none (2 non-blocking critic notes deferred to S2) | yes |
+| 2026-07-22 | S2 | done | ambiguous section token (header matching >1 declared token) fails safe to `UnboundPlan` — STRICTER than the plan's "can misroute" compromise; concept-note wording to be reversed in S3 | none | yes |
 
 ## Decisions & divergences
 
@@ -287,6 +288,20 @@ Appended by /dev:implement after each slice — never rewritten. Newest row last
   arm is covered only via `index_bound_plans` directly — add an `attach`-level test once S2 makes it reachable;
   (2) `resolve_all`'s `Err` arm is structurally unreachable after `_Ambiguous` retired — revisit when a new fatal
   `SourceRef` cause appears.
+
+- **2026-07-22 — S2 landed (stacked-sheet `section` routing).** `bind_plans` now routes each parsed section of a
+  multi-basin sheet to the binding whose declared `section` token is contained in `normalize(basin_hint)`, with
+  the count-guard (extra parsed sections → `UnboundPlan`). Oerlikon Sprungbecken attaches via the combined
+  nichtschwimmer-sprungbecken sheet; Nichtschwimmer surfaces as exactly one honest `UnboundPlan`. **Divergence
+  (accepted, stronger than plan):** an *ambiguous* section — a parsed header containing >1 declared token —
+  fails safe to `UnboundPlan` rather than the "can misroute" hazard the Honest-compromises section documented;
+  the critic empirically confirmed (overlapping `becken`/`sprungbecken`, `schwimmer`/`nichtschwimmer`) that **no
+  input binds the wrong basin**. Consequence: the concept note's "containment can misroute" wording is now false
+  and must be **reversed in S3** (doc-reversal is already S3 scope). Also closed S1 deferred note (1): the
+  two-plans→one-basin fatal `Err` is now reachable and tested through `attach_lane_plans`. Two critic suggestions
+  folded into S3's audit scope: (a) an audit line for a declared section token that matched **no** parsed header
+  (a curated basin silently left `None` by a parser header regression); (b) optionally use realistic headers in
+  the golden-set routing assertion so it is not self-fulfilling.
 
 ## Summary
 

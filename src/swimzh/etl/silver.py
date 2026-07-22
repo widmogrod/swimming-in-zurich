@@ -24,6 +24,7 @@ from dataclasses import dataclass, replace
 from datetime import date, datetime
 
 from swimzh.core.errors import ProviderError, SchemaMismatch
+from swimzh.core.normalize import normalize
 from swimzh.core.result import Err, Ok, Result
 from swimzh.domain.lane_plan import LanePlan
 from swimzh.domain.models import (
@@ -109,15 +110,82 @@ def build_url_bindings(
     return Ok({url: tuple(bs) for url, bs in bindings.items()})
 
 
+def _bind_single(
+    url: str,
+    plans: Sequence[ParsedPlan],
+    binding: _Binding,
+    bound: list[BoundPlan],
+    unbound: list[UnboundPlan],
+) -> None:
+    """Single-basin arm: one whole-sheet binding (`section is None`). The plan binds directly and
+    `basin_hint` is IGNORED (header-independence). Structural count-guard: if the sheet split into
+    several parsed sections, never positionally misbind — surface every fragment as unbound."""
+    if len(plans) == 1:
+        bound.append(BoundPlan(binding.pool_id, binding.basin_id, plans[0].plan))
+        return
+    unbound.extend(
+        UnboundPlan(
+            url, p.basin_hint, f"single-basin source split into {len(plans)} parsed sections"
+        )
+        for p in plans
+    )
+
+
+def _bind_stacked(
+    url: str,
+    plans: Sequence[ParsedPlan],
+    bindings: Sequence[_Binding],
+    bound: list[BoundPlan],
+    unbound: list[UnboundPlan],
+) -> None:
+    """Stacked arm: a multi-basin sheet shares one URL across sections, so the URL alone cannot
+    discriminate. Route each parsed section to the binding whose declared `section` token appears
+    (containment) in `normalize(basin_hint)` — a scoped text match, not a pure id join.
+
+    Fail-safe on every ambiguity, never a silent misbind:
+      * a parsed section matching no declared token  -> UnboundPlan (the structural count-guard:
+        parser-split sections beyond the claimed bindings surface here, never positionally bound);
+      * a parsed section matching more than one token -> UnboundPlan (overlapping tokens — one is a
+        substring of the header — are ambiguous, so we decline to guess);
+      * a declared section token matching no parsed header contributes nothing (the binding is
+        simply absent from `bound`).
+    """
+    tokens: list[tuple[str, _Binding]] = []
+    for binding in bindings:
+        if binding.section is not None:
+            tokens.append((normalize(binding.section), binding))
+    for p in plans:
+        hint = normalize(p.basin_hint)
+        matches = [b for token, b in tokens if token and token in hint]
+        if len(matches) == 1:
+            bound.append(BoundPlan(matches[0].pool_id, matches[0].basin_id, p.plan))
+        elif not matches:
+            unbound.append(
+                UnboundPlan(
+                    url, p.basin_hint, "no declared section token matches this parsed header"
+                )
+            )
+        else:
+            unbound.append(
+                UnboundPlan(
+                    url, p.basin_hint, "parsed header matches multiple section tokens (ambiguous)"
+                )
+            )
+
+
 def bind_plans(
     parsed_plans: Sequence[ParsedPlan],
     url_bindings: Mapping[str, tuple[_Binding, ...]],
 ) -> tuple[tuple[BoundPlan, ...], tuple[UnboundPlan, ...]]:
-    """Join parsed plans to bindings, keyed on `source_url`. S1 implements the **single-basin**
-    arm only (one binding, no `section`): the plan binds directly and the `basin_hint` is
-    ignored. A URL no basin claims, a stacked binding (deferred to S2 section routing), or a
-    parser split that produced a count other than the single claimed basin all surface as a
-    non-fatal `UnboundPlan` — never a silent positional misbind."""
+    """Join parsed plans to bindings, keyed on `source_url`.
+
+    * single-basin (one binding, `section is None`) -> bind directly, `basin_hint` ignored;
+    * stacked (any binding carries a `section` token) -> route each parsed section to the binding
+      whose token appears in `normalize(basin_hint)`, with the structural count-guard;
+    * a URL no basin claims -> every plan is a non-fatal `UnboundPlan`.
+
+    Never a silent positional misbind: a count/token mismatch always surfaces as a typed
+    `UnboundPlan`, and a token that matches no section simply contributes no binding."""
     by_url: dict[str, list[ParsedPlan]] = defaultdict(list)
     for plan in parsed_plans:
         by_url[plan.source_url].append(plan)
@@ -130,28 +198,10 @@ def bind_plans(
             unbound.extend(
                 UnboundPlan(url, p.basin_hint, "no basin declares this source url") for p in plans
             )
-            continue
-        if len(bindings) == 1 and bindings[0].section is None:
-            if len(plans) == 1:
-                binding = bindings[0]
-                bound.append(BoundPlan(binding.pool_id, binding.basin_id, plans[0].plan))
-            else:
-                # Structural count-guard: a single-basin binding but the sheet split into several
-                # sections — never positionally misbind, surface every fragment as unbound.
-                unbound.extend(
-                    UnboundPlan(
-                        url,
-                        p.basin_hint,
-                        f"single-basin source split into {len(plans)} parsed sections",
-                    )
-                    for p in plans
-                )
-            continue
-        # Stacked (N bindings with section tokens): section routing lands in S2.
-        unbound.extend(
-            UnboundPlan(url, p.basin_hint, "stacked-sheet section routing not available")
-            for p in plans
-        )
+        elif len(bindings) == 1 and bindings[0].section is None:
+            _bind_single(url, plans, bindings[0], bound, unbound)
+        else:
+            _bind_stacked(url, plans, bindings, bound, unbound)
     return tuple(bound), tuple(unbound)
 
 

@@ -78,6 +78,17 @@ def _url(dataset: Dataset, pool_id: str, basin_id: str) -> str:
     return _declared(dataset)[(pool_id, basin_id)]
 
 
+def _sources(dataset: Dataset) -> list[tuple[str, str | None]]:
+    """Every declared `(url, section)` — the extraction universe. A stacked source carries a
+    `section` token; a single-basin source carries `None`."""
+    out: list[tuple[str, str | None]] = []
+    for facility in dataset.facilities:
+        for basin in facility.basins:
+            if basin.lane_plan_source is not None:
+                out.append((basin.lane_plan_source.url, basin.lane_plan_source.section))
+    return out
+
+
 # --- URL-keyed inner join (header-independence) --------------------------------------
 
 
@@ -116,7 +127,8 @@ def test_city_and_oerlikon_50m_still_attach(dataset: Dataset) -> None:
     )
     assert isinstance(city_lap.lane_plan, LanePlan)
     assert isinstance(oerlikon_lap.lane_plan, LanePlan)
-    # The un-declared Oerlikon Sprungbecken is untouched (its stacked sheet is S2).
+    # Oerlikon Sprungbecken declares a (stacked) source, but its combined sheet was not fed here
+    # (no parsed plan, no miss for that URL), so it stays untouched.
     sprung = next(
         b
         for b in by_id[PoolId("hallenbad-oerlikon")].basins
@@ -144,8 +156,11 @@ def test_leimbach_blaesi_kaeferberg_now_attach(dataset: Dataset) -> None:
 
 def test_golden_set_pins_the_exact_bound_set(dataset: Dataset) -> None:
     # Feed one parsed plan per declared source; the bound set is EXACTLY the declared basins.
-    declared = _declared(dataset)
-    parsed = [_parsed(url) for url in declared.values()]
+    # A stacked source (Oerlikon Sprungbecken) needs its `section` token in the parsed header to
+    # route; a single-basin source binds by URL regardless of header.
+    parsed = [
+        _parsed(url, basin_hint=(section or "anything")) for url, section in _sources(dataset)
+    ]
     result = attach_lane_plans(dataset.facilities, parsed, {}, FETCHED_AT)
     assert isinstance(result, Ok)
     bound = {
@@ -157,6 +172,7 @@ def test_golden_set_pins_the_exact_bound_set(dataset: Dataset) -> None:
     assert bound == {
         ("hallenbad-city", "city-50m"),
         ("hallenbad-oerlikon", "oerlikon-50m"),
+        ("hallenbad-oerlikon", "oerlikon-sprungbecken"),
         ("hallenbad-bungertwies", "bungertwies-25m"),
         ("hallenbad-leimbach", "leimbach-25m"),
         ("hallenbad-blaesi", "blaesi-25m"),
@@ -239,9 +255,9 @@ def test_single_basin_source_split_into_many_is_count_guarded_to_unbound() -> No
     assert all("split into 2" in u.reason for u in result.value.unbound)
 
 
-def test_bind_plans_defers_stacked_multi_binding_urls_to_unbound() -> None:
-    # A URL with N section-bindings (a stacked sheet) is NOT routed in S1 (section routing is S2):
-    # the plans surface as unbound with a deferral reason, never a guessed positional bind.
+def test_stacked_sheet_routes_each_section_by_its_declared_token() -> None:
+    # A stacked sheet with two section-bindings routes each parsed section to the binding whose
+    # `section` token appears (containment) in the parsed header — not by position.
     url = "https://example.test/stacked.pdf"
     bindings = {
         url: (
@@ -249,9 +265,125 @@ def test_bind_plans_defers_stacked_multi_binding_urls_to_unbound() -> None:
             _Binding(PoolId("p"), BasinId("p-b"), "sprungbecken"),
         )
     }
-    bound, unbound = bind_plans([_parsed(url, basin_hint="Sprungbecken")], bindings)
+    parsed = [_parsed(url, basin_hint="Sprungbecken"), _parsed(url, basin_hint="Nichtschwimmer")]
+    bound, unbound = bind_plans(parsed, bindings)
+    assert unbound == ()
+    routed = {(bp.pool_id, bp.basin_id) for bp in bound}
+    assert routed == {(PoolId("p"), BasinId("p-b")), (PoolId("p"), BasinId("p-a"))}
+
+
+def test_scrape_lanes_attaches_oerlikon_sprungbecken_via_section(dataset: Dataset) -> None:
+    # Acceptance: the combined Nichtschwimmer-/Sprungbecken sheet attaches Oerlikon Sprungbecken
+    # via its declared `section` token, while the still-uncurated Nichtschwimmer section (no
+    # binding) surfaces as EXACTLY ONE honest UnboundPlan — never a silent misbind.
+    url = _url(dataset, "hallenbad-oerlikon", "oerlikon-sprungbecken")
+    parsed = [
+        _parsed(url, basin_hint="Oerlikon Nichtschwimmer"),
+        _parsed(url, basin_hint="Oerlikon Sprungbecken"),
+    ]
+    result = attach_lane_plans(dataset.facilities, parsed, {}, FETCHED_AT)
+    assert isinstance(result, Ok), result
+    oerlikon = next(
+        f for f in result.value.facilities if str(f.identity.facility_id) == "hallenbad-oerlikon"
+    )
+    sprung = next(b for b in oerlikon.basins if b.basin_id == BasinId("oerlikon-sprungbecken"))
+    assert isinstance(sprung.lane_plan, LanePlan)
+    assert sprung.lane_plan.fetched_at == FETCHED_AT
+    # The Nichtschwimmer section binds nothing (no basin declares it) and is reported once.
+    assert len(result.value.unbound) == 1
+    assert "Nichtschwimmer" in result.value.unbound[0].basin_hint
+
+
+def test_wrong_section_token_binds_nothing_fail_safe() -> None:
+    # Acceptance: a typo'd / wrong `section` token matches no parsed header, so the binding
+    # contributes nothing (the basin stays None) and the parsed section is reported unbound —
+    # never guessed onto the wrong basin.
+    url = "https://example.test/stacked.pdf"
+    facilities = [_facility("p", (_basin("p-a", url, section="sprngbecken"),))]  # typo
+    parsed = [_parsed(url, basin_hint="Sprungbecken")]
+    result = attach_lane_plans(facilities, parsed, {}, FETCHED_AT)
+    assert isinstance(result, Ok)
+    assert all(b.lane_plan is None for f in result.value.facilities for b in f.basins)
+    assert len(result.value.unbound) == 1
+    assert "no declared section token" in result.value.unbound[0].reason
+
+
+def test_parser_split_count_exceeds_claimed_bindings_yields_typed_miss() -> None:
+    # Acceptance / structural count-guard: the parser splits the sheet into MORE sections than the
+    # claimed bindings; the extra section matches no declared token and surfaces as a typed miss
+    # (UnboundPlan), while the two claimed sections still bind by token.
+    url = "https://example.test/stacked.pdf"
+    bindings = {
+        url: (
+            _Binding(PoolId("p"), BasinId("p-a"), "teil-a"),
+            _Binding(PoolId("p"), BasinId("p-b"), "teil-b"),
+        )
+    }
+    parsed = [
+        _parsed(url, basin_hint="Teil-A"),
+        _parsed(url, basin_hint="Teil-B"),
+        _parsed(url, basin_hint="Teil-C surprise extra"),
+    ]
+    bound, unbound = bind_plans(parsed, bindings)
+    assert {(bp.pool_id, bp.basin_id) for bp in bound} == {
+        (PoolId("p"), BasinId("p-a")),
+        (PoolId("p"), BasinId("p-b")),
+    }
+    assert len(unbound) == 1
+    assert "Teil-C" in unbound[0].basin_hint
+
+
+def test_real_oerlikon_section_tokens_do_not_collide() -> None:
+    # Honest-compromise guard (documents the containment behaviour): the real Oerlikon tokens
+    # `nichtschwimmer` / `sprungbecken` are NOT substrings of each other's header, so each parsed
+    # section binds to exactly one basin. If a future edit introduced overlapping tokens this
+    # would break — the collision is caught here rather than silently misrouting.
+    url = "https://example.test/oerlikon.pdf"
+    bindings = {
+        url: (
+            _Binding(PoolId("p"), BasinId("nicht"), "nichtschwimmer"),
+            _Binding(PoolId("p"), BasinId("sprung"), "sprungbecken"),
+        )
+    }
+    nicht_bound, nicht_unbound = bind_plans([_parsed(url, basin_hint="Nichtschwimmer")], bindings)
+    assert nicht_unbound == ()
+    assert [(bp.pool_id, bp.basin_id) for bp in nicht_bound] == [(PoolId("p"), BasinId("nicht"))]
+    sprung_bound, sprung_unbound = bind_plans([_parsed(url, basin_hint="Sprungbecken")], bindings)
+    assert sprung_unbound == ()
+    assert [(bp.pool_id, bp.basin_id) for bp in sprung_bound] == [(PoolId("p"), BasinId("sprung"))]
+
+
+def test_overlapping_section_tokens_fail_safe_to_unbound() -> None:
+    # Honest-compromise hazard made explicit: if one token is a substring of another section's
+    # header (e.g. `schwimmer` ⊂ "Nichtschwimmer"), the "Nichtschwimmer" header matches BOTH
+    # tokens. Rather than positionally guess, the ambiguous section fails safe to UnboundPlan.
+    url = "https://example.test/collide.pdf"
+    bindings = {
+        url: (
+            _Binding(PoolId("p"), BasinId("schwimmer"), "schwimmer"),
+            _Binding(PoolId("p"), BasinId("nicht"), "nichtschwimmer"),
+        )
+    }
+    bound, unbound = bind_plans([_parsed(url, basin_hint="Nichtschwimmer")], bindings)
     assert bound == ()
-    assert len(unbound) == 1 and "stacked" in unbound[0].reason
+    assert len(unbound) == 1
+    assert "multiple section tokens" in unbound[0].reason
+
+
+def test_stacked_routing_two_sections_to_one_basin_is_a_fatal_err() -> None:
+    # Structural guard now REACHABLE under S2: two parsed sections whose headers both contain the
+    # same declared token route to the same basin. That is a fatal, named `Err` at attach — never
+    # a silent overwrite of one basin's lane plan by another.
+    url = "https://example.test/dup-section.pdf"
+    facilities = [_facility("p", (_basin("p-a", url, section="sprungbecken"),))]
+    parsed = [
+        _parsed(url, basin_hint="Sprungbecken A"),
+        _parsed(url, basin_hint="Sprungbecken B"),
+    ]
+    result = attach_lane_plans(facilities, parsed, {}, FETCHED_AT)
+    assert isinstance(result, Err)
+    assert isinstance(result.error, SchemaMismatch)
+    assert "two lane plans bound to one basin" in result.error.detail
 
 
 def test_two_bound_plans_on_one_basin_is_a_fatal_err() -> None:
