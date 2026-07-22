@@ -429,6 +429,85 @@ def test_scrape_lanes_reports_when_no_pdf_parses(tmp_path: Path) -> None:
     assert code == 1
 
 
+_OERLIKON_COMBINED_PDF = _FIXTURES / "oerlikon-nichtschwimmer-sprungbecken.pdf"
+
+
+def test_scrape_lanes_prints_unbound_and_unavailable_audit(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # S3 acceptance: the honest operational audit. The combined Oerlikon sheet attaches
+    # Sprungbecken (its section token) and surfaces the still-uncurated Nichtschwimmer section as
+    # a per-URL `unbound` line (source_url + header + reason); every other declared source is
+    # 503'd, so each records a per-basin `unavailable` line carrying its typed cause — NOT a bare
+    # `unmatched` list.
+    db = tmp_path / "gold.sqlite"
+    assert build(db_path=db, data_dir=DATA_DIR) == 0
+    oerlikon = _facility_from_read_path(db, "hallenbad-oerlikon")
+    sprung = next(b for b in oerlikon.basins if b.basin_id == BasinId("oerlikon-sprungbecken"))
+    assert sprung.lane_plan_source is not None
+    combined_url = sprung.lane_plan_source.url
+    combined_pdf = _OERLIKON_COMBINED_PDF.read_bytes()
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if str(request.url) == combined_url:
+            return httpx.Response(200, content=combined_pdf)
+        return httpx.Response(503, text="down")
+
+    code = scrape_lanes(db_path=db, client=_pdf_client(handler), fetched_at=FETCHED_AT)
+    assert code == 0  # Sprungbecken attached, so the run succeeds
+
+    err = capsys.readouterr().err
+    # (a) per-URL unbound: the uncurated Nichtschwimmer section — url + header + reason.
+    assert "unbound" in err
+    assert combined_url in err
+    assert "Nichtschwimmer" in err
+    # (b) per-basin unavailable: each 503'd declared source with its typed cause (HTTP 503).
+    assert "unavailable" in err
+    assert "city-50m" in err
+    assert "HTTP 503" in err
+
+
+def test_scrape_lanes_prints_unmatched_section_audit(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # S3 audit-completeness: a curated basin declares a `section` token, its stacked sheet parses,
+    # but the token matches NO parsed header (here the single-basin Schwimmerbecken sheet is served
+    # at the combined URL — "Sprungbecken" never appears). The basin is left None, but the silent
+    # drop is surfaced as an `unmatched section` audit line (a parser-header-regression alarm).
+    db = tmp_path / "gold.sqlite"
+    assert build(db_path=db, data_dir=DATA_DIR) == 0
+    oerlikon = _facility_from_read_path(db, "hallenbad-oerlikon")
+    combined_url = next(
+        b.lane_plan_source.url
+        for b in oerlikon.basins
+        if b.basin_id == BasinId("oerlikon-sprungbecken") and b.lane_plan_source is not None
+    )
+    city = _facility_from_read_path(db, "hallenbad-city")
+    city_url = next(
+        b.lane_plan_source.url
+        for b in city.basins
+        if b.basin_id == BasinId("city-50m") and b.lane_plan_source is not None
+    )
+    # The single-basin Schwimmerbecken sheet's header never contains the "Sprungbecken" token.
+    wrong_sheet = (_FIXTURES / "oerlikon-schwimmerbecken.pdf").read_bytes()
+    city_sheet = FIXTURE_PDF.read_bytes()
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if str(request.url) == combined_url:
+            return httpx.Response(200, content=wrong_sheet)
+        if str(request.url) == city_url:
+            return httpx.Response(200, content=city_sheet)
+        return httpx.Response(503, text="down")
+
+    code = scrape_lanes(db_path=db, client=_pdf_client(handler), fetched_at=FETCHED_AT)
+    assert code == 0  # City attached, so the run succeeds
+
+    err = capsys.readouterr().err
+    assert "unmatched section" in err
+    assert "oerlikon-sprungbecken" in err
+    assert "sprungbecken" in err
+
+
 def test_scrape_lanes_empty_store_is_error(tmp_path: Path) -> None:
     db = tmp_path / "empty.sqlite"
     open_db(db)  # schema only, no facilities

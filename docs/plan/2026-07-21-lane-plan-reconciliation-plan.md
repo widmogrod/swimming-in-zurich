@@ -232,6 +232,7 @@ Appended by /dev:implement after each slice — never rewritten. Newest row last
 |------|-------|--------|----------------------|-------------------|---------------|
 | 2026-07-22 | S1 | done | worktree relocated into main checkout (subagent cwd targeted the main repo, not the worktree); `index_bound_plans` two-plans→one-basin guard tested directly (structurally unreachable via the single-basin join until S2) | none (2 non-blocking critic notes deferred to S2) | yes |
 | 2026-07-22 | S2 | done | ambiguous section token (header matching >1 declared token) fails safe to `UnboundPlan` — STRICTER than the plan's "can misroute" compromise; concept-note wording to be reversed in S3 | none | yes |
+| 2026-07-22 | S3 | done | source docstrings were already accurate (S1/S2 removed the stale claims) — edited anyway for the grep-guard + stacked-routing description; CLI audit extracted to `_report_lane_audit` (CC); added typed `UnmatchedSection` audit (folds S2 critic suggestion a) | none | no |
 
 ## Decisions & divergences
 
@@ -303,6 +304,39 @@ Appended by /dev:implement after each slice — never rewritten. Newest row last
   (a curated basin silently left `None` by a parser header regression); (b) optionally use realistic headers in
   the golden-set routing assertion so it is not self-fulfilling.
 
+- **2026-07-22 — S3 landed (honest audit + doc reversal).** `scrape-lanes` now prints a typed stderr audit:
+  per-basin `LanePlanUnavailable` cause (`describe(cause)`), per-URL `UnboundPlan` (url + hint + reason), and a
+  new `UnmatchedSection` line (a curated `section` token that matched **no** parsed header — a likely parser
+  regression, no longer a silent `None`). `find_unmatched_sections` is scoped to sheets that actually parsed, so
+  a whole-sheet fetch failure stays a single `LanePlanUnavailable` (no double-report) and an ambiguous token
+  stays a single `UnboundPlan`. The concept note's false "can misroute" line is reversed to the shipped
+  fail-safe behaviour; `etl/lane_plans.py`/`etl/silver.py` docstrings and the `CLAUDE.md` lane-plan paragraph now
+  describe the URL-keyed join + persisted outcomes. Divergence: the docstrings were already free of the stale
+  decision-#8 claims (S1/S2 had removed them), so S3 added the positive description + grep-guard rather than a
+  literal reversal; the CLI audit was extracted to `_report_lane_audit` (CC gate). Behaviour is reporting-only —
+  scrape/build/attachment unchanged (critic-confirmed). Concept-note count-guard wording tightened post-review
+  (the stacked path's guard is emergent via the zero-match arm, not an explicit count compare).
+
 ## Summary
 
-Written when the plan reaches `done`; then distilled into `docs/summaries/lane-plan-reconciliation.md`.
+The lane-plan reconciliation defect (only 2 of 8 parsed Belegungspläne reached a swimmer, because attachment
+fuzzy-matched the PDF's internal title) is fixed by making the lane document a **first-class domain attribute**
+— `Basin.lane_plan_source(url, section=None)` authored in `data/pools/*.yaml`, riding `facility_doc` (no gold
+DDL). The ETL is now **driven by the domain**: the parse fetch-set is a projection of the declared sources
+(`declared_source_urls`), the hardcoded `CITY_BELEGUNGSPLAN_URLS`/`PENDING_BELEGUNGSPLAENE` lists and the fuzzy
+`_basin_hint_index` (+ the `BasinHint` `SourceRef` arm) are deleted, and reconciliation is a **deterministic
+URL-keyed inner join** — pure for single-basin sheets, plus a fail-safe `section`-token text match for stacked
+multi-basin sheets (ambiguous/overlapping token → `UnboundPlan`, never a misbind; critic-verified against real
+headers). Extraction outcomes are **first-class persisted state**: `Basin.lane_plan: LanePlan |
+LanePlanUnavailable | None`, where `LanePlanUnavailable` carries the real closed-union `ProviderError` cause
+persisted **losslessly** (enabled by narrowing `ProviderSpecific.detail: object → JsonValue`) — so a failed
+extraction fails only that basin's `lane_plan`, never the pool build, partial extraction loses nothing, and
+recovery can partition failures by error class (a deferred selective-retry command). `scrape-lanes` emits a
+typed stderr audit (`unavailable` causes, `unbound` URLs, `unmatched section`). Result: City-50m, Oerlikon-50m,
+**Oerlikon-Sprungbecken**, **Bungertwies**, **leimbach/blaesi/kaeferberg** attach (was 2/8 → now the full curated
+set); Nichtschwimmer is an honest `UnboundPlan`. Out of scope and untouched: fallback/view-download links,
+Altstetten's rotating-URL PNG, a discovery crawler, and gold DDL. Delivered in 3 gated slices (S1 first-class
+field + join + errors-as-data; S2 stacked routing; S3 audit + doc reversal); QA green throughout (410 passed,
+95.79%, CRAP clean). One execution divergence: the worktree was relocated into the main checkout because the
+implementer subagent wrote to the main repo path (recovered non-destructively; base `main` untouched until
+merge). Then distilled into `docs/summaries/lane-plan-reconciliation.md`.

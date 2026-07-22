@@ -29,13 +29,17 @@ adding one is a single YAML edit on the owning basin.
 inner join matching the parsed result back to the basin whose URL it came from — the fuzzy `_basin_hint_index`
 (normalise the PDF title against a facility×basin-word key) is deleted. A **stacked** multi-basin sheet shares
 one URL across all its sections, so the URL alone cannot discriminate: each section is routed by the declared
-`section` token against the parsed header — a **scoped text match, not a pure id join**. That match is
-misbind-safe only for **non-overlapping** tokens (containment can misroute if one token is a substring of
-another section's header); the structural count-guard (parser-split count ≠ claimed bindings → `UnboundPlan`)
-backstops the common failures. This residual soft match depends on the parser's header extraction (`_basin_title`,
-owned by [[richer-data-fidelity]], out of scope here). Failures are typed values: a URL no basin claims →
-non-fatal `UnboundPlan` (audited to stderr); a duplicate or double binding → fatal `Err(SchemaMismatch)`.
-`PoolId`/`BasinId` are read off loaded facilities (`reconstruct_pool_id`), never minted.
+`section` token against the parsed header — a **scoped text match, not a pure id join**. The routing **fails
+safe, never misbinds**: a parsed header matching **more than one** declared token (an ambiguous/overlapping
+token — one is a substring of another section's header) is surfaced as `UnboundPlan` rather than positionally
+guessed, and a header matching **zero** tokens is likewise `UnboundPlan` — so any extra parsed section beyond
+the declared bindings falls into this zero-match arm rather than being positionally guessed (in the single-basin
+path an explicit `len(plans)` count-guard does the same). The dual case — a declared token
+that matched **no** parsed header — is surfaced as an audited `unmatched section` (a likely parser-header
+regression), never a silent `None`. This residual soft match depends on the parser's header extraction
+(`_basin_title`, owned by [[richer-data-fidelity]], out of scope here). Failures are typed values: a URL no
+basin claims → non-fatal `UnboundPlan` (audited to stderr); a duplicate or double binding → fatal
+`Err(SchemaMismatch)`. `PoolId`/`BasinId` are read off loaded facilities (`reconstruct_pool_id`), never minted.
 
 **Extraction outcome is first-class persisted state — errors are data, not exceptions.**
 `Basin.lane_plan: LanePlan | LanePlanUnavailable | None`:

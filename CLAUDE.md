@@ -79,6 +79,20 @@ The WFS has locations but not opening hours (`n.a.`). `scrape-gold` parses the t
 JSON embedded in stadt-zuerich.ch pool pages (`providers/schedule_scraper.py`) — brittle,
 best-effort (unparseable pages are skipped and reported), pinned by a saved-page fixture test.
 
+`scrape-lanes` attaches per-basin Belegungsplan lane plans. The lane document is a **first-class
+domain attribute** — `Basin.lane_plan_source` (url + optional `section`), authored in
+`data/pools/*.yaml` on the owning basin (rides `facility_doc`, no gold DDL). The ETL is **driven
+by the domain**: the fetch-set is a projection of the declared sources (no hardcoded URL list), and
+reconciliation is a **deterministic URL-keyed join** in `etl/silver.py` (`ParsedPlan.basin_hint` is
+not an identity key — a single-basin sheet binds by URL alone; a stacked multi-basin sheet routes
+each section by its declared `section` token, failing safe to an audited `UnboundPlan` on any
+zero/ambiguous match). **Extraction outcomes are first-class persisted state:**
+`Basin.lane_plan: LanePlan | LanePlanUnavailable | None` — a parsed grid, a typed
+`LanePlanUnavailable(cause: ProviderError)` for a declared source whose fetch/parse failed (scoped
+to that basin — the facility still builds), or `None`. The command prints an honest audit to
+stderr (`unbound` URLs/headers, per-basin `unavailable` causes, `unmatched section` alarms). See
+`docs/concepts/lane-plan-url-binding.md`.
+
 ## Engineering conventions
 
 This project follows the agentic-engineering conventions. When implementing code here,

@@ -7,9 +7,14 @@ derived from the loaded facilities, so adding a source is one YAML edit on the o
 
 Best-effort and errors-as-values: each declared source URL is fetched + parsed independently.
 A success yields one or more `ParsedPlan`s (a stacked sheet stacks several basins) stamped with
-the URL they came from — the deterministic reconciliation key silver joins on. A fetch/parse
-failure is NOT swallowed: it is recorded as a typed `LanePlanMiss(source_url, cause)` so silver
-can persist a `LanePlanUnavailable` on the declared basin(s), keyed by the real `ProviderError`.
+the URL they came from. A fetch/parse failure is NOT swallowed: it is recorded as a typed
+`LanePlanMiss(source_url, cause)` so silver can persist a `LanePlanUnavailable` on the declared
+basin(s), keyed by the real `ProviderError`.
+
+The URL->basin binding is NOT made here: this module only fetches + parses and stamps the
+`source_url`. Binding is a deterministic URL-keyed join performed in `etl/silver.py` against the
+declared `lane_plan_source`s; `ParsedPlan.basin_hint` is only a stacked-sheet section
+discriminator + audit string, never an identity key.
 """
 
 from __future__ import annotations

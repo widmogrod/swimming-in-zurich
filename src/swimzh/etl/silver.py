@@ -4,12 +4,22 @@ Reconciliation is a **deterministic URL-keyed inner join**, not a fuzzy title ma
 declares where its lane document lives (`Basin.lane_plan_source`, url + optional section); the
 parse fetch-set is derived from those declarations, and each parsed plan carries the
 `source_url` it was fetched from. `attach_lane_plans` builds a `url -> binding` index from the
-model and joins each parsed plan straight back to the basin whose URL it came from — the parsed
-header's `basin_hint` is IGNORED for a single-basin sheet (header-independence). The old
-`normalise("<facility> <basin word>")` index is gone.
+model and joins each parsed plan straight back to the basin whose URL it came from. The old
+fuzzy `normalise("<facility> <basin word>")` title index is gone.
+
+  * a SINGLE-BASIN sheet (one binding, `section is None`) binds by URL alone — the parsed
+    header's `basin_hint` is IGNORED (header-independence);
+  * a STACKED multi-basin sheet shares one URL across sections, so each parsed section is routed
+    to the binding whose declared `section` token is contained in `normalize(basin_hint)` — a
+    scoped text match. It fails SAFE: a parsed section matching zero OR more-than-one declared
+    token is surfaced as `UnboundPlan`, never positionally misbound.
 
 Failures are typed values, never guesses:
-  * a URL no basin claims  -> a non-fatal `UnboundPlan` (audited, reported to stderr);
+  * a URL no basin claims, or a parsed section no declared token matches -> non-fatal
+    `UnboundPlan` (audited, reported to stderr);
+  * a declared `section` token that matched NONE of a fetched sheet's parsed headers -> non-fatal
+    `UnmatchedSection` (audited: a likely parser-header regression that dropped a curated section,
+    surfaced loud rather than left silently `None`);
   * a duplicate `(url, section)` binding, or two plans bound to one basin -> a fatal `Err`;
   * a declared source that FAILED to fetch/parse -> its basin gets `LanePlanUnavailable(cause)`,
     first-class persisted state, never a silent `None`.
@@ -71,6 +81,19 @@ class UnboundPlan:
     source_url: str
     basin_hint: str
     reason: str
+
+
+@dataclass(frozen=True, slots=True)
+class UnmatchedSection:
+    """A basin that declared a stacked-sheet `section` token whose token matched NONE of its
+    (successfully fetched) sheet's parsed headers, so the basin was left silently `None`. Almost
+    always a parser header regression that dropped a curated section — audited (non-fatal) so the
+    drop is loud rather than invisible. `pool_id`/`basin_id` are READ off the model, not minted."""
+
+    source_url: str
+    section: str
+    pool_id: PoolId
+    basin_id: BasinId
 
 
 def build_url_bindings(
@@ -211,12 +234,15 @@ def bind_plans(
 @dataclass(frozen=True, slots=True)
 class LanePlanAttachment:
     """The result of attaching lane plans: the augmented facilities, any non-fatal staleness
-    warnings (a plan older than the schedule it refines), and the parsed plans that bound to no
-    declared basin (reported, not fatal — e.g. an uncurated basin/pool)."""
+    warnings (a plan older than the schedule it refines), the parsed plans that bound to no
+    declared basin (`unbound` — e.g. an uncurated basin/pool), and declared stacked `section`
+    tokens that matched no parsed header of their fetched sheet (`unmatched_sections` — a likely
+    parser-header regression). All three are reported, not fatal."""
 
     facilities: tuple[Facility, ...]
     warnings: tuple[str, ...]
     unbound: tuple[UnboundPlan, ...] = ()
+    unmatched_sections: tuple[UnmatchedSection, ...] = ()
 
 
 def index_bound_plans(
@@ -235,6 +261,37 @@ def index_bound_plans(
             )
         by_basin[ref] = bp.plan
     return Ok(by_basin)
+
+
+def find_unmatched_sections(
+    url_bindings: Mapping[str, tuple[_Binding, ...]],
+    parsed_plans: Sequence[ParsedPlan],
+) -> tuple[UnmatchedSection, ...]:
+    """Declared stacked `section` tokens that matched NO parsed header of a sheet that DID parse.
+
+    Mirrors the containment test `_bind_stacked` routes on (`token in normalize(basin_hint)`): a
+    token present in none of its sheet's parsed headers produces no `BoundPlan`, leaving the basin
+    silently `None`. Surfaced here so a parser-header regression that drops a curated section is
+    auditable. Scoped to URLs that actually parsed — a whole-sheet fetch failure is recorded as
+    `LanePlanUnavailable`, and a URL not fetched this run has no headers to compare against."""
+    headers_by_url: dict[str, list[str]] = defaultdict(list)
+    for plan in parsed_plans:
+        headers_by_url[plan.source_url].append(normalize(plan.basin_hint))
+
+    unmatched: list[UnmatchedSection] = []
+    for url, bindings in url_bindings.items():
+        headers = headers_by_url.get(url)
+        if not headers:
+            continue
+        for binding in bindings:
+            if binding.section is None:
+                continue
+            token = normalize(binding.section)
+            if token and not any(token in header for header in headers):
+                unmatched.append(
+                    UnmatchedSection(url, binding.section, binding.pool_id, binding.basin_id)
+                )
+    return tuple(unmatched)
 
 
 def _staleness_warning(
@@ -262,13 +319,16 @@ def attach_lane_plans(
     A declared source whose fetch/parse failed (`misses[url]`) stamps `LanePlanUnavailable(cause)`
     on every basin that declared it — a scoped failure that never touches the facility or its
     schedule. Two plans bound to one basin is a **fatal** `Err` (never a wrong overwrite). A plan
-    that binds to no declared basin is reported in `LanePlanAttachment.unbound`, not fatal."""
+    that binds to no declared basin is reported in `LanePlanAttachment.unbound`, and a declared
+    stacked `section` whose token matched no parsed header in `unmatched_sections` — both audited,
+    not fatal."""
     bindings_result = build_url_bindings(facilities)
     if isinstance(bindings_result, Err):
         return bindings_result
     url_bindings = bindings_result.value
 
     bound, unbound = bind_plans(parsed_plans, url_bindings)
+    unmatched_sections = find_unmatched_sections(url_bindings, parsed_plans)
 
     by_basin_result = index_bound_plans(bound)
     if isinstance(by_basin_result, Err):
@@ -312,5 +372,6 @@ def attach_lane_plans(
             facilities=tuple(merged),
             warnings=tuple(warnings),
             unbound=unbound,
+            unmatched_sections=unmatched_sections,
         )
     )

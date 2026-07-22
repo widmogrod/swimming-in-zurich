@@ -123,3 +123,23 @@ def test_hardcoded_url_list_and_fuzzy_matcher_symbols_are_gone() -> None:
     assert not hasattr(silver, "_basin_hint_index")
     assert not hasattr(reconcile, "BasinHint")
     assert not hasattr(reconcile, "build_basin_hint_index")
+
+
+def test_source_docstrings_do_not_carry_stale_reconciliation_claims() -> None:
+    # S3 doc-reversal guard: the module docstrings must not resurrect the retired framing where
+    # `basin_hint` drove reconciliation / the URL->basin binding was "intentionally NOT made".
+    # Binding is now a deterministic URL-keyed join in silver — asserted positively too.
+    import importlib
+    from pathlib import Path
+
+    lane_plans = importlib.import_module("swimzh.etl.lane_plans")
+    silver = importlib.import_module("swimzh.etl.silver")
+
+    for module in (lane_plans, silver):
+        assert module.__file__ is not None
+        text = Path(module.__file__).read_text(encoding="utf-8").casefold()
+        assert "basin_hint drives" not in text
+        assert "decision #8" not in text
+        assert "intentionally not made" not in text
+    assert "url-keyed inner join" in (silver.__doc__ or "").casefold()
+    assert "binding is not made here" in (lane_plans.__doc__ or "").casefold()

@@ -26,10 +26,12 @@ from swimzh.domain.models import (
 )
 from swimzh.etl.silver import (
     BoundPlan,
+    UnmatchedSection,
     _Binding,
     attach_lane_plans,
     bind_plans,
     build_url_bindings,
+    find_unmatched_sections,
     index_bound_plans,
 )
 from swimzh.providers.belegungsplan import ParsedPlan
@@ -154,12 +156,20 @@ def test_leimbach_blaesi_kaeferberg_now_attach(dataset: Dataset) -> None:
         assert isinstance(basin.lane_plan, LanePlan), (pid, bid)
 
 
+def _realistic_hint(section: str | None) -> str:
+    """A realistic PDF header for the golden-set routing assertion — the declared token embedded
+    in a plausible facility+basin title (e.g. "Oerlikon Sprungbecken") rather than the bare token,
+    so the stacked routing step is exercised by containment, not by a self-fulfilling exact match.
+    A single-basin source (section None) binds by URL regardless of header."""
+    return f"Oerlikon {section.capitalize()}" if section else "anything"
+
+
 def test_golden_set_pins_the_exact_bound_set(dataset: Dataset) -> None:
     # Feed one parsed plan per declared source; the bound set is EXACTLY the declared basins.
-    # A stacked source (Oerlikon Sprungbecken) needs its `section` token in the parsed header to
-    # route; a single-basin source binds by URL regardless of header.
+    # A stacked source (Oerlikon Sprungbecken) needs its `section` token contained in the parsed
+    # header to route; a single-basin source binds by URL regardless of header.
     parsed = [
-        _parsed(url, basin_hint=(section or "anything")) for url, section in _sources(dataset)
+        _parsed(url, basin_hint=_realistic_hint(section)) for url, section in _sources(dataset)
     ]
     result = attach_lane_plans(dataset.facilities, parsed, {}, FETCHED_AT)
     assert isinstance(result, Ok)
@@ -398,6 +408,39 @@ def test_two_bound_plans_on_one_basin_is_a_fatal_err() -> None:
     assert isinstance(result, Err)
     assert isinstance(result.error, SchemaMismatch)
     assert "two lane plans bound to one basin" in result.error.detail
+
+
+# --- declared-but-absent section audit (parser-header-regression alarm) -------------
+
+
+def test_declared_section_absent_from_parsed_headers_is_audited() -> None:
+    # Audit completeness: a curated basin declares a `section` token, its stacked sheet parses,
+    # but the token matches NONE of the parsed headers (a parser header regression that silently
+    # dropped the curated section). The basin is left None but the drop is surfaced loud.
+    url = "https://example.test/stacked.pdf"
+    facilities = [_facility("p", (_basin("p-a", url, section="sprungbecken"),))]
+    parsed = [_parsed(url, basin_hint="Nichtschwimmer only, no diving pool on this sheet")]
+    result = attach_lane_plans(facilities, parsed, {}, FETCHED_AT)
+    assert isinstance(result, Ok)
+    assert all(b.lane_plan is None for f in result.value.facilities for b in f.basins)
+    assert result.value.unmatched_sections == (
+        UnmatchedSection(url, "sprungbecken", PoolId("p"), BasinId("p-a")),
+    )
+
+
+def test_unmatched_sections_scoped_to_sheets_that_parsed() -> None:
+    # A declared section whose sheet was NOT parsed this run (no ParsedPlan for its URL — a fetch
+    # failure -> LanePlanUnavailable, or simply not fetched) is NOT an unmatched-section: there is
+    # no parsed header to compare against, so it must not be flagged.
+    url = "https://example.test/stacked.pdf"
+    facilities = [_facility("p", (_basin("p-a", url, section="sprungbecken"),))]
+    bindings_result = build_url_bindings(facilities)
+    assert isinstance(bindings_result, Ok)
+    bindings = bindings_result.value
+    assert find_unmatched_sections(bindings, []) == ()
+    # A matched token contributes no unmatched-section either.
+    matched = [_parsed(url, basin_hint="Oerlikon Sprungbecken")]
+    assert find_unmatched_sections(bindings, matched) == ()
 
 
 # --- unbound + staleness (non-fatal reporting) --------------------------------------
