@@ -22,7 +22,13 @@ from swimzh.boundary.curated_dto import CalendarDTO, FacilityDTO, RegistryDTO
 from swimzh.core.errors import ParseError, ProviderError, SchemaMismatch
 from swimzh.core.result import Err, Ok, Result
 from swimzh.domain.calendar import HolidayRange, ZurichCalendar
-from swimzh.domain.models import Facility, FacilityId, PoolIdentity, PoolKind, Provenance
+from swimzh.domain.models import (
+    Facility,
+    PoolIdentity,
+    PoolKind,
+    Provenance,
+    reconstruct_pool_id,
+)
 from swimzh.domain.registry import Registry
 from swimzh.domain.schedule import HolidayPolicy
 
@@ -87,6 +93,8 @@ def _map_facility(dto: FacilityDTO, identity: PoolIdentity) -> Facility:
         website=dto.website,
         features=tuple(mapping.feature_from_dto(f) for f in dto.features),
         lockers=tuple(mapping.locker_from_dto(lo) for lo in dto.lockers),
+        accessibility=dto.accessibility,
+        last_admission_before=dto.last_admission_before,
     )
 
 
@@ -103,7 +111,7 @@ def _build_calendar(dto: CalendarDTO) -> ZurichCalendar:
 def _build_registry(dto: RegistryDTO) -> Registry:
     identities = [
         PoolIdentity(
-            facility_id=FacilityId(i.facility_id),
+            facility_id=reconstruct_pool_id(i.facility_id),
             name=i.name,
             kind=_KINDS[i.kind],
             geo_sport_id=i.geo_sport_id,
@@ -130,7 +138,7 @@ def load_dataset(data_dir: Path) -> Result[Dataset, ProviderError]:
         facilities: list[Facility] = []
         for pool_path in sorted((data_dir / "pools").glob("*.yaml")):
             facility_dto = _validate(FacilityDTO, _load_yaml(pool_path), pool_path.name)
-            identity = registry.get(FacilityId(facility_dto.facility_id))
+            identity = registry.get(reconstruct_pool_id(facility_dto.facility_id))
             if identity is None:
                 # Intentional raise-and-catch: _CuratedError is the internal channel that
                 # the outer handler converts into a Result. This is the provider boundary.

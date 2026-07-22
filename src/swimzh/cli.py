@@ -1,7 +1,9 @@
 """Command-line entry point.
 
-  swimzh build-gold    --db gold.sqlite     # raw→silver→gold SQLite the web app serves from
+  swimzh build         --db gold.sqlite     # assemble the gold SQLite from committed inputs
   swimzh build-catalog --out data/catalog.json  # full pool catalog from the WFS (committed)
+  swimzh scrape-gold   --db gold.sqlite     # scrape real schedules onto a built store
+  swimzh scrape-lanes  --db gold.sqlite     # attach per-basin Belegungsplan lane plans
 
 Run via: `uv run python -m swimzh.cli <command> ...`
 """
@@ -12,31 +14,46 @@ import argparse
 import sys
 from datetime import datetime
 from pathlib import Path
+from typing import assert_never
 from zoneinfo import ZoneInfo
 
+from swimzh.build.compose import compose
+from swimzh.build.reconcile import crosswalk_from_rows, resolve_all
 from swimzh.core.errors import describe
 from swimzh.core.http import HttpClient
 from swimzh.core.result import Err, Ok
-from swimzh.etl import pipeline
+from swimzh.domain.lane_plan import LanePlan
+from swimzh.domain.models import LanePlanUnavailable
+from swimzh.etl.build import build_store
 from swimzh.etl.catalog import build_catalog
-from swimzh.etl.gold import write_gold
+from swimzh.etl.lane_plans import scrape_lane_plans
 from swimzh.etl.scrape import scrape_indoor_facilities
+from swimzh.etl.silver import LanePlanAttachment, attach_lane_plans
 from swimzh.providers import geo_sport
 from swimzh.providers.price_scraper import scrape_prices
 from swimzh.storage import catalog_json
-from swimzh.storage.sqlite_repo import open_db
+from swimzh.storage.sqlite_repo import (
+    GoldRepository,
+    load_alias_rows,
+    load_xref_rows,
+    open_db,
+    write_schedules,
+)
 
 _ZURICH = ZoneInfo("Europe/Zurich")
 
 
-def build_gold(*, db_path: Path, data_dir: Path, client: HttpClient, fetched_at: datetime) -> int:
-    """Run raw→silver→gold into `db_path`. Returns a process exit code."""
-    match pipeline.run(data_dir=data_dir, db_path=db_path, client=client, fetched_at=fetched_at):
+def build(*, db_path: Path, data_dir: Path) -> int:
+    """Assemble a complete, self-contained gold store from committed inputs, offline.
+
+    No network: curated facilities + calendar + the committed catalog are written into one
+    gold DB. Returns a process exit code."""
+    match build_store(data_dir, db_path):
         case Ok(repo):
-            print(f"gold store written to {db_path} ({repo.count()} facilities)")
+            print(f"gold store built at {db_path} ({repo.count()} facilities)")
             return 0
         case Err(error):
-            print(f"ETL failed: {describe(error)}", file=sys.stderr)
+            print(f"build failed: {describe(error)}", file=sys.stderr)
             return 1
 
 
@@ -57,33 +74,157 @@ def build_catalog_file(*, out: Path, client: HttpClient, generated_at: datetime)
 def scrape_gold(
     *, db_path: Path, catalog_path: Path, client: HttpClient, fetched_at: datetime
 ) -> int:
-    """Scrape indoor-pool schedules into a gold store the web app can serve from. Exit code."""
+    """Scrape indoor-pool schedules and compose them onto an already-built gold store. Exit code.
+
+    Runs the ONE builder path: scrape emits identity-free ``(SourceRef, aspects)`` extracts;
+    ``reconcile`` resolves each ``SourceRef`` to a canonical id against the store's spine (an
+    unreconcilable name is a loud typed ``Err``, never a silent wrong-pool write); ``compose``
+    folds the scraped aspects onto the curated pool (curated-wins per aspect — a curated pool
+    keeps its schedule AND gains a scraped price). There is no second door into a gold row.
+    """
     if not catalog_path.exists():
         print(f"catalog not found at {catalog_path}; run build-catalog first", file=sys.stderr)
+        return 1
+    if not db_path.exists():
+        print(f"gold store not found at {db_path}; run `swimzh build` first", file=sys.stderr)
         return 1
     catalog = catalog_json.loads(catalog_path.read_text(encoding="utf-8"))
     prices_result = scrape_prices(client, fetched_at.date())
     prices = prices_result.value if isinstance(prices_result, Ok) else None
     report = scrape_indoor_facilities(client, catalog, fetched_at, prices=prices)
-    if not report.facilities:
+    if not report.extracts:
         print("no schedules could be scraped", file=sys.stderr)
         return 1
-    write_gold(open_db(db_path), report.facilities)
-    msg = f"scraped {len(report.facilities)} indoor pools into {db_path}"
-    msg += " (with prices)" if prices is not None else " (prices unavailable)"
-    if report.skipped:
-        msg += f"; skipped {len(report.skipped)}: {', '.join(report.skipped)}"
-    print(msg)
-    return 0
+
+    conn = open_db(db_path)
+    curated = GoldRepository(conn).load_all()
+    crosswalk = crosswalk_from_rows(load_alias_rows(conn), load_xref_rows(conn))
+    match resolve_all(report.extracts, crosswalk):
+        case Err(error):
+            print(f"scrape reconcile failed: {describe(error)}", file=sys.stderr)
+            return 1
+        case Ok(outcome):
+            # Partial success: compose + write the pools that reconciled, UNCONDITIONALLY —
+            # one unmatched WFS name no longer discards every good scrape. Benign misses are
+            # reported to stderr and signalled by a non-zero exit (visible, not silent); the
+            # good scrapes are still written. Only an ambiguous ref (the `Err` case above) is
+            # fatal — never a silent wrong-pool write.
+            composition = compose(curated, outcome.resolved)
+            write_schedules(
+                conn,
+                tuple((f.identity.facility_id, f) for f in composition.facilities),
+            )
+            msg = f"scraped {len(outcome.resolved)} indoor pools into {db_path}"
+            msg += " (with prices)" if prices is not None else " (prices unavailable)"
+            for note in composition.notes:
+                msg += f"; {note}"
+            if report.skipped:
+                msg += f"; skipped {len(report.skipped)}: {', '.join(report.skipped)}"
+            print(msg)
+            if outcome.unresolved:
+                print(
+                    f"unresolved (no pool matched): {', '.join(sorted(outcome.unresolved))}",
+                    file=sys.stderr,
+                )
+                return 1
+            return 0
+
+
+def _report_lane_audit(attachment: LanePlanAttachment) -> tuple[int, int]:
+    """Print the honest scrape-lanes audit to stderr and return `(attached, unavailable)` counts.
+
+    Three audit streams: (a) each per-basin `unavailable` extraction with its typed cause; (b) each
+    `unbound` parsed section a URL/header no basin claims; (c) each `unmatched section` — a declared
+    token that matched no parsed header. `lane_plan` is a closed three-case union, matched
+    exhaustively."""
+    attached = 0
+    unavailable = 0
+    for facility in attachment.facilities:
+        for basin in facility.basins:
+            match basin.lane_plan:
+                case LanePlan():
+                    attached += 1
+                case LanePlanUnavailable() as miss:
+                    unavailable += 1
+                    print(
+                        f"unavailable ({basin.basin_id} <- {miss.source_url}): "
+                        f"{describe(miss.cause)}",
+                        file=sys.stderr,
+                    )
+                case None:
+                    pass
+                case _ as unreachable:  # pragma: no cover - exhaustiveness guard
+                    assert_never(unreachable)
+    for plan in attachment.unbound:
+        print(
+            f"unbound ({plan.source_url}): {plan.basin_hint!r} — {plan.reason}",
+            file=sys.stderr,
+        )
+    for section in attachment.unmatched_sections:
+        print(
+            f"unmatched section ({section.basin_id} <- {section.source_url}): "
+            f"declared section {section.section!r} matched no parsed header",
+            file=sys.stderr,
+        )
+    for warning in attachment.warnings:
+        print(f"warning: {warning}", file=sys.stderr)
+    return attached, unavailable
+
+
+def scrape_lanes(*, db_path: Path, client: HttpClient, fetched_at: datetime) -> int:
+    """Fetch the Belegungsplan PDFs the loaded facilities DECLARE (`lane_plan_source`) and attach
+    the parsed plans onto the basin that owns each URL — a deterministic URL-keyed join. A source
+    that fails to fetch/parse is recorded as first-class `LanePlanUnavailable` state (never a
+    silent drop). Prints an honest operational audit to stderr: each `unbound` parsed section (a
+    URL/header no basin claims), each per-basin `unavailable` cause, and each `unmatched section`
+    (a declared token that matched no parsed header). Exit code."""
+    if not db_path.exists():
+        print(f"gold store not found at {db_path}; build it first", file=sys.stderr)
+        return 1
+    conn = open_db(db_path)
+    facilities = GoldRepository(conn).load_all()
+    if not facilities:
+        print(f"gold store {db_path} is empty; build it first", file=sys.stderr)
+        return 1
+
+    report = scrape_lane_plans(client, facilities)
+    if not report.plans and not report.misses:
+        print("no basin declares a lane_plan_source; nothing to scrape", file=sys.stderr)
+        return 1
+
+    misses = {miss.source_url: miss.cause for miss in report.misses}
+    match attach_lane_plans(facilities, report.plans, misses, fetched_at):
+        case Err(error):
+            print(f"lane-plan reconcile failed: {describe(error)}", file=sys.stderr)
+            return 1
+        case Ok(attachment):
+            attached, unavailable = _report_lane_audit(attachment)
+            # Persist the run's outcomes (parsed plans AND recorded failures) to the read path.
+            write_schedules(
+                conn,
+                tuple((f.identity.facility_id, f) for f in attachment.facilities),
+            )
+            if attached == 0:
+                print("no lane plan reconciled to a curated basin", file=sys.stderr)
+                return 1
+            msg = f"attached {attached} lane plan(s) into {db_path}"
+            if unavailable:
+                msg += f"; {unavailable} unavailable (recorded)"
+            print(msg)
+            return 0
+        case _ as unreachable:  # pragma: no cover - exhaustiveness guard
+            assert_never(unreachable)
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="swimzh")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
-    gold = subparsers.add_parser("build-gold", help="build the SQLite gold store")
-    gold.add_argument("--db", required=True, help="path to the gold SQLite file to write")
-    gold.add_argument("--data", default="data", help="curated data directory (default: data)")
+    offline = subparsers.add_parser(
+        "build", help="assemble a complete gold store from committed inputs (offline)"
+    )
+    offline.add_argument("--db", required=True, help="path to the gold SQLite file to write")
+    offline.add_argument("--data", default="data", help="curated data directory (default: data)")
 
     catalog = subparsers.add_parser("build-catalog", help="build the pool catalog from the WFS")
     catalog.add_argument("--out", default="data/catalog.json", help="catalog JSON to write")
@@ -94,7 +235,16 @@ def main(argv: list[str] | None = None) -> int:
     scrape.add_argument("--db", required=True, help="path to the gold SQLite file to write")
     scrape.add_argument("--catalog", default="data/catalog.json", help="catalog JSON to read")
 
+    lanes = subparsers.add_parser(
+        "scrape-lanes", help="attach per-basin Belegungsplan lane plans to a gold store"
+    )
+    lanes.add_argument("--db", required=True, help="path to the existing gold SQLite file")
+
     args = parser.parse_args(argv)
+
+    # `build` is fully offline — no network client needed.
+    if args.command == "build":
+        return build(db_path=Path(args.db), data_dir=Path(args.data))
 
     # The network wiring below is exercised live; the per-command functions are unit-tested
     # with an injected client.
@@ -104,10 +254,6 @@ def main(argv: list[str] | None = None) -> int:
     with httpx.Client(timeout=30.0, follow_redirects=True) as inner:  # pragma: no cover - live
         client = HttpClient(inner, source="geo_sport", timeout_s=30.0)
         now = datetime.now(_ZURICH)
-        if args.command == "build-gold":
-            return build_gold(
-                db_path=Path(args.db), data_dir=Path(args.data), client=client, fetched_at=now
-            )
         if args.command == "scrape-gold":
             return scrape_gold(
                 db_path=Path(args.db),
@@ -115,6 +261,8 @@ def main(argv: list[str] | None = None) -> int:
                 client=client,
                 fetched_at=now,
             )
+        if args.command == "scrape-lanes":
+            return scrape_lanes(db_path=Path(args.db), client=client, fetched_at=now)
         return build_catalog_file(out=Path(args.out), client=client, generated_at=now)
 
 

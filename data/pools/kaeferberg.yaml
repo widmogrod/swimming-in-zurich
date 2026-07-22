@@ -1,0 +1,14 @@
+# Wärmebad Käferberg — MINIMAL, lane-plan-only (NOT fully curated). See leimbach.yaml header.
+# Only the Mehrzweckbecken (Hubboden) publishes a Belegungsplan; the 32°C thermal pool has none.
+
+facility_id: "waermebad-kaeferberg"
+address: "Emil-Klöti-Strasse 17, 8037 Zürich"
+source: "stadt-zuerich.ch/hallenbaeder/kaeferberg (lane-plan source only, uncurated schedule)"
+
+basins:
+  - basin_id: "kaeferberg-mehrzweckbecken"
+    name: "Mehrzweckbecken"
+    kind: "vario"
+    rules: []  # schedule-less: identity + lane document only, no /swim option yet
+    lane_plan_source:
+      url: "https://www.stadt-zuerich.ch/content/dam/web/de/stadtleben/sport-und-erholung/dokumente/badeanlagen/belegungsplaene/kaeferberg.pdf"

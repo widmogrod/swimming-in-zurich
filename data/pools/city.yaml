@@ -5,7 +5,7 @@
 # Sunday-schedule public holiday, a summer closure). Verify against stadt-zuerich.ch and
 # update `valid_as_of` before relying on any answer.
 
-facility_id: "city"
+facility_id: "hallenbad-city"
 address: "Sihlstrasse 71, 8001 Zürich"
 source: "stadt-zuerich.ch/hallenbaeder/city (curated, illustrative)"
 valid_as_of: "2026-07-18"
@@ -49,6 +49,9 @@ basins:
     kind: "lap"
     dimensions: { length_m: "50" }
     lanes: 6  # "50 x 15 m (6 Bahnen)" — from the official infrastructure prose
+    # First-class lane document: this basin's city Belegungsplan (single-basin sheet).
+    lane_plan_source:
+      url: "https://www.stadt-zuerich.ch/content/dam/web/de/stadtleben/sport-und-erholung/dokumente/badeanlagen/belegungsplaene/city-schwimmerbecken.pdf"
     rules:
       # Weekday partition (school term): lane -> seniors -> public
       - { weekdays: ["mon", "tue", "wed", "thu", "fri"], start: "06:30", end: "09:00", access: { type: "lane_swim" } }

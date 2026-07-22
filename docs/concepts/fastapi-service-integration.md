@@ -17,14 +17,19 @@ single installable library (`swimzh`) with a `src/` layout and one QA chain:
 
 ## Data source
 
-`main.py` wires `CuratedSwimData` (a `SwimData` port implementation) that loads the curated
-dataset at startup — offline, no network. Swapping to the SQLite gold store later is a second
-adapter satisfying the same `SwimData` protocol; no endpoint/service change required.
+`main.py` wires `GoldSwimData` (a `SwimData` port implementation) that reads the single SQLite
+gold store — the app's only runtime source (see [[gold-store]] and
+[[2026-07-19-single-source-of-truth-plan]]). A missing DB fails fast at startup, pointing the
+operator at `swimzh build`. The catalog and calendar are read from the gold DB's own tables,
+not from `data/` files; the curated `data/*.yaml` + `catalog.json` are ETL inputs the app never
+opens at runtime. (The former `CuratedSwimData` YAML-at-runtime adapter was removed by the
+single-source-of-truth plan.)
 
 ## Run
 
 ```sh
-uv run uvicorn apps.web.main:app --reload      # http://127.0.0.1:8000
+uv run python -m swimzh.cli build --db gold.sqlite            # build the gold DB (offline)
+SWIMZH_GOLD_DB=gold.sqlite uv run uvicorn apps.web.main:app --reload   # http://127.0.0.1:8000
 ```
-Env (all in `apps/web/config.py`): `SWIMZH_DATA_DIR` (default `data`), `SWIMZH_HOST`,
-`SWIMZH_PORT`.
+Env (all in `apps/web/config.py`): `SWIMZH_GOLD_DB` (default `gold.sqlite`; the DB must exist),
+`SWIMZH_HOST`, `SWIMZH_PORT`.

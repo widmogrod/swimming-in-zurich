@@ -8,8 +8,8 @@ with *explainable* eligibility, price, distance, and provenance.
 It deliberately distinguishes three outcomes so an empty answer is never ambiguous:
   * an option (open, with eligibility),
   * a facility that is **closed** that day (with reason), and
-  * a facility whose schedule is **not yet curated** (unknown, via the registry) —
-    never conflated with "closed".
+  * a facility whose schedule is **not yet curated** (unknown — identity known via the pool
+    roster, schedule not curated) — never conflated with "closed".
 """
 
 from __future__ import annotations
@@ -24,24 +24,34 @@ from swimzh.core.errors import ProviderError, describe
 from swimzh.core.result import Err, Ok, Result
 from swimzh.domain.access import EligibilityResult, eligibility
 from swimzh.domain.calendar import ZurichCalendar
+from swimzh.domain.catalog import RosterEntry
 from swimzh.domain.geo import GeoPoint, haversine_km
+from swimzh.domain.lane_plan import (
+    LaneAvailability,
+    LaneAvailabilityTimeline,
+    LanePanel,
+    LanePlan,
+    lane_availability_at,
+    lane_availability_timeline,
+    lane_panel,
+)
 from swimzh.domain.lockers import LockerOption
 from swimzh.domain.models import (
     Basin,
     BasinId,
     BasinKind,
     Facility,
-    FacilityId,
     Feature,
+    PoolId,
     PoolIdentity,
     PoolKind,
     Provenance,
+    reconstruct_pool_id,
 )
 from swimzh.domain.person import Person
 from swimzh.domain.pricing import PriceEntry, price_for
-from swimzh.domain.registry import Registry
 from swimzh.domain.resolver import resolve_basin, resolve_hours
-from swimzh.domain.schedule import ClosedDay, DaySchedule, OpenDay, ResolvedSession
+from swimzh.domain.schedule import ClosedDay, DaySchedule, OpenDay, ResolvedSession, Weekday
 
 _ZURICH = ZoneInfo("Europe/Zurich")
 
@@ -65,7 +75,7 @@ class SwimQuery:
 class Occupancy:
     """A raw live occupancy reading (people/percent/capacity) from a provider."""
 
-    facility_id: FacilityId
+    facility_id: PoolId
     measured_at: datetime
     percent_full: float | None
     people: int | None
@@ -120,7 +130,7 @@ _NOW_TOLERANCE = timedelta(minutes=30)
 
 @dataclass(frozen=True, slots=True)
 class SwimOption:
-    facility_id: FacilityId
+    facility_id: PoolId
     facility_name: str
     facility_kind: PoolKind  # indoor/outdoor/… — from the pool identity
     basin_id: BasinId
@@ -138,13 +148,21 @@ class SwimOption:
     # None = not requested (no provider wired, or query.at is not ~now).
     # LiveOccupancy / OccupancyUnavailable = requested and resolved.
     live_occupancy: OccupancyResult | None = None
+    # None = the basin has no parsed lane plan. A `LaneAvailability` is a pure derivation of
+    # the STORED recurring plan, so — unlike live_occupancy — it is attached for ANY query
+    # time (incl. future dates), computed at the QUERIED moment clamped into the session.
+    lane_availability: LaneAvailability | None = None
+    # The full lane split across the session (one segment per reservation boundary), also a
+    # pure derivation of the stored plan — never stored. Powers the "4/6 then 2/6 after 18:00"
+    # arc. None when the basin has no parsed plan.
+    lane_timeline: LaneAvailabilityTimeline | None = None
 
 
 @dataclass(frozen=True, slots=True)
 class FacilityStatus:
     """Why a facility produced no options: closed that day, or not yet curated."""
 
-    facility_id: FacilityId
+    facility_id: PoolId
     facility_name: str
     status: str  # "closed" | "uncurated"
     detail: str
@@ -154,7 +172,7 @@ class FacilityStatus:
 class FacilityNotice:
     """A pool alert active on the queried date (e.g. a maintenance closure)."""
 
-    facility_id: FacilityId
+    facility_id: PoolId
     facility_name: str
     text: str
 
@@ -196,8 +214,8 @@ def find_swim_options(
     query: SwimQuery,
     facilities: tuple[Facility, ...],
     calendar: ZurichCalendar,
+    roster: tuple[RosterEntry, ...] = (),
     *,
-    registry: Registry | None = None,
     occupancy: OccupancyProvider | None = None,
 ) -> QueryResult:
     at_local = query.at.astimezone(_ZURICH) if query.at.tzinfo is not None else query.at
@@ -237,6 +255,13 @@ def find_swim_options(
         produced = False
 
         for basin in facility.basins:
+            # Decision #5 gate: a basin with NO schedule rules has no verified session data — e.g.
+            # a `PARSED_PROSE` basin whose physicals were auto-extracted from WFS prose. It is
+            # surfaced in `/pools/{id}` detail (with its caveat) but MUST NOT yield a `/swim`
+            # option. Skip it here explicitly, before `resolve_basin` — so it neither produces an
+            # option nor a spurious "closed" status (a prose-only facility flows to `uncurated`).
+            if not basin.rules:
+                continue
             schedule = resolve_basin(facility, basin, day, calendar)
             match schedule:
                 case ClosedDay(reason):
@@ -244,6 +269,23 @@ def find_swim_options(
                 case OpenDay(sessions):
                     for session in sessions:
                         produced = True
+                        # Clamp the point eval to the QUERIED moment (`now_time`, the queried
+                        # time-of-day already used by `open_at_query_time`) when it falls in the
+                        # session, else the session start — so 12:00 and 18:00 report different
+                        # lane splits. NOT the wall-clock `now` (that is reserved for occupancy
+                        # freshness); using it would collapse a future/other-time query back to
+                        # `session.time.start`.
+                        weekday = Weekday(day.weekday())
+                        t = now_time if session.time.contains(now_time) else session.time.start
+                        lane_avail: LaneAvailability | None = None
+                        lane_timeline: LaneAvailabilityTimeline | None = None
+                        # `lane_plan` now carries a third state (`LanePlanUnavailable`); only a
+                        # parsed `LanePlan` yields a derivation — a recorded failure is inert here.
+                        if isinstance(basin.lane_plan, LanePlan):
+                            lane_avail = lane_availability_at(basin.lane_plan, weekday, t)
+                            lane_timeline = lane_availability_timeline(
+                                basin.lane_plan, weekday, session.time
+                            )
                         options.append(
                             SwimOption(
                                 facility_id=facility.identity.facility_id,
@@ -266,6 +308,8 @@ def find_swim_options(
                                 distance_km=distance,
                                 provenance=facility.provenance,
                                 live_occupancy=live,
+                                lane_availability=lane_avail,
+                                lane_timeline=lane_timeline,
                             )
                         )
 
@@ -279,8 +323,11 @@ def find_swim_options(
                 )
             )
 
-    if registry is not None:
-        statuses.extend(_uncurated_statuses(facilities, registry))
+    # The three-state answer goes live: every roster pool whose schedule is not among the
+    # curated facilities we just resolved is `uncurated` (roster − scheduled) — never merged
+    # with `closed`. An empty roster yields no uncurated rows (callers that only exercise
+    # options pass none), so this stays a single uniform path, not a `registry is None` branch.
+    statuses.extend(_uncurated_statuses(facilities, roster))
 
     options.sort(
         key=lambda o: (
@@ -311,12 +358,24 @@ class FeatureStatus:
 
 
 @dataclass(frozen=True, slots=True)
+class BasinLanePanel:
+    """A basin's lane panel for the facility-detail view — the basin's identity paired with
+    the pure `LanePanel` derivation of its stored `LanePlan` (only basins with a plan)."""
+
+    basin_id: BasinId
+    basin_name: str
+    panel: LanePanel
+
+
+@dataclass(frozen=True, slots=True)
 class FacilityDetail:
     """Facility-level statics for a detail view (`/pools/{id}`-shaped, not per-session):
     website, features (with hours resolved via the schedule resolver), lockers, and the
-    basins with their physical attributes."""
+    basins with their physical attributes. `lane_panels` carries, for each basin that has a
+    parsed Belegungsplan, the per-lane day timeline / best-time / roster derivations for the
+    queried weekday (empty when no basin has a plan)."""
 
-    facility_id: FacilityId
+    facility_id: PoolId
     facility_name: str
     address: str
     website: str | None
@@ -324,6 +383,10 @@ class FacilityDetail:
     features: tuple[FeatureStatus, ...]
     lockers: tuple[LockerOption, ...]
     provenance: Provenance
+    lane_panels: tuple[BasinLanePanel, ...] = field(default_factory=tuple)
+    amenities: tuple[str, ...] = field(default_factory=tuple)
+    accessibility: str | None = None
+    last_admission_before: timedelta | None = None
 
 
 def _feature_status(
@@ -344,6 +407,16 @@ def facility_detail(facility: Facility, at: datetime, calendar: ZurichCalendar) 
     """Assemble the static facility-level answer ("what does this pool offer?") with each
     feature's hours resolved for the queried moment via the existing resolver."""
     at_local = at.astimezone(_ZURICH) if at.tzinfo is not None else at
+    weekday = Weekday(at_local.date().weekday())
+    lane_panels = tuple(
+        BasinLanePanel(
+            basin_id=basin.basin_id,
+            basin_name=basin.name,
+            panel=lane_panel(basin.lane_plan, weekday),
+        )
+        for basin in facility.basins
+        if isinstance(basin.lane_plan, LanePlan)
+    )
     return FacilityDetail(
         facility_id=facility.identity.facility_id,
         facility_name=facility.identity.name,
@@ -353,22 +426,33 @@ def facility_detail(facility: Facility, at: datetime, calendar: ZurichCalendar) 
         features=tuple(_feature_status(facility, f, at_local, calendar) for f in facility.features),
         lockers=facility.lockers,
         provenance=facility.provenance,
+        lane_panels=lane_panels,
+        amenities=tuple(sorted(facility.amenities)),
+        accessibility=facility.accessibility,
+        last_admission_before=facility.last_admission_before,
     )
 
 
 def _uncurated_statuses(
-    facilities: tuple[Facility, ...], registry: Registry
+    facilities: tuple[Facility, ...], roster: tuple[RosterEntry, ...]
 ) -> list[FacilityStatus]:
-    curated_ids = {f.identity.facility_id for f in facilities}
-    uncurated: list[FacilityStatus] = []
-    for fid, identity in registry.identities.items():
-        if fid not in curated_ids:
-            uncurated.append(
-                FacilityStatus(
-                    facility_id=fid,
-                    facility_name=identity.name,
-                    status="uncurated",
-                    detail="schedule not yet curated",
-                )
-            )
-    return uncurated
+    """`uncurated = roster − scheduled`: every roster pool whose canonical id is not among the
+    curated facilities resolved this query. Identity is known (the roster), the schedule is
+    not — so it is `uncurated`, distinct from a curated pool that is `closed` today.
+
+    "Scheduled" is a facility carrying at least one basin with a schedule rule — NOT merely a
+    facility_doc: a prose-only pool (auto-extracted PARSED_PROSE basins, no rules — Decision #5)
+    has a facility_doc but no schedule, so it stays `uncurated` here, never silently dropped."""
+    scheduled_ids = {
+        str(f.identity.facility_id) for f in facilities if any(basin.rules for basin in f.basins)
+    }
+    return [
+        FacilityStatus(
+            facility_id=reconstruct_pool_id(row.entry.pool_id),
+            facility_name=row.entry.name,
+            status="uncurated",
+            detail="schedule not yet curated",
+        )
+        for row in roster
+        if row.entry.pool_id not in scheduled_ids
+    ]

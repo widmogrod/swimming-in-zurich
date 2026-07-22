@@ -12,7 +12,7 @@ from swimzh.domain.models import (
     Basin,
     BasinId,
     Facility,
-    FacilityId,
+    PoolId,
     PoolIdentity,
     PoolKind,
     Provenance,
@@ -71,7 +71,7 @@ def _basin() -> Basin:
 
 def _facility(policy: HolidayPolicy = HolidayPolicy.SUNDAY_SCHEDULE) -> Facility:
     return Facility(
-        identity=PoolIdentity(FacilityId("f"), "Test", PoolKind.INDOOR),
+        identity=PoolIdentity(PoolId("f"), "Test", PoolKind.INDOOR),
         address="",
         provenance=Provenance(source="test", curated=True),
         basins=(_basin(),),

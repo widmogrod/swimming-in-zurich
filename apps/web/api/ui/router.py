@@ -6,18 +6,23 @@ The "Plan my week" tab (Screen 2 in ``docs/plan/2026-07-19-ux-ascii-design.md``)
 read-only days×time grid for the nearest pool: it assembles seven ``/swim`` calls — one per
 weekday (Option A; ``find_swim_options`` returns a whole day's sessions per call) — into a
 grid whose cells carry the same orthogonal access (``≈◇⌂WSX·``) and eligibility (``✓✗?``)
-glyph axes; busyness is un-wired, so the grid states plainly "Busyness: not available yet."
-Closed and unknown days are called out explicitly, never left as a blank that reads as "closed".
+glyph axes plus the session's time range as VISIBLE cell text (not hover-only, invisible on
+touch), inside a horizontal-scroll container so it stays a grid on a phone; busyness is
+un-wired, so the grid states plainly "Busyness: not available yet." Closed and unknown days
+are called out explicitly, never left as a blank that reads as "closed".
 
-The "Find a swim" results embody the unified monospace visual language (see
-``docs/plan/2026-07-19-ux-ascii-design.md``): a fat length badge, orthogonal access
-(``≈◇⌂WSX·``) and eligibility (``✓✗?``) glyph axes, the three never-merged terminal
-states (open ``·closes`` / closed-with-reason / "Hours not listed yet"), an
-``ⓘ Schedule last checked … · source`` provenance stamp in plain words, and — below the
-results in a default-closed "What do the symbols mean?" expander — the shared glyph legend.
-The access word (from ``accessLabel``) reads on each card, not just the bare glyph. The badge
-carries a ``N lane`` sub-line under the length when the basin's lane count is known,
-degrading to length-only when it is not."""
+The "Find a swim" card leads with the ANSWER, not the filter (S4 #7): the facility name is the
+hero (and the S3 link), then a bold colored status pill (open = green / an upcoming window =
+amber, never opacity-only) paired with an eligibility WORD ("you're in" / "not for you" /
+"check"), then distance/price, with the length + lane count demoted to a compact secondary tag
+(kept — it's a real lap-swimmer filter — only shrunk). It still embodies the unified visual
+language (see ``docs/plan/2026-07-19-ux-ascii-design.md``): orthogonal access (``≈◇⌂WSX·``)
+and eligibility (``✓✗?``) glyph axes, the three never-merged terminal states (open ``·closes``
+/ closed-with-reason / "Hours not listed yet"), an ``ⓘ Schedule last checked … · source``
+provenance stamp in plain words, and — below the results in a default-closed "What do the
+symbols mean?" expander — the shared glyph legend. The access word (sentence-cased from
+``accessLabel``) reads on each card, not just the bare glyph. The length tag carries a
+``N lane`` note when the basin's lane count is known, degrading to length-only when it is not."""
 
 from __future__ import annotations
 
@@ -46,6 +51,13 @@ _PAGE = """<!doctype html>
   label { display: flex; flex-direction: column; font-size: .85rem; gap: .25rem; }
   input, select, button { padding: .5rem; font-size: 1rem; }
   form button { grid-column: 1 / -1; cursor: pointer; }
+  /* Shared context bar (#12): the persistent place/gender/age/radius inputs live ONCE above the
+     tabs (styled as a boxed form) and drive every tab, so switching tabs continues the session. */
+  .ctxbar { border: 1px solid #8886; border-radius: .5rem; padding: .75rem .9rem; margin: 1rem 0 .3rem; background: #8881; }
+  .ctxlead { font-size: .78rem; opacity: .6; margin: 0 0 .5rem; }
+  /* Neutral data-coverage line (#10): the consolidated footer's second row — states the
+     verified-timetable fraction calmly (NOT the old amber "7 of ~57" `.warn` banner). */
+  .coverage { margin-top: .5rem; font-size: .82rem; }
   table { border-collapse: collapse; width: 100%; margin-top: 1rem; }
   th, td { text-align: left; padding: .4rem .5rem; border-bottom: 1px solid #8884; font-size: .9rem; vertical-align: top; }
   .badge { display: inline-block; padding: .05rem .4rem; border-radius: .4rem; background: #8882; font-size: .8rem; }
@@ -61,26 +73,80 @@ _PAGE = """<!doctype html>
     border: 1px solid #8886; border-radius: .4rem; padding: .6rem .8rem; margin: .4rem 0 1rem; opacity: .85; }
   .symbols { margin: 1rem 0; }
   .symbols summary { cursor: pointer; opacity: .8; font-size: .85rem; }
-  .card { display: flex; gap: .8rem; align-items: stretch; border: 1px solid #8886;
-    border-radius: .5rem; padding: .7rem; margin: .8rem 0; }
-  .lenbadge { font-family: var(--mono); flex: 0 0 auto; min-width: 5.5rem; display: flex;
-    flex-direction: column; align-items: center; justify-content: center; text-align: center;
-    border: 2px solid #8888; border-radius: .4rem; padding: .4rem .3rem; }
-  .lenbadge .len { font-size: 1.5rem; font-weight: 700; line-height: 1.1; }
-  .lenbadge .lanes { font-size: .8rem; opacity: .8; line-height: 1.2; }
-  .lenbadge .kind { font-size: .7rem; opacity: .7; text-transform: uppercase; letter-spacing: .05em; }
-  .card .body { flex: 1 1 auto; min-width: 0; }
-  .card .head { display: flex; justify-content: space-between; gap: .6rem; flex-wrap: wrap; }
-  .card .name { font-weight: 600; }
+  /* --- swim-card visual hierarchy (S4 #7): the facility NAME is the hero, then a bold
+     colored status pill + an eligibility WORD, then distance/price, with length/lanes
+     demoted to a small secondary tag (kept — it's a real lap-swimmer filter). --- */
+  .card { border: 1px solid #8886; border-radius: .5rem; padding: .7rem .9rem; margin: .8rem 0; }
+  .card .cardname { font-size: 1.15rem; font-weight: 700; line-height: 1.25; }
+  .card .cardname .mark { font-family: var(--mono); font-weight: 400; opacity: .6; margin-right: .25rem; }
+  .card .statusrow { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; margin: .35rem 0; }
   .glyph { font-family: var(--mono); font-weight: 700; }
-  .axis-access { }
   .axis-elig.in { color: #15803d; }
   .axis-elig.out { color: #b91c1c; }
   .axis-elig.unk { color: #b45309; }
-  .state { font-family: var(--mono); font-size: .85rem; white-space: nowrap; }
-  .state.open { color: #15803d; }
-  .state.upcoming { opacity: .8; }
-  .card .metaline { font-size: .85rem; opacity: .8; margin-top: .2rem; }
+  /* Open-vs-later is a bold COLORED pill, not an opacity difference (opacity reads as disabled
+     and washes out on some screens): open = green, an upcoming window = amber. */
+  .state { font-family: var(--mono); font-size: .78rem; font-weight: 700; white-space: nowrap;
+    color: #fff; padding: .12rem .55rem; border-radius: 1rem; }
+  .state.open { background: #15803d; }
+  .state.upcoming { background: #b45309; }
+  .eligword { font-size: .85rem; font-weight: 600; display: inline-flex; align-items: center; gap: .25rem; }
+  .eligword.in { color: #15803d; }
+  .eligword.out { color: #b91c1c; }
+  .eligword.unk { color: #b45309; }
+  /* length + lanes: kept as a real lap-swimmer filter, demoted to a compact monospace tag */
+  .lenbadge { display: inline-block; font-family: var(--mono); font-size: .74rem; white-space: nowrap;
+    border: 1px solid #8886; border-radius: .3rem; padding: .04rem .4rem; opacity: .9; }
+  .lenbadge .len { font-weight: 600; }
+  .lenbadge .lanes { opacity: .8; }
+  /* lane availability: which of the basin's lanes are public right now (Belegungsplan). */
+  .lanebadge { display: inline-block; font-size: .74rem; white-space: nowrap; border-radius: .3rem;
+    padding: .04rem .4rem; background: #16a34a22; color: #15803d; border: 1px solid #16a34a55; }
+  .lanebadge .lpub { font-weight: 600; }
+  .lanebadge .lpartial { opacity: .8; font-style: italic; }
+  /* the arc variant: lane split CHANGES during the session ("4/6 then 2/6 after 18:00") — amber
+     to read as "watch the time", distinct from the steady-state green glance badge. */
+  .lanebadge.lanearc { background: #b4530922; color: #b45309; border-color: #b4530955; }
+  /* --- facility-detail lane panel (Belegungsplan): per-lane timeline, best time, roster --- */
+  .lanesched { margin-top: .4rem; }
+  .lanesched > summary { cursor: pointer; font-size: .82rem; opacity: .85; }
+  .lanepanel { margin: .5rem 0 .2rem; font-size: .82rem; }
+  .lanepanel .lptitle { font-weight: 600; margin: .5rem 0 .2rem; opacity: .8; }
+  .besttime { display: inline-block; font-size: .78rem; border-radius: .3rem; padding: .1rem .5rem;
+    background: #16a34a22; color: #15803d; border: 1px solid #16a34a55; margin: .2rem 0; }
+  .lanestrips { font-family: var(--mono); font-size: .74rem; }
+  .lanestrip { display: flex; gap: .4rem; align-items: baseline; padding: .1rem 0; }
+  .lanestrip .lslane { opacity: .7; min-width: 3.2rem; white-space: nowrap; }
+  .lseg { display: inline-block; border-radius: .25rem; padding: 0 .35rem; margin: .05rem .2rem .05rem 0;
+    border: 1px solid #8886; white-space: nowrap; }
+  .lseg.public { background: #16a34a22; color: #15803d; border-color: #16a34a55; }
+  .lseg.reserved { background: #8882; }
+  .lsempty { opacity: .5; }
+  .roster { margin-top: .3rem; }
+  .roster .rrow { padding: .1rem 0; }
+  .roster .rclub { font-weight: 600; }
+  /* --- facility-detail statics (basins, features, lockers, prices) in the /pools/{id} panel --- */
+  .basincard { border: 1px solid #8886; border-radius: .4rem; padding: .5rem .7rem; margin: .4rem 0; }
+  .basincard .basinhead { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; }
+  .basincard .basinname { font-weight: 600; }
+  /* the prominent water-temperature badge (Decision #4: nominal here, tooltip carries the source) */
+  .tempbadge { display: inline-block; font-weight: 700; font-size: .95rem; white-space: nowrap;
+    padding: .1rem .55rem; border-radius: 1rem; background: #0ea5e922; color: #0369a1;
+    border: 1px solid #0ea5e955; }
+  .basinchips { display: flex; flex-wrap: wrap; gap: .35rem; margin-top: .35rem; }
+  .sizechip { display: inline-block; font-family: var(--mono); font-size: .74rem; white-space: nowrap;
+    border: 1px solid #8886; border-radius: .3rem; padding: .04rem .4rem; opacity: .9; }
+  /* the honesty caveat where a basin's physicals were auto-extracted from prose, not curated */
+  .parsedcaveat { display: inline-block; font-size: .72rem; margin-top: .3rem; color: #b45309;
+    background: #b4530922; border: 1px solid #b4530955; border-radius: .3rem; padding: .04rem .4rem; }
+  .featurerow, .lockerrow, .pricerow { font-size: .82rem; padding: .15rem 0; }
+  .pricerow .pricecat { display: inline-block; min-width: 4.5rem; font-family: var(--mono); opacity: .7; }
+  /* "open now?" pill for a facility feature — green open / grey closed, never opacity-only */
+  .openpill { font-family: var(--mono); font-size: .7rem; font-weight: 700; color: #fff;
+    padding: .06rem .45rem; border-radius: 1rem; white-space: nowrap; }
+  .openpill.open { background: #15803d; }
+  .openpill.closed { background: #6b7280; }
+  .card .metaline { font-size: .85rem; opacity: .85; margin-top: .2rem; }
   .card .reason { font-size: .8rem; opacity: .65; margin-top: .2rem; }
   /* pool-as-object detail line: address · tel · official ↗ · directions ↗ */
   .pooldetail { font-size: .8rem; opacity: .8; margin-top: .3rem; }
@@ -113,20 +179,58 @@ _PAGE = """<!doctype html>
   .chip.closedchip { opacity: .55; text-decoration: line-through; }
   .chip.closedchip.active { opacity: 1; text-decoration: none; }
   .planhead { font-family: var(--mono); font-size: .85rem; margin: .8rem 0 .3rem; }
-  .weekgrid { font-family: var(--mono); border-collapse: collapse; width: 100%; font-size: .9rem; }
+  /* The grid is wider than a phone: wrap it in a horizontal-scroll container with a sensible
+     min-width so it stays a grid on mobile (persona 2 plans on a phone) instead of collapsing. */
+  .gridscroll { overflow-x: auto; margin: .3rem 0; }
+  .weekgrid { font-family: var(--mono); border-collapse: collapse; width: 100%; min-width: 40rem; font-size: .9rem; }
   .weekgrid th, .weekgrid td { border: 1px solid #8884; padding: .3rem .45rem; text-align: center; }
   .weekgrid th { font-weight: 600; opacity: .85; }
   .weekgrid td.time { text-align: right; opacity: .8; white-space: nowrap; }
   .weekgrid td.closed-day { opacity: .45; }        /* no session at this slot (·) */
   .weekgrid td.unknown-day { color: #b45309; }     /* no data — ? , NEVER blank */
+  /* Session time ranges are VISIBLE cell text, not title=-hover-only (invisible on touch). */
+  .weekgrid .cellglyphs { display: block; line-height: 1.3; }
+  .weekgrid .celltime { display: block; font-size: .66rem; opacity: .7; white-space: nowrap; margin-top: .05rem; }
   .cell-elig.in { color: #15803d; } .cell-elig.out { color: #b91c1c; } .cell-elig.unk { color: #b45309; }
   .daynote { font-family: var(--mono); font-size: .82rem; margin: .15rem 0; }
   .daynote.closed { color: #b91c1c; } .daynote.unknown { color: #b45309; }
+
+  /* --- All-pools hub (S5): name filter, schedule indicator, jump-to-plan action --- */
+  .poolfilter { max-width: 22rem; margin: 1rem 0 .4rem; }
+  .poolfilter input { width: 100%; }
+  .sched-yes { color: #15803d; font-weight: 600; white-space: nowrap; }
+  .sched-no { opacity: .6; font-size: .82rem; }        /* honest: no timetable yet, NOT closed */
+  tr.norow { opacity: .72; }                            /* location-only rows sit back, not hidden */
+  button.jump { padding: .25rem .6rem; font-size: .85rem; cursor: pointer; white-space: nowrap;
+    border: 1px solid #3b82f6; color: #3b82f6; background: transparent; border-radius: .4rem; }
+  button.jump:hover { background: #3b82f6; color: #fff; }
 </style>
 </head>
 <body>
 <h1>🏊 Swimming in Zürich</h1>
 <p class="muted">Locations from the city open data (WFS). Schedules are curated/illustrative — verify on-site via the official link.</p>
+
+<!-- Shared context bar (#12): place/gender/age/radius live here ONCE, above the tabs. Every tab
+     reads this state and adds only its own control (Find: "When"; Plan: its filters). Changing it
+     re-runs the active tab, so switching tabs continues the session instead of resetting it. -->
+<p class="ctxlead">Your search context — applies to every tab:</p>
+<form id="ctx" class="ctxbar">
+  <label>Near
+    <select name="place">
+      <option value="47.3779,8.5403">Zürich HB (main station)</option>
+      <option value="47.3671,8.5451">Bellevue</option>
+      <option value="47.3606,8.5510">Zürichhorn</option>
+    </select>
+  </label>
+  <label>Gender
+    <select name="gender">
+      <option value="">any</option><option value="female">female</option>
+      <option value="male">male</option><option value="diverse">diverse</option>
+    </select>
+  </label>
+  <label>Age<input type="number" name="age" min="0" max="120" placeholder="optional"></label>
+  <label>Radius (km)<input type="number" name="radius_km" min="1" max="30" value="10"></label>
+</form>
 
 <nav>
   <button data-tab="find" class="active">Find a swim</button>
@@ -136,15 +240,10 @@ _PAGE = """<!doctype html>
 </nav>
 
 <section id="find" class="active">
+  <!-- Find's ONLY tab-specific inputs are "When" + the eligible toggle; place/gender/age/radius
+       come from the shared context bar above. -->
   <form id="f">
     <label>When<input type="datetime-local" name="at" required></label>
-    <label>Gender
-      <select name="gender">
-        <option value="">any</option><option value="female">female</option>
-        <option value="male">male</option><option value="diverse">diverse</option>
-      </select>
-    </label>
-    <label>Age<input type="number" name="age" min="0" max="120" placeholder="optional"></label>
     <label>Only eligible
       <select name="eligible_only"><option value="true">yes</option><option value="false">no</option></select>
     </label>
@@ -161,25 +260,9 @@ PROV     ⓘ Schedule last checked … · source · official / from the website 
 </section>
 
 <section id="plan">
-  <p class="muted">Plan recurring lap windows across the week near home. Read-only — a days×time grid for one nearby pool at a time. (Saving a routine is not built yet.)</p>
-  <form id="pf">
-    <label>Near
-      <select name="place">
-        <option value="47.3779,8.5403">Zürich HB (main station)</option>
-        <option value="47.3671,8.5451">Bellevue</option>
-        <option value="47.3606,8.5510">Zürichhorn</option>
-      </select>
-    </label>
-    <label>Gender
-      <select name="gender">
-        <option value="">any</option><option value="female">female</option>
-        <option value="male">male</option><option value="diverse">diverse</option>
-      </select>
-    </label>
-    <label>Age<input type="number" name="age" min="0" max="120" placeholder="optional"></label>
-    <label>Radius (km)<input type="number" name="radius_km" min="1" max="30" value="10"></label>
-    <button type="submit">Show my week</button>
-  </form>
+  <p class="muted">Plan recurring lap windows across the week near home. Read-only — a days×time grid for one nearby pool at a time. Uses your shared context (place/gender/age/radius) above. (Saving a routine is not built yet.)</p>
+  <!-- Plan's ONLY tab-specific controls are these lap/reserved/eligible filters; place/gender/age/
+       radius come from the shared context bar. The week auto-resolves from that shared state. -->
   <div class="planfilters">
     <label><input type="checkbox" id="pf-lap" checked> lap only</label>
     <label><input type="checkbox" id="pf-reserved"> show reserved</label>
@@ -195,30 +278,16 @@ FOR YOU  ✓ in     ✗ not you   ? unknown</pre>
 </section>
 
 <section id="visit">
-  <p class="muted">New to Zürich? Start here — the vocabulary you need, then a few pools to try. Closed pools stay on the list (a locked door is worse than a long word).</p>
-  <form id="vf">
-    <label>Staying near
-      <select name="place">
-        <option value="47.3779,8.5403">Zürich HB (main station)</option>
-        <option value="47.3671,8.5451">Bellevue</option>
-        <option value="47.3606,8.5510">Zürichhorn</option>
-      </select>
-    </label>
-    <label>Radius (km)<input type="number" name="radius_km" min="1" max="30" value="5"></label>
-    <label>Age<input type="number" name="age" min="0" max="120" placeholder="optional"></label>
-    <label>Gender
-      <select name="gender">
-        <option value="">any</option><option value="female">female</option>
-        <option value="male">male</option><option value="diverse">diverse</option>
-      </select>
-    </label>
-    <button type="submit">Show me starter pools</button>
-  </form>
+  <p class="muted">New to Zürich? Start here — the vocabulary you need, then a few pools to try. Closed pools stay on the list (a locked door is worse than a long word). Uses your shared context (place/gender/age/radius) above — this tab adds nothing extra.</p>
   <div id="visitOut"></div>
   <div class="primer" id="primer"></div>
 </section>
 
 <section id="all">
+  <p class="muted">Every pool in the city catalog. Pools with a ✓ schedule can be planned — jump straight to the weekly grid; the rest are locations we list honestly without a timetable yet.</p>
+  <label class="poolfilter">Filter by name
+    <input type="search" id="poolFilter" placeholder="type a pool name…" autocomplete="off">
+  </label>
   <div class="chips" id="kinds"></div>
   <div id="allOut"></div>
 </section>
@@ -226,28 +295,56 @@ FOR YOU  ✓ in     ✗ not you   ? unknown</pre>
 <script>
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-// tabs
-document.querySelectorAll('nav button').forEach(b => b.addEventListener('click', () => {
-  document.querySelectorAll('nav button').forEach(x => x.classList.remove('active'));
-  document.querySelectorAll('section').forEach(x => x.classList.remove('active'));
-  b.classList.add('active'); $('#' + b.dataset.tab).classList.add('active');
-  if (b.dataset.tab === 'all' && !allLoaded) loadPools();
-  if (b.dataset.tab === 'visit' && !visitLoaded) loadVisit();
-  if (b.dataset.tab === 'plan' && !planLoaded) loadPlan();
-}));
+// tabs — activateTab is also the programmatic entry point for the All-pools "Plan ›" jump.
+let activeTab = 'find';   // which tab the shared-context re-run targets
+function activateTab(tab) {
+  activeTab = tab;
+  document.querySelectorAll('nav button').forEach(x => x.classList.toggle('active', x.dataset.tab === tab));
+  document.querySelectorAll('section').forEach(x => x.classList.toggle('active', x.id === tab));
+  if (tab === 'all' && !allLoaded) loadPools();
+  if (tab === 'visit' && !visitLoaded) loadVisit();
+  if (tab === 'plan' && !planLoaded) loadPlan();
+}
+document.querySelectorAll('nav button').forEach(b =>
+  b.addEventListener('click', () => activateTab(b.dataset.tab)));
+
+// --- Shared context bar (#12): ONE set of place/gender/age/radius inputs, above the tabs ---
+// Every tab reads ctxState() instead of its own duplicated fields, so the session is carried
+// across tab switches (the inputs are never re-entered per tab). Changing any shared input
+// re-runs whichever tab is active, continuing the session rather than resetting it. The
+// All-pools tab lists the whole catalog and does not consume this context.
+const ctx = $('#ctx');
+ctx.addEventListener('submit', e => e.preventDefault());  // Enter in a field must not reload
+function ctxState() {
+  const [lat, lon] = ctx.place.value.split(',');
+  return { lat, lon, gender: ctx.gender.value, age: ctx.age.value, radius_km: ctx.radius_km.value };
+}
+function rerunActiveTab() {
+  if (activeTab === 'find') { if (findLoaded) f.dispatchEvent(new Event('submit')); }
+  else if (activeTab === 'plan') { if (planLoaded) runPlan(); }
+  else if (activeTab === 'visit') { if (visitLoaded) runVisit(); }
+}
+ctx.addEventListener('change', rerunActiveTab);
 
 // --- Pool catalog join: the facility as a first-class, actionable object ---
-// /swim carries only the facility NAME; /pools carries url/phone/address/lat/lon per pool.
-// Join key = the facility display name (verified: every /swim facility matches a /pools name).
-// Fetch /pools ONCE (memoized, shared by every tab) into a name->record map, so a card can
-// link its pool and show contact/route detail. Helpers degrade to plain text / '' when a
-// facility has no catalog match — never a broken or empty href.
+// /swim carries only the facility NAME; /pools carries url/phone/address/lat/lon per pool AND
+// its derived `curated` flag (the pool table's curation_status). Join key = the facility
+// display name (verified: every /swim facility matches a /pools name). Fetch /pools ONCE
+// (memoized, shared by every tab) into a name->record map, so a card can link its pool, show
+// contact/route detail, and know whether a pool has a curated timetable — WITHOUT a second
+// /swim call. Helpers degrade to plain text / '' when a facility has no catalog match.
 let poolsPromise = null;   // in-flight/settled /pools fetch, shared so it runs at most once
-let poolMap = new Map();   // facility name -> { url, phone, address, lat, lon, ... }
+let poolMap = new Map();   // facility name -> { url, phone, address, lat, lon, curated, ... }
+let scheduledCount = 0;    // how many catalog pools carry a curated timetable (from /pools)
 function loadPoolsData() {
   if (!poolsPromise) poolsPromise = fetch('/pools')
     .then(r => r.ok ? r.json() : { count: 0, kinds: [], pools: [] })
-    .then(a => { poolMap = new Map((a.pools || []).map(p => [p.name, p])); return a; });
+    .then(a => { poolMap = new Map((a.pools || []).map(p => [p.name, p]));
+      if (catalogCount === null) catalogCount = a.count;  // shared: the coverage footer reuses it
+      // Which catalog pools HAVE a curated timetable is read straight from /pools' `curated`
+      // flag (the store's derived curation_status) — never guessed by name-matching a /swim call.
+      scheduledCount = (a.pools || []).filter(p => p.curated).length;
+      return a; });
   return poolsPromise;
 }
 function poolInfo(name) { return poolMap.get(name) || null; }  // the catalog record, or null
@@ -292,6 +389,7 @@ function poolLinksHTML(name) {
 
 // --- Find a swim ---
 const f = $('#f'), findOut = $('#findOut');
+let findLoaded = false;   // becomes true after the first search, so a context change re-runs Find
 const now = new Date(); now.setSeconds(0, 0);
 f.at.value = new Date(now.getTime() - now.getTimezoneOffset()*60000).toISOString().slice(0,16);
 
@@ -303,38 +401,233 @@ const ACCESS_LABEL = { LaneSwim:'LANE', PublicSwim:'PUBLIC', FamilyTime:'FAMILY'
   AdultsOnly:'ADULTS' };
 const accessGlyph = a => ACCESS_GLYPH[a] || '◇';
 const accessLabel = a => ACCESS_LABEL[a] || a;
+// Sentence-case the (shouty upper-case) access label so a card reads "Lane", not "LANE".
+const sentence = s => s ? s.charAt(0).toUpperCase() + s.slice(1).toLowerCase() : s;
 // Eligibility glyph axis (whether it's YOU) — ? = not determinable (unknown), never merged with ✗.
 function eligAxis(o) {
   if (o.eligible) return { g:'✓', cls:'in' };
   if (/determine eligibility|confirm admission/.test(o.reason)) return { g:'?', cls:'unk' };
   return { g:'✗', cls:'out' };
 }
-function optionCard(o) {
-  const badge = o.length_m != null
-    ? `<span class="len">${esc(o.length_m)} m</span>`
-    : `<span class="len">pool</span>`;
-  // Lane count sub-line — real datum from the basin; absent => length-only (honest degrade).
-  const lanes = o.lanes != null ? `<span class="lanes">${esc(o.lanes)} lane</span>` : '';
-  // Three terminal states, per card: OPEN (with closing time) vs. an upcoming window today.
-  const state = o.open_now
+// The eligibility axis paired with a plain WORD (derived, via eligAxis, from o.reason) so ✓/✗/?
+// is not the only signal: "you're in" / "not for you" / "check".
+const ELIG_WORD = { in: "you're in", out: 'not for you', unk: 'check' };
+function eligWord(o) { return ELIG_WORD[eligAxis(o).cls]; }
+// Open-vs-later terminal state as a bold COLORED pill (see .state CSS) — never opacity-only.
+function statePill(o) {
+  return o.open_now
     ? `<span class="state open">OPEN · closes ${esc(o.end)}</span>`
     : `<span class="state upcoming">${esc(o.start)}–${esc(o.end)} today</span>`;
+}
+// Length + lane count as a compact secondary tag: a real lap-swimmer filter, kept but demoted.
+// Lane count is a real datum from the basin — absent => length-only (honest degrade, no faked N).
+function lenTagHTML(o) {
+  const len = o.length_m != null ? `${esc(o.length_m)} m` : 'pool';
+  const lanes = o.lanes != null ? `<span class="lanes"> · ${esc(o.lanes)} lane</span>` : '';
+  return `<span class="lenbadge"><span class="len">${len}</span>${lanes}</span>`;
+}
+// Lane-availability glance badge (Belegungsplan): "5/6 lanes public · until 18:00". Only shown
+// when the basin has a parsed lane plan; `partial` flags an unresolved cell so the count isn't
+// silently trusted. Absent (null) => no badge, an honest degrade (most basins have no plan yet).
+function laneBadgeHTML(o) {
+  const la = o.lane_availability;
+  if (!la) return '';
+  const until = la.public_until ? ` · until ${esc(la.public_until)}` : '';
+  const partial = la.partial ? ' <span class="lpartial">partial</span>' : '';
+  return `<span class="lanebadge"><span class="lpub">${esc(la.public_lanes)}/${esc(la.lane_count)}</span> lanes public${until}${partial}</span>`;
+}
+// Lane-availability ARC across the whole session (Belegungsplan timeline): collapses the
+// per-boundary segments into distinct public-count runs and renders "4/6 then 2/6 after 18:00".
+// Only shown when the public count actually CHANGES during the session (>=2 runs) — otherwise
+// the single glance badge (laneBadgeHTML) already says it. Absent (null) => no arc.
+function laneTimelineHTML(o) {
+  const tl = o.lane_timeline;
+  if (!tl || !tl.segments.length) return '';
+  const runs = [];
+  for (const s of tl.segments) {
+    const last = runs[runs.length - 1];
+    if (last && last.public_lanes === s.public_lanes && last.lane_count === s.lane_count) last.end = s.end;
+    else runs.push({ start: s.start, end: s.end, public_lanes: s.public_lanes, lane_count: s.lane_count });
+  }
+  if (runs.length < 2) return '';  // constant across the session — the glance badge covers it
+  const txt = runs.map((r, i) =>
+    i === 0 ? `${esc(r.public_lanes)}/${esc(r.lane_count)}`
+            : `then ${esc(r.public_lanes)}/${esc(r.lane_count)} after ${esc(r.start)}`).join(' ');
+  return `<span class="lanebadge lanearc" title="lane availability changes during this session">↺ ${txt}</span>`;
+}
+// --- Facility-detail lane panel (Belegungsplan derivations) -----------------------------
+// A basin whose OptionOut carries lane_availability has a parsed plan, so its /pools/{id}
+// facility detail carries a per-basin lane panel: the "best time to come" window, the per-
+// lane day timeline, and the club roster. Rendered lazily inside a <details> on first open.
+const DAY_NAMES = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+const dayName = i => DAY_NAMES[i] || ('day ' + i);
+// One lane's day as a row of colored segments (public = green, reserved shows its owner);
+// an empty lane reads "—" (no session), never a blank that would imply "public".
+function laneStripHTML(strip) {
+  if (!strip.segments.length)
+    return `<div class="lanestrip"><span class="lslane">lane ${esc(strip.lane)}</span><span class="lsempty">—</span></div>`;
+  const segs = strip.segments.map(s => {
+    const pub = s.owner == null;
+    const label = pub ? 'public' : s.owner;
+    return `<span class="lseg ${pub ? 'public' : 'reserved'}">${esc(s.start)}–${esc(s.end)} ${esc(label)}</span>`;
+  }).join('');
+  return `<div class="lanestrip"><span class="lslane">lane ${esc(strip.lane)}</span><span>${segs}</span></div>`;
+}
+// The club roster: who holds which lanes, when. One row per (owner, weekday).
+function rosterHTML(roster) {
+  if (!roster.length) return '<div class="muted">No club or school reservations this week — all public.</div>';
+  return '<div class="roster">' + roster.map(r =>
+    `<div class="rrow"><span class="rclub">${esc(r.club)}</span>: ${esc(dayName(r.weekday))} ${esc(r.start)}–${esc(r.end)}, lanes ${esc(r.lanes.join(', '))}</div>`
+  ).join('') + '</div>';
+}
+// One basin's panel: best-time badge, then the per-lane timeline, then the roster.
+function basinPanelHTML(bp) {
+  const p = bp.panel, dv = p.day_view;
+  const best = p.best_public
+    ? `<div class="besttime">Best time to come (${esc(dayName(dv.weekday))}): ${esc(p.best_public.start)}–${esc(p.best_public.end)} · ${esc(p.best_public.public_lanes)}/${esc(dv.lane_count)} lanes public</div>`
+    : '<div class="muted">No public lanes scheduled this day.</div>';
+  const strips = '<div class="lanestrips">' + dv.strips.map(laneStripHTML).join('') + '</div>';
+  return `<div class="lanepanel"><div class="lptitle">${esc(bp.basin_name)} — ${esc(dayName(dv.weekday))} lane plan</div>`
+    + best
+    + '<div class="lptitle">Per-lane timeline</div>' + strips
+    + '<div class="lptitle">Club roster (this week)</div>' + rosterHTML(p.roster)
+    + '</div>';
+}
+// --- Facility-detail statics (basins, features, lockers, prices) ------------------------
+// /pools/{id} now carries the physical facts the domain already computes: each basin's size,
+// lane count and DESIGN water temperature (with a curated-vs-parsed_prose honesty caveat),
+// the facility's features with hours resolved for the queried moment, its lockers, and its
+// price table. Rendered in the same lazy detail panel as the lane plans.
+// One basin card: name + a prominent water-temperature badge, then size/lane/kind chips, then
+// the PARSED_PROSE caveat when the physicals were auto-extracted (not hand-verified).
+function basinCardHTML(b) {
+  // Decision #4: a MEASURED reading wins the prominent badge; the nominal (design) value moves to
+  // the tooltip. With only a nominal value, show it (labelled "design"). No temp => no badge.
+  let temp = '';
+  if (b.measured_temp_c != null) {
+    const nom = b.nominal_temp_c != null ? ` (design ${esc(b.nominal_temp_c)}°C)` : '';
+    temp = `<span class="tempbadge" title="measured water temperature${nom}">🌡 ${esc(b.measured_temp_c)}°C</span>`;
+  } else if (b.nominal_temp_c != null) {
+    temp = `<span class="tempbadge" title="design (nominal) temperature, not a live reading">🌡 ${esc(b.nominal_temp_c)}°C</span>`;
+  }
+  const chips = [];
+  if (b.length_m != null)
+    chips.push(`<span class="sizechip">${esc(b.length_m)}${b.width_m != null ? ' × ' + esc(b.width_m) : ''} m</span>`);
+  if (b.lanes != null) chips.push(`<span class="sizechip">${esc(b.lanes)} lane${b.lanes === 1 ? '' : 's'}</span>`);
+  if (b.diving_platforms_m && b.diving_platforms_m.length)
+    chips.push(`<span class="sizechip">🤿 ${b.diving_platforms_m.map(esc).join('/')} m</span>`);
+  if (b.kind) chips.push(`<span class="sizechip">${esc(b.kind)}</span>`);
+  // physical_source === 'parsed_prose' => auto-extracted, unverified: say so plainly.
+  const caveat = b.physical_source === 'parsed_prose'
+    ? '<div class="parsedcaveat">PARSED_PROSE — auto-extracted from the pool page, not hand-verified</div>'
+    : '';
+  return `<div class="basincard"><div class="basinhead"><span class="basinname">${esc(b.name)}</span>${temp}</div>`
+    + `<div class="basinchips">${chips.join('')}</div>${caveat}</div>`;
+}
+// One feature row: name + an "open now?" pill (green open / grey closed / omitted when the
+// feature states no separate hours), then its resolved hours, surcharge and temperature.
+function featureRowHTML(fe) {
+  const pill = fe.open_now === true ? '<span class="openpill open">open now</span>'
+    : fe.open_now === false ? '<span class="openpill closed">closed now</span>' : '';
+  const hours = fe.hours && fe.hours.length
+    ? ' <span class="muted">' + fe.hours.map(h => esc(h.start) + '–' + esc(h.end)).join(', ') + '</span>'
+    : (fe.closed_reason ? ' <span class="muted">' + esc(fe.closed_reason) + '</span>' : '');
+  const extra = [fe.surcharge_chf != null ? '+CHF ' + esc(fe.surcharge_chf) : null,
+    fe.temp_c != null ? esc(fe.temp_c) + '°C' : null].filter(Boolean).map(esc).join(' · ');
+  return `<div class="featurerow"><b>${esc(fe.name)}</b> ${pill}${hours}${extra ? ' · ' + extra : ''}</div>`;
+}
+// One locker row: category, then fee (or "free") + refundable deposit + rental period.
+function lockerRowHTML(l) {
+  const fee = l.fee_chf != null ? 'CHF ' + esc(l.fee_chf) : 'free';
+  const dep = l.deposit_chf != null ? ' · deposit CHF ' + esc(l.deposit_chf) : '';
+  const per = l.period ? ' · ' + esc(l.period) : '';
+  return `<div class="lockerrow"><b>${esc(l.category)}</b>: ${fee}${dep}${per}</div>`;
+}
+// The facility price table: one row per age-band entry, plus a "checked on" freshness line.
+function priceTableHTML(pt) {
+  const rows = pt.entries.map(e =>
+    `<div class="pricerow"><span class="pricecat">${esc(e.category)}</span> ${esc(e.display)}</div>`).join('');
+  const when = pt.valid_as_of ? `<div class="muted">Prices checked ${esc(pt.valid_as_of)}</div>` : '';
+  return rows + when;
+}
+// Amenity chips + accessibility + last-admission note — the facility-level statics F extracted.
+function facilityExtrasHTML(d) {
+  let h = '';
+  if (d.amenities && d.amenities.length)
+    h += '<div class="basinchips">' + d.amenities.map(a => `<span class="sizechip">${esc(a)}</span>`).join('') + '</div>';
+  if (d.accessibility)
+    h += `<div class="featurerow">♿ ${esc(d.accessibility)}</div>`;
+  if (d.last_admission_before_min != null)
+    h += `<div class="muted">Last admission ${esc(d.last_admission_before_min)} min before closing</div>`;
+  return h;
+}
+// Compose the whole facility-detail panel: basins, features, lockers, prices, then lane plans.
+function facilityDetailHTML(d) {
+  let h = facilityExtrasHTML(d);
+  if (d.basins && d.basins.length)
+    h += '<div class="lptitle">Basins</div>' + d.basins.map(basinCardHTML).join('');
+  if (d.features && d.features.length)
+    h += '<div class="lptitle">Facilities &amp; amenities</div>' + d.features.map(featureRowHTML).join('');
+  if (d.lockers && d.lockers.length)
+    h += '<div class="lptitle">Lockers</div>' + d.lockers.map(lockerRowHTML).join('');
+  if (d.prices && d.prices.entries && d.prices.entries.length)
+    h += '<div class="lptitle">Prices</div>' + priceTableHTML(d.prices);
+  if (d.lane_panels && d.lane_panels.length)
+    h += '<div class="lptitle">Lane plans</div>' + d.lane_panels.map(basinPanelHTML).join('');
+  return h || '<p class="muted">No further detail for this pool yet.</p>';
+}
+// Fetch /pools/{facility_id} once per <details> and render its full facility detail (physical
+// basins + water temperature, features, lockers, prices, and any lane panels). The `at` moment
+// selects the weekday/hours shown; we pass the Find form's "When" so the panel matches the search.
+async function loadLanePanel(el) {
+  if (el.dataset.loaded) return;
+  el.dataset.loaded = '1';
+  const id = el.dataset.facilityId, at = el.dataset.at;
+  const box = el.querySelector('.lanepanel-slot');
+  box.innerHTML = '<p class="muted">Loading pool detail…</p>';
+  const r = await fetch('/pools/' + encodeURIComponent(id) + (at ? '?at=' + encodeURIComponent(at) : ''));
+  if (!r.ok) { box.innerHTML = '<p class="muted">Pool detail unavailable.</p>'; return; }
+  const d = await r.json();
+  box.innerHTML = facilityDetailHTML(d);
+}
+// Wire every lane-schedule <details> in a container to lazy-load on first open.
+function wireLanePanels(container) {
+  container.querySelectorAll('details.lanesched').forEach(d =>
+    d.addEventListener('toggle', () => { if (d.open) loadLanePanel(d); }));
+}
+// Visual hierarchy (S4 #7): the eye lands on the ANSWER, not the filter — facility name (big,
+// the S3 link) → bold status pill + eligibility WORD → distance/price → length demoted to a
+// small tag. The redundant `indoor` kind is dropped (every Find result is indoor).
+function optionCard(o) {
   const el = eligAxis(o);
   const meta = [o.distance_km != null ? o.distance_km + ' km' : null, o.price]
     .filter(Boolean).map(esc).join(' · ');
   return `<article class="card">
-    <div class="lenbadge">${badge}${lanes}<span class="kind">${esc(o.kind)}</span></div>
-    <div class="body">
-      <div class="head"><span class="name">${poolNameHTML(o.facility)} · ${esc(o.basin)}</span>${state}</div>
-      <div class="metaline">
-        <span class="glyph axis-access">${esc(accessGlyph(o.access))}</span> ${esc(accessLabel(o.access))}
-        &nbsp; <span class="glyph axis-elig ${el.cls}">${el.g}</span>
-        ${meta ? '&nbsp; ' + meta : ''}
-      </div>
-      <div class="reason">${esc(o.reason)}</div>
-      ${poolDetailHTML(o.facility)}
+    <div class="cardname">${poolNameHTML(o.facility)} · ${esc(o.basin)}</div>
+    <div class="statusrow">
+      ${statePill(o)}
+      <span class="eligword ${el.cls}"><span class="glyph axis-elig ${el.cls}">${el.g}</span> ${esc(eligWord(o))}</span>
     </div>
+    <div class="metaline">
+      <span class="glyph axis-access">${esc(accessGlyph(o.access))}</span> ${esc(sentence(accessLabel(o.access)))}
+      ${meta ? '&nbsp; · ' + meta : ''}
+      &nbsp; ${lenTagHTML(o)}
+      ${laneBadgeHTML(o)}
+      ${laneTimelineHTML(o)}
+    </div>
+    <div class="reason">${esc(o.reason)}</div>
+    ${poolDetailHTML(o.facility)}
+    ${laneSchedHTML(o)}
   </article>`;
+}
+
+// A default-closed lane-schedule expander for basins WITH a parsed plan (o.lane_availability
+// present). It lazy-loads the /pools/{id} facility-detail panel on first open (see
+// wireLanePanels). Absent when the basin has no plan, so most cards stay unchanged.
+function laneSchedHTML(o) {
+  if (!o.lane_availability) return '';
+  return `<details class="lanesched" data-facility-id="${esc(o.facility_id)}" data-at="${esc(f.at.value)}">`
+    + '<summary>Lane schedule this week ›</summary><div class="lanepanel-slot"></div></details>';
 }
 
 // The three terminal states are never merged: closed-with-reason and uncurated are
@@ -362,15 +655,35 @@ function provStamp(options) {
   return `<div class="prov">ⓘ ${asOf}${esc(sources.join(', ') || 'unknown source')} · ${provenance}</div>`;
 }
 
+// #10: ONE consolidated footer per tab. The trailing meta used to be a stack (provenance stamp
+// + a separate amber hardcoded-count .warn banner). footerHTML folds them into a single footer:
+// the ⓘ provenance stamp, then a NEUTRAL data-coverage line built from the REAL counts — the
+// memoized catalog size (catalogCount) and the curated-timetable count (scheduledCount), both
+// from the one /pools read — stating the same honest fact (few verified timetables; unknown ≠
+// closed) calmly, not in alarm red.
+function coverageHTML() {
+  if (catalogCount == null) return '';
+  return `<div class="coverage muted">Timetables verified for ${scheduledCount} of ~${catalogCount} Zürich pools so far — the rest are listed as locations and show as “unknown”, which is not the same as closed.</div>`;
+}
+function footerHTML(options) { return provStamp(options) + coverageHTML(); }
+
 f.addEventListener('submit', async e => {
   e.preventDefault();
+  findLoaded = true;
+  // Find's own control is "When" + the eligible toggle; place/gender/age/radius come from ctx.
+  const c = ctxState();
   const p = new URLSearchParams();
-  for (const [k, v] of new FormData(f)) if (v !== '') p.append(k, v);
+  p.append('at', f.at.value);
+  p.append('eligible_only', f.eligible_only.value);
+  p.append('lat', c.lat); p.append('lon', c.lon);
+  if (c.radius_km) p.append('radius_km', c.radius_km);
+  if (c.age) p.append('age', c.age);
+  if (c.gender) p.append('gender', c.gender);
   findOut.innerHTML = '<p class="muted">Searching…</p>';
   const r = await fetch('/swim?' + p);
   if (!r.ok) { findOut.innerHTML = '<p class="warn">' + esc((await r.json()).detail) + '</p>'; return; }
   const a = await r.json();
-  await loadPoolsData();  // memoized /pools — so every card can link its pool + show detail
+  await loadPoolsData();  // memoized /pools — link each card + read the curated-timetable counts
   let h = a.notices.map(n => '<p class="warn">📣 <strong>' + esc(n.facility) + '</strong>: ' + esc(n.text) + '</p>').join('');
   h += a.warnings.map(w => '<p class="warn">⚠ ' + esc(w) + '</p>').join('');
   if (!a.options.length) h += '<p>No open, eligible sessions for that moment.</p>';
@@ -378,8 +691,9 @@ f.addEventListener('submit', async e => {
   if (a.statuses.length)
     h += '<div class="notshown"><div class="sep">not shown as options</div>'
        + a.statuses.map(statusLine).join('') + '</div>';
-  h += provStamp(a.options);
+  h += footerHTML(a.options);
   findOut.innerHTML = h;
+  wireLanePanels(findOut);  // lazy-load each card's Belegungsplan lane panel on first open
 });
 
 // access legend
@@ -391,7 +705,7 @@ fetch('/access-types').then(r => r.json()).then(a => {
 // Plain-language primer + a few distance-ranked starter pools with jargon decoded inline.
 // Reuses the shared /swim, /pools, /access-types responses and the unified card helpers
 // above — no new endpoints, no invented data.
-const vf = $('#vf'), visitOut = $('#visitOut');
+const visitOut = $('#visitOut');
 
 // Pool TYPES keyed off the catalog `kind` value → the German label + a plain-English gloss.
 const POOL_TYPES = {
@@ -423,7 +737,7 @@ async function loadVisit() {
   // The slot glossary is the /access-types data; POOL TYPES is keyed off the kinds actually
   // present in the results (see renderPrimer), so no /pools fetch is needed here.
   visitAccess = await fetch('/access-types').then(r => r.json());
-  vf.dispatchEvent(new Event('submit'));  // show starter pools immediately with defaults
+  await runVisit();  // show starter pools immediately, from the shared context bar
 }
 
 // The primer is deliberately small: one always-visible line (the only thing a newcomer must
@@ -451,47 +765,40 @@ function renderPrimer(options) {
 // A starter-pool card: the S1 badge + orthogonal glyph axes, jargon decoded inline, km only.
 // Walk/transit time is deliberately never shown — there is no routing model (gap #4).
 function starterCard(o, mark) {
-  const badge = o.length_m != null
-    ? `<span class="len">${esc(o.length_m)} m</span>`
-    : `<span class="len">pool</span>`;
-  const lanes = o.lanes != null ? `<span class="lanes">${esc(o.lanes)} lane</span>` : '';
-  const state = o.open_now
-    ? `<span class="state open">OPEN · closes ${esc(o.end)}</span>`
-    : `<span class="state upcoming">${esc(o.start)}–${esc(o.end)} today</span>`;
   const el = eligAxis(o);
   const meta = [o.distance_km != null ? o.distance_km + ' km' : null, o.price]
     .filter(Boolean).map(esc).join(' · ');
   return `<article class="card">
-    <div class="lenbadge"><span class="kind">${esc(mark)}</span>${badge}${lanes}</div>
-    <div class="body">
-      <div class="head"><span class="name">${poolNameHTML(o.facility)} · ${esc(o.basin)}</span>${state}</div>
-      <div class="metaline">
-        <span class="glyph axis-access">${esc(accessGlyph(o.access))}</span>
-        <span class="glyph axis-elig ${el.cls}">${el.g}</span>
-        ${meta ? '&nbsp; ' + meta : ''}
-      </div>
-      <div class="decode">This slot is <b>${esc(decodeAccess(o.access))}</b>.</div>
-      ${poolDetailHTML(o.facility)}
+    <div class="cardname"><span class="mark">${esc(mark)}</span>${poolNameHTML(o.facility)} · ${esc(o.basin)}</div>
+    <div class="statusrow">
+      ${statePill(o)}
+      <span class="eligword ${el.cls}"><span class="glyph axis-elig ${el.cls}">${el.g}</span> ${esc(eligWord(o))}</span>
     </div>
+    <div class="metaline">
+      <span class="glyph axis-access">${esc(accessGlyph(o.access))}</span>
+      ${meta ? '&nbsp; ' + meta : ''}
+      &nbsp; ${lenTagHTML(o)}
+    </div>
+    <div class="decode">This slot is <b>${esc(decodeAccess(o.access))}</b>.</div>
+    ${poolDetailHTML(o.facility)}
   </article>`;
 }
 
-vf.addEventListener('submit', async e => {
-  e.preventDefault();
+async function runVisit() {
   const now = new Date(); now.setSeconds(0, 0);
-  const [lat, lon] = vf.place.value.split(',');
+  const c = ctxState();  // place/gender/age/radius from the shared context bar (no vf form now)
   const p = new URLSearchParams();
   p.append('at', new Date(now.getTime() - now.getTimezoneOffset()*60000).toISOString().slice(0,16));
-  p.append('lat', lat); p.append('lon', lon);
-  if (vf.radius_km.value) p.append('radius_km', vf.radius_km.value);
-  if (vf.age.value) p.append('age', vf.age.value);
-  if (vf.gender.value) p.append('gender', vf.gender.value);
+  p.append('lat', c.lat); p.append('lon', c.lon);
+  if (c.radius_km) p.append('radius_km', c.radius_km);
+  if (c.age) p.append('age', c.age);
+  if (c.gender) p.append('gender', c.gender);
   p.append('eligible_only', 'false');  // a newcomer sees every nearby option, ✓/✗/? and all
   visitOut.innerHTML = '<p class="muted">Finding pools near you…</p>';
   const r = await fetch('/swim?' + p);
   if (!r.ok) { visitOut.innerHTML = '<p class="warn">' + esc((await r.json()).detail) + '</p>'; return; }
   const a = await r.json();
-  await loadPoolsData();  // memoized /pools — link each starter pool + its contact/route detail
+  await loadPoolsData();  // memoized /pools — link each starter pool + read the coverage counts
   renderPrimer(a.options);  // keep the glossary keyed to the kinds these results actually contain
   let h = '<h3>Starter pools near you</h3>';
   const marks = ['①', '②', '③'];
@@ -510,10 +817,11 @@ vf.addEventListener('submit', async e => {
   if (a.statuses.length)
     h += '<div class="notshown"><div class="sep">also nearby — not open right now, but NOT necessarily shut</div>'
        + a.statuses.map(statusLine).join('') + '</div>';
-  h += provStamp(a.options);
-  h += '<p class="warn">⚠ Only 7 of ~57 Zürich pools have verified timetables. The rest show as “unknown” — which is NOT the same as closed.</p>';
+  // #10: one consolidated footer — provenance + a NEUTRAL data-coverage line — replaces the old
+  // provStamp-plus-amber-"7 of ~57"-banner stack. Same honesty, told once, calmly (not alarm red).
+  h += footerHTML(a.options);
   visitOut.innerHTML = h;
-});
+}
 
 // --- Plan my week (read-only weekly grid) ---
 // DISCOVERY (Option A): /swim takes a single `at` moment, but find_swim_options resolves
@@ -521,12 +829,13 @@ vf.addEventListener('submit', async e => {
 // `open_now` is just a per-session flag), so 7 calls — one per weekday at a representative
 // noon — assemble the whole week with no API change. Eligibility (✓✗?) is per-session and
 // time-independent; only holiday-correct schedules need the real date, which each call has.
-const pf = $('#pf'), planOut = $('#planOut'), poolSwitch = $('#poolSwitch'), planNote = $('#planNote');
+const planOut = $('#planOut'), poolSwitch = $('#poolSwitch'), planNote = $('#planNote');
 const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 let planLoaded = false;
 let planWeek = null;      // [{ label, iso, answer }] for Mon..Sun
 let planPools = [];       // [{ facility, distance_km, closed }] — open pools first (by distance), then closed
 let planSelected = null;  // selected facility name
+let planPreselect = null; // facility the All-pools "Plan ›" jump asked to select once resolved
 let catalogCount = null;  // total pools in the WFS catalog (the "All pools" universe)
 
 function localISO(d) {
@@ -538,11 +847,13 @@ function mondayOf(d) {
   return m;
 }
 
-async function loadPlan() { planLoaded = true; pf.dispatchEvent(new Event('submit')); }
+async function loadPlan() { planLoaded = true; await runPlan(); }
 
-pf.addEventListener('submit', async e => {
-  e.preventDefault();
-  const [lat, lon] = pf.place.value.split(',');
+// The week resolves from the shared context bar (place/gender/age/radius) — no per-tab form.
+// loadPlan runs it on first tab open; a shared-context change re-runs it (see rerunActiveTab).
+async function runPlan() {
+  const c = ctxState();
+  const [lat, lon] = [c.lat, c.lon];
   const monday = mondayOf(new Date());
   planOut.innerHTML = '<p class="muted">Resolving the week…</p>';
   const days = WEEKDAYS.map((label, i) => {
@@ -552,9 +863,9 @@ pf.addEventListener('submit', async e => {
   // Option A: one /swim call per weekday (7), assembled client-side.
   const answers = await Promise.all(days.map(async day => {
     const p = new URLSearchParams({ at: day.iso, lat, lon, eligible_only: 'false' });
-    if (pf.radius_km.value) p.append('radius_km', pf.radius_km.value);
-    if (pf.age.value) p.append('age', pf.age.value);
-    if (pf.gender.value) p.append('gender', pf.gender.value);
+    if (c.radius_km) p.append('radius_km', c.radius_km);
+    if (c.age) p.append('age', c.age);
+    if (c.gender) p.append('gender', c.gender);
     const r = await fetch('/swim?' + p);
     return r.ok ? r.json() : { options: [], statuses: [], warnings: [], notices: [] };
   }));
@@ -583,8 +894,14 @@ pf.addEventListener('submit', async e => {
   const closedPools = [...closedNames].sort().map(facility => ({ facility, distance_km: null, closed: true }));
   planPools = [...openPools, ...closedPools];
   planSelected = openPools.length ? openPools[0].facility : (planPools[0]?.facility ?? null);  // nearest OPEN pool by default
+  // S5 jump: if the All-pools "Plan ›" button requested a pool and it resolved within the
+  // current place/radius, preselect it (else fall back to the nearest — recorded tech debt).
+  if (planPreselect) {
+    if (planPools.some(p => p.facility === planPreselect)) planSelected = planPreselect;
+    planPreselect = null;
+  }
   renderPlan();
-});
+}
 
 ['pf-lap', 'pf-reserved', 'pf-elig'].forEach(id =>
   $('#' + id).addEventListener('change', () => { if (planWeek) renderPlan(); }));
@@ -655,7 +972,8 @@ function renderPlan() {
   }
 
   let h = `<div class="planhead">${badgePool}</div>` + poolDetail;
-  h += '<table class="weekgrid"><thead><tr><th>time</th>'
+  // Horizontal-scroll container (#9): the grid stays a grid on a phone instead of collapsing.
+  h += '<div class="gridscroll"><table class="weekgrid"><thead><tr><th>time</th>'
      + planWeek.map(d => `<th>${esc(d.label)}</th>`).join('') + '</tr></thead><tbody>';
   for (const t of times) {
     h += `<tr><td class="time">${esc(t)}</td>`;
@@ -668,12 +986,16 @@ function renderPlan() {
       const o = here.find(x => x.access === 'LaneSwim') || here[0];  // one glyph pair per cell
       const el = eligAxis(o);
       const title = here.map(x => x.start + '–' + x.end + ' ' + accessLabel(x.access)).join(' · ');
-      h += `<td title="${esc(title)}"><span class="glyph">${esc(accessGlyph(o.access))}</span>`
-         + `<span class="glyph cell-elig ${el.cls}">${el.g}</span></td>`;
+      // The time range is VISIBLE cell text (#9), not title=-hover-only — hover is invisible on
+      // touch. Glyphs stay for scannability; the full stacked-session detail stays in title=.
+      h += `<td title="${esc(title)}">`
+         + `<span class="cellglyphs"><span class="glyph">${esc(accessGlyph(o.access))}</span>`
+         + `<span class="glyph cell-elig ${el.cls}">${el.g}</span></span>`
+         + `<span class="celltime">${esc(o.start)}–${esc(o.end)}</span></td>`;
     }
     h += '</tr>';
   }
-  h += '</tbody></table>';
+  h += '</tbody></table></div>';
 
   // Closed / unknown days are called out explicitly below the grid — never left as a silent blank.
   const notes = planWeek.map((d, i) => {
@@ -688,26 +1010,68 @@ function renderPlan() {
   planOut.innerHTML = h;
 }
 
-// --- All pools ---
-let allLoaded = false, currentKind = null;
+// --- All pools: a navigation HUB, not a dead-end (S5) ---
+// One /pools fetch TOTAL (the memoized loadPoolsData()). Each /pools row carries a `curated`
+// flag — the store's derived curation_status — so each row knows whether it has a timetable
+// WITHOUT a second /swim call and WITHOUT name-matching. Rows WITH a schedule get a "Plan ›"
+// jump; rows WITHOUT read "location only — no timetable yet" (honest, never "closed"). A
+// name-filter box narrows the 57.
+let allLoaded = false, currentKind = null, nameFilter = '', allPools = [];
 async function loadPools() {
   allLoaded = true;
-  const r = await fetch('/pools');
-  const a = await r.json();
+  const a = await loadPoolsData();
+  allPools = a.pools || [];
   $('#kinds').innerHTML = ['<button class="chip active" data-kind="">all (' + a.count + ')</button>']
     .concat(a.kinds.map(k => `<button class="chip" data-kind="${esc(k)}">${esc(k)}</button>`)).join('');
   document.querySelectorAll('#kinds .chip').forEach(c => c.addEventListener('click', () => {
     document.querySelectorAll('#kinds .chip').forEach(x => x.classList.remove('active'));
-    c.classList.add('active'); currentKind = c.dataset.kind || null; renderPools(a.pools);
+    c.classList.add('active'); currentKind = c.dataset.kind || null; renderPools();
   }));
-  renderPools(a.pools);
+  renderPools();
 }
-function renderPools(pools) {
-  const items = currentKind ? pools.filter(p => p.kind === currentKind) : pools;
-  let h = `<p class="muted">${items.length} pools</p><table><thead><tr><th>Name</th><th>Kind</th><th>Address</th><th></th></tr></thead><tbody>`;
-  for (const p of items)
-    h += `<tr><td>${esc(p.name)}</td><td><span class="badge">${esc(p.kind)}</span></td><td>${esc(p.address)}</td><td>${p.url ? `<a href="${esc(p.url)}" target="_blank" rel="noopener">official ↗</a>` : ''}</td></tr>`;
+// Client-side name filter (#13): case-insensitive `includes` on p.name, the jump-to-schedule
+// entry point. Wired once (the input lives in static markup); a no-op until the tab is loaded.
+$('#poolFilter').addEventListener('input', e => {
+  nameFilter = e.target.value.trim().toLowerCase();
+  if (allLoaded) renderPools();
+});
+function renderPools() {
+  let items = allPools;
+  if (currentKind) items = items.filter(p => p.kind === currentKind);
+  if (nameFilter) items = items.filter(p => p.name.toLowerCase().includes(nameFilter));
+  let h = `<p class="muted">${items.length} pools</p><table><thead><tr>`
+    + '<th>Name</th><th>Kind</th><th>Schedule</th><th>Address</th><th></th></tr></thead><tbody>';
+  for (const p of items) {
+    const scheduled = p.curated;  // read from /pools (derived curation_status), never guessed by name
+    // #11: a schedule indicator + a "Plan ›" jump for pools we can actually plan; the rest are
+    // honestly "location only — no timetable yet" (NOT closed — invariant #1).
+    const schedCell = scheduled
+      ? '<span class="sched-yes">✓ schedule</span>'
+      : '<span class="sched-no">location only — no timetable yet</span>';
+    const action = scheduled
+      ? `<button class="jump" data-pool="${esc(p.name)}">Plan ›</button>`
+      : (p.url ? `<a href="${esc(p.url)}" target="_blank" rel="noopener">official ↗</a>` : '');
+    h += `<tr${scheduled ? '' : ' class="norow"'}><td>${poolNameHTML(p.name)}</td>`
+      + `<td><span class="badge">${esc(p.kind)}</span></td><td>${schedCell}</td>`
+      + `<td>${esc(p.address)}</td><td>${action}</td></tr>`;
+  }
   $('#allOut').innerHTML = h + '</tbody></table>';
+  // Wire the jumps: switch to Plan and preselect this pool (see jumpToPlan).
+  $('#allOut').querySelectorAll('button.jump').forEach(b =>
+    b.addEventListener('click', () => jumpToPlan(b.dataset.pool)));
+}
+// The All-pools → Plan jump: switch tabs and ask the planner to preselect this pool. If the plan
+// is already resolved, apply the selection now (when the pool is within the current place/radius);
+// otherwise loadPlan()'s submit consumes planPreselect once the week resolves.
+function jumpToPlan(facility) {
+  planPreselect = facility;
+  const wasLoaded = planLoaded;
+  activateTab('plan');
+  if (wasLoaded) {
+    if (planPools.some(p => p.facility === facility)) planSelected = facility;
+    planPreselect = null;
+    renderPlan();
+  }
 }
 </script>
 </body>

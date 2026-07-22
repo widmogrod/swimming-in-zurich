@@ -11,6 +11,10 @@ dependencies = [
     "pyyaml>=6.0",
 ]
 
+[project.optional-dependencies]
+# Belegungsplan (lane-reservation) PDF parsing — lazy-imported in providers/belegungsplan.py.
+pdf = ["pdfplumber>=0.11"]
+
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
@@ -56,6 +60,11 @@ files = ["src", "tests", "apps"]
 # The vendored CRAP gate script is a tool, not project source; don't type-check it.
 exclude = ["^scripts/"]
 
+# pdfplumber ships no type stubs; it is an optional extra, lazy-imported in the provider.
+[[tool.mypy.overrides]]
+module = ["pdfplumber", "pdfplumber.*"]
+ignore_missing_imports = true
+
 [tool.pytest.ini_options]
 addopts = [
     "-q",
@@ -71,9 +80,9 @@ source = ["src", "apps"]
 branch = true
 
 [tool.coverage.report]
-# Calibrated to current coverage (91.91%) rounded down, as a no-regression floor;
-# ratchet up as coverage grows.
-fail_under = 91
+# Calibrated to current coverage (95.61%, after Plan C deleted the legacy geo pipeline +
+# `facility` table) rounded down, as a no-regression floor; ratchet up as coverage grows.
+fail_under = 95
 
 [tool.crap]
 threshold = 30.0
@@ -83,6 +92,7 @@ min-complexity = 5
 dev = [
     "fastapi>=0.139.2",
     "mypy>=2.3.0",
+    "pdfplumber>=0.11",
     "pre-commit>=4.6.0",
     "pyright>=1.1.411",
     "pytest>=9.1.1",

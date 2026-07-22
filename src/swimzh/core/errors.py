@@ -17,6 +17,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import assert_never
 
+# The JSON value space — the only shapes that survive a lossless persist through the boundary
+# DTO. `ProviderSpecific.detail` is narrowed to this (from `object`) so the whole closed union
+# round-trips through the gold codec with no variant special-cased and no lossy `repr`.
+type JsonValue = None | bool | int | float | str | list[JsonValue] | dict[str, JsonValue]
+
 
 @dataclass(frozen=True, slots=True)
 class Timeout:
@@ -107,7 +112,7 @@ class ProviderSpecific:
     """
 
     provider: str
-    detail: object
+    detail: JsonValue
 
 
 type ProviderError = (

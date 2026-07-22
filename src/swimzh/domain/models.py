@@ -9,12 +9,14 @@ and access rules. Closures and public-holiday policy sit at the facility level.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from decimal import Decimal
 from enum import Enum
 from typing import NewType
 
+from swimzh.core.errors import ProviderError
 from swimzh.domain.geo import GeoPoint
+from swimzh.domain.lane_plan import LanePlan
 from swimzh.domain.lockers import LockerOption
 from swimzh.domain.pricing import PriceTable
 from swimzh.domain.schedule import (
@@ -24,8 +26,21 @@ from swimzh.domain.schedule import (
     ScheduleRule,
 )
 
-FacilityId = NewType("FacilityId", str)
+PoolId = NewType("PoolId", str)
 BasinId = NewType("BasinId", str)
+
+
+def reconstruct_pool_id(value: str) -> PoolId:
+    """Re-wrap a canonical id string that was ALREADY minted upstream — a persisted gold row
+    or a validated DTO — back into a ``PoolId``.
+
+    This is *reconstruction*, not minting: the id already passed through the two minting seams
+    (``build.reconcile`` / ``build.seed``, the only sites that create an id from an external
+    ref) before it was stored, so trusting it here introduces no new identity. Kept as a single
+    named boundary so the minter grep-guard can allow exactly ONE reconstruction door (this
+    module) instead of every trusted call-site (persisted-row codec / validated DTO providers).
+    """
+    return PoolId(value)
 
 
 class PoolKind(Enum):
@@ -53,7 +68,7 @@ class Provenance:
 class PoolIdentity:
     """Canonical identity + crosswalk into other data sources' namespaces."""
 
-    facility_id: FacilityId
+    facility_id: PoolId
     name: str
     kind: PoolKind
     geo_sport_id: str | None = None
@@ -106,6 +121,30 @@ class Dimensions:
 
 
 @dataclass(frozen=True, slots=True)
+class LanePlanSource:
+    """Where a basin's lane document (its Belegungsplan PDF) lives — a FIRST-CLASS domain
+    attribute authored in ``data/pools/*.yaml``. Every declared source is a PDF we parse; there
+    is no ``format``/``label``/fallback. ``section`` is the bare basin token for a STACKED
+    multi-basin sheet (``None`` => the whole sheet is this one basin's plan)."""
+
+    url: str
+    section: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class LanePlanUnavailable:
+    """A declared ``lane_plan_source`` whose extraction was attempted and FAILED — first-class
+    persisted state, not an exception. ``cause`` is the real closed-union ``ProviderError``,
+    persisted losslessly, so partial extraction loses nothing and recovery can select failed
+    rows by error class."""
+
+    source_url: str
+    section: str | None
+    cause: ProviderError
+    observed_at: datetime
+
+
+@dataclass(frozen=True, slots=True)
 class Basin:
     basin_id: BasinId
     name: str
@@ -115,7 +154,21 @@ class Basin:
     dimensions: Dimensions | None = None
     lanes: int | None = None  # "(6 Bahnen)"
     nominal_temp_c: Decimal | None = None  # "28°C" — a design target, NOT a live reading
+    # A distinct, actually-measured water temperature (e.g. a scraped "aktuell 26°C" reading), as
+    # opposed to the `nominal_temp_c` design target. Kept separate so the UI can show the measured
+    # value while a tooltip still carries the nominal one (decision #4). `physical_source` tags the
+    # honesty of the basin's physicals as a whole (curated vs prose-scraped).
+    measured_temp_c: Decimal | None = None
+    diving_platforms_m: tuple[Decimal, ...] = ()  # e.g. (1, 3, 5) from "Sprungbecken 1/3/5m"
     physical_source: BasinSource = BasinSource.CURATED
+    # Curated INPUT: where this basin's lane document lives (drives extraction). Distinct from
+    # `lane_plan`, the extraction OUTCOME below.
+    lane_plan_source: LanePlanSource | None = None
+    # Extraction OUTCOME, first-class persisted state:
+    #   None                -> nothing to extract (no source) OR scrape not yet run
+    #   LanePlan            -> parsed grid
+    #   LanePlanUnavailable -> source declared, extraction attempted and FAILED (cause persisted)
+    lane_plan: LanePlan | LanePlanUnavailable | None = None
 
 
 class FeatureKind(Enum):
@@ -128,6 +181,9 @@ class FeatureKind(Enum):
     WELLNESS = "wellness"
     SLIDE = "slide"
     HOT_TUB = "hot_tub"
+    TERRACE = "terrace"  # Sonnenterrasse / sun deck
+    REST = "rest"  # Liegewiese / Sandstrand — a rest/sunbathing area
+    GASTRONOMY = "gastronomy"  # Restaurant / kiosk / café
 
 
 @dataclass(frozen=True, slots=True)
@@ -159,3 +215,8 @@ class Facility:
     website: str | None = None  # static (WFS `www` / official pool page)
     features: tuple[Feature, ...] = field(default_factory=tuple)
     lockers: tuple[LockerOption, ...] = field(default_factory=tuple)
+    # Free-text accessibility note ("barrierefrei", "Lift zum Becken") — static, best-effort.
+    accessibility: str | None = None
+    # How long before closing the last admission is (e.g. 30 min). `timedelta` so the UI can render
+    # it against the resolved closing time rather than hard-coding a clock.
+    last_admission_before: timedelta | None = None

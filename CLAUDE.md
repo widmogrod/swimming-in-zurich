@@ -14,17 +14,16 @@ intent and design decisions, and `README.md` for orientation.
 - `src/swimzh/boundary/` — pydantic v2 DTOs (ingest boundary).
 - `src/swimzh/providers/` — adapters returning `Result[..., ProviderError]` (`curated`,
   `geo_sport`; occupancy later).
-- `src/swimzh/etl/` + `src/swimzh/storage/` — medallion raw→silver→gold (pure functions)
-  into the SQLite gold store; `find_swim_options` reads from `GoldRepository`.
-- `apps/web/` — FastAPI service + minimal HTML UI over the swim data (see below).
-- `data/` — curated YAML (pools, registry, calendar) + `sources.md` legal register.
+- `src/swimzh/build/` + `src/swimzh/etl/` + `src/swimzh/storage/` — the single offline builder
+  (`build_store`: seed → identity spine → curated blob) writes the SQLite gold store (pure
+  functions); `find_swim_options` reads from `GoldRepository`.
+- `apps/web/` — FastAPI service + minimal HTML UI over the gold DB (see below).
+- `data/` — **ETL inputs** (the curated source of truth): pools/registry/calendar YAML +
+  `catalog.json`, built into the gold DB by `swimzh build`; never read at app runtime. Plus
+  `sources.md` legal register.
 - `tests/` — mirrors `src/swimzh/`; `apps/web/tests/` mirrors the service.
 
 ## Web UI / API
-
-```sh
-uv run uvicorn apps.web.main:app --reload      # http://127.0.0.1:8000  (UI at /, API at /swim)
-```
 
 `GET /swim?at=<ISO datetime>&gender=female|male|diverse&age=<int>&lat=&lon=&radius_km=&eligible_only=true`
 returns eligibility-annotated options + statuses + warnings. Follows the
@@ -34,20 +33,65 @@ returns eligibility-annotated options + statuses + warnings. Follows the
 Endpoints: `/swim` (query), `/pools` (list all ~57 pools from the catalog, `?kind=` filter),
 `/access-types` (explanations), `/health`, `/` (UI: find tab + all-pools browser).
 
+### Single source of truth: build a gold DB, then run against it
+
+The app reads **only** one SQLite gold store — every endpoint (`/swim`, `/pools`,
+`/access-types`) serves from it. No `apps/web/**` module reads `data/*.yaml` or
+`data/catalog.json` at request/startup time (grep-asserted by a test). `SWIMZH_GOLD_DB` is
+**required**: if the DB is missing or empty, startup **fails fast** with `run \`swimzh build …\``.
+
+```sh
+# 1. Build a complete, self-contained gold DB from committed inputs — OFFLINE, no network.
+uv run python -m swimzh.cli build --db gold.sqlite
+
+# 2. (optional) Enrich the same store with real scraped data (network):
+uv run python -m swimzh.cli scrape-gold   --db gold.sqlite   # REAL schedules scraped per pool
+uv run python -m swimzh.cli scrape-lanes  --db gold.sqlite   # per-basin Belegungsplan lane plans
+
+# 3. Run the app against the DB (UI at /, API at /swim). Missing/empty DB -> clean
+#    one-line fail-fast (no ASGI traceback). SWIMZH_RELOAD=0 disables auto-reload.
+SWIMZH_GOLD_DB=gold.sqlite uv run python -m apps.web.main   # http://127.0.0.1:8000
+```
+
+`python -m apps.web.main` is the clean dev entrypoint (preflights the store, then serves via
+uvicorn). `uvicorn apps.web.main:app` still works and still fails fast without a DB, but reports
+through uvicorn's lifespan traceback rather than the one-liner.
+
+`swimzh build` is the **single offline builder**: it assembles the identity spine (the `pool`
+table = the ~57-pool roster, plus its `pool_alias`/`pool_xref` crosswalk) + the `calendar`
+singleton into one store from the committed inputs alone (offline, no network). The curated
+schedule payload rides as a typed blob on the `pool` row (`facility_doc`); there is **no
+`facility` table** and no stored `curation_status` (it is derived at read from that blob). Geo
+comes from the committed `catalog.json` (WFS coordinates), stamped onto `facility_doc` at build
+time — not a live WFS merge. The network commands (`scrape-gold`, `scrape-lanes`) **layer onto**
+an already-built store. The curated data directory is supplied to the CLI/ETL via `--data`
+(default `data/`); the **app never reads `data/`** — only the gold DB.
+
 Data sources:
-- **Catalog** (all pools, every category): committed `data/catalog.json`, generated from the
-  WFS. Regenerate with `uv run python -m swimzh.cli build-catalog --out data/catalog.json`.
-- **Schedules** (`/swim`): the `SwimData` port — `SWIMZH_GOLD_DB` (SQLite gold store) if set
-  and present, else the curated dataset (offline default). Build gold two ways:
-  ```sh
-  uv run python -m swimzh.cli scrape-gold --db gold.sqlite   # REAL schedules scraped from
-                                                             #   each indoor pool's page
-  uv run python -m swimzh.cli build-gold  --db gold.sqlite   # curated 3 pools + geo merge
-  SWIMZH_GOLD_DB=gold.sqlite uv run uvicorn apps.web.main:app --reload
-  ```
+- **ETL inputs (human/curated source of truth, committed in git):** `data/pools/*.yaml`,
+  `data/registry.yaml`, `data/calendar/*.yaml`, and `data/catalog.json`. These are consumed by
+  `swimzh build`/the ETL only — never read at app runtime. Regenerate the catalog from the WFS
+  with `uv run python -m swimzh.cli build-catalog --out data/catalog.json`.
+- **Single runtime source:** the gold `.sqlite` the app reads (git-ignored; build it, don't
+  commit it). `/swim` schedules, `/pools` catalog, and the calendar all come from this one store.
+
 The WFS has locations but not opening hours (`n.a.`). `scrape-gold` parses the timetable
 JSON embedded in stadt-zuerich.ch pool pages (`providers/schedule_scraper.py`) — brittle,
 best-effort (unparseable pages are skipped and reported), pinned by a saved-page fixture test.
+
+`scrape-lanes` attaches per-basin Belegungsplan lane plans. The lane document is a **first-class
+domain attribute** — `Basin.lane_plan_source` (url + optional `section`), authored in
+`data/pools/*.yaml` on the owning basin (rides `facility_doc`, no gold DDL). The ETL is **driven
+by the domain**: the fetch-set is a projection of the declared sources (no hardcoded URL list), and
+reconciliation is a **deterministic URL-keyed join** in `etl/silver.py` (`ParsedPlan.basin_hint` is
+not an identity key — a single-basin sheet binds by URL alone; a stacked multi-basin sheet routes
+each section by its declared `section` token, failing safe to an audited `UnboundPlan` on any
+zero/ambiguous match). **Extraction outcomes are first-class persisted state:**
+`Basin.lane_plan: LanePlan | LanePlanUnavailable | None` — a parsed grid, a typed
+`LanePlanUnavailable(cause: ProviderError)` for a declared source whose fetch/parse failed (scoped
+to that basin — the facility still builds), or `None`. The command prints an honest audit to
+stderr (`unbound` URLs/headers, per-basin `unavailable` causes, `unmatched section` alarms). See
+`docs/concepts/lane-plan-url-binding.md`.
 
 ## Engineering conventions
 
@@ -71,11 +115,15 @@ uv run pytest                 # writes coverage.json; enforces coverage fail_und
 uv run python scripts/crap.py # complexity²·(1−coverage)³ + complexity gate
 ```
 
-- **Type checker**: `mypy .` (strict) is the canonical gate. `pyright` (strict) is also
-  configured and passes; both agree. Either is fine locally; CI uses mypy.
+- **Type checker**: `mypy .` (strict) is the canonical, enforced gate and is **green**.
+  `pyright` (strict) is also configured but has **known, deferred debt** — remaining
+  `reportPrivateUsage` findings in `tests/.../test_belegungsplan.py` and `storage/catalog_json.py`
+  (tests/codecs that read domain private attrs). Do **not** assume pyright is clean; the QA gate is
+  mypy. (The `storage/calendar_codec.py` findings were cleared by adding public read accessors to
+  `ZurichCalendar`; the same treatment for the remaining files is a tracked backlog item.)
 - **Coverage floor**: `fail_under` in `[tool.coverage.report]` is a no-regression ratchet
-  (currently 91, calibrated to real coverage of 91.91%). Raise it as coverage grows; never
-  lower it without a reason.
+  (currently 95, calibrated to real coverage of 95.61% after Plan C deleted the legacy geo
+  pipeline + `facility` table). Raise it as coverage grows; never lower it without a reason.
 - **CRAP gate**: fails a function only when `cc > min-complexity (5)` AND `crap > threshold
   (30)`. Fix by adding tests or reducing complexity — do **not** raise the threshold to pass.
 

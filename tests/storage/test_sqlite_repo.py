@@ -1,51 +1,72 @@
-"""GoldRepository round-trips facilities through SQLite faithfully."""
+"""GoldRepository round-trips the curated schedule blob through `pool.facility_doc`.
+
+Post-B2 the read path is `pool.facility_doc` (written by the single `write_schedules` door),
+not the `facility` table — so the round-trip is seeded via `write_pools` + `write_schedules`.
+"""
 
 from __future__ import annotations
 
+import sqlite3
 from pathlib import Path
 
 import pytest
 
+from swimzh.build.seed import build_spine
 from swimzh.core.result import Ok
-from swimzh.domain.models import Facility
+from swimzh.domain.catalog import PoolCatalogEntry
+from swimzh.domain.models import Facility, PoolId
+from swimzh.domain.registry import Registry
 from swimzh.providers.curated import load_dataset
-from swimzh.storage.sqlite_repo import GoldRepository, open_db, write_facilities
+from swimzh.storage import catalog_json, codec
+from swimzh.storage.rows import PoolSpine
+from swimzh.storage.sqlite_repo import GoldRepository, open_db, write_pools, write_schedules
 
 DATA_DIR = Path(__file__).resolve().parents[2] / "data"
 
 
 @pytest.fixture(scope="module")
-def facilities() -> tuple[Facility, ...]:
+def spine() -> PoolSpine:
     result = load_dataset(DATA_DIR)
     assert isinstance(result, Ok), result
-    return result.value.facilities
+    catalog: tuple[PoolCatalogEntry, ...] = catalog_json.loads(
+        (DATA_DIR / "catalog.json").read_text(encoding="utf-8")
+    )
+    registry: Registry = result.value.registry
+    return build_spine(catalog, result.value.facilities, registry)
 
 
-def test_write_then_load_all_roundtrips(facilities: tuple[Facility, ...]) -> None:
+def _keyed(spine: PoolSpine) -> dict[PoolId, Facility]:
+    """The curated `(PoolId, Facility)` pairs `write_schedules` lands on `pool.facility_doc`."""
+    return {p.id: codec.loads(p.facility_doc) for p in spine.pools if p.facility_doc is not None}
+
+
+def _seed(spine: PoolSpine) -> sqlite3.Connection:
     conn = open_db(":memory:")
-    write_facilities(conn, facilities)
-    repo = GoldRepository(conn)
+    write_pools(conn, spine)
+    write_schedules(conn, tuple(_keyed(spine).items()))
+    return conn
 
-    assert repo.count() == len(facilities)
+
+def test_write_then_load_all_roundtrips(spine: PoolSpine) -> None:
+    repo = GoldRepository(_seed(spine))
+    expected = _keyed(spine)
+
+    # 4 curated pools + 3 lane-plan-only pools + 2 Slice-F prose pools (schedule-less blobs).
+    assert repo.count() == len(expected) == 9
     loaded = {f.identity.facility_id: f for f in repo.load_all()}
-    original = {f.identity.facility_id: f for f in facilities}
-    assert loaded == original
+    assert loaded == expected
 
 
-def test_get_by_id_and_missing(facilities: tuple[Facility, ...]) -> None:
-    conn = open_db(":memory:")
-    write_facilities(conn, facilities)
-    repo = GoldRepository(conn)
+def test_get_by_id_and_missing(spine: PoolSpine) -> None:
+    repo = GoldRepository(_seed(spine))
+    keyed = _keyed(spine)
 
-    some_id = facilities[0].identity.facility_id
-    assert repo.get(some_id) == facilities[0]
-    from swimzh.domain.models import FacilityId
-
-    assert repo.get(FacilityId("does-not-exist")) is None
+    some_id, some_facility = next(iter(keyed.items()))
+    assert repo.get(some_id) == some_facility
+    assert repo.get(PoolId("does-not-exist")) is None
 
 
-def test_write_is_idempotent(facilities: tuple[Facility, ...]) -> None:
-    conn = open_db(":memory:")
-    write_facilities(conn, facilities)
-    write_facilities(conn, facilities)  # upsert, not duplicate
-    assert GoldRepository(conn).count() == len(facilities)
+def test_write_schedules_is_idempotent(spine: PoolSpine) -> None:
+    conn = _seed(spine)
+    write_schedules(conn, tuple(_keyed(spine).items()))  # UPDATE again, not duplicate
+    assert GoldRepository(conn).count() == 9  # 4 curated + 3 lane-plan-only + 2 Slice-F prose

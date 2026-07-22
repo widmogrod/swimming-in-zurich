@@ -6,7 +6,7 @@ or UI exists.
 from __future__ import annotations
 
 import dataclasses
-from datetime import datetime, time, timedelta
+from datetime import date, datetime, time, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
@@ -14,13 +14,21 @@ import pytest
 
 from swimzh.core.errors import ProviderError, Timeout, describe
 from swimzh.core.result import Err, Ok, Result
-from swimzh.domain.access import PublicSwim
+from swimzh.domain.access import ClubReserved, PublicSwim
+from swimzh.domain.catalog import PoolCatalogEntry, RosterEntry
+from swimzh.domain.lane_plan import (
+    LaneAvailability,
+    LanePlan,
+    LaneReservation,
+    PlanConfidence,
+    PlanCoverage,
+)
 from swimzh.domain.models import (
     Basin,
     BasinId,
     BasinKind,
     Facility,
-    FacilityId,
+    PoolId,
     PoolIdentity,
     PoolKind,
     Provenance,
@@ -49,16 +57,43 @@ def dataset() -> Dataset:
     return result.value
 
 
-def test_dataset_loads_four_curated_pools(dataset: Dataset) -> None:
+def test_dataset_loads_curated_and_lane_plan_only_pools(dataset: Dataset) -> None:
     names = {f.identity.name for f in dataset.facilities}
     assert names == {
+        # Fully curated (schedules).
         "Hallenbad City",
         "Hallenbad Oerlikon",
         "Hallenbad Bungertwies",
         "Schulschwimmanlage Aemtler",
+        # Lane-plan-only (schedule-less basin carrying a lane_plan_source).
+        "Hallenbad Leimbach",
+        "Hallenbad Bläsi",
+        "Wärmebad Käferberg",
     }
     # Registry knows more than we have curated.
     assert len(dataset.registry.identities) == 8
+
+
+def _roster(dataset: Dataset) -> tuple[RosterEntry, ...]:
+    """The roster the app feeds `find_swim_options`, here derived from the curated dataset's
+    registry (8 known pools) so the three-state `uncurated = roster − scheduled` answer is
+    exercised without a gold DB."""
+    return tuple(
+        RosterEntry(
+            entry=PoolCatalogEntry(
+                pool_id=str(identity.facility_id),
+                name=identity.name,
+                kind=identity.kind,
+                address="",
+                geo=None,
+                url=None,
+                description=None,
+                phone=None,
+            ),
+            curated=False,
+        )
+        for identity in dataset.registry.identities.values()
+    )
 
 
 def _query(dataset: Dataset, when: datetime, person: Person = ADULT) -> QueryResult:
@@ -66,7 +101,7 @@ def _query(dataset: Dataset, when: datetime, person: Person = ADULT) -> QueryRes
         SwimQuery(person=person, at=when),
         dataset.facilities,
         dataset.calendar,
-        registry=dataset.registry,
+        _roster(dataset),
     )
 
 
@@ -131,7 +166,9 @@ def test_school_pool_adults_only_window_rejects_child(dataset: Dataset) -> None:
     when = datetime(2026, 3, 9, 19, 0, tzinfo=ZURICH)
     child = _query(dataset, when, person=Person(gender=Gender.FEMALE, age=10))
     open_aemtler = [
-        o for o in child.options if str(o.facility_id) == "aemtler" and o.open_at_query_time
+        o
+        for o in child.options
+        if str(o.facility_id) == "schulschwimmanlage-aemtler" and o.open_at_query_time
     ]
     assert open_aemtler, "expected the Aemtler adults-only window among Monday-evening options"
     option = open_aemtler[0]
@@ -141,7 +178,9 @@ def test_school_pool_adults_only_window_rejects_child(dataset: Dataset) -> None:
     # The same window admits an adult.
     adult = _query(dataset, when)
     open_adult = [
-        o for o in adult.options if str(o.facility_id) == "aemtler" and o.open_at_query_time
+        o
+        for o in adult.options
+        if str(o.facility_id) == "schulschwimmanlage-aemtler" and o.open_at_query_time
     ]
     assert open_adult and open_adult[0].eligibility.allowed is True
 
@@ -150,7 +189,9 @@ def test_school_pool_daytime_is_school_reserved_in_term(dataset: Dataset) -> Non
     # Wednesday 2026-03-11 14:00 in term: school time — reserved, not public.
     result = _query(dataset, datetime(2026, 3, 11, 14, 0, tzinfo=ZURICH))
     open_aemtler = [
-        o for o in result.options if str(o.facility_id) == "aemtler" and o.open_at_query_time
+        o
+        for o in result.options
+        if str(o.facility_id) == "schulschwimmanlage-aemtler" and o.open_at_query_time
     ]
     assert open_aemtler
     assert all(o.eligibility.allowed is False for o in open_aemtler)
@@ -161,7 +202,7 @@ def test_school_pool_opens_to_public_in_school_holidays(dataset: Dataset) -> Non
     # Monday 2026-07-20 10:00 (Sommerferien): the daytime block is public; the term-scoped
     # school-reserved and adults-only rules must not fire.
     result = _query(dataset, datetime(2026, 7, 20, 10, 0, tzinfo=ZURICH))
-    aemtler = [o for o in result.options if str(o.facility_id) == "aemtler"]
+    aemtler = [o for o in result.options if str(o.facility_id) == "schulschwimmanlage-aemtler"]
     assert aemtler
     assert {o.eligibility.rule for o in aemtler} == {"public"}
     assert all(o.eligibility.allowed for o in aemtler)
@@ -200,7 +241,7 @@ def _keyed_facility(keys: tuple[str, ...]) -> Facility:
     )
     return Facility(
         identity=PoolIdentity(
-            facility_id=FacilityId("occ-test"),
+            facility_id=PoolId("occ-test"),
             name="Hallenbad Occupancy-Test",
             kind=PoolKind.INDOOR,
             crowdmonitor_keys=keys,
@@ -213,7 +254,7 @@ def _keyed_facility(keys: tuple[str, ...]) -> Facility:
 
 def _reading(measured_at: datetime) -> Occupancy:
     return Occupancy(
-        facility_id=FacilityId("occ-test"),
+        facility_id=PoolId("occ-test"),
         measured_at=measured_at,
         percent_full=62.0,
         people=93,
@@ -280,6 +321,207 @@ def test_facility_without_crowdmonitor_keys_is_unavailable(dataset: Dataset) -> 
     assert result.options
     assert result.options[0].live_occupancy == OccupancyUnavailable(reason="no crowdmonitor key")
     assert provider.calls == []  # never asked without a key
+
+
+# --- Lane availability (query-time derivation of the STORED lane plan) -------------------
+#
+# Unlike occupancy, lane availability is a pure derivation of the recurring plan, so it is
+# attached for ANY query time (incl. future dates), computed at each session's start.
+
+# Tuesday 2026-09-15 (2026-09-14 is a Monday per the fixtures above).
+_TUESDAY = datetime(2026, 9, 15, 12, 0, tzinfo=ZURICH)
+
+
+def _planned_facility() -> Facility:
+    """A synthetic facility open Tue 06:00–08:00, whose basin carries a lane plan for that
+    slot: lanes 1–2 held by a club, 3–6 public."""
+    rule = ScheduleRule(
+        weekdays=frozenset({Weekday.TUESDAY}),
+        time=TimeRange(time(6, 0), time(8, 0)),
+        access=PublicSwim(),
+    )
+    plan = LanePlan(
+        lane_count=6,
+        reservations=(
+            LaneReservation(
+                weekdays=frozenset({Weekday.TUESDAY}),
+                time=TimeRange(time(6, 0), time(8, 0)),
+                lanes=frozenset({1, 2}),
+                access=ClubReserved(club="ASVZ"),
+            ),
+            LaneReservation(
+                weekdays=frozenset({Weekday.TUESDAY}),
+                time=TimeRange(time(6, 0), time(8, 0)),
+                lanes=frozenset({3, 4, 5, 6}),
+                access=PublicSwim(),
+            ),
+        ),
+        valid_from=date(2026, 1, 1),
+        coverage=PlanCoverage(
+            confidence=PlanConfidence.COMPLETE, cells_total=1344, cells_resolved=1344
+        ),
+    )
+    return Facility(
+        identity=PoolIdentity(
+            facility_id=PoolId("lane-test"),
+            name="Hallenbad Lane-Test",
+            kind=PoolKind.INDOOR,
+        ),
+        address="Bahnstrasse 1, Zürich",
+        provenance=Provenance(source="test", curated=True),
+        basins=(
+            Basin(
+                basin_id=BasinId("lane-main"),
+                name="Schwimmerbecken",
+                rules=(rule,),
+                lane_plan=plan,
+            ),
+        ),
+    )
+
+
+def test_lane_availability_clamps_to_session_start_when_query_is_outside(
+    dataset: Dataset,
+) -> None:
+    # _TUESDAY is 12:00 but the session is 06:00–08:00, so the queried moment is OUTSIDE it and
+    # the point eval clamps to the session start (06:00) — lanes 1–2 club, 3–6 public.
+    result = find_swim_options(
+        SwimQuery(person=ADULT, at=_TUESDAY), (_planned_facility(),), dataset.calendar
+    )
+    assert result.options
+    avail = result.options[0].lane_availability
+    assert avail == LaneAvailability(
+        lane_count=6,
+        public_lanes=4,
+        reserved_lanes=2,
+        owners=(ClubReserved(club="ASVZ"),),
+        public_until=time(8, 0),
+        partial=False,
+    )
+
+
+def _timeline_facility() -> Facility:
+    """A basin open Tue 06:00–22:00: all six lanes public until 18:00, when a club takes 2 —
+    so 12:00 (6 public) and 18:00 (4 public) must report DIFFERENT counts."""
+    rule = ScheduleRule(
+        weekdays=frozenset({Weekday.TUESDAY}),
+        time=TimeRange(time(6, 0), time(22, 0)),
+        access=PublicSwim(),
+    )
+    plan = LanePlan(
+        lane_count=6,
+        reservations=(
+            LaneReservation(
+                weekdays=frozenset({Weekday.TUESDAY}),
+                time=TimeRange(time(6, 0), time(18, 0)),
+                lanes=frozenset({1, 2, 3, 4, 5, 6}),
+                access=PublicSwim(),
+            ),
+            LaneReservation(
+                weekdays=frozenset({Weekday.TUESDAY}),
+                time=TimeRange(time(18, 0), time(22, 0)),
+                lanes=frozenset({1, 2, 3, 4}),
+                access=PublicSwim(),
+            ),
+            LaneReservation(
+                weekdays=frozenset({Weekday.TUESDAY}),
+                time=TimeRange(time(18, 0), time(22, 0)),
+                lanes=frozenset({5, 6}),
+                access=ClubReserved(club="ASVZ"),
+            ),
+        ),
+        valid_from=date(2026, 1, 1),
+        coverage=PlanCoverage(
+            confidence=PlanConfidence.COMPLETE, cells_total=1344, cells_resolved=1344
+        ),
+    )
+    return Facility(
+        identity=PoolIdentity(
+            facility_id=PoolId("timeline-test"),
+            name="Hallenbad Timeline-Test",
+            kind=PoolKind.INDOOR,
+        ),
+        address="Bahnstrasse 2, Zürich",
+        provenance=Provenance(source="test", curated=True),
+        basins=(
+            Basin(
+                basin_id=BasinId("timeline-main"),
+                name="Schwimmerbecken",
+                rules=(rule,),
+                lane_plan=plan,
+            ),
+        ),
+    )
+
+
+def test_lane_availability_clamped_to_queried_moment_not_wall_clock(dataset: Dataset) -> None:
+    # THE 12:00 == 18:00 FIX. Both queries share the SAME 06:00–22:00 session; only the queried
+    # time-of-day differs. The point eval must clamp to `now_time` (the queried moment), so
+    # 18:00 reports fewer public lanes than 12:00 — and this holds regardless of the wall-clock
+    # time the test runs, because the clamp reads `at`, never `datetime.now()`.
+    facility = (_timeline_facility(),)
+    at_noon = datetime(2026, 9, 15, 12, 0, tzinfo=ZURICH)  # a Tuesday
+    at_evening = datetime(2026, 9, 15, 18, 0, tzinfo=ZURICH)
+
+    noon = find_swim_options(SwimQuery(person=ADULT, at=at_noon), facility, dataset.calendar)
+    evening = find_swim_options(SwimQuery(person=ADULT, at=at_evening), facility, dataset.calendar)
+
+    noon_avail = noon.options[0].lane_availability
+    evening_avail = evening.options[0].lane_availability
+    assert noon_avail is not None and evening_avail is not None
+    assert noon_avail.public_lanes == 6
+    assert evening_avail.public_lanes == 4
+    assert evening_avail.public_lanes < noon_avail.public_lanes
+
+
+def test_lane_timeline_attached_across_the_whole_session(dataset: Dataset) -> None:
+    # The derived timeline spans the whole session independent of the queried moment: one
+    # segment per reservation boundary (06:00–18:00 = 6 public, 18:00–22:00 = 4 public).
+    result = find_swim_options(
+        SwimQuery(person=ADULT, at=datetime(2026, 9, 15, 12, 0, tzinfo=ZURICH)),
+        (_timeline_facility(),),
+        dataset.calendar,
+    )
+    timeline = result.options[0].lane_timeline
+    assert timeline is not None
+    assert [(s.time.start, s.time.end) for s in timeline.segments] == [
+        (time(6, 0), time(18, 0)),
+        (time(18, 0), time(22, 0)),
+    ]
+    assert [s.availability.public_lanes for s in timeline.segments] == [6, 4]
+
+
+def test_no_lane_timeline_without_a_plan(dataset: Dataset) -> None:
+    result = find_swim_options(
+        SwimQuery(person=ADULT, at=datetime(2026, 9, 14, 12, 0, tzinfo=ZURICH)),
+        dataset.facilities,
+        dataset.calendar,
+    )
+    assert result.options
+    assert all(o.lane_timeline is None for o in result.options)
+
+
+def test_lane_availability_not_gated_to_now(dataset: Dataset) -> None:
+    # The query moment (2026-09-15) is far from wall-clock now, yet the badge is still
+    # attached — availability is a static derivation, not a "~now" signal like occupancy.
+    far_future = _TUESDAY + timedelta(weeks=104)  # ~2 years ahead, still a Tuesday
+    result = find_swim_options(
+        SwimQuery(person=ADULT, at=far_future), (_planned_facility(),), dataset.calendar
+    )
+    assert result.options
+    assert result.options[0].lane_availability is not None
+    assert result.options[0].live_occupancy is None  # occupancy stays unrequested
+
+
+def test_no_lane_availability_without_a_plan(dataset: Dataset) -> None:
+    # The curated dataset carries no lane plans yet (S2 needs live URLs) → None, never invented.
+    result = find_swim_options(
+        SwimQuery(person=ADULT, at=datetime(2026, 9, 14, 12, 0, tzinfo=ZURICH)),
+        dataset.facilities,
+        dataset.calendar,
+    )
+    assert result.options
+    assert all(o.lane_availability is None for o in result.options)
 
 
 def test_naive_measured_at_is_rejected_at_construction() -> None:

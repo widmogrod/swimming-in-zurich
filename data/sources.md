@@ -1,5 +1,10 @@
 # Data sources — legal register
 
+> **These `data/` files are ETL inputs, not runtime reads.** The curated YAML (`pools/*.yaml`,
+> `registry.yaml`, `calendar/*.yaml`) and `catalog.json` are the human/curated **source of
+> truth**, committed to git. `swimzh build` assembles them (offline) into the single SQLite
+> gold DB that the app actually reads at runtime; the app never opens these files directly.
+
 One row per source we use or intend to use. Track license, terms, and refresh cadence so a
 stale-but-typed wrong answer is a tracked risk, not a surprise. **Owner action noted below:
 email Open Data Zürich to ask whether machine-readable schedules exist — that could remove
@@ -8,6 +13,7 @@ the need to scrape entirely.**
 | Source | What we take | License / terms | Machine-readable? | Refresh cadence | Status |
 |--------|--------------|-----------------|-------------------|-----------------|--------|
 | `geo_sport` (data.stadt-zuerich.ch, CKAN) | Pool locations, facility metadata, geo | **CC0** (open) | ✅ JSON/GeoJSON | Rare (yearly-ish) | Planned (milestone 3) |
+| WFS `infrastruktur` prose (via `catalog.json` `description`) | Per-pool basin physicals (kind, size, lanes, nominal temp, diving-platform heights) + non-basin amenities (sauna/steam/terrace/restaurant/…) | Same terms as `geo_sport` (WFS metadata) | ⚠️ Free-text prose, not structured | With the WFS metadata (yearly-ish) | **Parsed offline** by `providers/infrastruktur.py`, wired into `swimzh build` for location-only pools → schedule-less `PARSED_PROSE` basins (shown in `/pools/{id}` with a caveat, never a `/swim` option). Best-effort, partial. |
 | stadt-zuerich.ch Hallenbäder pages | Opening hours + public-swim/women-only/senior slots | ⚠️ Not open data; copyright-in-compilation unclear under Swiss law | ⚠️ Timetable embedded as entity-encoded JSON in the HTML | Per season / term | **Scraped** by `providers/schedule_scraper.py` (`scrape-gold`); read-only of public pages, best-effort, 6/7 indoor pools parse. Prefer asking OGD for a feed (below). |
 | CrowdMonitor (occupancy) — vendor = countee.ch | Live occupancy (indoor+outdoor) | ❌ Commercial; ToS unclear; surfaced via city "Badi aktuell" pages | ~JSON (semi-open) | 1–5 min | **Deferred** until vendor terms verified (milestone 5, behind a flag) |
 | Baditicker API (stadt-zuerich.ch OGD) | Outdoor water temp + open/closed | Open (OGD) | ✅ JSON | Seasonal (off in winter) | Out of scope (outdoor only) |
