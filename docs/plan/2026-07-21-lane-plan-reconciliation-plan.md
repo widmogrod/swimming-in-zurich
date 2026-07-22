@@ -1,6 +1,6 @@
 ---
 type: plan
-status: in-progress       # draft -> approved -> in-progress -> done
+status: done              # draft -> approved -> in-progress -> done
 created: 2026-07-21
 updated: 2026-07-22
 feature: lane-plan-reconciliation
