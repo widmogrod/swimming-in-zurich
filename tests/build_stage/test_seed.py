@@ -70,13 +70,18 @@ def test_curated_pools_carry_a_facility_blob_uncurated_carry_at_most_prose(
         if codec.is_curated(p.facility_doc):
             assert p.facility_doc is not None
         elif p.facility_doc is not None:
-            # Slice F: a location-only pool may carry a SCHEDULE-LESS prose blob (auto-extracted
-            # PARSED_PROSE basins). Present but uncurated — every basin has no rule (so it yields
-            # no `/swim` option) and is tagged PARSED_PROSE (Decision #5).
+            # A present-but-uncurated blob is SCHEDULE-LESS (no rule → no `/swim` option) and is
+            # one of two kinds: a Slice-F prose pool (auto-extracted PARSED_PROSE basins), or a
+            # lane-plan-only pool (hand-authored CURATED basin carrying only a `lane_plan_source`
+            # — leimbach/blaesi/käferberg). Both are legitimately uncurated.
             facility = codec.loads(p.facility_doc)
             assert not any(b.rules for b in facility.basins)
-            assert facility.basins  # a prose blob is only minted when the prose named a basin
-            assert all(b.physical_source is BasinSource.PARSED_PROSE for b in facility.basins)
+            assert facility.basins  # a blob is only minted when it carries at least one basin
+            for basin in facility.basins:
+                if basin.physical_source is BasinSource.PARSED_PROSE:
+                    continue  # prose pool
+                # otherwise a lane-plan-only curated basin: it must carry a lane_plan_source
+                assert basin.lane_plan_source is not None
 
 
 def test_facility_doc_geo_equals_committed_catalog_geo(
@@ -131,8 +136,8 @@ def test_uncurated_pool_kind_comes_from_catalog(
             assert p.kind is by_id[str(p.id)].kind
 
 
-def test_crosswalk_resolves_aliases_and_xrefs(spine: PoolSpine, dataset: Dataset) -> None:
-    crosswalk = build_crosswalk(spine, dataset.facilities)
+def test_crosswalk_resolves_aliases_and_xrefs(spine: PoolSpine) -> None:
+    crosswalk = build_crosswalk(spine)
     # Every alias resolves to the pool it was minted for.
     for alias_row in spine.aliases:
         assert crosswalk.resolve(Name(alias_row.alias)) == Ok(alias_row.pool_id)

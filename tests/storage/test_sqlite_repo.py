@@ -51,8 +51,8 @@ def test_write_then_load_all_roundtrips(spine: PoolSpine) -> None:
     repo = GoldRepository(_seed(spine))
     expected = _keyed(spine)
 
-    # 4 curated pools + 2 Slice-F prose pools (schedule-less PARSED_PROSE blobs).
-    assert repo.count() == len(expected) == 6
+    # 4 curated pools + 3 lane-plan-only pools + 2 Slice-F prose pools (schedule-less blobs).
+    assert repo.count() == len(expected) == 9
     loaded = {f.identity.facility_id: f for f in repo.load_all()}
     assert loaded == expected
 
@@ -69,4 +69,4 @@ def test_get_by_id_and_missing(spine: PoolSpine) -> None:
 def test_write_schedules_is_idempotent(spine: PoolSpine) -> None:
     conn = _seed(spine)
     write_schedules(conn, tuple(_keyed(spine).items()))  # UPDATE again, not duplicate
-    assert GoldRepository(conn).count() == 6  # 4 curated + 2 Slice-F prose pools
+    assert GoldRepository(conn).count() == 9  # 4 curated + 3 lane-plan-only + 2 Slice-F prose

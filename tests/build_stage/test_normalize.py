@@ -26,14 +26,13 @@ def test_normalize_is_idempotent(raw: str) -> None:
     assert normalize(once) == once
 
 
-def test_normalize_matches_the_registry_and_silver_helpers() -> None:
-    # The whole point of hoisting: the one function is what registry + silver now use, so
-    # alias-norm generation and reconcile lookup can never diverge. Loading via import_module
-    # (ModuleType) keeps both mypy's private-export check and ruff's getattr lint out of it.
+def test_normalize_matches_the_registry_helper() -> None:
+    # The whole point of hoisting: the one function is what the registry uses, so alias-norm
+    # generation and reconcile lookup can never diverge. (Silver no longer normalises anything —
+    # lane-plan reconciliation is a URL-keyed join, not a fuzzy title match.) Loading via
+    # import_module (ModuleType) keeps both mypy's private-export check and ruff's getattr lint out.
     import importlib
 
     registry_mod = importlib.import_module("swimzh.domain.registry")
-    silver_mod = importlib.import_module("swimzh.etl.silver")
 
     assert registry_mod._normalise is normalize
-    assert silver_mod._normalise is normalize

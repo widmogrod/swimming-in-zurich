@@ -1,9 +1,10 @@
 """The identity seam — the SOLE producer of a canonical ``PoolId``.
 
 Providers emit a ``SourceRef`` (never an id); ``resolve`` turns one into a ``PoolId`` by
-**lookup, never fuzzy match**, in a fixed order: xref ``(namespace, ext_id)`` → alias
-``norm(name)`` → basin-hint index. An unresolved or ambiguous ref is a loud ``Err`` naming
-the offender — never a guess that silently attaches data to the wrong pool.
+**lookup, never fuzzy match**: xref ``(namespace, ext_id)`` → alias ``norm(name)``. An
+unresolved ref is a loud ``Err`` naming the offender — never a guess that silently attaches
+data to the wrong pool. (The former ``BasinHint`` arm — a fuzzy Belegungsplan-title lookup —
+was retired: lane plans now reconcile by URL-origin identity in ``etl/silver``, not by title.)
 
 Honesty note (see docs/concepts/data-layer-architecture.md §3): ``PoolId`` is a ``NewType``,
 which has **no** private constructor — mypy accepts ``PoolId("anything")`` from anywhere. The
@@ -22,7 +23,7 @@ from typing import assert_never
 from swimzh.core.errors import ProviderError, SchemaMismatch
 from swimzh.core.normalize import normalize
 from swimzh.core.result import Err, Ok, Result
-from swimzh.domain.models import BASIN_KIND_WORDS, Facility, PoolId
+from swimzh.domain.models import PoolId
 
 _SOURCE = "reconcile"
 
@@ -45,14 +46,7 @@ class Name:
     display: str
 
 
-@dataclass(frozen=True, slots=True)
-class BasinHint:
-    """A Belegungsplan header title, e.g. ``"Hallenbad City Schwimmerbecken"``."""
-
-    text: str
-
-
-SourceRef = Xref | Name | BasinHint
+SourceRef = Xref | Name
 
 
 # --- the crosswalk (lookup tables) and the resolve seam -------------------------------
@@ -65,20 +59,18 @@ class Crosswalk:
 
     xref: dict[tuple[str, str], PoolId]
     alias: dict[str, PoolId]
-    basin_hint: dict[str, PoolId]
-    ambiguous_hints: frozenset[str]
 
     def resolve(self, ref: SourceRef) -> Result[PoolId, ProviderError]:
         return resolve(ref, self)
 
 
-# --- three-way resolution classification (the ambiguous/not-found distinction) --------
+# --- resolution classification (the matched/not-found distinction) --------------------
 #
-# ``resolve`` collapses the outcome to ``Ok | Err`` for its single-ref callers, but a batch
-# resolver needs to tell a *benign* miss (a ref with no crosswalk entry — reportable, not
-# fatal) apart from an *ambiguous* one (a ref that would attach to >1 pool — structurally
-# fatal, the never-attach-to-wrong-pool hazard). ``_classify`` carries that distinction as a
-# typed value so both callers agree on it without parsing an error string.
+# ``resolve`` collapses the outcome to ``Ok | Err`` for its single-ref callers; ``resolve_all``
+# needs to tell a *benign* miss (a ref with no crosswalk entry — reportable, not fatal) apart
+# from a match, without parsing an error string. ``_classify`` carries that distinction as a
+# typed value. ``Xref``/``Name`` are dict lookups (a key maps to a single pool by construction),
+# so a ref either matches exactly one pool or misses benignly — there is no ambiguous class.
 
 
 @dataclass(frozen=True, slots=True)
@@ -95,23 +87,11 @@ class _NotFound:
     error: ProviderError
 
 
-@dataclass(frozen=True, slots=True)
-class _Ambiguous:
-    """The ref would attach to more than one pool — structurally fatal, never guessed."""
-
-    error: ProviderError
-
-
-_Resolution = _Matched | _NotFound | _Ambiguous
+_Resolution = _Matched | _NotFound
 
 
 def _classify(ref: SourceRef, crosswalk: Crosswalk) -> _Resolution:
-    """Look a ``SourceRef`` up, distinguishing matched / benign-miss / ambiguous.
-
-    ``Xref``/``Name`` are dict lookups (a key maps to a single pool by construction), so their
-    only failure is a benign ``_NotFound``. Only a ``BasinHint`` can be ``_Ambiguous`` — the
-    basin-hint index records a key mapping to two different pools in ``ambiguous_hints``.
-    """
+    """Look a ``SourceRef`` up, distinguishing a match from a benign miss."""
     match ref:
         case Xref(namespace, ext_id):
             pool_id = crosswalk.xref.get((namespace, ext_id))
@@ -132,34 +112,17 @@ def _classify(ref: SourceRef, crosswalk: Crosswalk) -> _Resolution:
                     )
                 )
             return _Matched(pool_id)
-        case BasinHint(text):
-            key = normalize(text)
-            if key in crosswalk.ambiguous_hints:
-                return _Ambiguous(
-                    SchemaMismatch(source=_SOURCE, detail=f"ambiguous basin hint: {text!r}")
-                )
-            pool_id = crosswalk.basin_hint.get(key)
-            if pool_id is None:
-                return _NotFound(
-                    SchemaMismatch(source=_SOURCE, detail=f"unresolved basin hint: {text!r}")
-                )
-            return _Matched(pool_id)
         case _:  # pragma: no cover - exhaustiveness guard
             assert_never(ref)
 
 
 def resolve(ref: SourceRef, crosswalk: Crosswalk) -> Result[PoolId, ProviderError]:
-    """Resolve a ``SourceRef`` to exactly one ``PoolId`` by lookup, or a loud ``Err``.
-
-    Single-ref callers get ``Ok | Err``; both a benign miss and an ambiguous hint are ``Err``
-    here (see ``resolve_all`` for the batch resolver that keeps them apart)."""
+    """Resolve a ``SourceRef`` to exactly one ``PoolId`` by lookup, or a loud ``Err`` on a miss."""
     resolution = _classify(ref, crosswalk)
     match resolution:
         case _Matched(pool_id):
             return Ok(pool_id)
         case _NotFound(error):
-            return Err(error)
-        case _Ambiguous(error):
             return Err(error)
         case _:  # pragma: no cover - exhaustiveness guard
             assert_never(resolution)
@@ -172,8 +135,6 @@ def _ref_label(ref: SourceRef) -> str:
             return f"{namespace}:{ext_id}"
         case Name(display):
             return display
-        case BasinHint(text):
-            return text
         case _:  # pragma: no cover - exhaustiveness guard
             assert_never(ref)
 
@@ -197,15 +158,13 @@ def resolve_all[Payload](
     extracts: Iterable[tuple[SourceRef, Payload]], crosswalk: Crosswalk
 ) -> Result[ReconcileOutcome[Payload], ProviderError]:
     """Resolve every provider extract's ``SourceRef`` to a ``PoolId`` — resilient to benign
-    misses, fatal on ambiguity.
+    misses.
 
     A benign miss (a ``Name``/``Xref`` with no crosswalk entry) is collected into
     ``ReconcileOutcome.unresolved`` (its display label) rather than aborting the batch, so one
-    unmatched WFS name no longer discards every good scrape. An **ambiguous** ref (one that
-    would attach to more than one pool) still aborts the whole batch with a typed ``Err``
-    naming the offender — a scrape can never silently attach its payload to the wrong pool. On
-    success returns the keyed payloads, which ``compose`` then folds per pool.
-    """
+    unmatched WFS name no longer discards every good scrape. On success returns the keyed
+    payloads, which ``compose`` then folds per pool. The ``Err`` arm is retained for the callers
+    that treat a caller-supplied fatal reconcile error uniformly (see ``cli.scrape_gold``)."""
     keyed: list[tuple[PoolId, Payload]] = []
     unresolved: list[str] = []
     for ref, payload in extracts:
@@ -215,8 +174,6 @@ def resolve_all[Payload](
                 keyed.append((pool_id, payload))
             case _NotFound(_):
                 unresolved.append(_ref_label(ref))
-            case _Ambiguous(error):
-                return Err(error)
             case _:  # pragma: no cover - exhaustiveness guard
                 assert_never(resolution)
     return Ok(ReconcileOutcome(resolved=tuple(keyed), unresolved=tuple(unresolved)))
@@ -225,44 +182,11 @@ def resolve_all[Payload](
 # --- crosswalk construction (the SOLE PoolId minting for lookup tables) ----------------
 
 
-def build_basin_hint_index(
-    facilities: Iterable[Facility],
-) -> tuple[dict[str, PoolId], set[str]]:
-    """Build a normalized ``basin_hint -> PoolId`` index (facility name/alias × basin word).
-
-    Keys are (facility name or alias) × (basin name or its ``BasinKind`` German word). A key
-    that would map to two *different* pools is recorded as ambiguous and never used to resolve —
-    a hint can only ever land on a single, unambiguous pool. The sole home for this index
-    (previously duplicated in ``build/seed``); ``etl/silver`` keeps a basin-*granular* variant
-    for lane-plan attachment.
-    """
-    index: dict[str, PoolId] = {}
-    ambiguous: set[str] = set()
-    for facility in facilities:
-        pool_id = PoolId(str(facility.identity.facility_id))
-        facility_names = (facility.identity.name, *facility.identity.aliases)
-        for basin in facility.basins:
-            terms = [basin.name]
-            word = BASIN_KIND_WORDS.get(basin.kind)
-            if word is not None:
-                terms.append(word)
-            for facility_name in facility_names:
-                for term in terms:
-                    key = normalize(f"{facility_name} {term}")
-                    existing = index.get(key)
-                    if existing is not None and existing != pool_id:
-                        ambiguous.add(key)
-                    else:
-                        index[key] = pool_id
-    return index, ambiguous
-
-
 def crosswalk_from_rows(
     alias_rows: Iterable[tuple[str, str]],
     xref_rows: Iterable[tuple[str, str, str]],
-    curated: Iterable[Facility],
 ) -> Crosswalk:
-    """Assemble a ``Crosswalk`` from stored spine rows + the curated facilities.
+    """Assemble a ``Crosswalk`` from stored spine rows.
 
     ``alias_rows`` are ``(norm, pool_id)``; ``xref_rows`` are ``(namespace, ext_id, pool_id)``
     — the plain-string projections of the ``pool_alias`` / ``pool_xref`` tables. This seam mints
@@ -270,10 +194,7 @@ def crosswalk_from_rows(
     later builder (``scrape-gold``) resolves against the very spine ``build`` laid down, never a
     second id namespace.
     """
-    basin_hint, ambiguous = build_basin_hint_index(curated)
     return Crosswalk(
         xref={(namespace, ext_id): PoolId(pool_id) for namespace, ext_id, pool_id in xref_rows},
         alias={norm: PoolId(pool_id) for norm, pool_id in alias_rows},
-        basin_hint=basin_hint,
-        ambiguous_hints=frozenset(ambiguous),
     )

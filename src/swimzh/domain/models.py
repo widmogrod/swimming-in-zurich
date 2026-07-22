@@ -14,6 +14,7 @@ from decimal import Decimal
 from enum import Enum
 from typing import NewType
 
+from swimzh.core.errors import ProviderError
 from swimzh.domain.geo import GeoPoint
 from swimzh.domain.lane_plan import LanePlan
 from swimzh.domain.lockers import LockerOption
@@ -103,21 +104,6 @@ class BasinKind(Enum):
     OTHER = "other"
 
 
-# German basin-type words used to build the lane-plan / basin-hint index — the single home
-# for this vocabulary (consumed by ``build/reconcile`` and ``etl/silver``). Mirrors the
-# ``BasinKind`` prose the Belegungsplan headers use ("… Schwimmerbecken"); ``OTHER`` has no
-# meaningful word and is deliberately absent so it never seeds an over-broad key.
-BASIN_KIND_WORDS: dict[BasinKind, str] = {
-    BasinKind.LAP: "Schwimmerbecken",
-    BasinKind.NON_SWIMMER: "Nichtschwimmerbecken",
-    BasinKind.DIVING: "Sprungbecken",
-    BasinKind.VARIO: "Variobecken",
-    BasinKind.TEACHING: "Lehrschwimmbecken",
-    BasinKind.CHILDREN: "Kinderbecken",
-    BasinKind.OUTDOOR: "Aussenbecken",
-}
-
-
 class BasinSource(Enum):
     """Honesty signal for a basin's physical attributes: hand-verified vs prose-scraped."""
 
@@ -132,6 +118,30 @@ class Dimensions:
 
     length_m: Decimal
     width_m: Decimal | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class LanePlanSource:
+    """Where a basin's lane document (its Belegungsplan PDF) lives — a FIRST-CLASS domain
+    attribute authored in ``data/pools/*.yaml``. Every declared source is a PDF we parse; there
+    is no ``format``/``label``/fallback. ``section`` is the bare basin token for a STACKED
+    multi-basin sheet (``None`` => the whole sheet is this one basin's plan)."""
+
+    url: str
+    section: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class LanePlanUnavailable:
+    """A declared ``lane_plan_source`` whose extraction was attempted and FAILED — first-class
+    persisted state, not an exception. ``cause`` is the real closed-union ``ProviderError``,
+    persisted losslessly, so partial extraction loses nothing and recovery can select failed
+    rows by error class."""
+
+    source_url: str
+    section: str | None
+    cause: ProviderError
+    observed_at: datetime
 
 
 @dataclass(frozen=True, slots=True)
@@ -151,7 +161,14 @@ class Basin:
     measured_temp_c: Decimal | None = None
     diving_platforms_m: tuple[Decimal, ...] = ()  # e.g. (1, 3, 5) from "Sprungbecken 1/3/5m"
     physical_source: BasinSource = BasinSource.CURATED
-    lane_plan: LanePlan | None = None  # parsed per-basin Belegungsplan (static/recurring)
+    # Curated INPUT: where this basin's lane document lives (drives extraction). Distinct from
+    # `lane_plan`, the extraction OUTCOME below.
+    lane_plan_source: LanePlanSource | None = None
+    # Extraction OUTCOME, first-class persisted state:
+    #   None                -> nothing to extract (no source) OR scrape not yet run
+    #   LanePlan            -> parsed grid
+    #   LanePlanUnavailable -> source declared, extraction attempted and FAILED (cause persisted)
+    lane_plan: LanePlan | LanePlanUnavailable | None = None
 
 
 class FeatureKind(Enum):

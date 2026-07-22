@@ -49,10 +49,11 @@ def test_pool_facility_doc_read_matches_curated_dataset_modulo_geo(tmp_path: Pat
     curated = _curated_yaml_facilities()
 
     # The curated (scheduled) pools land on the read path — nothing dropped or invented by the
-    # flip. Slice F additionally puts SCHEDULE-LESS prose pools on the read path; isolate the
-    # scheduled ones (those with a schedule rule) for the curated-parity comparison.
+    # flip. Both Slice-F prose pools AND the reconciliation slice's lane-plan-only pools are
+    # SCHEDULE-LESS; isolate the scheduled ones (those with a schedule rule) for the parity check.
+    scheduled_curated = {pid: f for pid, f in curated.items() if any(b.rules for b in f.basins)}
     scheduled = {pid: f for pid, f in new_read.items() if any(b.rules for b in f.basins)}
-    assert set(scheduled) == set(curated)
+    assert set(scheduled) == set(scheduled_curated)
     assert set(scheduled) == {
         "hallenbad-city",
         "hallenbad-oerlikon",
@@ -63,16 +64,25 @@ def test_pool_facility_doc_read_matches_curated_dataset_modulo_geo(tmp_path: Pat
     # Everything but geo is identical: the schedule/identity/basins/prices the read path serves
     # is unchanged by the flip.
     for pool_id in scheduled:
-        assert _without_geo(scheduled[pool_id]) == _without_geo(curated[pool_id]), pool_id
+        assert _without_geo(scheduled[pool_id]) == _without_geo(scheduled_curated[pool_id]), pool_id
 
-    # Pin the EXACT set of Slice-F prose pools (location-only pools whose WFS prose names basins).
-    # A catalog regeneration that changes which pools carry basin prose must surface here, not
-    # slip in silently — every prose pool is schedule-less and PARSED_PROSE.
-    prose = {pid for pid, f in new_read.items() if not any(b.rules for b in f.basins)}
+    # Schedule-less read-path pools are of two kinds. Pin BOTH exactly so a catalog/curation change
+    # surfaces here, not silently: the Slice-F prose pools (all PARSED_PROSE basins) and the
+    # lane-plan-only curated pools (CURATED basins carrying only a `lane_plan_source`).
+    schedule_less = {pid for pid, f in new_read.items() if not any(b.rules for b in f.basins)}
+    prose = {
+        pid
+        for pid in schedule_less
+        if all(b.physical_source is BasinSource.PARSED_PROSE for b in new_read[pid].basins)
+    }
     assert prose == {"hallenbad-altstetten", "strandbad-tiefenbrunnen"}
     for pid in prose:
+        assert new_read[pid].basins
+    lane_only = schedule_less - prose
+    assert lane_only == {"hallenbad-leimbach", "hallenbad-blaesi", "waermebad-kaeferberg"}
+    for pid in lane_only:
         basins = new_read[pid].basins
-        assert basins and all(b.physical_source is BasinSource.PARSED_PROSE for b in basins)
+        assert basins and all(b.lane_plan_source is not None for b in basins)
 
 
 def test_geo_divergence_is_by_design_catalog_over_yaml(tmp_path: Path) -> None:
@@ -92,9 +102,14 @@ def test_geo_divergence_is_by_design_catalog_over_yaml(tmp_path: Path) -> None:
     for pool_id, facility in new_read.items():
         assert facility.geo == catalog[pool_id]
 
-    # …and for the 3 shifted pools that is genuinely different from the curated YAML geo. Only the
-    # curated pools have a YAML geo to diverge from (prose pools have no curated counterpart).
-    diverged = {pid for pid in curated if new_read[pid].geo != curated[pid].geo}
+    # …and for the 3 shifted pools that is genuinely different from the curated YAML geo. Only a
+    # curated pool that actually authored a YAML geo can diverge; the lane-plan-only pools declare
+    # no geo (None), so they are excluded rather than counted as a trivial divergence.
+    diverged = {
+        pid
+        for pid in curated
+        if curated[pid].geo is not None and new_read[pid].geo != curated[pid].geo
+    }
     assert diverged == _GEO_SHIFTED
 
 

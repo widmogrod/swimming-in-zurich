@@ -57,13 +57,18 @@ def dataset() -> Dataset:
     return result.value
 
 
-def test_dataset_loads_four_curated_pools(dataset: Dataset) -> None:
+def test_dataset_loads_curated_and_lane_plan_only_pools(dataset: Dataset) -> None:
     names = {f.identity.name for f in dataset.facilities}
     assert names == {
+        # Fully curated (schedules).
         "Hallenbad City",
         "Hallenbad Oerlikon",
         "Hallenbad Bungertwies",
         "Schulschwimmanlage Aemtler",
+        # Lane-plan-only (schedule-less basin carrying a lane_plan_source).
+        "Hallenbad Leimbach",
+        "Hallenbad Bläsi",
+        "Wärmebad Käferberg",
     }
     # Registry knows more than we have curated.
     assert len(dataset.registry.identities) == 8

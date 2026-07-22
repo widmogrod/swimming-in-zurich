@@ -1,5 +1,6 @@
-"""Belegungsplan scrape stage: best-effort fetch/parse, offline via MockTransport over the
-committed City PDF fixture."""
+"""Belegungsplan scrape stage: DOMAIN-DRIVEN, best-effort fetch/parse. The fetch-set is derived
+from the loaded facilities' `lane_plan_source` declarations (no hardcoded URL list); each parsed
+plan is stamped with its source URL and each failure recorded as a typed miss."""
 
 from __future__ import annotations
 
@@ -8,14 +9,26 @@ from pathlib import Path
 
 import httpx
 
+from swimzh.core.errors import HttpStatus
 from swimzh.core.http import HttpClient, RetryPolicy
-from swimzh.etl.lane_plans import CITY_BELEGUNGSPLAN_URLS, scrape_lane_plans
-
-NEW_SLUGS = ("leimbach", "blaesi", "kaeferberg")
+from swimzh.domain.models import (
+    Basin,
+    BasinId,
+    BasinKind,
+    Facility,
+    LanePlanSource,
+    PoolId,
+    PoolIdentity,
+    PoolKind,
+    Provenance,
+)
+from swimzh.etl.lane_plans import declared_source_urls, scrape_lane_plans
 
 FIXTURES = Path(__file__).resolve().parents[1] / "providers" / "fixtures"
-PDF_FIXTURE = FIXTURES / "city-schwimmerbecken.pdf"
-CITY_BYTES = PDF_FIXTURE.read_bytes()
+CITY_BYTES = (FIXTURES / "city-schwimmerbecken.pdf").read_bytes()
+
+CITY_URL = "https://example.test/city-schwimmerbecken.pdf"
+LEIMBACH_URL = "https://example.test/leimbach.pdf"
 
 
 def _client(handler: Callable[[httpx.Request], httpx.Response]) -> HttpClient:
@@ -23,66 +36,90 @@ def _client(handler: Callable[[httpx.Request], httpx.Response]) -> HttpClient:
     return HttpClient(inner, source="belegungsplan", retry=RetryPolicy(max_attempts=1))
 
 
-def test_scrape_lane_plans_parses_fixture() -> None:
+def _facility(pool_id: str, basins: tuple[Basin, ...]) -> Facility:
+    return Facility(
+        identity=PoolIdentity(facility_id=PoolId(pool_id), name=pool_id, kind=PoolKind.INDOOR),
+        address="",
+        provenance=Provenance(source="test", curated=True),
+        basins=basins,
+    )
+
+
+def _basin(basin_id: str, url: str | None) -> Basin:
+    source = LanePlanSource(url=url) if url is not None else None
+    return Basin(
+        basin_id=BasinId(basin_id),
+        name=basin_id,
+        rules=(),
+        kind=BasinKind.LAP,
+        lane_plan_source=source,
+    )
+
+
+def test_declared_source_urls_derives_the_fetch_set_from_the_domain() -> None:
+    # The fetch-set IS a projection of the model — nothing hardcoded. Distinct URLs, first-seen
+    # order, deduped; a basin without a source contributes nothing.
+    facilities = (
+        _facility("a", (_basin("a-1", CITY_URL), _basin("a-2", None))),
+        _facility("b", (_basin("b-1", LEIMBACH_URL), _basin("b-2", CITY_URL))),
+    )
+    assert declared_source_urls(facilities) == (CITY_URL, LEIMBACH_URL)
+
+
+def test_scrape_parses_declared_source_and_stamps_its_url() -> None:
     client = _client(lambda _r: httpx.Response(200, content=CITY_BYTES))
-    report = scrape_lane_plans(client, ("https://example.test/city.pdf",))
+    facilities = (_facility("city", (_basin("city-50m", CITY_URL),)),)
+    report = scrape_lane_plans(client, facilities)
     assert len(report.plans) == 1
-    assert report.skipped == ()
+    assert report.misses == ()
     parsed = report.plans[0]
     assert "City" in parsed.basin_hint
     assert parsed.plan.lane_count == 6
+    # The parser is URL-agnostic; the fetch loop stamped the real source URL as the join key.
+    assert parsed.source_url == CITY_URL
 
 
-def test_scrape_lane_plans_skips_failed_pdf_best_effort() -> None:
+def test_scrape_records_failed_fetch_as_a_typed_miss() -> None:
     def handler(request: httpx.Request) -> httpx.Response:
-        if request.url.path.endswith("good.pdf"):
+        if request.url.path.endswith("city-schwimmerbecken.pdf"):
             return httpx.Response(200, content=CITY_BYTES)
         return httpx.Response(503, text="down")
 
     client = _client(handler)
-    report = scrape_lane_plans(
-        client, ("https://example.test/good.pdf", "https://example.test/bad.pdf")
+    facilities = (
+        _facility("city", (_basin("city-50m", CITY_URL),)),
+        _facility("leimbach", (_basin("leimbach-25m", LEIMBACH_URL),)),
     )
-    assert len(report.plans) == 1
-    assert report.skipped == ("https://example.test/bad.pdf",)
+    report = scrape_lane_plans(client, facilities)
+    assert len(report.plans) == 1 and report.plans[0].source_url == CITY_URL
+    assert len(report.misses) == 1
+    miss = report.misses[0]
+    assert miss.source_url == LEIMBACH_URL
+    # The real typed cause is preserved (not a status code or a describe() string).
+    assert isinstance(miss.cause, HttpStatus)
+    assert miss.cause.status == 503
 
 
-def test_scrape_lane_plans_newly_listed_basins_all_parse_never_fatal() -> None:
-    """Since Slice E2's anchor-derived grid band all three newly-listed basins parse as uniform
-    lane grids (the old A4 legend clip had dropped Bläsi's Sunday lane and hidden the sheet).
-    None is fatal — a fetch/parse failure would still be counted in `skipped`, never abort."""
-    by_slug = {slug: (FIXTURES / f"{slug}.pdf").read_bytes() for slug in NEW_SLUGS}
-
-    def handler(request: httpx.Request) -> httpx.Response:
-        slug = request.url.path.rsplit("/", 1)[-1].removesuffix(".pdf")
-        return httpx.Response(200, content=by_slug[slug])
-
-    client = _client(handler)
-    urls = tuple(f"https://example.test/{slug}.pdf" for slug in NEW_SLUGS)
-    report = scrape_lane_plans(client, urls)
-
-    hints = {p.basin_hint for p in report.plans}
-    assert any("Leimbach" in h for h in hints)
-    assert any("Käferberg" in h for h in hints)
-    assert any("Bläsi" in h for h in hints)
-    assert len(report.plans) == 3  # all three parse under E2's per-weekday segmentation
-    assert report.skipped == ()
+def test_scrape_of_no_declared_sources_is_empty() -> None:
+    client = _client(lambda _r: httpx.Response(200, content=CITY_BYTES))
+    facilities = (_facility("x", (_basin("x-1", None),)),)
+    report = scrape_lane_plans(client, facilities)
+    assert report.plans == () and report.misses == ()
 
 
-def test_scrape_lane_plans_expands_stacked_oerlikon_sheet_into_two_basins() -> None:
-    # The Oerlikon Nichtschwimmer-/Sprungbecken sheet stacks two basins; the sheet parser emits
-    # one ParsedPlan per basin, so one URL contributes TWO plans (E3 multi-basin segmentation).
-    sheet = (FIXTURES / "oerlikon-nichtschwimmer-sprungbecken.pdf").read_bytes()
-    client = _client(lambda _r: httpx.Response(200, content=sheet))
-    report = scrape_lane_plans(client, ("https://example.test/oerlikon-sprung.pdf",))
-    assert len(report.plans) == 2
-    assert report.skipped == ()
-    hints = {p.basin_hint for p in report.plans}
-    assert any("Nichtschwimmer" in h for h in hints)
-    assert any("Sprungbecken" in h for h in hints)
+def test_hardcoded_url_list_and_fuzzy_matcher_symbols_are_gone() -> None:
+    # Acceptance guard: the hardcoded URL list and the fuzzy basin-hint matcher are DELETED —
+    # extraction is now a projection of the domain, reconciliation a URL-keyed join. Asserting on
+    # module attributes (not a text grep) so a docstring mention of the retired names cannot trip
+    # the guard, and a reintroduction of the symbol itself does.
+    import importlib
 
+    lane_plans = importlib.import_module("swimzh.etl.lane_plans")
+    silver = importlib.import_module("swimzh.etl.silver")
+    reconcile = importlib.import_module("swimzh.build.reconcile")
 
-def test_new_slugs_are_wired_into_the_scrape_url_list() -> None:
-    listed = "\n".join(CITY_BELEGUNGSPLAN_URLS)
-    for slug in NEW_SLUGS:
-        assert f"/{slug}.pdf" in listed
+    assert not hasattr(lane_plans, "CITY_BELEGUNGSPLAN_URLS")
+    assert not hasattr(lane_plans, "PENDING_BELEGUNGSPLAENE")
+    assert not hasattr(silver, "_basin_hint_index")
+    assert not hasattr(reconcile, "BasinHint")
+    assert not hasattr(reconcile, "build_basin_hint_index")

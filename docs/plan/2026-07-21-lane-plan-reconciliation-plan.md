@@ -5,7 +5,7 @@ created: 2026-07-21
 updated: 2026-07-22
 feature: lane-plan-reconciliation
 branch: plan/lane-plan-reconciliation
-worktree: .claude/worktrees/plan-lane-plan-reconciliation
+worktree: "relocated into the main checkout (see Decisions 2026-07-22 — worktree relocation)"
 base_branch: main
 gates:
   qa: full               # ruff, format, mypy strict, pytest+coverage floor (95), CRAP
@@ -230,6 +230,7 @@ Appended by /dev:implement after each slice — never rewritten. Newest row last
 
 | date | slice | status | divergence from plan | tech debt created | human review? |
 |------|-------|--------|----------------------|-------------------|---------------|
+| 2026-07-22 | S1 | done | worktree relocated into main checkout (subagent cwd targeted the main repo, not the worktree); `index_bound_plans` two-plans→one-basin guard tested directly (structurally unreachable via the single-basin join until S2) | none (2 non-blocking critic notes deferred to S2) | yes |
 
 ## Decisions & divergences
 
@@ -263,6 +264,29 @@ Appended by /dev:implement after each slice — never rewritten. Newest row last
   provably complete/stable, which bounds only the "unknown source appears" risk (NOT the stale-store risk). S1/S2
   target the two blocked-but-real curated basins; the design is confirmed as the correct lever (the gap is 100%
   reconciliation, 0% discovery).
+
+- **2026-07-22 — worktree relocation (execution divergence, not design).** `/dev:implement` created an isolated
+  worktree, but the spawned `slice-implementer` resolved files via the session's primary-working-directory
+  absolute path and wrote S1 into the **main checkout**, not the worktree (the critic, running `git` from its
+  cwd, correctly found the worktree empty — a false "unimplemented" verdict). Recovered non-destructively:
+  captured S1 as a patch, removed the now-empty worktree (branch preserved), and `git switch`ed the main
+  checkout onto `plan/lane-plan-reconciliation`, carrying the staged S1 changes across. Net effect: the plan
+  branch now lives in the main working tree rather than a separate worktree; base `main` is still written only by
+  the approve commit + the eventual ff-merge. Re-ran the critic against the real code (verdict **approve**) and
+  the full QA chain (399 passed, 95.59%, crap OK) before committing.
+- **2026-07-22 — S1 landed.** `lane_plan_source` + `LanePlanUnavailable` + widened `Basin.lane_plan` are
+  first-class; the `ProviderError` codec round-trips losslessly via an explicit pydantic `Field(discriminator=
+  "type")` tag (not shape inference — the implementer's "smart union on shape" note was imprecise; the `lane_plan`
+  slot uses shape-disjoint discrimination, but the `ProviderError` union is tag-discriminated). The fuzzy matcher
+  (`_basin_hint_index`, `BASIN_KIND_WORDS`), the hardcoded URL lists (`CITY_BELEGUNGSPLAN_URLS`,
+  `PENDING_BELEGUNGSPLAENE`), and the `BasinHint` `SourceRef` arm (+ `build_basin_hint_index`, `Crosswalk.
+  basin_hint`/`ambiguous_hints`) are deleted. Discovery for S2/S3: leimbach/blaesi/kaeferberg are a new
+  **curated-but-schedule-less** class (physical_source CURATED, no rules) distinct from Slice-F PARSED_PROSE prose
+  pools — several spine/build test guards were widened to recognise it; keep the `prose` vs `lane_only`
+  distinction when touching those. Non-blocking (deferred): (1) `attach_lane_plans`' two-plans→one-basin `Err`
+  arm is covered only via `index_bound_plans` directly — add an `attach`-level test once S2 makes it reachable;
+  (2) `resolve_all`'s `Err` arm is structurally unreachable after `_Ambiguous` retired — revisit when a new fatal
+  `SourceRef` cause appears.
 
 ## Summary
 

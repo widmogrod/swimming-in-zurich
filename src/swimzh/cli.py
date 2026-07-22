@@ -21,9 +21,11 @@ from swimzh.build.reconcile import crosswalk_from_rows, resolve_all
 from swimzh.core.errors import describe
 from swimzh.core.http import HttpClient
 from swimzh.core.result import Err, Ok
+from swimzh.domain.lane_plan import LanePlan
+from swimzh.domain.models import LanePlanUnavailable
 from swimzh.etl.build import build_store
 from swimzh.etl.catalog import build_catalog
-from swimzh.etl.lane_plans import CITY_BELEGUNGSPLAN_URLS, scrape_lane_plans
+from swimzh.etl.lane_plans import scrape_lane_plans
 from swimzh.etl.scrape import scrape_indoor_facilities
 from swimzh.etl.silver import attach_lane_plans
 from swimzh.providers import geo_sport
@@ -95,7 +97,7 @@ def scrape_gold(
 
     conn = open_db(db_path)
     curated = GoldRepository(conn).load_all()
-    crosswalk = crosswalk_from_rows(load_alias_rows(conn), load_xref_rows(conn), curated)
+    crosswalk = crosswalk_from_rows(load_alias_rows(conn), load_xref_rows(conn))
     match resolve_all(report.extracts, crosswalk):
         case Err(error):
             print(f"scrape reconcile failed: {describe(error)}", file=sys.stderr)
@@ -127,16 +129,11 @@ def scrape_gold(
             return 0
 
 
-def scrape_lanes(
-    *,
-    db_path: Path,
-    client: HttpClient,
-    fetched_at: datetime,
-    urls: tuple[str, ...] = CITY_BELEGUNGSPLAN_URLS,
-) -> int:
-    """Fetch the per-basin Belegungsplan PDFs and attach the parsed lane plans onto the
-    matching basins of an existing gold store. Best-effort on fetch/parse; loud on a hint
-    that cannot be reconciled to a basin. Exit code."""
+def scrape_lanes(*, db_path: Path, client: HttpClient, fetched_at: datetime) -> int:
+    """Fetch the Belegungsplan PDFs the loaded facilities DECLARE (`lane_plan_source`) and attach
+    the parsed plans onto the basin that owns each URL — a deterministic URL-keyed join. A source
+    that fails to fetch/parse is recorded as first-class `LanePlanUnavailable` state (never a
+    silent drop); a URL no basin claims is a non-fatal `unbound` audit. Exit code."""
     if not db_path.exists():
         print(f"gold store not found at {db_path}; build it first", file=sys.stderr)
         return 1
@@ -146,37 +143,47 @@ def scrape_lanes(
         print(f"gold store {db_path} is empty; build it first", file=sys.stderr)
         return 1
 
-    report = scrape_lane_plans(client, urls)
-    if not report.plans:
-        skipped = f"; skipped {len(report.skipped)}" if report.skipped else ""
-        print(f"no Belegungsplan PDFs could be parsed{skipped}", file=sys.stderr)
+    report = scrape_lane_plans(client, facilities)
+    if not report.plans and not report.misses:
+        print("no basin declares a lane_plan_source; nothing to scrape", file=sys.stderr)
         return 1
 
-    match attach_lane_plans(facilities, report.plans, fetched_at):
+    misses = {miss.source_url: miss.cause for miss in report.misses}
+    match attach_lane_plans(facilities, report.plans, misses, fetched_at):
         case Err(error):
             print(f"lane-plan reconcile failed: {describe(error)}", file=sys.stderr)
             return 1
         case Ok(attachment):
             attached = sum(
-                1 for f in attachment.facilities for b in f.basins if b.lane_plan is not None
+                1
+                for f in attachment.facilities
+                for b in f.basins
+                if isinstance(b.lane_plan, LanePlan)
             )
-            if attachment.unmatched:
+            unavailable = sum(
+                1
+                for f in attachment.facilities
+                for b in f.basins
+                if isinstance(b.lane_plan, LanePlanUnavailable)
+            )
+            for plan in attachment.unbound:
                 print(
-                    f"unmatched (no curated basin): {', '.join(attachment.unmatched)}",
+                    f"unbound (no basin claims {plan.source_url}): {plan.reason}",
                     file=sys.stderr,
                 )
             for warning in attachment.warnings:
                 print(f"warning: {warning}", file=sys.stderr)
-            if attached == 0:
-                print("no lane plan reconciled to a curated basin", file=sys.stderr)
-                return 1
+            # Persist the run's outcomes (parsed plans AND recorded failures) to the read path.
             write_schedules(
                 conn,
                 tuple((f.identity.facility_id, f) for f in attachment.facilities),
             )
+            if attached == 0:
+                print("no lane plan reconciled to a curated basin", file=sys.stderr)
+                return 1
             msg = f"attached {attached} lane plan(s) into {db_path}"
-            if report.skipped:
-                msg += f"; skipped {len(report.skipped)}: {', '.join(report.skipped)}"
+            if unavailable:
+                msg += f"; {unavailable} unavailable (recorded)"
             print(msg)
             return 0
 

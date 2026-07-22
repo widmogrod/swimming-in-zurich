@@ -21,7 +21,7 @@ from __future__ import annotations
 
 from dataclasses import replace
 
-from swimzh.build.reconcile import Crosswalk, build_basin_hint_index
+from swimzh.build.reconcile import Crosswalk
 from swimzh.core.normalize import normalize
 from swimzh.domain.catalog import PoolCatalogEntry
 from swimzh.domain.models import (
@@ -161,11 +161,8 @@ def _prose_facility(entry: PoolCatalogEntry, pool_id: PoolId, kind: PoolKind) ->
     )
 
 
-def build_crosswalk(spine: PoolSpine, facilities: tuple[Facility, ...]) -> Crosswalk:
-    """The lookup tables ``reconcile.resolve`` consults, built from the spine + curated basins."""
+def build_crosswalk(spine: PoolSpine) -> Crosswalk:
+    """The lookup tables ``reconcile.resolve`` consults, built from the identity spine."""
     xref = {(x.namespace, x.ext_id): x.pool_id for x in spine.xrefs}
     alias = {a.norm: a.pool_id for a in spine.aliases}
-    basin_hint, ambiguous = build_basin_hint_index(facilities)
-    return Crosswalk(
-        xref=xref, alias=alias, basin_hint=basin_hint, ambiguous_hints=frozenset(ambiguous)
-    )
+    return Crosswalk(xref=xref, alias=alias)

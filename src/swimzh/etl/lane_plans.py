@@ -1,62 +1,70 @@
-"""Fetch + parse the per-basin Belegungsplan PDFs for the city indoor pools.
+"""Fetch + parse the per-basin Belegungsplan PDFs — DRIVEN BY the domain.
 
-Best-effort, mirroring `scrape.py`: each URL is fetched and parsed independently; a PDF
-whose fetch or parse fails is skipped and reported, never fatal. Successfully parsed plans
-carry only a `basin_hint` — the silver stage (`attach_lane_plans`) reconciles that to a
-`Basin`. The URL→basin binding is intentionally *not* made here (decision #8): this module
-only knows where the PDFs live.
+What to extract is a projection of the model: a source exists to be extracted *iff a basin
+declares a `lane_plan_source`. There is no hardcoded URL list (the old
+`CITY_BELEGUNGSPLAN_URLS` / `PENDING_BELEGUNGSPLAENE` constants are deleted); the fetch-set is
+derived from the loaded facilities, so adding a source is one YAML edit on the owning basin.
+
+Best-effort and errors-as-values: each declared source URL is fetched + parsed independently.
+A success yields one or more `ParsedPlan`s (a stacked sheet stacks several basins) stamped with
+the URL they came from — the deterministic reconciliation key silver joins on. A fetch/parse
+failure is NOT swallowed: it is recorded as a typed `LanePlanMiss(source_url, cause)` so silver
+can persist a `LanePlanUnavailable` on the declared basin(s), keyed by the real `ProviderError`.
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from collections.abc import Sequence
+from dataclasses import dataclass, replace
 
+from swimzh.core.errors import ProviderError
 from swimzh.core.http import HttpClient
 from swimzh.core.result import Err, Ok
+from swimzh.domain.models import Facility
 from swimzh.providers.belegungsplan import ParsedPlan, scrape_belegungsplan_sheet
 
-# The city indoor pools publish per-basin Belegungspläne under a shared
-# `.../belegungsplaene/<slug>[-<basin>].pdf` path. Best-effort and UNVERIFIED — a wrong or
-# stale URL is skipped + reported, and the parsed header's basin_hint (not the URL) drives
-# reconciliation, so a bad entry can never mis-attach. Verify against the live pool pages.
-_BELEGUNGSPLAENE = (
-    "https://www.stadt-zuerich.ch/content/dam/web/de/stadtleben/sport-und-erholung/"
-    "dokumente/badeanlagen/belegungsplaene"
-)
 
-# Verified per-basin Belegungsplan PDFs for the curated city indoor pools. Hints that don't
-# reconcile to a curated basin (e.g. the Variobecken, uncurated pools) are reported, not fatal.
-# The leimbach/blaesi/kaeferberg sheets are published but their pools are not yet curated: a
-# parsed plan lands in `unmatched` (no curated basin). Since Slice E2's anchor-derived grid band
-# (no A4 legend clip) all three parse as uniform lane grids — all best-effort and non-fatal
-# (reported skip / unmatched), never aborting a batch scrape.
-CITY_BELEGUNGSPLAN_URLS: tuple[str, ...] = (
-    f"{_BELEGUNGSPLAENE}/city-schwimmerbecken.pdf",
-    f"{_BELEGUNGSPLAENE}/city-variobecken.pdf",
-    f"{_BELEGUNGSPLAENE}/oerlikon-schwimmerbecken.pdf",
-    f"{_BELEGUNGSPLAENE}/oerlikon-nichtschwimmer-sprungbecken.pdf",
-    f"{_BELEGUNGSPLAENE}/bungertwies.pdf",
-    f"{_BELEGUNGSPLAENE}/leimbach.pdf",
-    f"{_BELEGUNGSPLAENE}/blaesi.pdf",
-    f"{_BELEGUNGSPLAENE}/kaeferberg.pdf",
-)
+def declared_source_urls(facilities: Sequence[Facility]) -> tuple[str, ...]:
+    """The parse fetch-set: every distinct `lane_plan_source.url` declared by a basin, in first-
+    seen order. This IS the extraction universe — nothing hardcoded — so the fetch loop can never
+    drift from what the domain declares."""
+    seen: dict[str, None] = {}
+    for facility in facilities:
+        for basin in facility.basins:
+            if basin.lane_plan_source is not None:
+                seen.setdefault(basin.lane_plan_source.url, None)
+    return tuple(seen)
+
+
+@dataclass(frozen=True, slots=True)
+class LanePlanMiss:
+    """A declared source whose fetch/parse FAILED — the real typed cause, mapped back to its
+    URL so silver can stamp a `LanePlanUnavailable` on every basin that declared it."""
+
+    source_url: str
+    cause: ProviderError
 
 
 @dataclass(frozen=True, slots=True)
 class LanePlanReport:
+    """The outcome of extracting the domain-declared sources: the parsed plans (each stamped
+    with its `source_url`) and the per-URL failures (typed causes)."""
+
     plans: tuple[ParsedPlan, ...]
-    skipped: tuple[str, ...]  # URLs whose PDF could not be fetched/parsed
+    misses: tuple[LanePlanMiss, ...]
 
 
-def scrape_lane_plans(client: HttpClient, urls: tuple[str, ...]) -> LanePlanReport:
+def scrape_lane_plans(client: HttpClient, facilities: Sequence[Facility]) -> LanePlanReport:
+    """Fetch + parse every source the loaded facilities declare, stamping each parsed plan with
+    the URL it came from and recording each failure as a typed miss."""
     plans: list[ParsedPlan] = []
-    skipped: list[str] = []
-    for url in urls:
+    misses: list[LanePlanMiss] = []
+    for url in declared_source_urls(facilities):
         # One sheet may stack several basins (Oerlikon's Nichtschwimmer-/Sprungbecken): the
         # sheet parser returns one `ParsedPlan` per basin; a single-basin sheet returns one.
         match scrape_belegungsplan_sheet(client, url):
             case Ok(parsed):
-                plans.extend(parsed)
-            case Err(_):
-                skipped.append(url)
-    return LanePlanReport(plans=tuple(plans), skipped=tuple(skipped))
+                plans.extend(replace(p, source_url=url) for p in parsed)
+            case Err(cause):
+                misses.append(LanePlanMiss(source_url=url, cause=cause))
+    return LanePlanReport(plans=tuple(plans), misses=tuple(misses))

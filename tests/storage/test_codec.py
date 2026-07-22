@@ -13,6 +13,19 @@ from zoneinfo import ZoneInfo
 import pytest
 from pydantic import ValidationError
 
+from swimzh.core.errors import (
+    ConnectionFailed,
+    DecodeError,
+    HttpStatus,
+    ParseError,
+    ProviderError,
+    ProviderSpecific,
+    RateLimited,
+    Redirect,
+    SchemaMismatch,
+    Timeout,
+    TooLarge,
+)
 from swimzh.core.result import Ok
 from swimzh.domain.access import ClubReserved, PublicSwim
 from swimzh.domain.lane_plan import LanePlan, LaneReservation, PlanConfidence, PlanCoverage
@@ -24,6 +37,8 @@ from swimzh.domain.models import (
     Facility,
     Feature,
     FeatureKind,
+    LanePlanSource,
+    LanePlanUnavailable,
 )
 from swimzh.domain.schedule import TimeRange, Weekday
 from swimzh.providers.curated import load_dataset
@@ -40,7 +55,9 @@ def facilities() -> tuple[Facility, ...]:
 
 
 def test_roundtrip_all_curated_facilities(facilities: tuple[Facility, ...]) -> None:
-    assert len(facilities) == 4
+    # 4 fully-curated pools + 3 lane-plan-only pools (leimbach/blaesi/käferberg carry a minimal
+    # schedule-less basin with a `lane_plan_source`).
+    assert len(facilities) == 7
     for facility in facilities:
         assert codec.loads(codec.dumps(facility)) == facility
 
@@ -248,7 +265,7 @@ def test_roundtrip_plan_with_lanes_by_weekday_and_sectioned_reservation(
     back = codec.loads(codec.dumps(facility))
     assert back == facility
     round_tripped = back.basins[0].lane_plan
-    assert round_tripped is not None
+    assert isinstance(round_tripped, LanePlan)
     assert round_tripped == plan
     assert round_tripped.lanes_by_weekday == {
         Weekday.MONDAY: 4,
@@ -288,7 +305,7 @@ def test_uniform_plan_serializes_without_the_new_slice_d_keys(
     back = codec.loads(dumped)
     assert back == facility
     restored = back.basins[0].lane_plan
-    assert restored is not None
+    assert isinstance(restored, LanePlan)
     assert restored.lanes_by_weekday is None
     assert all(r.section is None for r in restored.reservations)
 
@@ -331,6 +348,94 @@ def test_occupancy_and_lane_availability_never_leak_into_gold(
     # The stored plan itself must still be present (proves the guard rejects the derived type,
     # not lane data wholesale).
     assert "lane_plan" in codec.dumps(with_plan).lower()
+
+
+# --- lane_plan_source + lane_plan extraction-outcome codec (reconciliation slice) ---
+
+_ALL_PROVIDER_ERRORS: list[ProviderError] = [
+    Timeout(url="https://x/a.pdf", after_s=12.5),
+    ConnectionFailed(url="https://x/a.pdf", detail="connection refused"),
+    HttpStatus(url="https://x/a.pdf", status=503, body_snippet="<html>down</html>"),
+    RateLimited(url="https://x/a.pdf", retry_after_s=30.0),
+    RateLimited(url="https://x/a.pdf", retry_after_s=None),
+    DecodeError(source="belegungsplan", detail="bad gzip"),
+    ParseError(source="belegungsplan", detail="unreadable PDF", raw_snippet="%PDF-1.4"),
+    SchemaMismatch(source="belegungsplan", detail="no weekday header row"),
+    TooLarge(url="https://x/a.pdf", limit_bytes=1048576),
+    Redirect(url="https://x/a.pdf", location="https://y/", count=5),
+    ProviderSpecific(provider="belegungsplan", detail={"code": 7, "nested": ["a", None, True]}),
+    ProviderSpecific(provider="belegungsplan", detail="pdfplumber not installed"),
+    ProviderSpecific(provider="belegungsplan", detail=None),
+]
+
+
+def test_lane_plan_source_round_trips_and_is_absent_when_unset(
+    facilities: tuple[Facility, ...],
+) -> None:
+    base = facilities[0]
+    # A basin with no source adds nothing to the payload (byte-stability of pre-existing blobs).
+    assert '"lane_plan_source"' not in codec.dumps(base)
+
+    source = LanePlanSource(url="https://example.test/city-schwimmerbecken.pdf")
+    facility = replace(
+        base, basins=(replace(base.basins[0], lane_plan_source=source), *base.basins[1:])
+    )
+    back = codec.loads(codec.dumps(facility))
+    assert back == facility
+    assert back.basins[0].lane_plan_source == source
+    # `section` is omitted from the payload when None (Slice-D-style pop-when-default).
+    assert '"section"' not in codec.dumps(facility)
+
+
+def test_provider_error_union_round_trips_losslessly_through_the_dto() -> None:
+    # Acceptance: the FULL closed ProviderError union — incl. every ProviderSpecific payload shape
+    # — survives the boundary codec as a `LanePlanUnavailable.cause`, deep-equal, no repr.
+    base_facility = load_dataset(DATA_DIR)
+    assert isinstance(base_facility, Ok)
+    base = base_facility.value.facilities[0]
+    for cause in _ALL_PROVIDER_ERRORS:
+        unavailable = LanePlanUnavailable(
+            source_url="https://example.test/a.pdf",
+            section=None,
+            cause=cause,
+            observed_at=datetime(2026, 7, 18, 9, 0, tzinfo=ZoneInfo("Europe/Zurich")),
+        )
+        facility = replace(
+            base, basins=(replace(base.basins[0], lane_plan=unavailable), *base.basins[1:])
+        )
+        back = codec.loads(codec.dumps(facility))
+        assert back == facility, cause
+        restored = back.basins[0].lane_plan
+        assert isinstance(restored, LanePlanUnavailable)
+        assert restored.cause == cause
+
+
+def test_lane_plan_unavailable_and_lane_plan_are_discriminated_by_shape(
+    facilities: tuple[Facility, ...],
+) -> None:
+    # The widened `lane_plan` slot carries either a parsed LanePlan OR a LanePlanUnavailable; the
+    # smart union must restore each to the right domain type from the same JSON slot.
+    base = facilities[0]
+    plan = LanePlan(
+        lane_count=6,
+        reservations=(),
+        valid_from=date(2026, 1, 1),
+        coverage=PlanCoverage(PlanConfidence.COMPLETE, cells_total=0, cells_resolved=0),
+    )
+    unavailable = LanePlanUnavailable(
+        source_url="https://example.test/a.pdf",
+        section="sprungbecken",
+        cause=HttpStatus(url="https://example.test/a.pdf", status=404, body_snippet=""),
+        observed_at=datetime(2026, 7, 18, 9, 0, tzinfo=ZoneInfo("Europe/Zurich")),
+    )
+    with_plan = replace(base, basins=(replace(base.basins[0], lane_plan=plan), *base.basins[1:]))
+    with_miss = replace(
+        base, basins=(replace(base.basins[0], lane_plan=unavailable), *base.basins[1:])
+    )
+    assert isinstance(codec.loads(codec.dumps(with_plan)).basins[0].lane_plan, LanePlan)
+    restored_miss = codec.loads(codec.dumps(with_miss)).basins[0].lane_plan
+    assert isinstance(restored_miss, LanePlanUnavailable)
+    assert restored_miss.section == "sprungbecken"
 
 
 def test_legacy_basin_level_length_m_is_rejected(facilities: tuple[Facility, ...]) -> None:

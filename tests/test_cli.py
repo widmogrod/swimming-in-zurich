@@ -19,6 +19,7 @@ from swimzh.core.http import HttpClient, RetryPolicy
 from swimzh.core.result import Err, Ok
 from swimzh.domain.catalog import PoolCatalogEntry
 from swimzh.domain.geo import GeoPoint
+from swimzh.domain.lane_plan import LanePlan
 from swimzh.domain.models import BasinId, Facility, PoolKind, reconstruct_pool_id
 from swimzh.domain.pricing import PriceCategory, PriceEntry, PriceTable
 from swimzh.providers.curated import load_dataset
@@ -138,9 +139,10 @@ def test_scrape_gold_composes_onto_built_store(tmp_path: Path) -> None:
     )
     assert code == 0
     # No second row for City: the scrape composed onto the curated pool. The read path holds 4
-    # curated pools + 2 Slice-F prose pools = 6 (and exactly one City row, no long-slug duplicate).
+    # fully-curated pools + 3 lane-plan-only pools + 2 Slice-F prose pools = 9 (and exactly one
+    # City row, no long-slug duplicate).
     facilities = GoldRepository(open_db(db)).load_all()
-    assert len(facilities) == 6
+    assert len(facilities) == 9
     assert sum(1 for f in facilities if str(f.identity.facility_id) == "hallenbad-city") == 1
 
 
@@ -401,16 +403,14 @@ def test_scrape_lanes_attaches_plan_to_curated_basin(tmp_path: Path) -> None:
 
     body = FIXTURE_PDF.read_bytes()
     client = _pdf_client(lambda _r: httpx.Response(200, content=body))
-    code = scrape_lanes(
-        db_path=db, client=client, fetched_at=FETCHED_AT, urls=("https://example.test/city.pdf",)
-    )
+    code = scrape_lanes(db_path=db, client=client, fetched_at=FETCHED_AT)
     assert code == 0
 
     # B4 closes the B2→B4 enrichment gap: the lane plan is now on the read path
     # (`pool.facility_doc`), a scraped aspect curated City lacked, visible where `/swim` reads.
     city = _facility_from_read_path(db, "hallenbad-city")
     lap = next(b for b in city.basins if b.basin_id == BasinId("city-50m"))
-    assert lap.lane_plan is not None
+    assert isinstance(lap.lane_plan, LanePlan)
     assert lap.lane_plan.lane_count == 6
     assert lap.lane_plan.fetched_at == FETCHED_AT
 
@@ -425,9 +425,7 @@ def test_scrape_lanes_reports_when_no_pdf_parses(tmp_path: Path) -> None:
     db = tmp_path / "gold.sqlite"
     assert build(db_path=db, data_dir=DATA_DIR) == 0  # spine present, so the 503 is the cause
     client = _pdf_client(lambda _r: httpx.Response(503, text="down"))
-    code = scrape_lanes(
-        db_path=db, client=client, fetched_at=FETCHED_AT, urls=("https://example.test/city.pdf",)
-    )
+    code = scrape_lanes(db_path=db, client=client, fetched_at=FETCHED_AT)
     assert code == 1
 
 
@@ -435,9 +433,7 @@ def test_scrape_lanes_empty_store_is_error(tmp_path: Path) -> None:
     db = tmp_path / "empty.sqlite"
     open_db(db)  # schema only, no facilities
     client = _pdf_client(lambda _r: httpx.Response(200, content=FIXTURE_PDF.read_bytes()))
-    code = scrape_lanes(
-        db_path=db, client=client, fetched_at=FETCHED_AT, urls=("https://example.test/city.pdf",)
-    )
+    code = scrape_lanes(db_path=db, client=client, fetched_at=FETCHED_AT)
     assert code == 1
 
 
@@ -456,12 +452,17 @@ def test_build_produces_complete_offline_store(tmp_path: Path) -> None:
     dataset = load_dataset(DATA_DIR)
     assert isinstance(dataset, Ok)
     facilities = GoldRepository(conn).load_all()
-    # The curated (scheduled) facilities land on the read path…
+    # The curated *scheduled* facilities land on the read path — matched against the dataset's
+    # scheduled facilities (the lane-plan-only pools in the dataset are schedule-less, so they
+    # are excluded from this scheduled-parity check on both sides).
     scheduled = {f.identity.facility_id for f in facilities if any(b.rules for b in f.basins)}
-    assert scheduled == {f.identity.facility_id for f in dataset.value.facilities}
-    # …plus Slice-F schedule-less prose pools (a superset of the curated set).
+    scheduled_dataset = {
+        f.identity.facility_id for f in dataset.value.facilities if any(b.rules for b in f.basins)
+    }
+    assert scheduled == scheduled_dataset
+    # …plus schedule-less pools (Slice-F prose + lane-plan-only) — a superset of the scheduled set.
     stored = {f.identity.facility_id for f in facilities}
-    assert stored >= scheduled
+    assert stored > scheduled
 
 
 def test_build_via_main_offline(tmp_path: Path) -> None:
@@ -527,9 +528,7 @@ def test_build_then_scrape_lanes_enriches(tmp_path: Path) -> None:
 
     body = FIXTURE_PDF.read_bytes()
     client = _pdf_client(lambda _r: httpx.Response(200, content=body))
-    code = scrape_lanes(
-        db_path=db, client=client, fetched_at=FETCHED_AT, urls=("https://example.test/city.pdf",)
-    )
+    code = scrape_lanes(db_path=db, client=client, fetched_at=FETCHED_AT)
     assert code == 0
 
     conn = open_db(db)
@@ -537,7 +536,7 @@ def test_build_then_scrape_lanes_enriches(tmp_path: Path) -> None:
     # `write_schedules`) — the enrichment gap is closed, `/swim` sees the lane plan.
     city = _facility_from_read_path(db, "hallenbad-city")
     lap = next(b for b in city.basins if b.basin_id == BasinId("city-50m"))
-    assert lap.lane_plan is not None
+    assert isinstance(lap.lane_plan, LanePlan)
     # Roster + calendar assembled by `build` are untouched by lane enrichment.
     assert len(load_roster(conn)) == 57
 

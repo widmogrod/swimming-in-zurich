@@ -19,6 +19,8 @@ from pydantic import (
     model_serializer,
 )
 
+from swimzh.core.errors import JsonValue
+
 _Weekday = Literal["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
 _Scope = Literal["always", "school_term", "school_holiday"]
 _HolidayPolicy = Literal["normal", "sunday_schedule", "closed"]
@@ -130,7 +132,123 @@ class DimensionsDTO(_Strict):
     width_m: Decimal | None = None
 
 
+# --- ProviderError (closed union, lossless codec) ---------------------------------
+#
+# A discriminated union over `type`, one arm per `core.errors` variant, so a persisted
+# `LanePlanUnavailable.cause` round-trips losslessly (no variant special-cased, no `repr`).
+# `ProviderSpecific.detail` is `JsonValue` — the narrowing that makes the whole union encodable.
+
+
+class TimeoutDTO(_Strict):
+    type: Literal["timeout"]
+    url: str
+    after_s: float
+
+
+class ConnectionFailedDTO(_Strict):
+    type: Literal["connection_failed"]
+    url: str
+    detail: str
+
+
+class HttpStatusDTO(_Strict):
+    type: Literal["http_status"]
+    url: str
+    status: int
+    body_snippet: str
+
+
+class RateLimitedDTO(_Strict):
+    type: Literal["rate_limited"]
+    url: str
+    retry_after_s: float | None
+
+
+class DecodeErrorDTO(_Strict):
+    type: Literal["decode_error"]
+    source: str
+    detail: str
+
+
+class ParseErrorDTO(_Strict):
+    type: Literal["parse_error"]
+    source: str
+    detail: str
+    raw_snippet: str
+
+
+class SchemaMismatchDTO(_Strict):
+    type: Literal["schema_mismatch"]
+    source: str
+    detail: str
+
+
+class TooLargeDTO(_Strict):
+    type: Literal["too_large"]
+    url: str
+    limit_bytes: int
+
+
+class RedirectDTO(_Strict):
+    type: Literal["redirect"]
+    url: str
+    location: str
+    count: int
+
+
+class ProviderSpecificDTO(_Strict):
+    type: Literal["provider_specific"]
+    provider: str
+    detail: JsonValue
+
+
+ProviderErrorDTO = Annotated[
+    TimeoutDTO
+    | ConnectionFailedDTO
+    | HttpStatusDTO
+    | RateLimitedDTO
+    | DecodeErrorDTO
+    | ParseErrorDTO
+    | SchemaMismatchDTO
+    | TooLargeDTO
+    | RedirectDTO
+    | ProviderSpecificDTO,
+    Field(discriminator="type"),
+]
+
+
 # --- lane reservations (Belegungsplan) --------------------------------------------
+
+
+class LanePlanSourceDTO(_Strict):
+    url: str
+    section: str | None = None
+
+    @model_serializer(mode="wrap")
+    def _serialize(self, handler: SerializerFunctionWrapHandler) -> dict[str, Any]:
+        # Additive-and-invisible: a `None` `section` must not appear in the payload.
+        data: dict[str, Any] = handler(self)
+        if self.section is None:
+            data.pop("section", None)
+        return data
+
+
+class LanePlanUnavailableDTO(_Strict):
+    """The extraction-failed state persisted on a basin's `lane_plan`. Structurally disjoint
+    from `LanePlanDTO` (no `lane_count`/`coverage`), so a pydantic smart union discriminates the
+    two by shape — a pre-existing `LanePlanDTO` blob still validates unchanged."""
+
+    source_url: str
+    cause: ProviderErrorDTO
+    observed_at: datetime
+    section: str | None = None
+
+    @model_serializer(mode="wrap")
+    def _serialize(self, handler: SerializerFunctionWrapHandler) -> dict[str, Any]:
+        data: dict[str, Any] = handler(self)
+        if self.section is None:
+            data.pop("section", None)
+        return data
 
 
 class LaneReservationDTO(_Strict):
@@ -188,18 +306,24 @@ class BasinDTO(_Strict):
     measured_temp_c: Decimal | None = None
     diving_platforms_m: list[Decimal] = []
     physical_source: _BasinSource = "curated"
-    lane_plan: LanePlanDTO | None = None
+    # Curated input (where the lane document lives) vs the extraction outcome. `lane_plan` widens
+    # to carry a typed extraction FAILURE (`LanePlanUnavailableDTO`) as first-class persisted
+    # state; a pydantic smart union discriminates it from a parsed `LanePlanDTO` by shape.
+    lane_plan_source: LanePlanSourceDTO | None = None
+    lane_plan: LanePlanDTO | LanePlanUnavailableDTO | None = None
 
     @model_serializer(mode="wrap")
     def _serialize(self, handler: SerializerFunctionWrapHandler) -> dict[str, Any]:
-        # Additive-and-invisible (like Slice D): a basin with neither Slice-F field set must
-        # serialise to exactly the same bytes as a pre-Slice-F basin, so existing gold blobs
+        # Additive-and-invisible (like Slice D): a basin with none of the additive fields set must
+        # serialise to exactly the same bytes as a pre-existing basin, so existing gold blobs
         # round-trip byte-identically. Drop the defaults (`None` / empty list) from the payload.
         data: dict[str, Any] = handler(self)
         if self.measured_temp_c is None:
             data.pop("measured_temp_c", None)
         if not self.diving_platforms_m:
             data.pop("diving_platforms_m", None)
+        if self.lane_plan_source is None:
+            data.pop("lane_plan_source", None)
         return data
 
 

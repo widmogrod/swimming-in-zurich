@@ -30,6 +30,7 @@ from swimzh.domain.lane_plan import (
     LaneAvailability,
     LaneAvailabilityTimeline,
     LanePanel,
+    LanePlan,
     lane_availability_at,
     lane_availability_timeline,
     lane_panel,
@@ -278,7 +279,9 @@ def find_swim_options(
                         t = now_time if session.time.contains(now_time) else session.time.start
                         lane_avail: LaneAvailability | None = None
                         lane_timeline: LaneAvailabilityTimeline | None = None
-                        if basin.lane_plan is not None:
+                        # `lane_plan` now carries a third state (`LanePlanUnavailable`); only a
+                        # parsed `LanePlan` yields a derivation — a recorded failure is inert here.
+                        if isinstance(basin.lane_plan, LanePlan):
                             lane_avail = lane_availability_at(basin.lane_plan, weekday, t)
                             lane_timeline = lane_availability_timeline(
                                 basin.lane_plan, weekday, session.time
@@ -412,7 +415,7 @@ def facility_detail(facility: Facility, at: datetime, calendar: ZurichCalendar) 
             panel=lane_panel(basin.lane_plan, weekday),
         )
         for basin in facility.basins
-        if basin.lane_plan is not None
+        if isinstance(basin.lane_plan, LanePlan)
     )
     return FacilityDetail(
         facility_id=facility.identity.facility_id,

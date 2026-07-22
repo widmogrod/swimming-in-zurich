@@ -142,10 +142,16 @@ class _Header:
 
 @dataclass(frozen=True, slots=True)
 class ParsedPlan:
-    """A parsed plan plus the PDF-header basin name, reconciled to a `Basin` in silver."""
+    """A parsed plan plus the PDF-header basin name and the URL it was fetched from.
+
+    `source_url` is the deterministic reconciliation key (silver joins on it); the parser stays
+    URL-agnostic — it emits the default `""` and the fetch loop stamps the real URL. `basin_hint`
+    (the PDF header title) is demoted to a stacked-sheet discriminator + audit string, never an
+    identity key."""
 
     basin_hint: str
     plan: LanePlan
+    source_url: str = ""
 
 
 # --- generic 1-D clustering ---------------------------------------------------------

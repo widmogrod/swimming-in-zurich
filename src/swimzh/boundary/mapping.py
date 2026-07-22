@@ -19,23 +19,36 @@ from swimzh.boundary.curated_dto import (
     BasinDTO,
     ClosureDTO,
     ClubReservedDTO,
+    ConnectionFailedDTO,
+    DecodeErrorDTO,
     DimensionsDTO,
     ExceptionDTO,
     FamilyDTO,
     FeatureDTO,
     GeoDTO,
+    HttpStatusDTO,
     LanePlanDTO,
+    LanePlanSourceDTO,
+    LanePlanUnavailableDTO,
     LaneReservationDTO,
     LaneSwimDTO,
     LockerOptionDTO,
+    ParseErrorDTO,
     PlanCoverageDTO,
     PriceEntryDTO,
     PriceTableDTO,
+    ProviderErrorDTO,
+    ProviderSpecificDTO,
     PublicDTO,
+    RateLimitedDTO,
+    RedirectDTO,
     ResolvedSessionDTO,
     RuleDTO,
+    SchemaMismatchDTO,
     SchoolReservedDTO,
     SeniorsOnlyDTO,
+    TimeoutDTO,
+    TooLargeDTO,
     WomenOnlyDTO,
     _BasinKind,
     _BasinSource,
@@ -46,6 +59,19 @@ from swimzh.boundary.curated_dto import (
     _PriceCategory,
     _Scope,
     _Weekday,
+)
+from swimzh.core.errors import (
+    ConnectionFailed,
+    DecodeError,
+    HttpStatus,
+    ParseError,
+    ProviderError,
+    ProviderSpecific,
+    RateLimited,
+    Redirect,
+    SchemaMismatch,
+    Timeout,
+    TooLarge,
 )
 from swimzh.domain.access import (
     AdultsOnly,
@@ -74,6 +100,8 @@ from swimzh.domain.models import (
     Dimensions,
     Feature,
     FeatureKind,
+    LanePlanSource,
+    LanePlanUnavailable,
 )
 from swimzh.domain.pricing import PriceCategory, PriceEntry, PriceTable
 from swimzh.domain.schedule import (
@@ -277,7 +305,92 @@ def dimensions_to_dto(dims: Dimensions) -> DimensionsDTO:
     return DimensionsDTO(length_m=dims.length_m, width_m=dims.width_m)
 
 
+# --- ProviderError (lossless closed-union codec) ------------------------------------
+
+
+def provider_error_to_dto(error: ProviderError) -> ProviderErrorDTO:
+    match error:
+        case Timeout(url, after_s):
+            return TimeoutDTO(type="timeout", url=url, after_s=after_s)
+        case ConnectionFailed(url, detail):
+            return ConnectionFailedDTO(type="connection_failed", url=url, detail=detail)
+        case HttpStatus(url, status, body_snippet):
+            return HttpStatusDTO(
+                type="http_status", url=url, status=status, body_snippet=body_snippet
+            )
+        case RateLimited(url, retry_after_s):
+            return RateLimitedDTO(type="rate_limited", url=url, retry_after_s=retry_after_s)
+        case DecodeError(source, detail):
+            return DecodeErrorDTO(type="decode_error", source=source, detail=detail)
+        case ParseError(source, detail, raw_snippet):
+            return ParseErrorDTO(
+                type="parse_error", source=source, detail=detail, raw_snippet=raw_snippet
+            )
+        case SchemaMismatch(source, detail):
+            return SchemaMismatchDTO(type="schema_mismatch", source=source, detail=detail)
+        case TooLarge(url, limit_bytes):
+            return TooLargeDTO(type="too_large", url=url, limit_bytes=limit_bytes)
+        case Redirect(url, location, count):
+            return RedirectDTO(type="redirect", url=url, location=location, count=count)
+        case ProviderSpecific(provider, detail):
+            return ProviderSpecificDTO(type="provider_specific", provider=provider, detail=detail)
+        case _ as unreachable:
+            assert_never(unreachable)
+
+
+def provider_error_from_dto(dto: ProviderErrorDTO) -> ProviderError:
+    match dto:
+        case TimeoutDTO(url=url, after_s=after_s):
+            return Timeout(url=url, after_s=after_s)
+        case ConnectionFailedDTO(url=url, detail=detail):
+            return ConnectionFailed(url=url, detail=detail)
+        case HttpStatusDTO(url=url, status=status, body_snippet=body_snippet):
+            return HttpStatus(url=url, status=status, body_snippet=body_snippet)
+        case RateLimitedDTO(url=url, retry_after_s=retry_after_s):
+            return RateLimited(url=url, retry_after_s=retry_after_s)
+        case DecodeErrorDTO(source=source, detail=detail):
+            return DecodeError(source=source, detail=detail)
+        case ParseErrorDTO(source=source, detail=detail, raw_snippet=raw_snippet):
+            return ParseError(source=source, detail=detail, raw_snippet=raw_snippet)
+        case SchemaMismatchDTO(source=source, detail=detail):
+            return SchemaMismatch(source=source, detail=detail)
+        case TooLargeDTO(url=url, limit_bytes=limit_bytes):
+            return TooLarge(url=url, limit_bytes=limit_bytes)
+        case RedirectDTO(url=url, location=location, count=count):
+            return Redirect(url=url, location=location, count=count)
+        case ProviderSpecificDTO(provider=provider, detail=detail):
+            return ProviderSpecific(provider=provider, detail=detail)
+        case _ as unreachable:
+            assert_never(unreachable)
+
+
 # --- lane reservations (Belegungsplan) ----------------------------------------------
+
+
+def lane_plan_source_from_dto(dto: LanePlanSourceDTO) -> LanePlanSource:
+    return LanePlanSource(url=dto.url, section=dto.section)
+
+
+def lane_plan_source_to_dto(source: LanePlanSource) -> LanePlanSourceDTO:
+    return LanePlanSourceDTO(url=source.url, section=source.section)
+
+
+def lane_plan_unavailable_from_dto(dto: LanePlanUnavailableDTO) -> LanePlanUnavailable:
+    return LanePlanUnavailable(
+        source_url=dto.source_url,
+        section=dto.section,
+        cause=provider_error_from_dto(dto.cause),
+        observed_at=dto.observed_at,
+    )
+
+
+def lane_plan_unavailable_to_dto(unavailable: LanePlanUnavailable) -> LanePlanUnavailableDTO:
+    return LanePlanUnavailableDTO(
+        source_url=unavailable.source_url,
+        section=unavailable.section,
+        cause=provider_error_to_dto(unavailable.cause),
+        observed_at=unavailable.observed_at,
+    )
 
 
 def lane_reservation_from_dto(dto: LaneReservationDTO) -> LaneReservation:
@@ -350,6 +463,30 @@ def lane_plan_to_dto(plan: LanePlan) -> LanePlanDTO:
     )
 
 
+def _basin_lane_plan_from_dto(
+    dto: LanePlanDTO | LanePlanUnavailableDTO | None,
+) -> LanePlan | LanePlanUnavailable | None:
+    match dto:
+        case None:
+            return None
+        case LanePlanUnavailableDTO():
+            return lane_plan_unavailable_from_dto(dto)
+        case LanePlanDTO():
+            return lane_plan_from_dto(dto)
+
+
+def _basin_lane_plan_to_dto(
+    lane_plan: LanePlan | LanePlanUnavailable | None,
+) -> LanePlanDTO | LanePlanUnavailableDTO | None:
+    match lane_plan:
+        case None:
+            return None
+        case LanePlanUnavailable():
+            return lane_plan_unavailable_to_dto(lane_plan)
+        case LanePlan():
+            return lane_plan_to_dto(lane_plan)
+
+
 def basin_from_dto(dto: BasinDTO) -> Basin:
     return Basin(
         basin_id=BasinId(dto.basin_id),
@@ -363,7 +500,12 @@ def basin_from_dto(dto: BasinDTO) -> Basin:
         measured_temp_c=dto.measured_temp_c,
         diving_platforms_m=tuple(dto.diving_platforms_m),
         physical_source=_BASIN_SOURCE_FROM[dto.physical_source],
-        lane_plan=lane_plan_from_dto(dto.lane_plan) if dto.lane_plan is not None else None,
+        lane_plan_source=(
+            lane_plan_source_from_dto(dto.lane_plan_source)
+            if dto.lane_plan_source is not None
+            else None
+        ),
+        lane_plan=_basin_lane_plan_from_dto(dto.lane_plan),
     )
 
 
@@ -380,7 +522,12 @@ def basin_to_dto(basin: Basin) -> BasinDTO:
         measured_temp_c=basin.measured_temp_c,
         diving_platforms_m=list(basin.diving_platforms_m),
         physical_source=_BASIN_SOURCE_TO[basin.physical_source],
-        lane_plan=lane_plan_to_dto(basin.lane_plan) if basin.lane_plan is not None else None,
+        lane_plan_source=(
+            lane_plan_source_to_dto(basin.lane_plan_source)
+            if basin.lane_plan_source is not None
+            else None
+        ),
+        lane_plan=_basin_lane_plan_to_dto(basin.lane_plan),
     )
 
 
