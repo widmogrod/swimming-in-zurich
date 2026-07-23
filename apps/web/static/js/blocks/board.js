@@ -278,7 +278,18 @@ export function createBoard(el, opts = {}) {
   board.appendChild(body);
 
   const pal = resolvePalette(doc, board);
-  const canvases = []; // { canvas, row } per data row, for redraws
+  // One entry per data row: { canvas, row, ribbons, animated }. `ribbons` is
+  // computed ONCE here (not per frame — the old paint re-ran ribbonsFor for all 58
+  // rows every frame, pure allocation churn) and `animated` flags the ~1–2 rows that
+  // carry a flowing lane ribbon. Only those are redrawn in the RAF loop; the ~55
+  // static ghost/closed/unpublished rows are painted once and never touched again.
+  const canvases = [];
+
+  // A row animates only if it has a lane ribbon whose waterline the `phase` moves.
+  // Status ghosts/closed rules and unpublished sheaths are phase-independent → static.
+  function isAnimated(ribbons) {
+    return ribbons.some((r) => r.kind !== 'status' && r.variant === 'lanes');
+  }
 
   function buildRows() {
     body.textContent = '';
@@ -313,27 +324,39 @@ export function createBoard(el, opts = {}) {
       rowEl.appendChild(label);
       rowEl.appendChild(cell.scrollx);
       body.appendChild(rowEl);
-      canvases.push({ canvas: cell.canvas, row });
+      const ribbons = ribbonsFor(row);
+      canvases.push({ canvas: cell.canvas, row, ribbons, animated: isAnimated(ribbons) });
     }
     return rows;
   }
 
   let rows = buildRows();
 
-  function paint(phase) {
+  // Full frame: axis + EVERY row painted once (at `phase`). The axis and the static
+  // rows never change with time, so this is the ONLY place they are drawn — after
+  // this, the RAF loop only re-touches the animated ribbons.
+  function paintStatic(phase = 0) {
     drawAxis(axisCell.canvas, ts, pal);
-    for (const { canvas, row } of canvases) drawRow(canvas, ribbonsFor(row), ts, pal, phase);
+    for (const { canvas, ribbons } of canvases) drawRow(canvas, ribbons, ts, pal, phase);
   }
 
-  // Reduced motion → paint a single frozen frame, no RAF loop. Otherwise animate.
+  // Per-frame work: redraw ONLY the rows with a moving waterline (~1–2 curated
+  // ribbons), not all 58 canvases. The precomputed `ribbons` avoids per-frame alloc.
+  function paintAnimated(phase) {
+    for (const { canvas, ribbons, animated } of canvases) {
+      if (animated) drawRow(canvas, ribbons, ts, pal, phase);
+    }
+  }
+
+  // Reduced motion → paint a single frozen frame, no RAF loop. Otherwise paint the
+  // static frame once, then animate only the moving ribbons in one shared RAF loop.
   let running = false;
   function loop(t) {
-    paint((t || 0) / 600);
+    paintAnimated((t || 0) / 600);
     if (running && raf) raf(loop);
   }
-  if (reducedMotion || !raf) {
-    paint(0);
-  } else {
+  paintStatic(0);
+  if (!reducedMotion && raf) {
     running = true;
     raf(loop);
   }
@@ -341,18 +364,18 @@ export function createBoard(el, opts = {}) {
   function setFilter(next) {
     filter = next;
     rows = buildRows();
-    paint(0);
+    paintStatic(0);
   }
 
   function setData(next) {
     data = next;
     rows = buildRows();
-    paint(0);
+    paintStatic(0);
   }
 
   function destroy() {
-    running = false;
-    el.removeChild(board);
+    running = false; // stop the shared RAF loop so a rebuilt board leaves no orphan
+    if (board.parentNode === el) el.removeChild(board);
   }
 
   // The board's cursor-x for minute `min`, routed through the SHARED cursor helper

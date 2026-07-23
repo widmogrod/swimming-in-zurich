@@ -47,6 +47,7 @@
   /* Shadow */
   --shadow: 0 1px 2px rgba(20, 40, 50, .06), 0 8px 24px rgba(20, 40, 50, .07);
   --shadow-lg: 0 12px 40px rgba(20, 40, 50, .16);
+  --shadow-sm: 0 1px 2px rgba(20, 40, 50, .12);
   /* Lane split */
   --lane-public-fill: rgba(14, 142, 160, .16);
   --lane-public-edge: rgba(14, 142, 160, .42);
@@ -79,6 +80,11 @@
 
   /* --- 1.2 Typography ------------------------------------------------------ */
   --f: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  /* Base reading size for prose/body copy (the prototype's 15px body). Interactive
+     controls use the slightly smaller --fs-body so the toolbar stays compact. */
+  --fs-base: 15px;
+  --lh-base: 1.45;
+  --track-tight: -.006em;
   --fs-title: 25px;
   --fw-title: 680;
   --fs-head: 19px;
@@ -143,6 +149,7 @@
     --track: rgba(255, 255, 255, .10);
     --shadow: 0 1px 2px rgba(0, 0, 0, .4), 0 10px 30px rgba(0, 0, 0, .35);
     --shadow-lg: 0 16px 46px rgba(0, 0, 0, .6);
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, .45);
     --lane-public-fill: rgba(63, 194, 212, .16);
     --lane-public-edge: rgba(63, 194, 212, .40);
     --lane-public-ink: #8fe0ea;
@@ -186,6 +193,7 @@
   --track: rgba(255, 255, 255, .10);
   --shadow: 0 1px 2px rgba(0, 0, 0, .4), 0 10px 30px rgba(0, 0, 0, .35);
   --shadow-lg: 0 16px 46px rgba(0, 0, 0, .6);
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, .45);
   --lane-public-fill: rgba(63, 194, 212, .16);
   --lane-public-edge: rgba(63, 194, 212, .40);
   --lane-public-ink: #8fe0ea;
@@ -225,6 +233,7 @@
   --track: rgba(20, 40, 50, .09);
   --shadow: 0 1px 2px rgba(20, 40, 50, .06), 0 8px 24px rgba(20, 40, 50, .07);
   --shadow-lg: 0 12px 40px rgba(20, 40, 50, .16);
+  --shadow-sm: 0 1px 2px rgba(20, 40, 50, .12);
   --lane-public-fill: rgba(14, 142, 160, .16);
   --lane-public-edge: rgba(14, 142, 160, .42);
   --lane-public-ink: #0c7a76;

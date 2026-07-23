@@ -11,6 +11,39 @@
    ============================================================================ */
 
 /* ---------------------------------------------------------------------------
+   Base / reset (the prototype's `*{box-sizing:border-box}` + body ground).
+
+   Two things every block depends on:
+     1. border-box everywhere — so a control's declared height/--ctl-h is its
+        BOX height (padding + border live INSIDE it). Without this the UA default
+        content-box makes `height + padding + border` overflow the token height
+        and the toolbar controls render at three mismatched heights.
+     2. the system-font stack + page ground applied at the root — otherwise the
+        UA serif (Times) and default white leak through everything that does not
+        re-declare font-family, and dark mode has no dark page background.
+   --------------------------------------------------------------------------- */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+html,
+body {
+  margin: 0;
+}
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--f);
+  font-size: var(--fs-base);
+  line-height: var(--lh-base);
+  letter-spacing: var(--track-tight);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+/* ---------------------------------------------------------------------------
    RibbonBoard (Part 3 §4) — S2.
 
    Layout ONLY (colour comes from tokens). The board is a card holding an axis
@@ -473,6 +506,8 @@
   font-size: var(--fs-title);
   font-weight: var(--fw-title);
   color: var(--ink);
+  letter-spacing: -0.02em;
+  line-height: 1.1;
   margin: 0;
 }
 .apphdr__datebox {
@@ -505,11 +540,12 @@
   display: flex;
   flex-wrap: wrap;
   align-items: flex-end;
-  gap: var(--s3);
+  gap: var(--s3) var(--s4);
   padding: var(--s3) var(--s4);
-  background: var(--surface-2);
+  background: var(--surface);
   border: 1px solid var(--hair);
   border-radius: var(--r-lg);
+  box-shadow: var(--shadow);
 }
 .toolbar__field {
   display: flex;
@@ -518,9 +554,9 @@
   min-width: 0;
 }
 .toolbar__caption {
-  font-size: var(--fs-caption);
+  font-size: var(--fs-micro);
   font-weight: var(--fw-caption);
-  letter-spacing: 0.06em;
+  letter-spacing: 0.07em;
   text-transform: uppercase;
   color: var(--muted);
 }
@@ -596,12 +632,21 @@
    InsightBar (Part 3 §3) — one mode-aware summary line.
    --------------------------------------------------------------------------- */
 .insight {
-  padding: var(--s2) var(--s4);
+  padding: var(--s3) var(--s4);
+  background: linear-gradient(180deg, var(--best-band), transparent);
+  border: 1px solid var(--hair);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow);
+}
+.insight:empty {
+  display: none; /* no summary line yet → no empty card */
 }
 .insight__line {
   margin: 0;
   font-size: var(--fs-body);
+  font-weight: var(--fw-body);
   color: var(--ink-2);
+  letter-spacing: var(--track-tight);
   font-variant-numeric: tabular-nums;
 }
 

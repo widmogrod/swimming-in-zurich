@@ -34,6 +34,7 @@
 /* --- SegmentedControl (.ui-seg) ------------------------------------------ */
 .ui-seg {
   display: inline-flex;
+  align-items: center;
   height: var(--ctl-h);
   padding: var(--s1);
   gap: var(--s1);
@@ -58,10 +59,16 @@
 .ui-seg__opt.is-selected {
   background: var(--surface);
   color: var(--ink);
-  box-shadow: var(--shadow);
+  box-shadow: var(--shadow-sm);
+}
+/* Mode switch active tab: a raised surface pill with accent-ink text (not a filled
+   accent block — accent-ink on accent reads as low-contrast mush). Matches the
+   prototype's `.modeseg button[aria-pressed=true]{background:surface;color:accent-ink}`. */
+.ui-seg--mode .ui-seg__opt {
+  font-weight: var(--fw-caption);
 }
 .ui-seg--mode .ui-seg__opt.is-selected {
-  background: var(--accent);
+  background: var(--surface);
   color: var(--accent-ink);
 }
 
@@ -89,7 +96,7 @@
 }
 .ui-chip.is-selected {
   background: var(--accent);
-  color: var(--accent-ink);
+  color: var(--surface);
   border-color: transparent;
 }
 
@@ -103,7 +110,7 @@
   height: var(--ctl-h);
   padding: 0 var(--s3);
   min-width: 12rem;
-  background: var(--surface);
+  background: var(--surface-2);
   color: var(--ink);
   border: 1px solid var(--hair);
   border-radius: var(--r-sm);
@@ -172,7 +179,7 @@
   height: var(--ctl-h);
   padding: 0 var(--s3);
   min-width: 12rem;
-  background: var(--surface);
+  background: var(--surface-2);
   color: var(--ink);
   border: 1px solid var(--hair);
   border-radius: var(--r-sm);
@@ -238,7 +245,7 @@
   width: 2.6rem;
   height: 1.5rem;
   border-radius: var(--r-pill);
-  background: var(--track);
+  background: var(--hair);
   transition: background var(--dur-sheet) var(--ease-sheet);
   flex: none;
 }
@@ -251,7 +258,7 @@
   height: calc(1.5rem - 4px);
   border-radius: var(--r-pill);
   background: var(--surface);
-  box-shadow: var(--shadow);
+  box-shadow: var(--shadow-sm);
   transition: transform var(--dur-sheet) var(--ease-sheet);
 }
 .ui-toggle.is-on .ui-toggle__track {
@@ -271,10 +278,14 @@
   height: var(--ctl-h);
   gap: var(--s1);
   padding: 0 var(--s1);
-  background: var(--surface);
+  background: var(--surface-2);
   border: 1px solid var(--hair);
   border-radius: var(--r-md);
   font-family: var(--f);
+}
+.ui-datestepper__nav:hover {
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  color: var(--accent-ink);
 }
 .ui-datestepper__nav {
   appearance: none;

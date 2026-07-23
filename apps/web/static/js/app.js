@@ -167,6 +167,9 @@ async function main() {
 
   async function render() {
     header.setDateLabel(headerLabel());
+    // Tear down the previous board FIRST so its shared RAF loop stops — otherwise every
+    // filter change would leave an orphaned loop redrawing detached canvases forever.
+    if (board) board.destroy();
     boardHost.textContent = '';
     let data;
     if (filter.mode === 'pool') {
