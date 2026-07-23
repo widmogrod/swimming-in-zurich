@@ -35,6 +35,10 @@
   /* Semantic — availability (never-merged states) */
   --closed: #b0563f;
   --unknown: #8a99a2;
+  /* Women-only ribbon hue — its OWN violet, NOT the closed terracotta (a women-only
+     session is a restricted access family, not a closed pool; sharing --closed would
+     read as "shut"). Distinct from accent-aqua and closed-red. */
+  --women: #8a5cc4;
   /* Support */
   --chip: #eef4f5;
   --chip-ink: #3a5560;
@@ -63,7 +67,7 @@
   --fam-public: var(--accent);
   --fam-lane: var(--lane-public-ink);
   --fam-family: var(--accent-ink);
-  --fam-women: var(--closed);
+  --fam-women: var(--women);
   --fam-seniors: var(--badge-chk);
   --fam-adults: var(--best);
   --fam-school: var(--lane-res-ink);
@@ -101,48 +105,22 @@
   --ease-sheet: cubic-bezier(.32, .72, 0, 1);
   --dur-sheet: .26s;
 
-  /* --- S1 real semantic tokens (kept past S5) ------------------------------
-     EligibilityBadge — the MUTED Part-1 values (✓ green / ? gold / ✕ grey),
-     NEVER alarm red. Deliberately DISTINCT names from the retired S0 compat
-     --elig-* block below (which still holds the legacy alarm-red palette): the
-     name collision the S0 Decisions note flagged is resolved by giving the real
-     component its own --badge-* tokens, leaving the compat block untouched for
-     S5 to retire. Dark values are lightened for AA on the dark ground. */
+  /* --- EligibilityBadge semantic tokens ------------------------------------
+     The MUTED Part-1 values (✓ green / ? gold / ✕ grey), NEVER alarm red.
+     (The S0 re-skin compat --elig-* block that once held the legacy alarm-red
+     palette was retired in S5 along with the legacy UI.) Dark values are
+     lightened for AA on the dark ground. */
   --badge-in: #1a9d54; /* ✓ you're in */
   --badge-chk: #b7791f; /* ? check — gold, distinct from ✕ */
   --badge-no: #8a909c; /* ✕ not for you — muted grey, never red */
   /* One accent-derived focus ring every interactive primitive shares. The inner
      var(--accent) resolves per-theme at use, so this adapts without redeclaring. */
   --focus-ring: 0 0 0 3px color-mix(in srgb, var(--accent) 45%, transparent);
-
-  /* --- S0 re-skin compatibility tokens ------------------------------------
-     These reproduce the CURRENT embedded UI's fixed palette so the throwaway
-     re-skin (apps/web/api/ui/router.py) is visually equivalent. They are
-     deliberately theme-neutral (fixed in light AND dark), matching how the old
-     UI's hardcoded hex behaved. This whole block is retired with the legacy UI
-     at S5. Named beyond the Part-1 set per the plan's Decisions note. */
-  --tint-1: #8881; /* faintest alpha-grey fill (context bar) */
-  --tint-2: #8882; /* soft alpha-grey fill (badge, reserved seg) */
-  --tint-4: #8884; /* light alpha-grey divider */
-  --tint-6: #8886; /* alpha-grey 1px border */
-  --link: #3b82f6; /* legacy interactive blue (nav/chip active, links, jump) */
-  --on-color: #ffffff; /* text on a colored pill / button */
-  --elig-in: #15803d; /* eligibility ✓ / open / public green */
-  --elig-out: #b91c1c; /* eligibility ✗ / closed-status red */
-  --elig-unk: #b45309; /* eligibility ? / warn / uncurated amber */
-  --sched: #6b7280; /* neutral "closed now" grey pill */
-  --good-fill: #16a34a22; /* green badge tint (lanes-public / best-time) */
-  --good-edge: #16a34a55; /* green badge edge */
-  --warn-fill: #b4530922; /* amber badge tint (lane-arc / parsed caveat) */
-  --warn-edge: #b4530955; /* amber badge edge */
-  --temp-ink: #0369a1; /* water-temperature badge ink */
-  --temp-fill: #0ea5e922; /* water-temperature badge tint */
-  --temp-edge: #0ea5e955; /* water-temperature badge edge */
 }
 
 /* --- 1.4 Theming contract: dark ramp ------------------------------------- */
-/* OS-preference dark (only the color ramp changes; type/space/radius/motion and
-   the S0 compat tokens are theme-invariant). */
+/* OS-preference dark (only the color ramp changes; type/space/radius/motion are
+   theme-invariant). */
 @media (prefers-color-scheme: dark) {
   :root {
     --bg: #0d1418;
@@ -158,6 +136,7 @@
     --accent-ink: #8fe0ea;
     --closed: #dd8f79;
     --unknown: #6d7d86;
+    --women: #b79be0;
     --chip: #17252c;
     --chip-ink: #9db3bc;
     --envfill: #33454d;
@@ -200,6 +179,7 @@
   --accent-ink: #8fe0ea;
   --closed: #dd8f79;
   --unknown: #6d7d86;
+  --women: #b79be0;
   --chip: #17252c;
   --chip-ink: #9db3bc;
   --envfill: #33454d;
@@ -238,6 +218,7 @@
   --accent-ink: #0a6675;
   --closed: #b0563f;
   --unknown: #8a99a2;
+  --women: #8a5cc4;
   --chip: #eef4f5;
   --chip-ink: #3a5560;
   --envfill: #b9c7cd;

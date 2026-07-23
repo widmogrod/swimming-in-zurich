@@ -15,6 +15,7 @@
 import { makeTimescale } from '../timescale.js';
 import { eligForAccess, dayEligibility } from '../eligibility.js';
 import { ribbonsFor } from './ribbonmodel.js';
+import { cursorX as sharedCursorX, hhmmToMin } from './cursor.js';
 import { createEligibilityBadge } from '../components/eligibilitybadge.js';
 
 // Default board window [06:00, 22:00] across a 900px plot. The plot width is the
@@ -27,11 +28,10 @@ const REDUCED_MOTION_QUERY = '(prefers-reduced-motion: reduce)';
 const ROW_H = 46; // canvas height in CSS px
 const FAMILIES = ['public', 'lane', 'family', 'women', 'seniors', 'adults', 'school', 'club'];
 
-// "HH:MM" → minutes-of-day. Pure; the board's only time parsing.
-export function hhmmToMin(hhmm) {
-  const [h, m] = hhmm.split(':').map((n) => parseInt(n, 10));
-  return h * 60 + m;
-}
+// "HH:MM" → minutes-of-day. Re-exported from the shared cursor leaf so the board,
+// the Gantt, and the panel all parse times through ONE function (the duplicated
+// two-line copy that used to live here is gone — F carried nit).
+export { hhmmToMin };
 
 // ---- Row derivation (pure, exported for unit tests) -----------------------------
 
@@ -225,7 +225,8 @@ function makeScrollCell(doc, plot, canvasClass, height) {
   scrollx.className = 'board__scrollx';
   const track = doc.createElement('div');
   track.className = 'board__track';
-  track.style.width = `${plot}px`;
+  // No inline width: the canvas' own width (below) is the intrinsic content and
+  // `.board__track { width: max-content }` (blocks.css) governs the track width.
   const canvas = doc.createElement('canvas');
   canvas.className = canvasClass;
   canvas.width = plot;
@@ -354,10 +355,21 @@ export function createBoard(el, opts = {}) {
     el.removeChild(board);
   }
 
+  // The board's cursor-x for minute `min`, routed through the SHARED cursor helper
+  // over the board's OWN timescale `ts`. The Gantt computes its cursor-x the same
+  // way (gantt.js → cursorX(ts, min)); handed the same `ts`, board.cursorX(T) ===
+  // gantt.cursorPlotX(T) BY CONSTRUCTION — and a Gantt given its own scale diverges.
+  // This is the anti-desync anchor the S5 DOM-contract test asserts directly.
+  function cursorXAt(min) {
+    return sharedCursorX(ts, min);
+  }
+
   return {
     el,
     board,
     reducedMotion,
+    timescale: ts,
+    cursorX: cursorXAt,
     get rows() {
       return rows;
     },

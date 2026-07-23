@@ -5,8 +5,8 @@ The layering tokens → components → blocks → shell is enforced mechanically
   * all colour lives in tokens.css — no raw hex/rgba leaks into components.css /
     blocks.css or the component JS;
   * the /static mount serves the design-system assets;
-  * the `/` page still carries an injected token DEFINITION (S0 critic-nit: a lost
-    `/* __TOKENS__ */` marker must not silently break every var(--…)).
+  * the `/` page is the SMALL unified shell that LINKS the token layer (the legacy
+    embedded string and its `/* __TOKENS__ */` inlining machinery were deleted at S5).
 """
 
 from __future__ import annotations
@@ -95,6 +95,73 @@ def test_detail_panel_bottom_sheet_responsive_contract() -> None:
     )
 
 
+def test_filter_toolbar_phone_breakpoints_stack_and_stretch() -> None:
+    """S5 responsive contract for the FilterToolbar. There is no layout engine in the
+    gate, so — mirroring the S2 board-overflow and S3 sheet contracts — assert the CSS
+    PROPERTIES that make the toolbar reflow on a phone are declared:
+
+      * a `@media (max-width: 720px)` block stacks each field full-width
+        (`.toolbar__field { flex: 1 1 100% }`);
+      * inside it the segmented controls stretch (`.ui-seg` full-width, options
+        `flex: 1 1 0`), the DateStepper spans full-width, and the place + pool
+        comboboxes fill the row (their intrinsic min-width released to 0);
+      * a deeper `@media (max-width: 560px)` block tightens the strip and lets the age
+        chips share the row.
+
+    The true visual check is the human review at the S5 pause; this is the mechanical
+    proxy that the phone reflow has not regressed in CSS.
+    """
+    blocks = (_STATIC / "blocks.css").read_text(encoding="utf-8")
+    normalized = re.sub(r"\s+", " ", blocks)
+    assert "@media (max-width: 720px)" in normalized, "the toolbar needs a <=720px breakpoint"
+    assert "@media (max-width: 560px)" in normalized, (
+        "the toolbar needs a deeper <=560px breakpoint"
+    )
+    # The stack: each field spans the full row.
+    assert ".toolbar__field { flex: 1 1 100%; }" in normalized, "fields must stack full-width"
+    # Segmented controls stretch and their options share the row.
+    assert ".toolbar__field .ui-seg { display: flex; width: 100%; }" in normalized
+    assert ".toolbar__field .ui-seg__opt { flex: 1 1 0; text-align: center; }" in normalized
+    # The DateStepper spans full-width.
+    assert ".toolbar__field .ui-datestepper { display: flex; width: 100%; }" in normalized
+    # Place + pool comboboxes fill the row (their 12rem min-width released to 0).
+    assert (
+        ".toolbar__field .ui-combo input, .toolbar__field .ui-place input "
+        "{ flex: 1 1 auto; width: 100%; min-width: 0; }"
+    ) in normalized, "the place/pool inputs must fill the row (min-width released)"
+
+
+def test_every_interactive_control_has_a_focus_visible_ring() -> None:
+    """A11y: every interactive control shows a visible focus ring via the shared
+    `--focus-ring` token on :focus-visible (keyboard focus, never mouse). The primitive
+    controls carry it in components.css; the block-level theme toggle carries it in
+    blocks.css. All use `box-shadow: var(--focus-ring)` (the token is a box-shadow
+    value — never mis-applied as an `outline` colour)."""
+    components = (_STATIC / "components.css").read_text(encoding="utf-8")
+    blocks = (_STATIC / "blocks.css").read_text(encoding="utf-8")
+    norm_c = re.sub(r"\s+", " ", components)
+    norm_b = re.sub(r"\s+", " ", blocks)
+    # Every documented interactive primitive is in the shared focus-ring selector list.
+    for selector in (
+        ".ui-seg__opt:focus-visible",
+        ".ui-chip:focus-visible",
+        ".ui-combo input:focus-visible",
+        ".ui-place input:focus-visible",
+        ".ui-place__geo:focus-visible",
+        ".ui-datestepper__nav:focus-visible",
+        ".ui-toggle input:focus-visible",
+    ):
+        assert selector in norm_c, f"missing focus-visible ring for {selector}"
+    assert "box-shadow: var(--focus-ring);" in norm_c, "primitives ring via box-shadow"
+    # The block-level theme toggle also rings on focus-visible.
+    assert ".apphdr__theme:focus-visible" in norm_b, "the theme toggle needs a focus-visible ring"
+    assert "box-shadow: var(--focus-ring);" in norm_b, "the theme toggle rings via box-shadow"
+    # The token is a box-shadow value, so it must NEVER be mis-applied as an outline colour.
+    assert "outline: 2px solid var(--focus-ring)" not in norm_b, (
+        "--focus-ring is a box-shadow value, not an outline colour"
+    )
+
+
 def test_components_do_not_import_the_blocks_layer() -> None:
     """Layer rule: a primitive may not reach up into the blocks layer."""
     offenders = []
@@ -106,9 +173,21 @@ def test_components_do_not_import_the_blocks_layer() -> None:
     assert not offenders, f"components import the blocks layer: {offenders}"
 
 
+def _gallery_inline_style() -> str:
+    """The gallery router's inline `<style>` block (the ONE server-rendered stylesheet
+    outside the static .css files). It must obey the same no-hex rule — colour via
+    var(--…) only — so it is scanned alongside the static CSS/JS (S5 F nit)."""
+    from apps.web.api.gallery.router import _GALLERY_PAGE
+
+    m = re.search(r"<style>(.*?)</style>", _GALLERY_PAGE, re.DOTALL)
+    assert m, "gallery page must carry an inline <style> block to scan"
+    return m.group(1)
+
+
 def test_no_raw_hex_or_rgba_outside_tokens_css() -> None:
-    """All colour literals live in tokens.css. Component CSS and component JS use
-    var(--…) / color-mix() / currentColor only — never a raw hex or rgba()."""
+    """All colour literals live in tokens.css. Component CSS, component JS, AND the
+    gallery router's inline <style> use var(--…) / color-mix() / currentColor only —
+    never a raw hex or rgba()."""
     offenders = []
     css_files = [p for p in _STATIC.glob("*.css") if p.name != "tokens.css"]
     for path in [*css_files, *_js_sources()]:
@@ -116,6 +195,10 @@ def test_no_raw_hex_or_rgba_outside_tokens_css() -> None:
         for n, line in enumerate(text.splitlines(), 1):
             if _HEX.search(line) or _RGBA.search(line):
                 offenders.append(f"{path.name}:{n}: {line.strip()}")
+    # The gallery router's inline <style> is server-rendered, not a static file — scan it too.
+    for n, line in enumerate(_gallery_inline_style().splitlines(), 1):
+        if _HEX.search(line) or _RGBA.search(line):
+            offenders.append(f"gallery/router.py<style>:{n}: {line.strip()}")
     assert not offenders, f"raw colour literals outside tokens.css: {offenders}"
 
 
@@ -140,13 +223,21 @@ def test_static_mount_serves_the_design_system_assets() -> None:
     assert "createSegmentedControl" in js.text
 
 
-def test_legacy_page_carries_an_injected_token_definition() -> None:
-    """S0 critic-nit: the LEGACY `_PAGE` inlines tokens.css via the `/* __TOKENS__ */`
-    marker; a lost marker would silently break every var(--…). S4 stopped serving that
-    string at `/` (the new shell LINKS tokens.css instead — see test_static_mount), but
-    kept `_RENDERED_PAGE` as dead code, so this belt-and-braces check now reads it
-    directly (the router still raises at import if the marker is missing). S5 deletes it."""
-    from apps.web.api.ui.router import _RENDERED_PAGE
+def test_index_shell_links_the_token_layer_and_hydrator() -> None:
+    """S5 retired the legacy embedded `_PAGE`/`_RENDERED_PAGE` string (which inlined
+    tokens via the `/* __TOKENS__ */` marker). `/` now serves the SMALL unified shell
+    that LINKS the three design-system stylesheets (tokens first) from /static and the
+    app.js ES-module hydrator — the tokens still reach the page, now by <link>. This
+    replaces the old injected-definition belt-and-braces check."""
+    with TestClient(app) as client:
+        page = client.get("/").text
+    assert '<link rel="stylesheet" href="/static/tokens.css">' in page
+    assert '<link rel="stylesheet" href="/static/components.css">' in page
+    assert '<link rel="stylesheet" href="/static/blocks.css">' in page
+    assert '<script type="module" src="/static/js/app.js"></script>' in page
+    # The legacy symbols are gone — the router no longer carries them.
+    import apps.web.api.ui.router as ui_router
 
-    assert "--ctl-h: 36px" in _RENDERED_PAGE
-    assert "--accent: #0e8ea0" in _RENDERED_PAGE
+    assert not hasattr(ui_router, "_PAGE")
+    assert not hasattr(ui_router, "_RENDERED_PAGE")
+    assert not hasattr(ui_router, "_TOKENS_CSS")

@@ -22,7 +22,7 @@ import { createBoardLegend } from './blocks/legend.js';
 import { createStateBlocks } from './blocks/stateblocks.js';
 import { createFilterState, merge } from './filterstate.js';
 import { makeTimescale } from './timescale.js';
-import { basinFromPanel } from './blocks/cursor.js';
+import { basinFromPanel, panelForBasin } from './blocks/cursor.js';
 import { formatLabel } from './components/datestepper.js';
 import { fetchDay, fetchWeek, fetchPoolDetail, isoDate, weekDates } from './api.js';
 
@@ -110,7 +110,7 @@ async function main() {
   }
 
   let panel = null;
-  function openPanel(detail, cursorMin, distanceKm) {
+  function openPanel(detail, cursorMin, distanceKm, basinName) {
     panelHost.textContent = '';
     if (!detail || !detail.lane_panels || detail.lane_panels.length === 0) {
       const msg = document.createElement('p');
@@ -120,7 +120,9 @@ async function main() {
       panel = null;
       return;
     }
-    const basin = basinFromPanel(detail.lane_panels[0]);
+    // Resolve the clicked row's OWN basin (not always lane_panels[0]) so the panel
+    // headline reads the same basin the board readout does on multi-basin facilities.
+    const basin = basinFromPanel(panelForBasin(detail.lane_panels, basinName));
     panel = createDetailPanel(panelHost, {
       detail,
       basin,
@@ -149,7 +151,7 @@ async function main() {
     if (!row || row.options.length === 0) return;
     const opt = row.options[0];
     const detail = await fetchPoolDetail(opt.facility_id, filter.date || today);
-    openPanel(detail, min, opt.distance_km);
+    openPanel(detail, min, opt.distance_km, opt.basin);
     setCursor(min);
   }
 

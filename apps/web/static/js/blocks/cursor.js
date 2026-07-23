@@ -13,9 +13,9 @@
 // This module is a pure leaf: no DOM, no canvas, no timescale construction. It is
 // handed a timescale (built ONCE, upstream) and a canonical `basin` model.
 
-// "HH:MM" → minutes-of-day. The board has its own copy (board.js) that predates
-// this module and is independently tested; this leaf keeps its own so it pulls in
-// no heavy block. (Both are the same two-line parse; noted as minor duplication.)
+// "HH:MM" → minutes-of-day. This leaf is the ONE definition: board.js (and the
+// Gantt/panel via this module) import it from here — the old duplicated copy in
+// board.js was consolidated away (S5 F nit), so there is a single time parser.
 export function hhmmToMin(hhmm) {
   const [h, m] = String(hhmm).split(':').map((n) => parseInt(n, 10));
   return h * 60 + m;
@@ -62,6 +62,27 @@ export function basinFromPanel(lanePanel) {
     best_public: lanePanel.panel.best_public || null,
     weekday: dv.weekday,
   };
+}
+
+/**
+ * panelForBasin(lanePanels, basinName) → the `/pools/{id}` `lane_panels[]` entry
+ * whose basin matches `basinName` (by `basin_name`), or the FIRST panel as a
+ * fallback, or null when there are no panels.
+ *
+ * This is what lets a click on a MULTI-BASIN facility's board row open the panel on
+ * the SAME basin the clicked option belongs to (so board readout == panel headline
+ * holds — the S3/S4 identity), instead of always taking `lane_panels[0]`.
+ * @param {Array<{basin_name:string}>} lanePanels the detail's lane_panels[].
+ * @param {string|null|undefined} basinName the clicked option's basin name.
+ */
+export function panelForBasin(lanePanels, basinName) {
+  const panels = lanePanels || [];
+  if (panels.length === 0) return null;
+  if (basinName != null) {
+    const match = panels.find((lp) => lp.basin_name === basinName);
+    if (match) return match;
+  }
+  return panels[0];
 }
 
 // The lane segment covering `min` in a strip (start ≤ min < end), or null. Gaps

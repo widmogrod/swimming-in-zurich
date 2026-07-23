@@ -9,11 +9,40 @@ route must be gated at registration time — so each test builds a fresh app via
 
 from __future__ import annotations
 
+import re
+from pathlib import Path
+
 import pytest
 from fastapi.testclient import TestClient
 
 from apps.web.api.gallery.router import _COMPONENTS, _THEMES
 from apps.web.main import create_app
+
+_REGISTRY_JS = Path(__file__).resolve().parents[2] / "static" / "js" / "components" / "registry.js"
+# Top-level REGISTRY keys look like `  'name': {` or `  combobox: {` (2-space indent,
+# value opens a brace) — the inner `create:`/`interactive:`/`props:` keys are deeper.
+_REGISTRY_KEY = re.compile(r"^ {2}(?:'([a-z-]+)'|([a-z-]+)):\s*\{\s*$", re.MULTILINE)
+
+
+def _registry_names() -> set[str]:
+    text = _REGISTRY_JS.read_text(encoding="utf-8")
+    body = text.split("export const REGISTRY = {", 1)[1]
+    return {a or b for a, b in _REGISTRY_KEY.findall(body)}
+
+
+def test_gallery_components_cross_check_the_js_registry() -> None:
+    """S5 F nit: the Python gallery route (`_COMPONENTS`) and the JS `REGISTRY` must
+    name the SAME primitives, so a Python-only edit can't add a mount the JS cannot
+    hydrate (an unhydratable dead cell), nor drop one the JS still expects. Cross-check
+    the two directly — the JS-side `registry.test.js` guards the states per component;
+    this guards the name SET across the language boundary."""
+    python_names = {name for name, _title, _states in _COMPONENTS}
+    js_names = _registry_names()
+    assert js_names, "failed to parse any REGISTRY keys from registry.js"
+    assert python_names == js_names, (
+        f"gallery _COMPONENTS vs JS REGISTRY drift — "
+        f"python-only: {python_names - js_names}; js-only: {js_names - python_names}"
+    )
 
 
 def test_gallery_absent_when_dev_ui_off(monkeypatch: pytest.MonkeyPatch) -> None:

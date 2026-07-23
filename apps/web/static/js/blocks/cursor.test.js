@@ -12,6 +12,7 @@ import {
   publicAt,
   peakPublic,
   basinFromPanel,
+  panelForBasin,
 } from './cursor.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -55,6 +56,22 @@ test('publicAt counts only PublicSwim lanes covering the minute (reserved/gaps d
   assert.deepEqual(publicAt(basin, hhmmToMin('09:00')), { public: 0, total: 2 });
   // End is exclusive: exactly 08:00 is no longer inside 06:00–08:00.
   assert.deepEqual(publicAt(basin, hhmmToMin('08:00')), { public: 0, total: 2 });
+});
+
+test('panelForBasin picks the clicked basin (not always lane_panels[0]) on a multi-basin facility', () => {
+  const panels = [
+    { basin_name: '50m-Becken', panel: {} },
+    { basin_name: 'Lehrschwimmbecken', panel: {} },
+  ];
+  // The clicked option's basin resolves to ITS panel, not the first.
+  assert.equal(panelForBasin(panels, 'Lehrschwimmbecken').basin_name, 'Lehrschwimmbecken');
+  assert.equal(panelForBasin(panels, '50m-Becken').basin_name, '50m-Becken');
+  // Unknown / missing basin name falls back to the first panel (never throws).
+  assert.equal(panelForBasin(panels, 'Nonexistent').basin_name, '50m-Becken');
+  assert.equal(panelForBasin(panels, null).basin_name, '50m-Becken');
+  // No panels → null (openPanel already guards the empty case before calling).
+  assert.equal(panelForBasin([], 'x'), null);
+  assert.equal(panelForBasin(undefined, 'x'), null);
 });
 
 test('the real fixture has a cursor minute where public != peak (proves cursor ≠ peak matters)', () => {

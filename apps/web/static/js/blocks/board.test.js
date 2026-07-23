@@ -86,7 +86,12 @@ test('Day mode builds: axis row + one row/canvas/rowlabel per facility', () => {
   // every data row's canvas lives inside a scroll cell → a max-content track
   const tracks = el.queryAll(hasClass('board__track'));
   assert.equal(tracks.length, expected + 1);
-  assert.equal(tracks[0].style.width, `${BOARD_PLOT}px`);
+  // The track carries NO inline width now — `.board__track { width: max-content }`
+  // (blocks.css) governs it from the canvas' intrinsic width (F carried nit).
+  assert.equal(tracks[0].style.width, undefined);
+  // the canvas inside still carries the intrinsic plot width it draws at.
+  const firstCanvas = tracks[0].query(isCanvas);
+  assert.equal(firstCanvas.style.width, `${BOARD_PLOT}px`);
 });
 
 test('option rows carry an EligibilityBadge; option-less rows carry only a status dot', () => {

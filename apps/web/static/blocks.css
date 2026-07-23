@@ -492,13 +492,14 @@
   cursor: pointer;
 }
 .apphdr__theme:focus-visible {
-  outline: 2px solid var(--focus-ring);
-  outline-offset: 2px;
+  outline: none;
+  box-shadow: var(--focus-ring);
 }
 
 /* ---------------------------------------------------------------------------
-   FilterToolbar (Part 3 §2) — the global context spine. The fields wrap on a
-   phone and each control stretches full width there (deep breakpoints: S5).
+   FilterToolbar (Part 3 §2) — the global context spine. On a wide screen the
+   fields sit in one wrapping row; on a phone (S5 breakpoints below) every field
+   stacks full-width and its control stretches edge-to-edge.
    --------------------------------------------------------------------------- */
 .toolbar {
   display: flex;
@@ -526,9 +527,68 @@
 .toolbar__context {
   min-width: 0;
 }
-@media (max-width: 640px) {
+
+/* --- Phone breakpoints (mirrors the prototype's ≤720 / ≤560 behaviour) -------
+   ≤720px: every field stacks full-width and its control stretches — the
+   segmented controls (mode/gender) fill the row with equal-width options, the
+   DateStepper spans full-width with a growing centred label, and the place +
+   pool comboboxes fill the row (their intrinsic min-width is released). The
+   board (S2) and the bottom-sheet (S3) already contain their own overflow, so
+   only the toolbar needs to reflow here. */
+@media (max-width: 720px) {
+  .toolbar {
+    align-items: stretch;
+  }
   .toolbar__field {
     flex: 1 1 100%;
+  }
+  /* segmented controls (mode + gender) stretch, options share the row equally */
+  .toolbar__field .ui-seg {
+    display: flex;
+    width: 100%;
+  }
+  .toolbar__field .ui-seg__opt {
+    flex: 1 1 0;
+    text-align: center;
+  }
+  /* the DateStepper spans full-width, label grows to fill the middle */
+  .toolbar__field .ui-datestepper {
+    display: flex;
+    width: 100%;
+  }
+  .toolbar__field .ui-datestepper__label {
+    flex: 1 1 auto;
+  }
+  /* place typeahead + pool combobox fill the row (release their 12rem min-width) */
+  .toolbar__context,
+  .toolbar__context > div,
+  .toolbar__field .ui-combo,
+  .toolbar__field .ui-place {
+    display: flex;
+    width: 100%;
+  }
+  .toolbar__field .ui-combo input,
+  .toolbar__field .ui-place input {
+    flex: 1 1 auto;
+    width: 100%;
+    min-width: 0;
+  }
+}
+
+/* ≤560px: tighten the strip and let the age chips share the row full-width so a
+   narrow phone never forces a horizontal scroll on the toolbar itself. */
+@media (max-width: 560px) {
+  .toolbar {
+    padding: var(--s3);
+    gap: var(--s2);
+  }
+  .toolbar__field .ui-chipgroup {
+    display: flex;
+    width: 100%;
+  }
+  .toolbar__field .ui-chip {
+    flex: 1 1 auto;
+    text-align: center;
   }
 }
 
