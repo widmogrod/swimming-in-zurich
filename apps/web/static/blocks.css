@@ -9,3 +9,118 @@
    blocks (IdentityHeader, FilterToolbar, InsightBar, RibbonBoard, LaneGantt,
    DetailPanel/BottomSheet, BoardLegend, StateBlocks) land in S2+.
    ============================================================================ */
+
+/* ---------------------------------------------------------------------------
+   RibbonBoard (Part 3 §4) — S2.
+
+   Layout ONLY (colour comes from tokens). The board is a card holding an axis
+   header and one row per pool (Day) / per day (Pool). Each row is a 2-column
+   grid: a fixed-width RowLabel column + a canvas column.
+
+   CONTAINMENT (the prototype's page-overflow bug): the canvas column is
+   `minmax(0, 1fr)` — NOT `1fr`. With min=0 the column may shrink below its
+   content, so the wide (max-content) canvas track scrolls INSIDE its
+   `overflow-x: auto` cell instead of forcing the whole page sideways. The label
+   column stays put because only the canvas cell scrolls.
+   --------------------------------------------------------------------------- */
+
+.stage {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+}
+
+.board {
+  background: var(--surface);
+  border: 1px solid var(--hair);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow);
+  overflow: hidden;              /* clip the rounded corners over the scroll cells */
+  --board-label-w: 15rem;        /* shared RowLabel column width (keeps rows aligned) */
+}
+
+.board__row {
+  display: grid;
+  grid-template-columns: [label] var(--board-label-w) [canvas] minmax(0, 1fr);
+  align-items: stretch;
+  border-top: 1px solid var(--hair-2);
+}
+
+.board__row--axis {
+  border-top: 0;
+  color: var(--muted);
+}
+
+/* The scroll cell: a wide canvas track scrolls horizontally INSIDE this cell. */
+.board__scrollx {
+  overflow-x: auto;
+  overflow-y: hidden;
+  min-width: 0;                  /* belt-and-braces: allow the grid cell to shrink */
+}
+
+.board__track {
+  width: max-content;           /* the canvas' intrinsic width; wider than the cell */
+}
+
+.board__canvas,
+.board__axiscanvas {
+  display: block;
+}
+
+/* RowLabel column — status dot + name + eligibility badge. */
+.board__rowlabel {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  padding: var(--s2) var(--s3);
+  min-width: 0;
+  background: var(--surface);
+  border-right: 1px solid var(--hair-2);
+}
+
+.board__rowlabel--head {
+  min-height: 1.5rem;
+}
+
+.board__rowname {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--fs-body);
+  font-weight: var(--fw-body);
+  color: var(--ink);
+}
+
+.board__dot {
+  flex: 0 0 auto;
+  width: 9px;
+  height: 9px;
+  border-radius: var(--r-pill);
+  background: var(--unknown);
+}
+
+.board__dot--open { background: var(--accent); }
+.board__dot--closed { background: var(--closed); }
+.board__dot--unknown { background: var(--unknown); }
+
+.board__rowbadge {
+  flex: 0 0 auto;
+}
+
+/* Colour-family probes: board.js reads each computed `color` to paint the canvas,
+   so every ribbon hue traces back to a token and no hex lives in the JS. */
+.board__probe { position: absolute; visibility: hidden; pointer-events: none; }
+.fam-public { color: var(--fam-public); }
+.fam-lane { color: var(--fam-lane); }
+.fam-family { color: var(--fam-family); }
+.fam-women { color: var(--fam-women); }
+.fam-seniors { color: var(--fam-seniors); }
+.fam-adults { color: var(--fam-adults); }
+.fam-school { color: var(--fam-school); }
+.fam-club { color: var(--fam-club); }
+.fam-closed { color: var(--fam-closed); }
+.fam-unknown { color: var(--fam-unknown); }
+.fam-sheath { color: var(--fam-sheath); }
+.fam-axis { color: var(--fam-axis); }

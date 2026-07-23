@@ -56,6 +56,21 @@ class FakeElement {
     this._text = '';
   }
 
+  // `className` mirrors the DOM: assigning a space-separated string REPLACES the
+  // class set (so `.className = 'a b'` and `classList.add('a','b')` agree). Added in
+  // S2 so blocks that build DOM via `.className =` are still classList-queryable.
+  set className(v) {
+    this.classList = new ClassList();
+    String(v)
+      .split(/\s+/)
+      .filter(Boolean)
+      .forEach((c) => this.classList.add(c));
+  }
+
+  get className() {
+    return this.classList.value;
+  }
+
   setAttribute(k, v) {
     this.attributes[k] = String(v);
     if (k === 'id') this.id = String(v);

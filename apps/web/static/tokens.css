@@ -55,6 +55,23 @@
   --best-band: rgba(10, 132, 255, .10);
   --best-edge: rgba(10, 132, 255, .5);
   --cursor: #0a84ff;
+  /* Access-family ribbon hues (S2 RibbonBoard). ALIASES over the existing palette —
+     no new raw hue is introduced, and because each is a var() reference it resolves
+     per-theme automatically (no dark re-declaration needed). "Open to you" families
+     (public/lane/family) read as the aqua accent; the restricted families reuse
+     the muted held/reserved inks. Exact hues are provisional — polished at S5. */
+  --fam-public: var(--accent);
+  --fam-lane: var(--lane-public-ink);
+  --fam-family: var(--accent-ink);
+  --fam-women: var(--closed);
+  --fam-seniors: var(--badge-chk);
+  --fam-adults: var(--best);
+  --fam-school: var(--lane-res-ink);
+  --fam-club: var(--lane-res-ink);
+  --fam-closed: var(--closed);
+  --fam-unknown: var(--unknown);
+  --fam-sheath: var(--envfill);
+  --fam-axis: var(--muted);
 
   /* --- 1.2 Typography ------------------------------------------------------ */
   --f: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;

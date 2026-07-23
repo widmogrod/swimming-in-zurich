@@ -345,6 +345,30 @@ its data fetch/derive. Blocks import primitives and the timescale util; they nev
   math via `Date.UTC` (not `toISOString()` on a local date) — reuse the UTC-parse pattern in the S2/S3
   board/gantt date utils.
 
+### Implementation decisions & divergences — S2 (2026-07-23)
+
+- **Shared timescale is genuinely the single scale.** `board.js` routes every plot-x through the S0
+  `timescale.X(...)` and accepts an injected `opts.timescale` instance so S3's Gantt passes the SAME
+  object — critic-verified no local minute→pixel math. This is the anti-desync anchor for the S3 pause.
+- **`eligForAccess` mirrors the domain, not the prompt's literal "else in."** `SchoolReserved`/
+  `ClubReserved` → `no` (domain `access.py` returns `allowed=False`); `WomenOnly` diverse/unset → `chk`
+  (domain says "confirm with venue") — honours the `?≠✕` invariant. Public/Lane/Family/unknown → `in`.
+  One shared `eligibility.js` now; S3 panel + S4 toolbar MUST reuse it (do not re-parse `access`).
+- **Overflow-containment gated by a CSS-contract test** (no layout engine in the gate): asserts the
+  board grid column is `minmax(0,1fr)` (and a bare `1fr` is absent), scroll cell `overflow-x:auto`,
+  track `width:max-content`. Would fail on a revert to the page-overflow bug. The true visual/browser
+  check is the human step at the S3 pause.
+- **Divergence (accepted): `--fam-*` access-family tokens** — 12 `var()` aliases over the existing
+  palette (no raw hex, single `:root` decl); provisional hues (esp. `--fam-women: var(--closed)` reuses
+  red) flagged for the S5 palette pass. The ribbon fill (hue) is a separate channel from the
+  EligibilityBadge (`--badge-*` grey) so no eligibility/availability invariant is merged now.
+- **Divergence (accepted): dev `/ui/board` route** (own package) under the existing `SWIMZH_DEV_UI`
+  flag; row status shown as a compact dot (not `StatePill`, which stays for S3's panel).
+- **Carry to S3 (critic nits + tech debt):** wire the shared horizontal scroll + time cursor across
+  rows and into the Gantt (the alignment work); drop `board.js`'s inline 900px track width so
+  `max-content` governs (or record the fixed-plot intent); reuse `accessFamily`/`eligForAccess` and the
+  UTC date pattern.
+
 ## Risks & mitigations
 
 1. **No-build modularity drift** — without a bundler, import graphs can rot. *Mitigate:* flat
@@ -367,3 +391,4 @@ its data fetch/derive. Blocks import primitives and the timescale util; they nev
 |---|---|---|---|---|---|
 | 2026-07-23 | S0 | done | server-side token injection (Option a); `node --test` bridged into pytest; ruff S603 per-file-ignore added & ratified | throwaway compat tokens in `tokens.css` (retired at S5); `--elig-*` value-collision to fix at S5; token-injection has no marker-present test (add S1); Node is a CI/gate dependency | yes |
 | 2026-07-23 | S1 | done | `create_app()` factory (composition root) for per-flag route registration; headless `_fakedom.js` for zero-dep JS DOM/ARIA tests; real `--badge-in/-chk/-no` eligibility tokens (collision avoided, S0 compat block untouched); broadened `tokens.css` `[data-theme]` selectors (additive) | Python `_COMPONENTS` vs JS `REGISTRY` are two hand-kept lists, only JS-side agreement pinned; datestepper test doesn't pin process TZ; hex-grep doesn't scan the gallery router's inline `<style>` | yes |
+| 2026-07-23 | S2 | done | shared `timescale.js` consumed by the board (critic-verified, no re-derive); pure `ribbonmodel.js` mapping; shared `eligibility.js` (School/Club→no, mirrors domain; WomenOnly diverse/unset→chk); `--fam-*` access-family token aliases; dev `/ui/board` route; overflow-containment via CSS-contract test | per-row `.board__scrollx` not yet scroll-synced (S3 does shared scroll + time cursor); `board.js` inline `track.style.width=900px` overrides the `max-content` CSS the contract test asserts; `--fam-women` reuses closed-red hue (S5 palette polish); canvas pixel output unverified until browser check | yes |

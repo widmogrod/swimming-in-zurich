@@ -1,0 +1,460 @@
+{
+  "options": [
+    {
+      "facility": "Hallenbad Oerlikon",
+      "facility_id": "hallenbad-oerlikon",
+      "kind": "indoor",
+      "basin": "50m-Becken",
+      "length_m": 50.0,
+      "lanes": null,
+      "start": "06:00",
+      "end": "08:00",
+      "access": "LaneSwim",
+      "eligible": true,
+      "reason": "lane swimming \u2014 open to all",
+      "price": "Erwachsene CHF 8.00",
+      "distance_km": null,
+      "open_now": false,
+      "valid_as_of": "2026-07-18",
+      "source": "stadt-zuerich.ch/hallenbaeder/oerlikon (curated, illustrative)",
+      "curated": true,
+      "lane_availability": {
+        "lane_count": 8,
+        "public_lanes": 5,
+        "reserved_lanes": 3,
+        "public_until": "22:00",
+        "partial": false
+      },
+      "lane_timeline": {
+        "segments": [
+          {
+            "start": "06:00",
+            "end": "08:00",
+            "lane_count": 8,
+            "public_lanes": 5,
+            "reserved_lanes": 3,
+            "partial": false
+          }
+        ]
+      }
+    },
+    {
+      "facility": "Hallenbad Oerlikon",
+      "facility_id": "hallenbad-oerlikon",
+      "kind": "indoor",
+      "basin": "50m-Becken",
+      "length_m": 50.0,
+      "lanes": null,
+      "start": "08:00",
+      "end": "21:30",
+      "access": "PublicSwim",
+      "eligible": true,
+      "reason": "public swimming \u2014 open to all",
+      "price": "Erwachsene CHF 8.00",
+      "distance_km": null,
+      "open_now": true,
+      "valid_as_of": "2026-07-18",
+      "source": "stadt-zuerich.ch/hallenbaeder/oerlikon (curated, illustrative)",
+      "curated": true,
+      "lane_availability": {
+        "lane_count": 8,
+        "public_lanes": 4,
+        "reserved_lanes": 4,
+        "public_until": "22:00",
+        "partial": false
+      },
+      "lane_timeline": {
+        "segments": [
+          {
+            "start": "08:00",
+            "end": "09:00",
+            "lane_count": 8,
+            "public_lanes": 4,
+            "reserved_lanes": 4,
+            "partial": false
+          },
+          {
+            "start": "09:00",
+            "end": "09:30",
+            "lane_count": 8,
+            "public_lanes": 4,
+            "reserved_lanes": 4,
+            "partial": false
+          },
+          {
+            "start": "09:30",
+            "end": "10:00",
+            "lane_count": 8,
+            "public_lanes": 8,
+            "reserved_lanes": 0,
+            "partial": false
+          },
+          {
+            "start": "10:00",
+            "end": "11:00",
+            "lane_count": 8,
+            "public_lanes": 7,
+            "reserved_lanes": 1,
+            "partial": false
+          },
+          {
+            "start": "11:00",
+            "end": "13:00",
+            "lane_count": 8,
+            "public_lanes": 8,
+            "reserved_lanes": 0,
+            "partial": false
+          },
+          {
+            "start": "13:00",
+            "end": "13:30",
+            "lane_count": 8,
+            "public_lanes": 7,
+            "reserved_lanes": 1,
+            "partial": false
+          },
+          {
+            "start": "13:30",
+            "end": "14:00",
+            "lane_count": 8,
+            "public_lanes": 6,
+            "reserved_lanes": 2,
+            "partial": false
+          },
+          {
+            "start": "14:00",
+            "end": "15:00",
+            "lane_count": 8,
+            "public_lanes": 4,
+            "reserved_lanes": 4,
+            "partial": false
+          },
+          {
+            "start": "15:00",
+            "end": "19:00",
+            "lane_count": 8,
+            "public_lanes": 4,
+            "reserved_lanes": 4,
+            "partial": false
+          },
+          {
+            "start": "19:00",
+            "end": "20:00",
+            "lane_count": 8,
+            "public_lanes": 4,
+            "reserved_lanes": 4,
+            "partial": false
+          },
+          {
+            "start": "20:00",
+            "end": "21:30",
+            "lane_count": 8,
+            "public_lanes": 4,
+            "reserved_lanes": 4,
+            "partial": false
+          }
+        ]
+      }
+    },
+    {
+      "facility": "Schulschwimmanlage Aemtler",
+      "facility_id": "schulschwimmanlage-aemtler",
+      "kind": "school",
+      "basin": "Schwimmbecken",
+      "length_m": null,
+      "lanes": null,
+      "start": "09:00",
+      "end": "17:00",
+      "access": "PublicSwim",
+      "eligible": true,
+      "reason": "public swimming \u2014 open to all",
+      "price": null,
+      "distance_km": null,
+      "open_now": true,
+      "valid_as_of": "2026-07-19",
+      "source": "stadt-zuerich.ch/hallenbaeder/aemtler (curated, illustrative)",
+      "curated": true,
+      "lane_availability": null,
+      "lane_timeline": null
+    }
+  ],
+  "statuses": [
+    {
+      "facility": "Hallenbad Bungertwies",
+      "status": "closed",
+      "detail": "Sommerpause"
+    },
+    {
+      "facility": "Hallenbad City",
+      "status": "closed",
+      "detail": "Sommerpause / Revision"
+    },
+    {
+      "facility": "Flussbad Au-H\u00f6ngg",
+      "status": "uncurated",
+      "detail": "schedule not yet curated"
+    },
+    {
+      "facility": "Flussbad Oberer Letten",
+      "status": "uncurated",
+      "detail": "schedule not yet curated"
+    },
+    {
+      "facility": "Flussbad Unterer Letten",
+      "status": "uncurated",
+      "detail": "schedule not yet curated"
+    },
+    {
+      "facility": "Flussbad Unterer Letten (Flussteil)",
+      "status": "uncurated",
+      "detail": "schedule not yet curated"
+    },
+    {
+      "facility": "Frauenbad Stadthausquai",
+      "status": "uncurated",
+      "detail": "schedule not yet curated"
+    },
+    {
+      "facility": "Freibad Allenmoos",
+      "status": "uncurated",
+      "detail": "schedule not yet curated"
+    },
+    {
+      "facility": "Freibad Auhof",
+      "status": "uncurated",
+      "detail": "schedule not yet curated"
+    },
+    {
+      "facility": "Freibad Dolder",
+      "status": "uncurated",
+      "detail": "schedule not yet curated"
+    },
+    {
+      "facility": "Freibad Heuried",
+      "status": "uncurated",
+      "detail": "schedule not yet curated"
+    },
+    {
+      "facility": "Freibad Letzigraben",
+      "status": "uncurated",
+      "detail": "schedule not yet curated"
+    },
+    {
+      "facility": "Freibad Seebach",
+      "status": "uncurated",
+      "detail": "schedule not yet curated"
+    },
+    {
+      "facility": "Freibad Zwischen den H\u00f6lzern",
+      "status": "uncurated",
+      "detail": "schedule not yet curated"
+    },
+    {
+      "facility": "Hallenbad Altstetten",
+      "status": "uncurated",
+      "detail": "schedule not yet curated"
+    },
+    {
+      "facility": "Hallenbad Bl\u00e4si",
+      "status": "uncurated",
+      "detail": "schedule not yet curated"
+    },
+    {
+      "facility": "Hallenbad Leimbach",
+      "status": "uncurated",
+      "detail": "schedule not yet curated"
+    },
+    {
+      "facility": "M\u00e4nnerbad Schanzengraben",
+      "status": "uncurated",
+      "detail": "schedule not yet curated"
+    },
+    {
+      "facility": "Planschbecken Althoos",
+      "status": "uncurated",
+      "detail": "schedule not yet curated"
+    },
+    {
+      "facility": "Planschbecken Am Uetliberg",
+      "status": "uncurated",
+      "detail": "schedule not yet curated"
+    },
+    {
+      "facility": "Planschbecken Artergut",
+      "status": "uncurated",
+      "detail": "schedule not yet curated"
+    },
+    {
+      "facility": "Planschbecken Bachwiesen",
+      "status": "uncurated",
+      "detail": "schedule not yet curated"
+    },
+    {
+      "facility": "Planschbecken B\u00e4ckeranlage",
+      "status": "uncurated",
+      "detail": "schedule not yet curated"
+    },
+    {
+      "facility": "Planschbecken Bullingerhof",
+      "status": "uncurated",
+      "detail": "schedule not yet curated"
+    },
+    {
+      "facility": "Planschbecken F\u00f6hrenwald",
+      "status": "uncurated",
+      "detail": "schedule not yet curated"
+    },
+    {
+      "facility": "Planschbecken Fritschiwiese",
+      "status": "uncurated",
+      "detail": "schedule not yet curated"
+    },
+    {
+      "facility": "Planschbecken Josefswiese",
+      "status": "uncurated",
+      "detail": "schedule not yet curated"
+    },
+    {
+      "facility": "Planschbecken Pfingstweid",
+      "status": "uncurated",
+      "detail": "schedule not yet curated"
+    },
+    {
+      "facility": "Planschbecken Schl\u00f6ssliareal",
+      "status": "uncurated",
+      "detail": "schedule not yet curated"
+    },
+    {
+      "facility": "Planschbecken Sihlh\u00f6lzli",
+      "status": "uncurated",
+      "detail": "schedule not yet curated"
+    },
+    {
+      "facility": "Planschbecken Wahlenpark",
+      "status": "uncurated",
+      "detail": "schedule not yet curated"
+    },
+    {
+      "facility": "Schulschwimmanlage Altweg",
+      "status": "uncurated",
+      "detail": "schedule not yet curated"
+    },
+    {
+      "facility": "Schulschwimmanlage Aubr\u00fccke",
+      "status": "uncurated",
+      "detail": "schedule not yet curated"
+    },
+    {
+      "facility": "Schulschwimmanlage Borrweg",
+      "status": "uncurated",
+      "detail": "schedule not yet curated"
+    },
+    {
+      "facility": "Schulschwimmanlage Buhn",
+      "status": "uncurated",
+      "detail": "schedule not yet curated"
+    },
+    {
+      "facility": "Schulschwimmanlage Freilager",
+      "status": "uncurated",
+      "detail": "schedule not yet curated"
+    },
+    {
+      "facility": "Schulschwimmanlage Gr\u00fcnau",
+      "status": "uncurated",
+      "detail": "schedule not yet curated"
+    },
+    {
+      "facility": "Schulschwimmanlage Hardau",
+      "status": "uncurated",
+      "detail": "schedule not yet curated"
+    },
+    {
+      "facility": "Schulschwimmanlage Isengrind",
+      "status": "uncurated",
+      "detail": "schedule not yet curated"
+    },
+    {
+      "facility": "Schulschwimmanlage K\u00fcgeliloo",
+      "status": "uncurated",
+      "detail": "schedule not yet curated"
+    },
+    {
+      "facility": "Schulschwimmanlage Letten",
+      "status": "uncurated",
+      "detail": "schedule not yet curated"
+    },
+    {
+      "facility": "Schulschwimmanlage Looren",
+      "status": "uncurated",
+      "detail": "schedule not yet curated"
+    },
+    {
+      "facility": "Schulschwimmanlage Riedtli",
+      "status": "uncurated",
+      "detail": "schedule not yet curated"
+    },
+    {
+      "facility": "Schulschwimmanlage Riesbach",
+      "status": "uncurated",
+      "detail": "schedule not yet curated"
+    },
+    {
+      "facility": "Schulschwimmanlage Staudenb\u00fchl",
+      "status": "uncurated",
+      "detail": "schedule not yet curated"
+    },
+    {
+      "facility": "Schulschwimmanlage Stettbach",
+      "status": "uncurated",
+      "detail": "schedule not yet curated"
+    },
+    {
+      "facility": "Schulschwimmanlage Tannenrauch",
+      "status": "uncurated",
+      "detail": "schedule not yet curated"
+    },
+    {
+      "facility": "Schulschwimmanlage Vogtsrain",
+      "status": "uncurated",
+      "detail": "schedule not yet curated"
+    },
+    {
+      "facility": "Seebad Enge",
+      "status": "uncurated",
+      "detail": "schedule not yet curated"
+    },
+    {
+      "facility": "Seebad Katzensee",
+      "status": "uncurated",
+      "detail": "schedule not yet curated"
+    },
+    {
+      "facility": "Seebad Utoquai",
+      "status": "uncurated",
+      "detail": "schedule not yet curated"
+    },
+    {
+      "facility": "Strandbad Mythenquai",
+      "status": "uncurated",
+      "detail": "schedule not yet curated"
+    },
+    {
+      "facility": "Strandbad Tiefenbrunnen",
+      "status": "uncurated",
+      "detail": "schedule not yet curated"
+    },
+    {
+      "facility": "Strandbad Wollishofen",
+      "status": "uncurated",
+      "detail": "schedule not yet curated"
+    },
+    {
+      "facility": "W\u00e4rmebad K\u00e4ferberg",
+      "status": "uncurated",
+      "detail": "schedule not yet curated"
+    }
+  ],
+  "warnings": [],
+  "notices": []
+}

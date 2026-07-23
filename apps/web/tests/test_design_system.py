@@ -24,14 +24,46 @@ _HEX = re.compile(r"#[0-9a-fA-F]{3,8}\b")
 _RGBA = re.compile(r"\brgba?\(")
 
 
-def _component_js_sources() -> list[Path]:
-    """The component modules themselves — excludes *.test.js (test assertions may
-    legitimately mention a hex regex) and the fake-DOM test helper."""
-    return [
-        p
-        for p in _COMPONENTS_JS.glob("*.js")
-        if not p.name.endswith(".test.js") and p.name != "_fakedom.js"
-    ]
+def _js_sources() -> list[Path]:
+    """Every design-system JS module — top-level (timescale/filterstate/eligibility),
+    the primitives under components/, and the blocks under blocks/. Excludes *.test.js
+    (test assertions may legitimately mention a hex regex) and the fake-DOM helper. All
+    colour must resolve through tokens.css (var()/currentColor), never a raw hex/rgba."""
+    js_dir = _STATIC / "js"
+    sources: list[Path] = []
+    for pattern in ("*.js", "components/*.js", "blocks/*.js"):
+        sources.extend(
+            p
+            for p in js_dir.glob(pattern)
+            if not p.name.endswith(".test.js") and p.name != "_fakedom.js"
+        )
+    return sources
+
+
+def test_board_grid_guarantees_overflow_containment() -> None:
+    """The RibbonBoard's wide canvas MUST scroll inside its card, never push the page
+    sideways (the exact bug that bit the prototype). There is no layout engine in the
+    test env, so `scrollWidth`/`clientWidth` are meaningless here; instead we assert the
+    CSS PROPERTIES that GUARANTEE containment are declared on the board:
+
+      * the canvas grid column is `minmax(0, 1fr)` (min=0 lets it shrink below content)
+        — NOT `1fr` (min=auto=max-content would blow the column out to the page);
+      * the scroll cell is `overflow-x: auto`;
+      * the canvas track inside it is `width: max-content`.
+
+    The true visual/browser check is deferred to the human review at the S3 pause; this
+    is the mechanical proxy that the containment contract has not regressed in CSS.
+    """
+    blocks = (_STATIC / "blocks.css").read_text(encoding="utf-8")
+    normalized = re.sub(r"\s+", " ", blocks)
+    assert "minmax(0, 1fr)" in normalized, "board canvas column must be minmax(0,1fr)"
+    assert "grid-template-columns: [label] var(--board-label-w) [canvas] minmax(0, 1fr)" in (
+        normalized
+    ), "the board row grid must place the canvas in a minmax(0,1fr) column"
+    assert "overflow-x: auto" in normalized, "the scroll cell must be overflow-x:auto"
+    assert "width: max-content" in normalized, "the canvas track must be width:max-content"
+    # And the failure mode is absent: the canvas column is never a bare `1fr`.
+    assert "[canvas] 1fr" not in normalized, "a bare 1fr canvas column would overflow the page"
 
 
 def test_components_do_not_import_the_blocks_layer() -> None:
@@ -50,7 +82,7 @@ def test_no_raw_hex_or_rgba_outside_tokens_css() -> None:
     var(--…) / color-mix() / currentColor only — never a raw hex or rgba()."""
     offenders = []
     css_files = [p for p in _STATIC.glob("*.css") if p.name != "tokens.css"]
-    for path in [*css_files, *_component_js_sources()]:
+    for path in [*css_files, *_js_sources()]:
         text = path.read_text(encoding="utf-8")
         for n, line in enumerate(text.splitlines(), 1):
             if _HEX.search(line) or _RGBA.search(line):
