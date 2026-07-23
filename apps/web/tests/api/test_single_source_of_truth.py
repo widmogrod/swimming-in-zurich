@@ -21,7 +21,7 @@ FORBIDDEN = ("catalog.json", ".yaml", "load_dataset")
 
 
 def _config(gold_db: Path) -> Config:
-    return Config(gold_db=gold_db, host="127.0.0.1", port=8000, reload=False)
+    return Config(gold_db=gold_db, host="127.0.0.1", port=8000, reload=False, dev_ui=False)
 
 
 def _runtime_source_files() -> list[Path]:

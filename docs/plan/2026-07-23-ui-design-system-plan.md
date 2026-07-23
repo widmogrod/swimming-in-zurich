@@ -5,7 +5,7 @@ created: 2026-07-23
 updated: 2026-07-23
 feature: ui-design-system
 branch: plan/ui-design-system
-worktree: "relocated into the main checkout (subagents write to main, not a worktree — see [[dev-implement-subagents-write-to-main-not-worktree]])"
+worktree: .claude/worktrees/plan-ui-design-system   # S0 ran via main-checkout relocation; S1+ switched to a real git worktree per the user's request (verifying subagents honour it — see [[dev-implement-subagents-write-to-main-not-worktree]])
 base_branch: feat/new-ui
 gates:
   qa: full                # ruff, format, mypy strict, pytest+coverage floor, CRAP (Python side unchanged)
@@ -314,7 +314,36 @@ its data fetch/derive. Blocks import primitives and the timescale util; they nev
   swap the *values* under those names.
 - **Critic nit (carry):** the `str.replace` injection silently no-ops if the `/* __TOKENS__ */`
   marker is ever removed (all `var(--…)` would break) with no test guarding a token *definition* in
-  the rendered page — S1 should add that assertion or make a missing marker raise.
+  the rendered page — S1 should add that assertion or make a missing marker raise. **[done in S1:
+  the router now RAISES on a missing marker, + `test_index_page_carries_an_injected_token_definition`.]**
+
+### Implementation decisions & divergences — S1 (2026-07-23)
+
+- **Worktree isolation now works.** S1 ran in a real git worktree (`.claude/worktrees/plan-ui-design-system`)
+  per the user's request; verified the slice-implementer wrote only into the worktree, main checkout
+  stayed clean. The prior learning ([[dev-implement-subagents-write-to-main-not-worktree]]) is **stale**
+  as of 2026-07-23 — the tooling was fixed. S0 was done via main-checkout relocation; S1+ via worktree.
+- **ARIA/DOM/key testing with zero JS-DOM deps → hand-written `_fakedom.js`.** Factories derive their
+  document from `el.ownerDocument` (fallback `globalThis.document`); tests pass a minimal
+  `FakeDocument`/`FakeElement` that backs `setAttribute`/`getAttribute`/`addEventListener`/`dispatch`
+  with a real map and invokes handlers with a synthetic event — so a genuine ARIA/key regression fails
+  a test (critic-verified non-tautological). Key-nav is also factored into pure `keynav.js`. No jsdom,
+  no npm deps. Gallery renders client-side; its mount×state×theme structure is asserted server-side.
+- **`--elig-*` collision resolved → new `--badge-in/-chk/-no`** carry the muted Part-1 values
+  (`#1a9d54`/`#b7791f`/`#8a909c`); the S0 throwaway `--elig-*` (alarm-red) is left for S5 to retire.
+- **Divergence (accepted): `create_app()` factory** in `main.py` (Design showed a module-level `app`).
+  Needed to conditionally register the dev route per flag and keep it per-flag testable; `app =
+  create_app()` preserves the ASGI entrypoint and still fails-fast on a missing gold DB (critic-verified).
+- **Divergence (accepted): broadened `tokens.css` theme selectors** to also match `[data-theme=…]`
+  (not only `:root[…]`) — additive, values unchanged, enables the gallery's simultaneous light+dark panels.
+- **`StaticFiles` mount at `/static`** added (net-new infra per Part 5); serves `apps/web/static/` only
+  (css/js; no data/secrets — critic-verified). Dev-only `/ui/gallery` gated by `SWIMZH_DEV_UI` (read only
+  in `config.py`); absent (404) when off.
+- **Carry to later slices (critic nits, non-blocking):** (1) cross-check Python `_COMPONENTS` against JS
+  `REGISTRY` from one source; (2) pin a negative-offset TZ in the datestepper test; (3) extend the
+  hex-grep to scan the gallery router's inline `<style>`. Real bug fixed in S1: `datestepper.js` date
+  math via `Date.UTC` (not `toISOString()` on a local date) — reuse the UTC-parse pattern in the S2/S3
+  board/gantt date utils.
 
 ## Risks & mitigations
 
@@ -337,3 +366,4 @@ its data fetch/derive. Blocks import primitives and the timescale util; they nev
 | date | slice | status | divergence | tech debt | human review? |
 |---|---|---|---|---|---|
 | 2026-07-23 | S0 | done | server-side token injection (Option a); `node --test` bridged into pytest; ruff S603 per-file-ignore added & ratified | throwaway compat tokens in `tokens.css` (retired at S5); `--elig-*` value-collision to fix at S5; token-injection has no marker-present test (add S1); Node is a CI/gate dependency | yes |
+| 2026-07-23 | S1 | done | `create_app()` factory (composition root) for per-flag route registration; headless `_fakedom.js` for zero-dep JS DOM/ARIA tests; real `--badge-in/-chk/-no` eligibility tokens (collision avoided, S0 compat block untouched); broadened `tokens.css` `[data-theme]` selectors (additive) | Python `_COMPONENTS` vs JS `REGISTRY` are two hand-kept lists, only JS-side agreement pinned; datestepper test doesn't pin process TZ; hex-grep doesn't scan the gallery router's inline `<style>` | yes |

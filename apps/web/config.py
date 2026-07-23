@@ -16,6 +16,7 @@ class Config:
     host: str
     port: int
     reload: bool  # auto-reload on code change (dev server via `python -m apps.web.main`)
+    dev_ui: bool  # register the dev-only /ui/gallery component gallery (absent in production)
 
     @staticmethod
     def from_env() -> Config:
@@ -24,4 +25,5 @@ class Config:
             host=os.getenv("SWIMZH_HOST", "127.0.0.1"),
             port=int(os.getenv("SWIMZH_PORT", "8000")),
             reload=os.getenv("SWIMZH_RELOAD", "1") not in {"0", "false", "False", ""},
+            dev_ui=os.getenv("SWIMZH_DEV_UI", "0") in {"1", "true", "True", "yes"},
         )

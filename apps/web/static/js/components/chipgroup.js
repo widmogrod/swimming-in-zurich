@@ -1,0 +1,8 @@
+// ChipGroup — age-range selector (a row of pill chips). Same ARIA + key model as
+// SegmentedControl (role=group, aria-pressed, arrow keys), different skin.
+
+import { buildSelectGroup } from './_selectgroup.js';
+
+export function createChipGroup(el, opts = {}) {
+  return buildSelectGroup(el, opts, { root: 'ui-chipgroup', opt: 'ui-chip' });
+}

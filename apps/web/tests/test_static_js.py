@@ -1,10 +1,16 @@
 """Bridge the native-ES-module unit tests into the Python QA gate.
 
-The UI's pure JS modules (`timescale`, `filterstate`) ship no build step, so their
-unit tests run on Node's zero-dependency built-in runner (`node --test`). This test
-shells out to it, so `uv run pytest` — and therefore the mechanical QA gate — fails
-if any JS unit test regresses. It is skipped (not silently passed) only where Node is
-genuinely unavailable, so the modules are never shipped un-run.
+The UI's pure JS modules ship no build step, so their unit tests run on Node's
+zero-dependency built-in runner (`node --test`). This test shells out to it, so
+`uv run pytest` — and therefore the mechanical QA gate — fails if any JS unit test
+regresses. It is skipped (not silently passed) only where Node is genuinely
+unavailable, so the modules are never shipped un-run.
+
+`node --test` (run with cwd at the js dir) discovers `*.test.js` RECURSIVELY, so it
+covers both the top-level modules (`timescale`, `filterstate`) and the S1 component
+suites under `static/js/components/*.test.js` (SegmentedControl, ChipGroup,
+Combobox, PlaceTypeahead, Toggle, DateStepper, the badges, and the registry sweep)
+with no per-file wiring.
 """
 
 from __future__ import annotations

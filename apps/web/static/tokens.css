@@ -84,6 +84,20 @@
   --ease-sheet: cubic-bezier(.32, .72, 0, 1);
   --dur-sheet: .26s;
 
+  /* --- S1 real semantic tokens (kept past S5) ------------------------------
+     EligibilityBadge — the MUTED Part-1 values (✓ green / ? gold / ✕ grey),
+     NEVER alarm red. Deliberately DISTINCT names from the retired S0 compat
+     --elig-* block below (which still holds the legacy alarm-red palette): the
+     name collision the S0 Decisions note flagged is resolved by giving the real
+     component its own --badge-* tokens, leaving the compat block untouched for
+     S5 to retire. Dark values are lightened for AA on the dark ground. */
+  --badge-in: #1a9d54; /* ✓ you're in */
+  --badge-chk: #b7791f; /* ? check — gold, distinct from ✕ */
+  --badge-no: #8a909c; /* ✕ not for you — muted grey, never red */
+  /* One accent-derived focus ring every interactive primitive shares. The inner
+     var(--accent) resolves per-theme at use, so this adapts without redeclaring. */
+  --focus-ring: 0 0 0 3px color-mix(in srgb, var(--accent) 45%, transparent);
+
   /* --- S0 re-skin compatibility tokens ------------------------------------
      These reproduce the CURRENT embedded UI's fixed palette so the throwaway
      re-skin (apps/web/api/ui/router.py) is visually equivalent. They are
@@ -143,11 +157,19 @@
     --best-band: rgba(74, 163, 255, .14);
     --best-edge: rgba(74, 163, 255, .6);
     --cursor: #4aa3ff;
+    /* EligibilityBadge — lightened for AA on the dark ground. */
+    --badge-in: #34c374;
+    --badge-chk: #d9a441;
+    --badge-no: #9aa3ac;
   }
 }
 
-/* Viewer toggle → forced dark (wins over an OS-light preference). */
-:root[data-theme="dark"] {
+/* Viewer toggle → forced dark. Applied at :root (whole-page toggle) AND on any
+   subtree carrying [data-theme="dark"] (e.g. the gallery's dark panel), so a
+   single panel can render dark while the page around it stays light. Custom
+   properties set here inherit into the matched element's subtree. */
+:root[data-theme="dark"],
+[data-theme="dark"] {
   --bg: #0d1418;
   --surface: #111c22;
   --surface-2: #0f191e;
@@ -177,10 +199,15 @@
   --best-band: rgba(74, 163, 255, .14);
   --best-edge: rgba(74, 163, 255, .6);
   --cursor: #4aa3ff;
+  --badge-in: #34c374;
+  --badge-chk: #d9a441;
+  --badge-no: #9aa3ac;
 }
 
-/* Viewer toggle → forced light (wins over an OS-dark preference). */
-:root[data-theme="light"] {
+/* Viewer toggle → forced light. Applied at :root AND on any [data-theme="light"]
+   subtree (the gallery's light panel), so a panel can force light under OS dark. */
+:root[data-theme="light"],
+[data-theme="light"] {
   --bg: #eef2f3;
   --surface: #ffffff;
   --surface-2: #f6f9fa;
@@ -210,6 +237,9 @@
   --best-band: rgba(10, 132, 255, .10);
   --best-edge: rgba(10, 132, 255, .5);
   --cursor: #0a84ff;
+  --badge-in: #1a9d54;
+  --badge-chk: #b7791f;
+  --badge-no: #8a909c;
 }
 
 /* Tabular numerals utility (token .tnum) — times/counts that must align. */

@@ -1094,7 +1094,15 @@ function jumpToPlan(facility) {
 
 
 # Inline the token layer into the page's single <style> block once, at import time.
-_RENDERED_PAGE = _PAGE.replace("/* __TOKENS__ */", _TOKENS_CSS)
+# Fail LOUD if the marker ever goes missing: str.replace would silently no-op,
+# shipping a page whose every var(--…) is undefined. (S0 critic-nit carry.)
+_INJECTION_MARKER = "/* __TOKENS__ */"
+if _INJECTION_MARKER not in _PAGE:
+    raise RuntimeError(
+        f"token-injection marker {_INJECTION_MARKER!r} missing from _PAGE — the token "
+        "layer would not be inlined and every var(--…) would break"
+    )
+_RENDERED_PAGE = _PAGE.replace(_INJECTION_MARKER, _TOKENS_CSS)
 
 
 @router.get("/", response_class=HTMLResponse)

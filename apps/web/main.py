@@ -12,6 +12,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
 
 from apps.web.api.access.router import router as access_router
 from apps.web.api.health.router import router as health_router
@@ -21,6 +22,8 @@ from apps.web.api.ui.router import router as ui_router
 from apps.web.config import Config
 from apps.web.services.gold_store import GoldSwimStore
 from apps.web.services.ports import SwimStore
+
+_STATIC_DIR = Path(__file__).resolve().parent / "static"
 
 
 def _missing_db_message(gold_db: Path) -> str:
@@ -59,21 +62,44 @@ def _load_swim_data(config: Config) -> SwimStore:
     return GoldSwimStore.open(config.gold_db)
 
 
-@asynccontextmanager
-async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-    config = Config.from_env()
-    _require_gold_db(config.gold_db)
-    app.state.config = config
-    app.state.swim_data = _load_swim_data(config)
-    yield
+def create_app(config: Config | None = None) -> FastAPI:
+    """Build the ASGI app. The composition root: the only place adapters are wired
+    and the only place routers are registered.
+
+    `config` defaults to `Config.from_env()`. The dev-only `/ui/gallery` route is
+    registered ONLY when `config.dev_ui` is set, so it is absent in production
+    (a route is always mounted once included — the flag gates the include itself).
+
+    The gold store is resolved LAZILY in the lifespan (env read at startup, not at
+    import), so the module-level `app` picks up `SWIMZH_GOLD_DB` set after import
+    (e.g. by the test fixtures). Route registration, by contrast, must happen now,
+    at build time — so `dev_ui` is read here."""
+
+    @asynccontextmanager
+    async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+        cfg = config or Config.from_env()
+        _require_gold_db(cfg.gold_db)
+        app.state.config = cfg
+        app.state.swim_data = _load_swim_data(cfg)
+        yield
+
+    app = FastAPI(title="Swimming in Zürich", lifespan=lifespan)
+    # Static design-system assets (tokens/components CSS + ES modules) — net-new
+    # infra this slice adds; first consumer is the dev gallery.
+    app.mount("/static", StaticFiles(directory=str(_STATIC_DIR)), name="static")
+    app.include_router(ui_router)
+    app.include_router(health_router)
+    app.include_router(swim_router)
+    app.include_router(pools_router)
+    app.include_router(access_router)
+    if (config or Config.from_env()).dev_ui:
+        from apps.web.api.gallery.router import router as gallery_router
+
+        app.include_router(gallery_router)
+    return app
 
 
-app = FastAPI(title="Swimming in Zürich", lifespan=lifespan)
-app.include_router(ui_router)
-app.include_router(health_router)
-app.include_router(swim_router)
-app.include_router(pools_router)
-app.include_router(access_router)
+app = create_app()
 
 
 def main() -> None:  # pragma: no cover
