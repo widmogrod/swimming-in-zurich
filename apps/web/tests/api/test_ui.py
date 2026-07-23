@@ -124,7 +124,7 @@ def test_pool_detail_panel_renders_basins_features_lockers_prices() -> None:
     assert "function featureRowHTML(fe)" in page
     assert "fe.open_now === true" in page
     assert "openpill open" in page and "openpill closed" in page
-    assert ".openpill.open { background: #15803d; }" in page
+    assert ".openpill.open { background: var(--elig-in); }" in page
     # Lockers and prices each render from the detail response.
     assert "function lockerRowHTML(l)" in page
     assert "function priceTableHTML(pt)" in page
@@ -523,8 +523,8 @@ def test_s4_open_vs_later_is_a_bold_colored_pill_not_opacity() -> None:
     assert "function statePill(o)" in page
     assert page.count("${statePill(o)}") == 2
     # Both states carry a background colour; neither is opacity-only anymore.
-    assert ".state.open { background: #15803d; }" in page
-    assert ".state.upcoming { background: #b45309; }" in page
+    assert ".state.open { background: var(--elig-in); }" in page
+    assert ".state.upcoming { background: var(--elig-unk); }" in page
     assert ".state.upcoming { opacity" not in page  # the old opacity-only treatment is gone
     # The distinct open branch (with closing time) survives.
     assert "OPEN · closes" in page

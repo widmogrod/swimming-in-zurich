@@ -1,0 +1,5 @@
+{
+  "type": "module",
+  "private": true,
+  "description": "Native ES modules for the swim UI (no build step). type:module lets `node --test` treat the .js files as ESM, matching the browser's <script type=module> loading."
+}

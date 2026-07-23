@@ -285,6 +285,37 @@ its data fetch/derive. Blocks import primitives and the timescale util; they nev
 - **`filterstate.js` is authored in S0 but first *observed* in S2/S4.** To avoid shipping an
   unverified module at S0, its S0 acceptance includes a merge + round-trip unit test (above).
 
+### Implementation decisions & divergences — S0 (2026-07-23)
+
+- **Ambiguity #1 resolved → server-side token injection (Option a).** `ui/router.py` reads
+  `apps/web/static/tokens.css` at import and inlines it into the page's single `<style>` via a
+  `/* __TOKENS__ */` marker. Zero structural HTML change; reading a `static/` asset at runtime does
+  not trip `test_no_app_module_reads_curated_data_at_runtime` (it scans `.py` only, for `data/`
+  inputs). The `StaticFiles` mount + `<link>` stays deferred to the slice that adds `<link>`-served
+  assets. Confirmed net-new: S0 needs no mount.
+- **Ambiguity #2 resolved → `node --test` bridged into pytest.** JS unit tests live at
+  `apps/web/static/js/*.test.js` (+ `package.json` `{"type":"module"}` so node & the browser agree
+  on ESM); `apps/web/tests/test_static_js.py` shells out to `node --test` so `uv run pytest` / the
+  QA gate cover them (7/7 pass). **Node is now a QA-gate dependency** — the bridge `skipif`s when
+  node is absent, so CI must provision Node or the JS tests silently skip (carry into S1+/CI setup).
+  Node 26 quirk: `node --test <dir>` positional fails `MODULE_NOT_FOUND`; run `node --test` with
+  `cwd` set to the js dir (bridge already does this; reuse in S1+).
+- **Divergence (ratified): ruff per-file-ignore.** Added `"apps/web/tests/test_static_js.py" =
+  ["S603"]` to `[tool.ruff.lint.per-file-ignores]`. Critic-adjudicated legitimate and minimally
+  scoped (S603 only, not S607, because `shutil.which("node")` returns an absolute path): pinned
+  binary, fixed args, no shell, no untrusted input — mirrors the existing `scripts/** =
+  ["S603","S607"]` precedent. **Orchestrator ratified.**
+- **Compat tokens are throwaway.** To keep S0 visually equivalent (the human screenshot gate),
+  `tokens.css` carries a clearly-commented "S0 re-skin compatibility tokens … retired at S5" block
+  reproducing the *legacy* palette (`--tint-*`, `--link`, `--elig-*`, `--sched`, `--good/warn/temp-*`)
+  rather than re-colouring the UI to the prototype palette now. **Carry to S1/S5:** the names
+  `--elig-in/-out/-unk` are claimed here with the legacy alarm-red `#b91c1c`; S1's real
+  EligibilityBadge wants the muted Part-1 values (`#1a9d54`/`#b7791f`/`#8a909c`) — S5 retirement must
+  swap the *values* under those names.
+- **Critic nit (carry):** the `str.replace` injection silently no-ops if the `/* __TOKENS__ */`
+  marker is ever removed (all `var(--…)` would break) with no test guarding a token *definition* in
+  the rendered page — S1 should add that assertion or make a missing marker raise.
+
 ## Risks & mitigations
 
 1. **No-build modularity drift** — without a bundler, import graphs can rot. *Mitigate:* flat
@@ -300,3 +331,9 @@ its data fetch/derive. Blocks import primitives and the timescale util; they nev
    silently dropped.
 5. **Scope** — this is a UI rewrite, not a data change; the Python domain/gold store is untouched.
    Keep the diff inside `apps/web/**` + `docs/**`.
+
+## Ledger
+
+| date | slice | status | divergence | tech debt | human review? |
+|---|---|---|---|---|---|
+| 2026-07-23 | S0 | done | server-side token injection (Option a); `node --test` bridged into pytest; ruff S603 per-file-ignore added & ratified | throwaway compat tokens in `tokens.css` (retired at S5); `--elig-*` value-collision to fix at S5; token-injection has no marker-present test (add S1); Node is a CI/gate dependency | yes |

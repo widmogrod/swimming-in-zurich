@@ -26,10 +26,23 @@ symbols mean?" expander — the shared glyph legend. The access word (sentence-c
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from fastapi import APIRouter
 from fastapi.responses import HTMLResponse
 
 router = APIRouter()
+
+# The design-system token layer (apps/web/static/tokens.css) is the single source of
+# visual truth. This throwaway embedded UI consumes it WITHOUT a structural HTML change
+# by inlining the token file's contents into the page's existing single <style> block at
+# serve time (see the `__TOKENS__` marker below). Reading a static asset under
+# apps/web/static/ at runtime is allowed — only reading the curated `data/` inputs is
+# forbidden (grep-asserted, and none of them are touched here). A future slice adds a
+# StaticFiles mount + <link>; deferred so S0 leaves the HTML structure untouched.
+_TOKENS_CSS = (Path(__file__).resolve().parents[2] / "static" / "tokens.css").read_text(
+    encoding="utf-8"
+)
 
 _PAGE = """<!doctype html>
 <html lang="en">
@@ -38,14 +51,15 @@ _PAGE = """<!doctype html>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Swimming in Zürich</title>
 <style>
+/* __TOKENS__ */
   :root { color-scheme: light dark; --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
   body { font-family: system-ui, sans-serif; max-width: 900px; margin: 1.5rem auto; padding: 0 1rem; }
   h1 { font-size: 1.4rem; margin-bottom: .2rem; }
   .muted { opacity: .7; font-size: .85rem; }
-  .warn { color: #b45309; }
+  .warn { color: var(--elig-unk); }
   nav { display: flex; gap: .5rem; margin: 1rem 0; }
-  nav button { padding: .5rem 1rem; cursor: pointer; border: 1px solid #8886; background: transparent; border-radius: .4rem; font-size: 1rem; }
-  nav button.active { background: #3b82f6; color: #fff; border-color: #3b82f6; }
+  nav button { padding: .5rem 1rem; cursor: pointer; border: 1px solid var(--tint-6); background: transparent; border-radius: .4rem; font-size: 1rem; }
+  nav button.active { background: var(--link); color: var(--on-color); border-color: var(--link); }
   section { display: none; } section.active { display: block; }
   form { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: .75rem; align-items: end; }
   label { display: flex; flex-direction: column; font-size: .85rem; gap: .25rem; }
@@ -53,99 +67,99 @@ _PAGE = """<!doctype html>
   form button { grid-column: 1 / -1; cursor: pointer; }
   /* Shared context bar (#12): the persistent place/gender/age/radius inputs live ONCE above the
      tabs (styled as a boxed form) and drive every tab, so switching tabs continues the session. */
-  .ctxbar { border: 1px solid #8886; border-radius: .5rem; padding: .75rem .9rem; margin: 1rem 0 .3rem; background: #8881; }
+  .ctxbar { border: 1px solid var(--tint-6); border-radius: .5rem; padding: .75rem .9rem; margin: 1rem 0 .3rem; background: var(--tint-1); }
   .ctxlead { font-size: .78rem; opacity: .6; margin: 0 0 .5rem; }
   /* Neutral data-coverage line (#10): the consolidated footer's second row — states the
      verified-timetable fraction calmly (NOT the old amber "7 of ~57" `.warn` banner). */
   .coverage { margin-top: .5rem; font-size: .82rem; }
   table { border-collapse: collapse; width: 100%; margin-top: 1rem; }
-  th, td { text-align: left; padding: .4rem .5rem; border-bottom: 1px solid #8884; font-size: .9rem; vertical-align: top; }
-  .badge { display: inline-block; padding: .05rem .4rem; border-radius: .4rem; background: #8882; font-size: .8rem; }
+  th, td { text-align: left; padding: .4rem .5rem; border-bottom: 1px solid var(--tint-4); font-size: .9rem; vertical-align: top; }
+  .badge { display: inline-block; padding: .05rem .4rem; border-radius: .4rem; background: var(--tint-2); font-size: .8rem; }
   .chips { display: flex; flex-wrap: wrap; gap: .4rem; margin: .8rem 0; }
-  .chip { padding: .3rem .7rem; border: 1px solid #8886; border-radius: 1rem; cursor: pointer; font-size: .85rem; background: transparent; }
-  .chip.active { background: #3b82f6; color: #fff; border-color: #3b82f6; }
+  .chip { padding: .3rem .7rem; border: 1px solid var(--tint-6); border-radius: 1rem; cursor: pointer; font-size: .85rem; background: transparent; }
+  .chip.active { background: var(--link); color: var(--on-color); border-color: var(--link); }
   .legend { margin-top: 1.5rem; font-size: .85rem; }
   .legend dt { font-weight: 600; margin-top: .5rem; }
-  a { color: #3b82f6; }
+  a { color: var(--link); }
 
   /* --- unified monospace swim-card language --- */
   .glyphlegend { font-family: var(--mono); font-size: .8rem; white-space: pre; overflow-x: auto;
-    border: 1px solid #8886; border-radius: .4rem; padding: .6rem .8rem; margin: .4rem 0 1rem; opacity: .85; }
+    border: 1px solid var(--tint-6); border-radius: .4rem; padding: .6rem .8rem; margin: .4rem 0 1rem; opacity: .85; }
   .symbols { margin: 1rem 0; }
   .symbols summary { cursor: pointer; opacity: .8; font-size: .85rem; }
   /* --- swim-card visual hierarchy (S4 #7): the facility NAME is the hero, then a bold
      colored status pill + an eligibility WORD, then distance/price, with length/lanes
      demoted to a small secondary tag (kept — it's a real lap-swimmer filter). --- */
-  .card { border: 1px solid #8886; border-radius: .5rem; padding: .7rem .9rem; margin: .8rem 0; }
+  .card { border: 1px solid var(--tint-6); border-radius: .5rem; padding: .7rem .9rem; margin: .8rem 0; }
   .card .cardname { font-size: 1.15rem; font-weight: 700; line-height: 1.25; }
   .card .cardname .mark { font-family: var(--mono); font-weight: 400; opacity: .6; margin-right: .25rem; }
   .card .statusrow { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; margin: .35rem 0; }
   .glyph { font-family: var(--mono); font-weight: 700; }
-  .axis-elig.in { color: #15803d; }
-  .axis-elig.out { color: #b91c1c; }
-  .axis-elig.unk { color: #b45309; }
+  .axis-elig.in { color: var(--elig-in); }
+  .axis-elig.out { color: var(--elig-out); }
+  .axis-elig.unk { color: var(--elig-unk); }
   /* Open-vs-later is a bold COLORED pill, not an opacity difference (opacity reads as disabled
      and washes out on some screens): open = green, an upcoming window = amber. */
   .state { font-family: var(--mono); font-size: .78rem; font-weight: 700; white-space: nowrap;
-    color: #fff; padding: .12rem .55rem; border-radius: 1rem; }
-  .state.open { background: #15803d; }
-  .state.upcoming { background: #b45309; }
+    color: var(--on-color); padding: .12rem .55rem; border-radius: 1rem; }
+  .state.open { background: var(--elig-in); }
+  .state.upcoming { background: var(--elig-unk); }
   .eligword { font-size: .85rem; font-weight: 600; display: inline-flex; align-items: center; gap: .25rem; }
-  .eligword.in { color: #15803d; }
-  .eligword.out { color: #b91c1c; }
-  .eligword.unk { color: #b45309; }
+  .eligword.in { color: var(--elig-in); }
+  .eligword.out { color: var(--elig-out); }
+  .eligword.unk { color: var(--elig-unk); }
   /* length + lanes: kept as a real lap-swimmer filter, demoted to a compact monospace tag */
   .lenbadge { display: inline-block; font-family: var(--mono); font-size: .74rem; white-space: nowrap;
-    border: 1px solid #8886; border-radius: .3rem; padding: .04rem .4rem; opacity: .9; }
+    border: 1px solid var(--tint-6); border-radius: .3rem; padding: .04rem .4rem; opacity: .9; }
   .lenbadge .len { font-weight: 600; }
   .lenbadge .lanes { opacity: .8; }
   /* lane availability: which of the basin's lanes are public right now (Belegungsplan). */
   .lanebadge { display: inline-block; font-size: .74rem; white-space: nowrap; border-radius: .3rem;
-    padding: .04rem .4rem; background: #16a34a22; color: #15803d; border: 1px solid #16a34a55; }
+    padding: .04rem .4rem; background: var(--good-fill); color: var(--elig-in); border: 1px solid var(--good-edge); }
   .lanebadge .lpub { font-weight: 600; }
   .lanebadge .lpartial { opacity: .8; font-style: italic; }
   /* the arc variant: lane split CHANGES during the session ("4/6 then 2/6 after 18:00") — amber
      to read as "watch the time", distinct from the steady-state green glance badge. */
-  .lanebadge.lanearc { background: #b4530922; color: #b45309; border-color: #b4530955; }
+  .lanebadge.lanearc { background: var(--warn-fill); color: var(--elig-unk); border-color: var(--warn-edge); }
   /* --- facility-detail lane panel (Belegungsplan): per-lane timeline, best time, roster --- */
   .lanesched { margin-top: .4rem; }
   .lanesched > summary { cursor: pointer; font-size: .82rem; opacity: .85; }
   .lanepanel { margin: .5rem 0 .2rem; font-size: .82rem; }
   .lanepanel .lptitle { font-weight: 600; margin: .5rem 0 .2rem; opacity: .8; }
   .besttime { display: inline-block; font-size: .78rem; border-radius: .3rem; padding: .1rem .5rem;
-    background: #16a34a22; color: #15803d; border: 1px solid #16a34a55; margin: .2rem 0; }
+    background: var(--good-fill); color: var(--elig-in); border: 1px solid var(--good-edge); margin: .2rem 0; }
   .lanestrips { font-family: var(--mono); font-size: .74rem; }
   .lanestrip { display: flex; gap: .4rem; align-items: baseline; padding: .1rem 0; }
   .lanestrip .lslane { opacity: .7; min-width: 3.2rem; white-space: nowrap; }
   .lseg { display: inline-block; border-radius: .25rem; padding: 0 .35rem; margin: .05rem .2rem .05rem 0;
-    border: 1px solid #8886; white-space: nowrap; }
-  .lseg.public { background: #16a34a22; color: #15803d; border-color: #16a34a55; }
-  .lseg.reserved { background: #8882; }
+    border: 1px solid var(--tint-6); white-space: nowrap; }
+  .lseg.public { background: var(--good-fill); color: var(--elig-in); border-color: var(--good-edge); }
+  .lseg.reserved { background: var(--tint-2); }
   .lsempty { opacity: .5; }
   .roster { margin-top: .3rem; }
   .roster .rrow { padding: .1rem 0; }
   .roster .rclub { font-weight: 600; }
   /* --- facility-detail statics (basins, features, lockers, prices) in the /pools/{id} panel --- */
-  .basincard { border: 1px solid #8886; border-radius: .4rem; padding: .5rem .7rem; margin: .4rem 0; }
+  .basincard { border: 1px solid var(--tint-6); border-radius: .4rem; padding: .5rem .7rem; margin: .4rem 0; }
   .basincard .basinhead { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; }
   .basincard .basinname { font-weight: 600; }
   /* the prominent water-temperature badge (Decision #4: nominal here, tooltip carries the source) */
   .tempbadge { display: inline-block; font-weight: 700; font-size: .95rem; white-space: nowrap;
-    padding: .1rem .55rem; border-radius: 1rem; background: #0ea5e922; color: #0369a1;
-    border: 1px solid #0ea5e955; }
+    padding: .1rem .55rem; border-radius: 1rem; background: var(--temp-fill); color: var(--temp-ink);
+    border: 1px solid var(--temp-edge); }
   .basinchips { display: flex; flex-wrap: wrap; gap: .35rem; margin-top: .35rem; }
   .sizechip { display: inline-block; font-family: var(--mono); font-size: .74rem; white-space: nowrap;
-    border: 1px solid #8886; border-radius: .3rem; padding: .04rem .4rem; opacity: .9; }
+    border: 1px solid var(--tint-6); border-radius: .3rem; padding: .04rem .4rem; opacity: .9; }
   /* the honesty caveat where a basin's physicals were auto-extracted from prose, not curated */
-  .parsedcaveat { display: inline-block; font-size: .72rem; margin-top: .3rem; color: #b45309;
-    background: #b4530922; border: 1px solid #b4530955; border-radius: .3rem; padding: .04rem .4rem; }
+  .parsedcaveat { display: inline-block; font-size: .72rem; margin-top: .3rem; color: var(--elig-unk);
+    background: var(--warn-fill); border: 1px solid var(--warn-edge); border-radius: .3rem; padding: .04rem .4rem; }
   .featurerow, .lockerrow, .pricerow { font-size: .82rem; padding: .15rem 0; }
   .pricerow .pricecat { display: inline-block; min-width: 4.5rem; font-family: var(--mono); opacity: .7; }
   /* "open now?" pill for a facility feature — green open / grey closed, never opacity-only */
-  .openpill { font-family: var(--mono); font-size: .7rem; font-weight: 700; color: #fff;
+  .openpill { font-family: var(--mono); font-size: .7rem; font-weight: 700; color: var(--on-color);
     padding: .06rem .45rem; border-radius: 1rem; white-space: nowrap; }
-  .openpill.open { background: #15803d; }
-  .openpill.closed { background: #6b7280; }
+  .openpill.open { background: var(--elig-in); }
+  .openpill.closed { background: var(--sched); }
   .card .metaline { font-size: .85rem; opacity: .85; margin-top: .2rem; }
   .card .reason { font-size: .8rem; opacity: .65; margin-top: .2rem; }
   /* pool-as-object detail line: address · tel · official ↗ · directions ↗ */
@@ -153,15 +167,15 @@ _PAGE = """<!doctype html>
   .status a { white-space: nowrap; }
   .notshown { margin-top: 1.2rem; }
   .notshown .sep { font-family: var(--mono); opacity: .6; font-size: .8rem;
-    border-top: 1px dashed #8886; padding-top: .5rem; }
+    border-top: 1px dashed var(--tint-6); padding-top: .5rem; }
   .status { font-family: var(--mono); font-size: .85rem; padding: .2rem 0; }
-  .status.closed { color: #b91c1c; }
-  .status.uncurated { color: #b45309; }
+  .status.closed { color: var(--elig-out); }
+  .status.uncurated { color: var(--elig-unk); }
   .prov { font-family: var(--mono); font-size: .8rem; opacity: .7; margin-top: 1rem;
-    border-top: 1px solid #8884; padding-top: .5rem; }
+    border-top: 1px solid var(--tint-4); padding-top: .5rem; }
 
   /* --- tourist orientation primer --- */
-  .primer { border: 1px solid #8886; border-radius: .5rem; padding: .8rem 1rem; margin: 1rem 0; font-size: .9rem; }
+  .primer { border: 1px solid var(--tint-6); border-radius: .5rem; padding: .8rem 1rem; margin: 1rem 0; font-size: .9rem; }
   .primer h3 { font-size: .95rem; margin: .2rem 0 .6rem; }
   .primer dt { font-weight: 600; margin-top: .6rem; font-family: var(--mono); font-size: .82rem;
     letter-spacing: .03em; }
@@ -183,27 +197,27 @@ _PAGE = """<!doctype html>
      min-width so it stays a grid on mobile (persona 2 plans on a phone) instead of collapsing. */
   .gridscroll { overflow-x: auto; margin: .3rem 0; }
   .weekgrid { font-family: var(--mono); border-collapse: collapse; width: 100%; min-width: 40rem; font-size: .9rem; }
-  .weekgrid th, .weekgrid td { border: 1px solid #8884; padding: .3rem .45rem; text-align: center; }
+  .weekgrid th, .weekgrid td { border: 1px solid var(--tint-4); padding: .3rem .45rem; text-align: center; }
   .weekgrid th { font-weight: 600; opacity: .85; }
   .weekgrid td.time { text-align: right; opacity: .8; white-space: nowrap; }
   .weekgrid td.closed-day { opacity: .45; }        /* no session at this slot (·) */
-  .weekgrid td.unknown-day { color: #b45309; }     /* no data — ? , NEVER blank */
+  .weekgrid td.unknown-day { color: var(--elig-unk); }     /* no data — ? , NEVER blank */
   /* Session time ranges are VISIBLE cell text, not title=-hover-only (invisible on touch). */
   .weekgrid .cellglyphs { display: block; line-height: 1.3; }
   .weekgrid .celltime { display: block; font-size: .66rem; opacity: .7; white-space: nowrap; margin-top: .05rem; }
-  .cell-elig.in { color: #15803d; } .cell-elig.out { color: #b91c1c; } .cell-elig.unk { color: #b45309; }
+  .cell-elig.in { color: var(--elig-in); } .cell-elig.out { color: var(--elig-out); } .cell-elig.unk { color: var(--elig-unk); }
   .daynote { font-family: var(--mono); font-size: .82rem; margin: .15rem 0; }
-  .daynote.closed { color: #b91c1c; } .daynote.unknown { color: #b45309; }
+  .daynote.closed { color: var(--elig-out); } .daynote.unknown { color: var(--elig-unk); }
 
   /* --- All-pools hub (S5): name filter, schedule indicator, jump-to-plan action --- */
   .poolfilter { max-width: 22rem; margin: 1rem 0 .4rem; }
   .poolfilter input { width: 100%; }
-  .sched-yes { color: #15803d; font-weight: 600; white-space: nowrap; }
+  .sched-yes { color: var(--elig-in); font-weight: 600; white-space: nowrap; }
   .sched-no { opacity: .6; font-size: .82rem; }        /* honest: no timetable yet, NOT closed */
   tr.norow { opacity: .72; }                            /* location-only rows sit back, not hidden */
   button.jump { padding: .25rem .6rem; font-size: .85rem; cursor: pointer; white-space: nowrap;
-    border: 1px solid #3b82f6; color: #3b82f6; background: transparent; border-radius: .4rem; }
-  button.jump:hover { background: #3b82f6; color: #fff; }
+    border: 1px solid var(--link); color: var(--link); background: transparent; border-radius: .4rem; }
+  button.jump:hover { background: var(--link); color: var(--on-color); }
 </style>
 </head>
 <body>
@@ -1079,6 +1093,10 @@ function jumpToPlan(facility) {
 """
 
 
+# Inline the token layer into the page's single <style> block once, at import time.
+_RENDERED_PAGE = _PAGE.replace("/* __TOKENS__ */", _TOKENS_CSS)
+
+
 @router.get("/", response_class=HTMLResponse)
 def index() -> HTMLResponse:
-    return HTMLResponse(content=_PAGE)
+    return HTMLResponse(content=_RENDERED_PAGE)

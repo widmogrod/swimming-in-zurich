@@ -44,6 +44,10 @@ ignore = [
 "apps/web/api/ui/router.py" = ["E501"]
 # Vendored QA gate script legitimately shells out to `radon` by name.
 "scripts/**" = ["S603", "S607"]
+# The JS unit-test bridge legitimately shells out to the pinned `node` binary
+# (resolved via shutil.which, fixed args) to run `node --test`; S603's
+# untrusted-input heuristic is a false positive here, same as scripts/ above.
+"apps/web/tests/test_static_js.py" = ["S603"]
 
 # Canonical type checker for the QA chain is mypy strict (below). The pyright config is
 # kept because the codebase was authored against it and it also passes; both agree.

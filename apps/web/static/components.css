@@ -1,0 +1,12 @@
+/* ============================================================================
+   components.css — LAYER 2: primitive components.
+
+   Primitives are styled PURELY through the tokens in tokens.css: no raw hex, no
+   magic px, no theme literals. Every interactive primitive is exactly --ctl-h
+   tall, keyboard-accessible, and theme-aware by virtue of reading tokens only.
+
+   Empty by design at S0 — this file establishes the layer boundary. The Part-2
+   primitives (SegmentedControl, DateStepper, Combobox, PlaceTypeahead,
+   ChipGroup, Toggle, StatePill, EligibilityBadge, LengthLanesBadge,
+   ProvenanceStamp, IconSet) land in S1.
+   ============================================================================ */

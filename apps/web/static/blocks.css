@@ -1,0 +1,11 @@
+/* ============================================================================
+   blocks.css — LAYER 3: composite blocks.
+
+   Blocks compose primitives and lay them out. They introduce NO new color and
+   NO raw hex — color lives in tokens.css, primitive styling in components.css.
+   Blocks may add layout (grid/flex, spacing via --s* tokens) only.
+
+   Empty by design at S0 — this file establishes the layer boundary. The Part-3
+   blocks (IdentityHeader, FilterToolbar, InsightBar, RibbonBoard, LaneGantt,
+   DetailPanel/BottomSheet, BoardLegend, StateBlocks) land in S2+.
+   ============================================================================ */
