@@ -1,6 +1,6 @@
 ---
 type: plan
-status: draft              # draft -> approved -> in-progress -> done
+status: approved           # draft -> approved -> in-progress -> done
 created: 2026-07-23
 updated: 2026-07-23
 feature: ui-design-system
@@ -9,7 +9,7 @@ base_branch: main
 gates:
   qa: full                # ruff, format, mypy strict, pytest+coverage floor, CRAP (Python side unchanged)
   review: adversarial     # critic subagent must find no blocking issues
-pause_after: [S0]         # S0 lands the token layer + component contract; human-review before building blocks on top
+pause_after: [S0, S3]     # S0 lands the token layer + component contract; S3 lands the crown-jewel board↔Gantt time-axis alignment (Risk #3) — both get human review before more is built on top
 links: ["[[flowing-water-ui]]", "[[lane-plan-url-binding]]", "[[fastapi-service-integration]]", "[[gold-store]]"]
 ---
 
@@ -17,7 +17,7 @@ links: ["[[flowing-water-ui]]", "[[lane-plan-url-binding]]", "[[fastapi-service-
 
 ## Context
 
-The live UI is a single ~1090-line HTML string embedded in `apps/web/api/ui/router.py` (four
+The live UI is a single 1084-line HTML string embedded in `apps/web/api/ui/router.py` (four
 disjoint tabs, competing visual languages, duplicated legends). It was flagged as "inconsistent
 and hard to navigate." A multi-round design exploration converged on one prototype — the
 **"flowing water" unified view** (`scratchpad/demo_unified.html`, published as an Artifact): one
@@ -180,7 +180,7 @@ its data fetch/derive. Blocks import primitives and the timescale util; they nev
 | `facility/_id`, `kind`, `basin`, `distance_km` | RowLabel, DetailPanel |
 | `start`/`end`, `access`, `open_now` | RibbonBoard segments, StatePill |
 | `lane_availability`, `lane_timeline.segments` (public/reserved/lane_count) | Ribbon thickness, Public-lanes-at-cursor, LaneGantt |
-| `/pools/{id}` `lane_panels[].strips[]` (owner names) | LaneGantt per-lane |
+| `/pools/{id}` `lane_panels[].panel.day_view.strips[].segments[].owner` | LaneGantt per-lane |
 | `length_m`, `lanes` | LengthLanesBadge |
 | `price`, basin `nominal/measured_temp_c` (+ `physical_source`) | DetailPanel facts (null → "Not listed") |
 | `eligible`+`reason` (derived from `access`×gender/age) | EligibilityBadge |
@@ -195,8 +195,18 @@ its data fetch/derive. Blocks import primitives and the timescale util; they nev
 - **Files** (new, static, no-build): `apps/web/static/tokens.css`, `components.css`, `blocks.css`,
   `js/{timescale,filterstate,api,board,gantt,panel,toolbar,legend}.js` (native ES modules).
 - **Shell**: `ui/router.py` returns a *small* HTML skeleton (`<meta charset>`, token/CSS links,
-  block mount-points, `<script type="module" src=…>`) instead of a 1090-line string. Still one
-  route (`/`), still serves nothing from `data/` (the grep-assert test stays green).
+  block mount-points, `<script type="module" src=…>`) instead of a 1084-line string. It still
+  serves nothing from `data/` — the grep-assert test
+  (`apps/web/tests/api/test_single_source_of_truth.py::test_no_app_module_reads_curated_data_at_runtime`,
+  which scans `.py` files only) stays green, and static CSS/JS under `apps/web/static/` cannot trip
+  it.
+- **Static serving is NET-NEW infrastructure** (today everything is inlined; there is no
+  `StaticFiles` mount or `/static` anywhere in `apps/web`). This plan adds a `StaticFiles` mount at
+  `/static` in the composition root serving `apps/web/static/`. Routes after this change: `/` (the
+  shell), the existing JSON endpoints, `/static/*` (the new mount), and the **dev-only**
+  `/ui/gallery`. Because a FastAPI route is always mounted once registered, `/ui/gallery` is
+  registered **conditionally on a config flag** (`SWIMZH_DEV_UI`, read only in `config.py` per the
+  fastapi-service convention) so it is absent in production.
 - **Data**: JS hydrates blocks from the existing JSON endpoints (`/swim`, `/pools`, `/pools/{id}`,
   `/access-types`). No new endpoints required for parity; a future `/swim?week=` batch is optional
   (today the Pool mode assembles 7 calls, as the current planner does).
@@ -213,17 +223,34 @@ its data fetch/derive. Blocks import primitives and the timescale util; they nev
 
 - **S0 — Token layer + component contract** *(pause here)*. Extract `tokens.css` (light+dark, the
   full table in Part 1) and the empty `components.css`/`blocks.css` layer files + the `timescale`
-  and `filterstate` modules. Re-skin the *current* embedded UI to consume tokens (no behaviour
-  change) to prove the token set is complete. **Accept:** current UI visually unchanged; zero raw
-  hex outside `tokens.css`; QA green.
+  and `filterstate` modules. Re-skin the *current* embedded UI to consume tokens (see Decisions —
+  throwaway proof that the token set is complete). **Accept (mechanical):** the `_PAGE` HTML
+  *structure* is unchanged — the diff touches only `<style>` contents / color literals, now
+  `var(--…)` (no changes to tags/attributes outside `style`); `grep -nE '#[0-9a-fA-F]{3,8}|rgba\('`
+  finds **zero** raw color literals outside `tokens.css`; `timescale` has a unit test (X(min) is
+  monotonic and hits the exact endpoints at DAY0/DAY1) and `filterstate` has a unit test
+  (merge + serialise/deserialise round-trip); QA green. *Human step at the pause:* screenshot
+  review confirms visual equivalence (there is no automated visual-regression gate — see Decisions).
 - **S1 — Primitives + gallery**. Build every Part-2 component as an isolated module + `components.css`
   section; add the dev `/ui/gallery` route rendering each with all states (incl. empty/disabled,
-  light+dark). **Accept:** gallery renders all primitives; keyboard + a11y roles verified; no block
-  logic yet.
+  light+dark). **Accept (mechanical):** the gallery route renders every Part-2 primitive in each
+  documented state in both themes; a DOM test asserts each interactive primitive exposes its
+  documented ARIA on the gallery DOM (`role`, and the right `aria-pressed`/`aria-selected`/
+  `aria-disabled`) — axe-core or explicit attribute assertions; unit tests cover the key handlers
+  (SegmentedControl/ChipGroup arrow-keys; Combobox ↑↓/Enter/Esc + type-filter; PlaceTypeahead
+  select-on-focus + geolocation-fallback path); a grep asserts no `blocks/` import inside
+  `components/` (layer rule).
 - **S2 — RibbonBoard + timescale**. The canvas board block (axis, sticky RowLabel, ribbon renderer,
-  cursor) driven by FilterState, consuming `timescale`. **Accept:** Day + Pool modes render real
-  `/swim` data; ghost/closed/eligibility states correct; horizontal scroll contained (no page
-  overflow); reduced-motion freezes water.
+  cursor) driven by FilterState, consuming `timescale`. **Accept (mechanical):** against saved
+  `/swim` fixtures, pure-JS unit tests assert the segment→render-state mapping (the pure logic
+  isolated per Risk #2): `statuses[].status=="closed"` → dashed closed ribbon carrying `detail`;
+  `status=="uncurated"` → dotted ghost ribbon; an option with `lane_timeline` → filled ribbon whose
+  thickness = `public_lanes/lane_count` and pinches where `reserved_lanes>0`; an option lacking
+  `lane_timeline` → "lane split not published" ribbon; `eligForAccess(access,gender,age)` ∈
+  {in,chk,no} per the shared rule (women-only→male=no; adults-only<18=no; ?≠✕). Day + Pool modes
+  render from those fixtures; a DOM test asserts the board's `.scrollx.scrollWidth > clientWidth`
+  **while** `document.documentElement.scrollWidth == clientWidth` (contained, no page overflow);
+  reduced-motion freezes the water RAF.
 - **S3 — LaneGantt + DetailPanel/Sheet**. Per-basin Gantt on the shared axis, cursor-synced to the
   board; facts block with Public-lanes-**at-cursor** (not peak); bottom-sheet <1060px. **Accept:**
   click at T aligns Gantt cursor to T's gridline and both readouts match; owner names from
@@ -238,6 +265,24 @@ its data fetch/derive. Blocks import primitives and the timescale util; they nev
   with ✕). Delete the legacy embedded HTML. **Accept:** full QA + adversarial review; old UI gone.
 
 ---
+
+## Decisions
+
+- **S0 re-skins the doomed embedded string** (which S5 deletes) to prove token completeness, even
+  though S1's gallery also proves it. Kept deliberately: the re-skin is a *throwaway* proof that
+  exercises the token set against real, dense, already-shipping markup **before any component
+  exists**, catching missing tokens at S0 rather than after the gallery is built. Cost: one
+  throwaway diff, reverted implicitly by S5. Alternative (gallery-only proof, no re-skin) was
+  rejected because it would leave the S0 pause with nothing observable but a stylesheet.
+- **Two human-review pauses (S0, S3), not one.** S0 gates the token layer + module contract; S3
+  gates the board↔Gantt shared-time-axis alignment (Risk #3) — the single hardest correctness
+  property — before S4 composes the full page on top.
+- **No automated visual-regression gate** (Playwright/screenshot-diff) in this plan. Visual
+  equivalence at S0 and look-and-feel at S4/S5 are confirmed by human screenshot review at the
+  pauses. A visual-regression harness is a possible follow-up, explicitly out of scope here to
+  avoid net-new CI infrastructure.
+- **`filterstate.js` is authored in S0 but first *observed* in S2/S4.** To avoid shipping an
+  unverified module at S0, its S0 acceptance includes a merge + round-trip unit test (above).
 
 ## Risks & mitigations
 
