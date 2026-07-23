@@ -1,11 +1,12 @@
 ---
 type: plan
-status: approved           # draft -> approved -> in-progress -> done
+status: in-progress        # draft -> approved -> in-progress -> done
 created: 2026-07-23
 updated: 2026-07-23
 feature: ui-design-system
 branch: plan/ui-design-system
-base_branch: main
+worktree: "relocated into the main checkout (subagents write to main, not a worktree — see [[dev-implement-subagents-write-to-main-not-worktree]])"
+base_branch: feat/new-ui
 gates:
   qa: full                # ruff, format, mypy strict, pytest+coverage floor, CRAP (Python side unchanged)
   review: adversarial     # critic subagent must find no blocking issues
