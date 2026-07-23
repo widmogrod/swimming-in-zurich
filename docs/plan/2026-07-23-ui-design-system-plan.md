@@ -1,6 +1,6 @@
 ---
 type: plan
-status: in-progress        # draft -> approved -> in-progress -> done
+status: done               # draft -> approved -> in-progress -> done
 created: 2026-07-23
 updated: 2026-07-23
 feature: ui-design-system
@@ -15,6 +15,38 @@ links: ["[[flowing-water-ui]]", "[[lane-plan-url-binding]]", "[[fastapi-service-
 ---
 
 # Plan — Rebuild the swim UI from a typed design system: tokens → components → blocks
+
+## Summary (done 2026-07-23)
+
+The `apps/web` UI is now a **typed, layered, no-build design system** (tokens → components →
+blocks → shell) replacing the 1084-line four-tab embedded string. `GET /` serves a small `_SHELL`
+that links `/static/{tokens,components,blocks}.css` and hydrates one unified **two-mode** app
+(Day · all pools / Pool · the week) from the JSON API, on the shared time axis. Delivered across
+6 gated slices (S0 via main-checkout relocation; S1–S5 in a real git worktree — the prior
+"subagents write to main" learning proved stale and is now corrected):
+
+- **S0** token layer (`tokens.css`, light/dark/`[data-theme]`) + pure JS core (`timescale`,
+  `filterstate`) + `node --test` bridged into pytest.
+- **S1** 12 primitives (SegmentedControl, DateStepper, Combobox, PlaceTypeahead, ChipGroup,
+  Toggle, StatePill, EligibilityBadge, LengthLanesBadge, ProvenanceStamp, IconSet) as token-only
+  CSS + ES-module factories, tested headless via a hand-written `_fakedom.js`; dev `/ui/gallery`
+  behind `SWIMZH_DEV_UI`; `StaticFiles` `/static` mount.
+- **S2** the canvas **RibbonBoard** + shared `timescale` + pure `ribbonmodel` + shared
+  `eligibility` rule.
+- **S3** the **LaneGantt** + **DetailPanel/BottomSheet** on ONE shared cursor — the board↔Gantt
+  alignment and the public-lanes-at-cursor (not peak) headline, both guarded by falsifiable tests.
+- **S4** IdentityHeader + FilterToolbar (one `FilterState`) + InsightBar + BoardLegend + live
+  `api.js`; `/` becomes the unified app; four-tab model retired.
+- **S5** responsive toolbar breakpoints + `:focus-visible`; honesty-invariant test sweep
+  (unknown≠closed, three states never merged, busyness "not available yet", ?≠✕); the direct
+  board↔Gantt DOM-equality contract; **legacy `_PAGE` + injection machinery deleted**
+  (`ui/router.py` 1148→60 lines).
+
+Every honesty invariant is preserved and test-guarded; the shared `timescale` is the single
+anti-desync anchor; no `apps/web/**` `.py` reads `data/` at runtime; QA green throughout
+(final: pytest 394 passed, coverage 95.68% ≥ 95, CRAP clean; 142 node tests). See the Ledger and
+`docs/summaries/ui-design-system.md`. Remaining tech debt is small and logged (client-side
+lap-only filter; `app.js` DOM wiring browser-only; a couple of paired source-string tests).
 
 ## Context
 
