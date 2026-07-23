@@ -391,6 +391,26 @@ its data fetch/derive. Blocks import primitives and the timescale util; they nev
   panel headline" holds on real data. S5 owns the direct board↔gantt DOM-equality contract test and
   consolidating the duplicated `hhmmToMin`.
 
+### Implementation decisions & divergences — S4 (2026-07-23)
+
+- **`/` now serves the unified two-mode app** (`_SHELL`: charset + linked `/static` stylesheets +
+  block mounts + `<script type=module src=/static/js/app.js>`). The four-tab model is retired
+  (`data-tab=` absent from live `/`, asserted). One `FilterState` (S0 `filterstate.js`) drives every
+  block; `app.js` wires FilterState→refetch/rerender, a board→panel click resolving to the SAME
+  basin's `/pools/{id}` day_view via the shared `timescale`/`cursor` (S3 identity, critic-verified);
+  absolute dates only (no "today" literal).
+- **Divergence (accepted): legacy `_PAGE`/`_RENDERED_PAGE` kept as DEAD code** (unserved) so the diff
+  stays reviewable and S5 owns the removal. ~45 legacy `/`-content tests were retargeted to read
+  `_RENDERED_PAGE` directly (critic-verified: not coverage-masking — the live invariants are covered
+  by the 128 node block/component tests + `test_shell.py`). **S5 deletes `_PAGE`, `_RENDERED_PAGE`,
+  the `_TOKENS_CSS`/marker injection machinery, `test_ui.py`, and the retargeted design-system check.**
+- **Fail-fast preserved** (critic-verified): startup still raises on a missing/empty gold DB; the
+  static shell doesn't bypass it (`/` never serves without a DB).
+- **Carry to S5 (critic nits + tech debt):** `openPanel` currently takes `lane_panels[0]` — on a
+  multi-basin facility this may not be the clicked row's basin; confirm the board↔panel basin
+  identity in S5's invariant sweep. Toolbar double-mount → an in-place `setPools()`. `lapOnly` emits
+  state but doesn't yet filter ribbons (no `/swim` lap param — client-side filter deferred).
+
 ## Risks & mitigations
 
 1. **No-build modularity drift** — without a bundler, import graphs can rot. *Mitigate:* flat
@@ -415,3 +435,4 @@ its data fetch/derive. Blocks import primitives and the timescale util; they nev
 | 2026-07-23 | S1 | done | `create_app()` factory (composition root) for per-flag route registration; headless `_fakedom.js` for zero-dep JS DOM/ARIA tests; real `--badge-in/-chk/-no` eligibility tokens (collision avoided, S0 compat block untouched); broadened `tokens.css` `[data-theme]` selectors (additive) | Python `_COMPONENTS` vs JS `REGISTRY` are two hand-kept lists, only JS-side agreement pinned; datestepper test doesn't pin process TZ; hex-grep doesn't scan the gallery router's inline `<style>` | yes |
 | 2026-07-23 | S2 | done | shared `timescale.js` consumed by the board (critic-verified, no re-derive); pure `ribbonmodel.js` mapping; shared `eligibility.js` (School/Club→no, mirrors domain; WomenOnly diverse/unset→chk); `--fam-*` access-family token aliases; dev `/ui/board` route; overflow-containment via CSS-contract test | per-row `.board__scrollx` not yet scroll-synced (S3 does shared scroll + time cursor); `board.js` inline `track.style.width=900px` overrides the `max-content` CSS the contract test asserts; `--fam-women` reuses closed-red hue (S5 palette polish); canvas pixel output unverified until browser check | yes |
 | 2026-07-23 | S3 | done | net-new pure `blocks/cursor.js` (`publicAt`/`cursorX` leaf); `blocks/detailpanel.js` (plan named it `panel.js`); dev `/ui/detail` route; alignment proven by cursor-x equality (two-scale non-tautology) + below-peak readout tests (critic-confirmed both regressions caught) | `cursor.js` duplicates board's 2-line `hhmmToMin` (drift surface, consolidate later); `board.js` inline 900px track width left (redundant == intrinsic, S2 carry); direct board↔gantt DOM-equality contract deferred to S5 (Risk #3); `pool_oerlikon.json` carries full 87-entry roster (unused) | yes |
+| 2026-07-23 | S4 | done | new `_SHELL` served at `/` (four-tab model retired; legacy `_PAGE` kept as dead code for S5); one `FilterState` drives every block; live `api.js` (Day + 7-call week + `/pools/{id}`); S3 board→panel identity wired via shared `timescale`/`cursor`; absolute dates (no "today" literal) | ~45 legacy `/`-content tests retargeted to read the dead `_RENDERED_PAGE` string (S5 deletes both + the token-injection machinery); toolbar double-mount after `/pools` resolves; lap-only emits `FilterState` but doesn't filter ribbons yet (no `/swim` lap param); `openPanel` takes `lane_panels[0]` — multi-basin basin-identity to confirm in S5 | yes |

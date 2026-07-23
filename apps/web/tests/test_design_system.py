@@ -140,12 +140,13 @@ def test_static_mount_serves_the_design_system_assets() -> None:
     assert "createSegmentedControl" in js.text
 
 
-def test_index_page_carries_an_injected_token_definition() -> None:
-    """S0 critic-nit: the `/` page inlines tokens.css via the `/* __TOKENS__ */`
-    marker; a lost marker would silently break every var(--…). Assert a known token
-    DEFINITION is present in the rendered page (the router also raises if the marker
-    is missing, so this is belt-and-braces)."""
-    with TestClient(app) as client:
-        page = client.get("/").text
-    assert "--ctl-h: 36px" in page
-    assert "--accent: #0e8ea0" in page
+def test_legacy_page_carries_an_injected_token_definition() -> None:
+    """S0 critic-nit: the LEGACY `_PAGE` inlines tokens.css via the `/* __TOKENS__ */`
+    marker; a lost marker would silently break every var(--…). S4 stopped serving that
+    string at `/` (the new shell LINKS tokens.css instead — see test_static_mount), but
+    kept `_RENDERED_PAGE` as dead code, so this belt-and-braces check now reads it
+    directly (the router still raises at import if the marker is missing). S5 deletes it."""
+    from apps.web.api.ui.router import _RENDERED_PAGE
+
+    assert "--ctl-h: 36px" in _RENDERED_PAGE
+    assert "--accent: #0e8ea0" in _RENDERED_PAGE

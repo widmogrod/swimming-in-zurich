@@ -408,3 +408,229 @@
     transition: none;
   }
 }
+
+/* ---------------------------------------------------------------------------
+   App shell (plan S4) — the unified two-mode page frame.
+
+   Layout ONLY (colour via tokens). A single column stack of blocks; the board +
+   panel become a two-column split on wide screens (the panel is a sticky side
+   rail ≥1060px, matching the DetailPanel's own responsive contract).
+   --------------------------------------------------------------------------- */
+.app {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: var(--s4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--s4);
+}
+.app__main {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--s4);
+  align-items: start;
+}
+.app__board {
+  min-width: 0;
+}
+.app__panelempty {
+  color: var(--muted);
+  font-size: var(--fs-body);
+  margin: 0;
+  padding: var(--s4);
+  border: 1px dashed var(--hair);
+  border-radius: var(--r-md);
+}
+@media (min-width: 1060px) {
+  .app__main {
+    grid-template-columns: minmax(0, 1fr) 22rem;
+  }
+  .app__panel {
+    position: sticky;
+    top: var(--s4);
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   IdentityHeader (Part 3 §1) — brand + absolute date/week + theme toggle.
+   --------------------------------------------------------------------------- */
+.apphdr {
+  display: flex;
+  align-items: center;
+  gap: var(--s4);
+  flex-wrap: wrap;
+}
+.apphdr__brand {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  margin-right: auto;
+}
+.apphdr__logo {
+  font-size: var(--fs-head);
+}
+.apphdr__title {
+  font-size: var(--fs-title);
+  font-weight: var(--fw-title);
+  color: var(--ink);
+  margin: 0;
+}
+.apphdr__datebox {
+  font-size: var(--fs-body);
+  font-weight: var(--fw-caption);
+  color: var(--ink-2);
+}
+.apphdr__theme {
+  height: var(--ctl-h);
+  padding: 0 var(--s3);
+  border: 1px solid var(--hair);
+  border-radius: var(--r-pill);
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-size: var(--fs-caption);
+  cursor: pointer;
+}
+.apphdr__theme:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+/* ---------------------------------------------------------------------------
+   FilterToolbar (Part 3 §2) — the global context spine. The fields wrap on a
+   phone and each control stretches full width there (deep breakpoints: S5).
+   --------------------------------------------------------------------------- */
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--s3);
+  padding: var(--s3) var(--s4);
+  background: var(--surface-2);
+  border: 1px solid var(--hair);
+  border-radius: var(--r-lg);
+}
+.toolbar__field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s1);
+  min-width: 0;
+}
+.toolbar__caption {
+  font-size: var(--fs-caption);
+  font-weight: var(--fw-caption);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.toolbar__context {
+  min-width: 0;
+}
+@media (max-width: 640px) {
+  .toolbar__field {
+    flex: 1 1 100%;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   InsightBar (Part 3 §3) — one mode-aware summary line.
+   --------------------------------------------------------------------------- */
+.insight {
+  padding: var(--s2) var(--s4);
+}
+.insight__line {
+  margin: 0;
+  font-size: var(--fs-body);
+  color: var(--ink-2);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------------------------------------------------------------------------
+   BoardLegend (Part 3 §7) — metro-style key. The swatch colours are tokens via
+   the shared .fam-* classes and the three .legend__state modifiers.
+   --------------------------------------------------------------------------- */
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s5);
+  padding: var(--s3) var(--s4);
+  border-top: 1px solid var(--hair);
+}
+.legend__group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s1);
+  min-width: 0;
+}
+.legend__grouptitle {
+  font-size: var(--fs-caption);
+  font-weight: var(--fw-caption);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.legend__row {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  font-size: var(--fs-caption);
+  color: var(--ink-2);
+}
+.legend__swatch {
+  width: 14px;
+  height: 14px;
+  border-radius: var(--r-sm);
+  background: currentColor; /* the .fam-* class sets `color`; this fills the chip */
+  flex: none;
+}
+.legend__state--open {
+  color: var(--accent);
+}
+.legend__state--closed {
+  color: var(--closed);
+}
+.legend__state--unknown {
+  color: var(--unknown);
+}
+.legend__note {
+  flex: 1 1 100%;
+  margin: 0;
+  font-size: var(--fs-caption);
+  color: var(--muted);
+}
+
+/* ---------------------------------------------------------------------------
+   StateBlocks (Part 3 §8) — closed / hours-not-listed / no-pools empty states,
+   each visually DISTINCT so a blank never reads as "closed".
+   --------------------------------------------------------------------------- */
+.stateblocks {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+}
+.stateblock {
+  padding: var(--s3) var(--s4);
+  border: 1px solid var(--hair);
+  border-left-width: 3px;
+  border-radius: var(--r-md);
+  background: var(--surface);
+}
+.stateblock__title {
+  font-size: var(--fs-body);
+  font-weight: var(--fw-head);
+  color: var(--ink);
+}
+.stateblock__body {
+  margin: var(--s1) 0 0;
+  font-size: var(--fs-caption);
+  color: var(--muted);
+}
+.stateblock--closed {
+  border-left-color: var(--closed);
+}
+.stateblock--hours-not-listed {
+  border-left-color: var(--unknown);
+}
+.stateblock--no-pools {
+  border-left-color: var(--hair-2);
+}

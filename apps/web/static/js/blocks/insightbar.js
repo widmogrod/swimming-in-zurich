@@ -1,0 +1,110 @@
+// insightbar.js — the InsightBar block (plan Part 3 §3).
+//
+// A single mode-aware summary line computed from the FETCHED data:
+//   - Day mode : "N pools with curated hours nearby · best public window X/Y at
+//                 <facility> HH:MM–HH:MM".
+//   - Pool mode: "Reliable public lanes: up to X of Y around HH:MM · open D of 7
+//                 days this week".
+// The number is honest: it is the best actual public-lane window in the data, and
+// degrades to a plain sentence when no lane split is published (never invented).
+//
+// The computation is PURE (`computeInsight`) so it unit-tests headless; the thin
+// `createInsightBar` only writes the derived text into the DOM. No colour, no hex.
+
+// The best public-lane window across a set of `/swim` options: the lane_timeline
+// segment with the MOST public lanes (ties broken by earliest start), tagged with
+// its facility. null when no option publishes a lane split.
+function bestWindow(options) {
+  let best = null;
+  for (const o of options || []) {
+    const tl = o.lane_timeline;
+    if (!tl || !tl.segments) continue;
+    for (const seg of tl.segments) {
+      const cand = {
+        facility: o.facility,
+        public_lanes: seg.public_lanes,
+        lane_count: seg.lane_count,
+        start: seg.start,
+        end: seg.end,
+      };
+      if (
+        best === null ||
+        cand.public_lanes > best.public_lanes ||
+        (cand.public_lanes === best.public_lanes && cand.start < best.start)
+      ) {
+        best = cand;
+      }
+    }
+  }
+  return best;
+}
+
+// Distinct facility names that produced at least one session (curated hours).
+function facilitiesWithHours(options) {
+  return new Set((options || []).map((o) => o.facility)).size;
+}
+
+function dayInsight(answer) {
+  const options = (answer && answer.options) || [];
+  const n = facilitiesWithHours(options);
+  const noun = n === 1 ? 'pool' : 'pools';
+  const lead = `${n} ${noun} with curated hours nearby`;
+  const best = bestWindow(options);
+  const text = best
+    ? `${lead} · best public window ${best.public_lanes}/${best.lane_count} at ` +
+      `${best.facility} ${best.start}–${best.end}`
+    : n > 0
+      ? `${lead} · lane split not published yet`
+      : 'No pools with curated hours for this day nearby';
+  return { mode: 'day', poolsCount: n, best, text };
+}
+
+function poolInsight(week) {
+  const days = (week && week.days) || [];
+  const openDays = days.filter((d) => d.answer && d.answer.options.length > 0).length;
+  const allOptions = days.flatMap((d) => (d.answer && d.answer.options) || []);
+  const best = bestWindow(allOptions);
+  const facility = week && week.facility ? week.facility : 'this pool';
+  const text = best
+    ? `Reliable public lanes at ${facility}: up to ${best.public_lanes} of ` +
+      `${best.lane_count} around ${best.start} · open ${openDays} of 7 days this week`
+    : openDays > 0
+      ? `${facility}: open ${openDays} of 7 days this week · lane split not published yet`
+      : `${facility}: no public sessions found this week`;
+  return { mode: 'pool', openDays, best, text };
+}
+
+/**
+ * computeInsight(data, filter) → { mode, text, … } — the mode-aware summary.
+ * @param {object} data `{ day: AnswerOut, week: {facility, days:[{answer}]} }`.
+ * @param {object} filter FilterState (its `mode` selects Day vs Pool).
+ */
+export function computeInsight(data, filter) {
+  if (filter && filter.mode === 'pool') return poolInsight(data && data.week);
+  return dayInsight(data && data.day);
+}
+
+/**
+ * createInsightBar(el, opts) — mount the InsightBar into `el` and paint the
+ * current summary. Call `update(data, filter)` on every refetch.
+ */
+export function createInsightBar(el, opts = {}) {
+  const doc = el.ownerDocument || globalThis.document;
+  el.classList.add('insight');
+  el.setAttribute('role', 'status');
+  el.setAttribute('aria-live', 'polite');
+
+  const line = doc.createElement('p');
+  line.className = 'insight__line';
+  el.appendChild(line);
+
+  function update(data, filter) {
+    const insight = computeInsight(data || {}, filter || { mode: 'day' });
+    line.textContent = insight.text;
+    return insight;
+  }
+
+  if (opts.data || opts.filter) update(opts.data, opts.filter);
+
+  return { el, update };
+}

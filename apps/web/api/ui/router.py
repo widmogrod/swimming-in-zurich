@@ -1105,6 +1105,43 @@ if _INJECTION_MARKER not in _PAGE:
 _RENDERED_PAGE = _PAGE.replace(_INJECTION_MARKER, _TOKENS_CSS)
 
 
+# --- S4: the unified two-mode app shell -------------------------------------------------
+# The four-tab model is retired. `/` now serves a SMALL skeleton — charset + the three
+# design-system stylesheets from the /static mount + the block mount points + the app.js
+# ES module — and the client (static/js/app.js) hydrates every block from the JSON API.
+# Tokens are LINKED here (not inlined): the no-build layering is tokens → components →
+# blocks, all served static, so there is nothing to inject at request time.
+#
+# `_PAGE`/`_RENDERED_PAGE` above are now DEAD (unserved) code, kept intact so this slice's
+# diff stays reviewable; S5 owns deleting the legacy string and its remaining tests.
+_SHELL = """<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Swimming in Zürich</title>
+<link rel="stylesheet" href="/static/tokens.css">
+<link rel="stylesheet" href="/static/components.css">
+<link rel="stylesheet" href="/static/blocks.css">
+</head>
+<body>
+<div id="app" class="app">
+  <header id="app-header" class="apphdr"></header>
+  <div id="app-toolbar" class="toolbar"></div>
+  <div id="app-insight" class="insight"></div>
+  <main class="app__main">
+    <div id="app-board" class="app__board"></div>
+    <aside id="app-panel" class="app__panel"></aside>
+  </main>
+  <div id="app-states" class="app__states"></div>
+  <section id="app-legend" class="legend"></section>
+</div>
+<script type="module" src="/static/js/app.js"></script>
+</body>
+</html>
+"""
+
+
 @router.get("/", response_class=HTMLResponse)
 def index() -> HTMLResponse:
-    return HTMLResponse(content=_RENDERED_PAGE)
+    return HTMLResponse(content=_SHELL)
