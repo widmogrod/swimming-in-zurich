@@ -47,8 +47,13 @@ body {
    RibbonBoard (Part 3 §4) — S2.
 
    Layout ONLY (colour comes from tokens). The board is a card holding an axis
-   header and one row per pool (Day) / per day (Pool). Each row is a 2-column
-   grid: a fixed-width RowLabel column + a canvas column.
+   header and one row per pool (Day) / per day (Pool).
+
+   ONE SHARED HORIZONTAL SCROLL: the board is a single 2-column grid — a fixed,
+   non-scrolling label column + a single `overflow-x:auto` track that holds the
+   time-axis header canvas AND every row canvas stacked. So the axis and ALL rows
+   scroll together and the time labels stay aligned to the ribbons below (the old
+   per-row scroll moved a single row and desynced the axis).
 
    CONTAINMENT (the prototype's page-overflow bug): the canvas column is
    `minmax(0, 1fr)` — NOT `1fr`. With min=0 the column may shrink below its
@@ -64,27 +69,26 @@ body {
 }
 
 .board {
+  display: grid;
+  grid-template-columns: [label] var(--board-label-w) [canvas] minmax(0, 1fr);
+  align-items: start;
   background: var(--surface);
   border: 1px solid var(--hair);
   border-radius: var(--r-lg);
   box-shadow: var(--shadow);
-  overflow: hidden;              /* clip the rounded corners over the scroll cells */
+  overflow: hidden;              /* clip the rounded corners over the scroll cell */
   --board-label-w: 15rem;        /* shared RowLabel column width (keeps rows aligned) */
 }
 
-.board__row {
-  display: grid;
-  grid-template-columns: [label] var(--board-label-w) [canvas] minmax(0, 1fr);
-  align-items: stretch;
-  border-top: 1px solid var(--hair-2);
+/* Column 1: the fixed, non-scrolling stack of the axis corner + one cell per row. */
+.board__labels {
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  border-right: 1px solid var(--hair-2);
 }
 
-.board__row--axis {
-  border-top: 0;
-  color: var(--muted);
-}
-
-/* The scroll cell: a wide canvas track scrolls horizontally INSIDE this cell. */
+/* Column 2 — the ONE shared scroll cell: the wide track scrolls horizontally here. */
 .board__scrollx {
   overflow-x: auto;
   overflow-y: hidden;
@@ -93,6 +97,15 @@ body {
 
 .board__track {
   width: max-content;           /* the canvas' intrinsic width; wider than the cell */
+  position: relative;           /* origin for the overlaid shared time-cursor line */
+  display: flex;
+  flex-direction: column;
+}
+
+.board__labelsbody,
+.board__trackbody {
+  display: flex;
+  flex-direction: column;
 }
 
 .board__canvas,
@@ -100,19 +113,57 @@ body {
   display: block;
 }
 
-/* RowLabel column — status dot + name + eligibility badge. */
+/* RowLabel cell — status dot + name + eligibility badge. Fixed height (set inline
+   from JS to match its canvas exactly); the row separator is an INSET box-shadow so
+   it never changes the cell's box height (a border would drift alignment row by row). */
 .board__rowlabel {
   display: flex;
   align-items: center;
   gap: var(--s2);
-  padding: var(--s2) var(--s3);
+  padding: 0 var(--s3);
   min-width: 0;
+  box-sizing: border-box;
   background: var(--surface);
-  border-right: 1px solid var(--hair-2);
+  box-shadow: inset 0 1px 0 var(--hair-2);
 }
 
 .board__rowlabel--head {
-  min-height: 1.5rem;
+  box-shadow: none;
+  align-items: flex-end;
+  padding-bottom: 3px;
+  font-size: var(--fs-caption);
+  font-weight: var(--fw-caption);
+  color: var(--ink-2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* The current weekday in Pool mode: a calm highlight + a TODAY pill. */
+.board__rowlabel--today {
+  background: var(--best-band);
+}
+
+.board__todaytag {
+  flex: 0 0 auto;
+  font-size: var(--fs-micro);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--accent);
+  background: var(--surface);
+  border: 1px solid var(--best-edge);
+  border-radius: var(--r-sm);
+  padding: 1px 5px;
+}
+
+/* "Not for you" under the current gender/age filter: dim the row + its ribbon. */
+.board__rowlabel--noelig {
+  opacity: 0.5;
+}
+
+.board__canvas--noelig {
+  opacity: 0.45;
 }
 
 .board__rowname {
@@ -157,6 +208,7 @@ body {
 .fam-unknown { color: var(--fam-unknown); }
 .fam-sheath { color: var(--fam-sheath); }
 .fam-axis { color: var(--fam-axis); }
+.fam-hair { color: var(--hair-2); }
 
 /* ---------------------------------------------------------------------------
    LaneGantt (Part 3 §5) — S3.
@@ -561,6 +613,10 @@ body {
   color: var(--muted);
 }
 .toolbar__context {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--s2);
   min-width: 0;
 }
 

@@ -35,7 +35,7 @@ test('toolbar starts in Day mode with a DateStepper in the context slot', () => 
   assert.ok(toolbar.controls.mode.buttons.every((b) => b.hasAttribute('aria-pressed')));
 });
 
-test('switching to Pool mode SWAPS the DateStepper for the pool Combobox and emits mode=pool', () => {
+test('Pool mode mounts BOTH a week stepper and the pool Combobox, and emits mode=pool', () => {
   const { toolbar, emitted } = makeToolbar();
   const poolBtn = toolbar.controls.mode.buttons[1]; // [Day, Pool]
   poolBtn.click();
@@ -43,12 +43,35 @@ test('switching to Pool mode SWAPS the DateStepper for the pool Combobox and emi
   const last = emitted[emitted.length - 1];
   assert.equal(last.mode, 'pool');
   assert.equal(toolbar.contextKind, 'pool');
-  const host = toolbar.controls.context.children[0];
-  assert.ok(host.classList.contains('ui-combo'));
-  assert.ok(!host.classList.contains('ui-datestepper'));
-  // The old stepper is gone from the slot (only one context control is ever mounted).
+  // The pool combobox is present…
   assert.equal(
-    toolbar.controls.context.queryAll((c) => c.classList.contains('ui-datestepper')).length,
+    toolbar.controls.context.queryAll((c) => c.classList.contains('ui-combo')).length,
+    1,
+  );
+  // …ALONGSIDE a week stepper (so the user can move week-to-week — plan item 2).
+  const weekSteppers = toolbar.controls.context.queryAll((c) => c.classList.contains('ui-weekstepper'));
+  assert.equal(weekSteppers.length, 1);
+  assert.ok(weekSteppers[0].classList.contains('ui-datestepper')); // reuses the stepper look
+  assert.ok(toolbar.controls.weekControl, 'the week stepper is exposed on controls');
+  // Stepping a week emits a new (Monday) date without leaving Pool mode.
+  const before = emitted.length;
+  const nextWeekBtn = weekSteppers[0].query((c) => c.getAttribute('aria-label') === 'Next week');
+  nextWeekBtn.click();
+  assert.ok(emitted.length > before);
+  assert.equal(emitted[emitted.length - 1].mode, 'pool');
+  assert.notEqual(emitted[emitted.length - 1].date, undefined);
+});
+
+test('switching to Pool mode and back leaves a day stepper (no combobox) in Day mode', () => {
+  const { toolbar } = makeToolbar();
+  toolbar.controls.mode.buttons[1].click(); // Pool
+  toolbar.controls.mode.buttons[0].click(); // Day
+  assert.equal(toolbar.contextKind, 'date');
+  const host = toolbar.controls.context.children[0];
+  assert.ok(host.classList.contains('ui-datestepper'));
+  assert.ok(!host.classList.contains('ui-weekstepper'));
+  assert.equal(
+    toolbar.controls.context.queryAll((c) => c.classList.contains('ui-combo')).length,
     0,
   );
 });

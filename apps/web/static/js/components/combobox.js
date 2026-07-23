@@ -69,10 +69,13 @@ export function createCombobox(el, { props = {}, onChange } = {}) {
       const text = doc.createElement('span');
       text.textContent = o.label;
       li.appendChild(text);
-      if (o.closed) {
+      // A muted trailing badge: `o.note` gives custom text (e.g. "no timetable yet"),
+      // else `o.closed` renders the plain "closed" badge. Both share the same styling
+      // so a caller can label unavailability HONESTLY (unknown ≠ closed).
+      if (o.note || o.closed) {
         const badge = doc.createElement('span');
         badge.classList.add('ui-combo__closed');
-        badge.textContent = 'closed';
+        badge.textContent = o.note || 'closed';
         li.appendChild(badge);
       }
       li.addEventListener('mousedown', (e) => {

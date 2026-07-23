@@ -81,20 +81,42 @@ test('Day mode builds: axis row + one row/canvas/rowlabel per facility', () => {
   assert.equal(canvases.length, expected + 1);
   assert.equal(el.queryAll(hasClass('board__axiscanvas')).length, 1);
   assert.equal(el.queryAll(hasClass('board__canvas')).length, expected);
-  // one rowlabel per data row (+ the axis header spacer)
+  // one rowlabel per data row (the axis header spacer has no rowname)
   assert.equal(el.queryAll(hasClass('board__rowname')).length, expected);
-  // every data row's canvas lives inside a scroll cell → a max-content track
+  // SHARED SCROLL: there is exactly ONE scroll cell + ONE max-content track holding
+  // the axis canvas AND every row canvas — so axis + rows scroll together (the old
+  // per-row scroll had one track per row; that structural contract changed with the
+  // single-shared-scroll layout, plan item 1).
+  assert.equal(el.queryAll(hasClass('board__scrollx')).length, 1);
   const tracks = el.queryAll(hasClass('board__track'));
-  assert.equal(tracks.length, expected + 1);
-  // The track carries NO inline width now — `.board__track { width: max-content }`
-  // (blocks.css) governs it from the canvas' intrinsic width (F carried nit).
+  assert.equal(tracks.length, 1);
+  // The track carries NO inline width — `.board__track { width: max-content }`
+  // (blocks.css) governs it from the canvases' intrinsic width.
   assert.equal(tracks[0].style.width, undefined);
-  // the canvas inside still carries the intrinsic plot width it draws at.
+  // the one track holds the axis canvas + every row canvas.
+  assert.equal(tracks[0].queryAll(isCanvas).length, expected + 1);
+  // the canvases inside carry the intrinsic plot width they draw at.
   const firstCanvas = tracks[0].query(isCanvas);
   assert.equal(firstCanvas.style.width, `${BOARD_PLOT}px`);
 });
 
-test('option rows carry an EligibilityBadge; option-less rows carry only a status dot', () => {
+test('option rows carry an EligibilityBadge once a gender/age filter is engaged', () => {
+  const el = mount();
+  // A gender/age filter engaged → each row with sessions is stamped with its badge
+  // (Anyone + Any age shows NO badge, so toggling a filter visibly changes the board).
+  createBoard(el, {
+    data: { day: DAY },
+    filter: { mode: 'day', gender: 'female', age: null },
+    matchMedia: () => ({ matches: false }),
+    requestAnimationFrame: () => {},
+  });
+  const optionRowCount = dayRows(DAY).filter((r) => r.options.length > 0).length;
+  assert.equal(el.queryAll(hasClass('board__rowbadge')).length, optionRowCount);
+  // status dots: one per row
+  assert.equal(el.queryAll(hasClass('board__dot')).length, dayRows(DAY).length);
+});
+
+test('with NO gender/age filter engaged, no eligibility badges are stamped', () => {
   const el = mount();
   createBoard(el, {
     data: { day: DAY },
@@ -102,9 +124,8 @@ test('option rows carry an EligibilityBadge; option-less rows carry only a statu
     matchMedia: () => ({ matches: false }),
     requestAnimationFrame: () => {},
   });
-  const optionRowCount = dayRows(DAY).filter((r) => r.options.length > 0).length;
-  assert.equal(el.queryAll(hasClass('board__rowbadge')).length, optionRowCount);
-  // status dots: one per row
+  assert.equal(el.queryAll(hasClass('board__rowbadge')).length, 0);
+  // but the status dots are always present.
   assert.equal(el.queryAll(hasClass('board__dot')).length, dayRows(DAY).length);
 });
 
