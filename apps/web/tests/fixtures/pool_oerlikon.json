@@ -1,0 +1,1982 @@
+{
+  "facility_id": "hallenbad-oerlikon",
+  "facility_name": "Hallenbad Oerlikon",
+  "address": "Wallisellenstrasse 100, 8050 Zürich",
+  "website": null,
+  "basins": [
+    {
+      "basin_id": "oerlikon-50m",
+      "name": "50m-Becken",
+      "kind": "lap",
+      "length_m": 50.0,
+      "width_m": null,
+      "lanes": null,
+      "nominal_temp_c": null,
+      "measured_temp_c": null,
+      "diving_platforms_m": [],
+      "physical_source": "curated"
+    },
+    {
+      "basin_id": "oerlikon-sprungbecken",
+      "name": "Sprungbecken",
+      "kind": "diving",
+      "length_m": null,
+      "width_m": null,
+      "lanes": null,
+      "nominal_temp_c": null,
+      "measured_temp_c": null,
+      "diving_platforms_m": [],
+      "physical_source": "curated"
+    }
+  ],
+  "features": [],
+  "lockers": [],
+  "prices": {
+    "entries": [
+      {
+        "category": "adult",
+        "amount_chf": 8.0,
+        "display": "Erwachsene CHF 8.00"
+      },
+      {
+        "category": "youth",
+        "amount_chf": 6.0,
+        "display": "Jugendliche CHF 6.00"
+      },
+      {
+        "category": "child",
+        "amount_chf": 4.0,
+        "display": "Kinder CHF 4.00"
+      },
+      {
+        "category": "senior",
+        "amount_chf": 6.0,
+        "display": "Senioren CHF 6.00"
+      }
+    ],
+    "valid_as_of": "2026-07-18",
+    "source_url": "https://www.stadt-zuerich.ch/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/hallenbaeder/oerlikon.html"
+  },
+  "provenance": {
+    "source": "stadt-zuerich.ch/hallenbaeder/oerlikon (curated, illustrative)",
+    "curated": true,
+    "valid_as_of": "2026-07-18",
+    "fetched_at": null
+  },
+  "lane_panels": [
+    {
+      "basin_id": "oerlikon-50m",
+      "basin_name": "50m-Becken",
+      "panel": {
+        "day_view": {
+          "weekday": 3,
+          "lane_count": 8,
+          "strips": [
+            {
+              "lane": 1,
+              "segments": [
+                {
+                  "start": "06:00",
+                  "end": "09:30",
+                  "access": "ClubReserved",
+                  "owner": "Limmat-Sharks"
+                },
+                {
+                  "start": "09:30",
+                  "end": "11:00",
+                  "access": "SchoolReserved",
+                  "owner": "Schools"
+                },
+                {
+                  "start": "11:00",
+                  "end": "12:00",
+                  "access": "PublicSwim",
+                  "owner": null
+                },
+                {
+                  "start": "12:00",
+                  "end": "13:00",
+                  "access": "ClubReserved",
+                  "owner": "Zürich Versicherung"
+                },
+                {
+                  "start": "13:00",
+                  "end": "16:00",
+                  "access": "PublicSwim",
+                  "owner": null
+                },
+                {
+                  "start": "16:00",
+                  "end": "21:00",
+                  "access": "ClubReserved",
+                  "owner": "Limmat-Sharks"
+                },
+                {
+                  "start": "21:00",
+                  "end": "22:00",
+                  "access": "ClubReserved",
+                  "owner": "Wasserballklub Stadtmannschaft"
+                }
+              ]
+            },
+            {
+              "lane": 2,
+              "segments": [
+                {
+                  "start": "06:00",
+                  "end": "09:30",
+                  "access": "ClubReserved",
+                  "owner": "Limmat-Sharks"
+                },
+                {
+                  "start": "09:30",
+                  "end": "10:30",
+                  "access": "PublicSwim",
+                  "owner": null
+                },
+                {
+                  "start": "10:30",
+                  "end": "12:00",
+                  "access": "ClubReserved",
+                  "owner": "ETH Zürich"
+                },
+                {
+                  "start": "12:00",
+                  "end": "16:00",
+                  "access": "PublicSwim",
+                  "owner": null
+                },
+                {
+                  "start": "16:00",
+                  "end": "21:00",
+                  "access": "ClubReserved",
+                  "owner": "Limmat-Sharks"
+                },
+                {
+                  "start": "21:00",
+                  "end": "22:00",
+                  "access": "ClubReserved",
+                  "owner": "Wasserballklub Stadtmannschaft"
+                }
+              ]
+            },
+            {
+              "lane": 3,
+              "segments": [
+                {
+                  "start": "06:00",
+                  "end": "09:30",
+                  "access": "ClubReserved",
+                  "owner": "Limmat-Sharks"
+                },
+                {
+                  "start": "09:30",
+                  "end": "10:30",
+                  "access": "PublicSwim",
+                  "owner": null
+                },
+                {
+                  "start": "10:30",
+                  "end": "12:00",
+                  "access": "ClubReserved",
+                  "owner": "ETH Zürich"
+                },
+                {
+                  "start": "12:00",
+                  "end": "14:00",
+                  "access": "PublicSwim",
+                  "owner": null
+                },
+                {
+                  "start": "14:00",
+                  "end": "16:30",
+                  "access": "ClubReserved",
+                  "owner": "PH Zürich"
+                },
+                {
+                  "start": "16:30",
+                  "end": "18:30",
+                  "access": "ClubReserved",
+                  "owner": "Limmat-Sharks"
+                },
+                {
+                  "start": "18:30",
+                  "end": "19:30",
+                  "access": "SchoolReserved",
+                  "owner": "Schools"
+                },
+                {
+                  "start": "19:30",
+                  "end": "21:00",
+                  "access": "ClubReserved",
+                  "owner": "Limmat-Sharks"
+                },
+                {
+                  "start": "21:00",
+                  "end": "22:00",
+                  "access": "ClubReserved",
+                  "owner": "Wasserballklub Stadtmannschaft"
+                }
+              ]
+            },
+            {
+              "lane": 4,
+              "segments": [
+                {
+                  "start": "06:00",
+                  "end": "07:30",
+                  "access": "PublicSwim",
+                  "owner": null
+                },
+                {
+                  "start": "07:30",
+                  "end": "09:30",
+                  "access": "ClubReserved",
+                  "owner": "Limmat-Sharks"
+                },
+                {
+                  "start": "09:30",
+                  "end": "16:00",
+                  "access": "PublicSwim",
+                  "owner": null
+                },
+                {
+                  "start": "16:00",
+                  "end": "18:30",
+                  "access": "ClubReserved",
+                  "owner": "Limmat-Sharks"
+                },
+                {
+                  "start": "18:30",
+                  "end": "20:00",
+                  "access": "ClubReserved",
+                  "owner": "Konya Katalin"
+                },
+                {
+                  "start": "20:00",
+                  "end": "21:00",
+                  "access": "ClubReserved",
+                  "owner": "Limmat-Sharks"
+                },
+                {
+                  "start": "21:00",
+                  "end": "22:00",
+                  "access": "ClubReserved",
+                  "owner": "Wasserballklub Stadtmannschaft"
+                }
+              ]
+            },
+            {
+              "lane": 5,
+              "segments": [
+                {
+                  "start": "06:00",
+                  "end": "20:00",
+                  "access": "PublicSwim",
+                  "owner": null
+                },
+                {
+                  "start": "20:00",
+                  "end": "22:00",
+                  "access": "ClubReserved",
+                  "owner": "Wasserballklub Stadtmannschaft"
+                }
+              ]
+            },
+            {
+              "lane": 6,
+              "segments": [
+                {
+                  "start": "06:00",
+                  "end": "20:00",
+                  "access": "PublicSwim",
+                  "owner": null
+                },
+                {
+                  "start": "20:00",
+                  "end": "21:00",
+                  "access": "ClubReserved",
+                  "owner": "Wasserballklub Stadtmannschaft"
+                },
+                {
+                  "start": "21:00",
+                  "end": "22:00",
+                  "access": "ClubReserved",
+                  "owner": "Unterwassersportclub"
+                }
+              ]
+            },
+            {
+              "lane": 7,
+              "segments": [
+                {
+                  "start": "06:00",
+                  "end": "20:00",
+                  "access": "PublicSwim",
+                  "owner": null
+                },
+                {
+                  "start": "20:00",
+                  "end": "22:00",
+                  "access": "ClubReserved",
+                  "owner": "Unterwassersportclub"
+                }
+              ]
+            },
+            {
+              "lane": 8,
+              "segments": [
+                {
+                  "start": "06:00",
+                  "end": "20:00",
+                  "access": "PublicSwim",
+                  "owner": null
+                },
+                {
+                  "start": "20:00",
+                  "end": "22:00",
+                  "access": "ClubReserved",
+                  "owner": "Unterwassersportclub"
+                },
+                {
+                  "start": "23:00",
+                  "end": "23:30",
+                  "access": "SchoolReserved",
+                  "owner": "Schools"
+                }
+              ]
+            }
+          ]
+        },
+        "best_public": {
+          "start": "13:00",
+          "end": "14:00",
+          "public_lanes": 8
+        },
+        "roster": [
+          {
+            "club": "ASVZ",
+            "weekday": 1,
+            "start": "20:00",
+            "end": "21:00",
+            "lanes": [
+              5
+            ]
+          },
+          {
+            "club": "ETH Zürich",
+            "weekday": 3,
+            "start": "10:30",
+            "end": "12:00",
+            "lanes": [
+              2,
+              3
+            ]
+          },
+          {
+            "club": "Free Radicals",
+            "weekday": 2,
+            "start": "20:00",
+            "end": "21:00",
+            "lanes": [
+              2
+            ]
+          },
+          {
+            "club": "Freediving Tribe Zürich",
+            "weekday": 2,
+            "start": "21:00",
+            "end": "22:00",
+            "lanes": [
+              1,
+              2
+            ]
+          },
+          {
+            "club": "Kanupolo",
+            "weekday": 1,
+            "start": "20:00",
+            "end": "23:00",
+            "lanes": [
+              6,
+              7,
+              8
+            ]
+          },
+          {
+            "club": "Kanupolo",
+            "weekday": 1,
+            "start": "22:00",
+            "end": "23:00",
+            "lanes": [
+              1,
+              2,
+              3,
+              4,
+              5
+            ]
+          },
+          {
+            "club": "Konya Katalin",
+            "weekday": 3,
+            "start": "18:30",
+            "end": "20:00",
+            "lanes": [
+              4
+            ]
+          },
+          {
+            "club": "Limmat-Nixen",
+            "weekday": 2,
+            "start": "13:00",
+            "end": "14:00",
+            "lanes": [
+              4
+            ]
+          },
+          {
+            "club": "Limmat-Nixen",
+            "weekday": 4,
+            "start": "13:00",
+            "end": "14:00",
+            "lanes": [
+              4
+            ]
+          },
+          {
+            "club": "Limmat-Sharks",
+            "weekday": 0,
+            "start": "06:00",
+            "end": "09:00",
+            "lanes": [
+              2
+            ]
+          },
+          {
+            "club": "Limmat-Sharks",
+            "weekday": 0,
+            "start": "06:00",
+            "end": "09:30",
+            "lanes": [
+              1
+            ]
+          },
+          {
+            "club": "Limmat-Sharks",
+            "weekday": 0,
+            "start": "07:30",
+            "end": "09:30",
+            "lanes": [
+              3
+            ]
+          },
+          {
+            "club": "Limmat-Sharks",
+            "weekday": 0,
+            "start": "16:00",
+            "end": "18:30",
+            "lanes": [
+              4
+            ]
+          },
+          {
+            "club": "Limmat-Sharks",
+            "weekday": 0,
+            "start": "16:00",
+            "end": "21:00",
+            "lanes": [
+              1,
+              2,
+              3
+            ]
+          },
+          {
+            "club": "Limmat-Sharks",
+            "weekday": 1,
+            "start": "06:00",
+            "end": "09:30",
+            "lanes": [
+              2,
+              3
+            ]
+          },
+          {
+            "club": "Limmat-Sharks",
+            "weekday": 1,
+            "start": "07:30",
+            "end": "09:30",
+            "lanes": [
+              1,
+              4
+            ]
+          },
+          {
+            "club": "Limmat-Sharks",
+            "weekday": 1,
+            "start": "16:00",
+            "end": "18:30",
+            "lanes": [
+              4
+            ]
+          },
+          {
+            "club": "Limmat-Sharks",
+            "weekday": 1,
+            "start": "16:00",
+            "end": "20:00",
+            "lanes": [
+              1,
+              2
+            ]
+          },
+          {
+            "club": "Limmat-Sharks",
+            "weekday": 1,
+            "start": "16:30",
+            "end": "20:00",
+            "lanes": [
+              3
+            ]
+          },
+          {
+            "club": "Limmat-Sharks",
+            "weekday": 2,
+            "start": "06:00",
+            "end": "09:30",
+            "lanes": [
+              1,
+              2,
+              3
+            ]
+          },
+          {
+            "club": "Limmat-Sharks",
+            "weekday": 2,
+            "start": "12:00",
+            "end": "20:00",
+            "lanes": [
+              2,
+              3
+            ]
+          },
+          {
+            "club": "Limmat-Sharks",
+            "weekday": 2,
+            "start": "14:00",
+            "end": "20:00",
+            "lanes": [
+              1
+            ]
+          },
+          {
+            "club": "Limmat-Sharks",
+            "weekday": 2,
+            "start": "14:00",
+            "end": "21:00",
+            "lanes": [
+              4
+            ]
+          },
+          {
+            "club": "Limmat-Sharks",
+            "weekday": 3,
+            "start": "06:00",
+            "end": "09:30",
+            "lanes": [
+              1,
+              2,
+              3
+            ]
+          },
+          {
+            "club": "Limmat-Sharks",
+            "weekday": 3,
+            "start": "07:30",
+            "end": "09:30",
+            "lanes": [
+              4
+            ]
+          },
+          {
+            "club": "Limmat-Sharks",
+            "weekday": 3,
+            "start": "16:00",
+            "end": "18:30",
+            "lanes": [
+              4
+            ]
+          },
+          {
+            "club": "Limmat-Sharks",
+            "weekday": 3,
+            "start": "16:00",
+            "end": "21:00",
+            "lanes": [
+              1,
+              2
+            ]
+          },
+          {
+            "club": "Limmat-Sharks",
+            "weekday": 3,
+            "start": "16:30",
+            "end": "18:30",
+            "lanes": [
+              3
+            ]
+          },
+          {
+            "club": "Limmat-Sharks",
+            "weekday": 3,
+            "start": "19:30",
+            "end": "21:00",
+            "lanes": [
+              3
+            ]
+          },
+          {
+            "club": "Limmat-Sharks",
+            "weekday": 3,
+            "start": "20:00",
+            "end": "21:00",
+            "lanes": [
+              4
+            ]
+          },
+          {
+            "club": "Limmat-Sharks",
+            "weekday": 4,
+            "start": "06:00",
+            "end": "09:30",
+            "lanes": [
+              1,
+              2,
+              3
+            ]
+          },
+          {
+            "club": "Limmat-Sharks",
+            "weekday": 4,
+            "start": "09:00",
+            "end": "09:30",
+            "lanes": [
+              4
+            ]
+          },
+          {
+            "club": "Limmat-Sharks",
+            "weekday": 4,
+            "start": "14:00",
+            "end": "19:00",
+            "lanes": [
+              4
+            ]
+          },
+          {
+            "club": "Limmat-Sharks",
+            "weekday": 4,
+            "start": "14:00",
+            "end": "20:00",
+            "lanes": [
+              3
+            ]
+          },
+          {
+            "club": "Limmat-Sharks",
+            "weekday": 4,
+            "start": "14:00",
+            "end": "21:30",
+            "lanes": [
+              1
+            ]
+          },
+          {
+            "club": "Limmat-Sharks",
+            "weekday": 4,
+            "start": "15:00",
+            "end": "21:30",
+            "lanes": [
+              2
+            ]
+          },
+          {
+            "club": "Limmat-Sharks",
+            "weekday": 5,
+            "start": "07:30",
+            "end": "14:00",
+            "lanes": [
+              4
+            ]
+          },
+          {
+            "club": "Limmat-Sharks",
+            "weekday": 5,
+            "start": "07:30",
+            "end": "20:00",
+            "lanes": [
+              1,
+              2,
+              3
+            ]
+          },
+          {
+            "club": "Limmat-Sharks",
+            "weekday": 5,
+            "start": "18:00",
+            "end": "19:00",
+            "lanes": [
+              4
+            ]
+          },
+          {
+            "club": "Limmat-Sharks",
+            "weekday": 6,
+            "start": "08:00",
+            "end": "18:00",
+            "lanes": [
+              1,
+              2
+            ]
+          },
+          {
+            "club": "My Sport",
+            "weekday": 1,
+            "start": "06:30",
+            "end": "07:30",
+            "lanes": [
+              1
+            ]
+          },
+          {
+            "club": "PH Zürich",
+            "weekday": 0,
+            "start": "09:00",
+            "end": "12:00",
+            "lanes": [
+              2
+            ]
+          },
+          {
+            "club": "PH Zürich",
+            "weekday": 1,
+            "start": "14:00",
+            "end": "16:30",
+            "lanes": [
+              3
+            ]
+          },
+          {
+            "club": "PH Zürich",
+            "weekday": 2,
+            "start": "12:30",
+            "end": "14:00",
+            "lanes": [
+              1
+            ]
+          },
+          {
+            "club": "PH Zürich",
+            "weekday": 3,
+            "start": "14:00",
+            "end": "16:30",
+            "lanes": [
+              3
+            ]
+          },
+          {
+            "club": "SLRG Rettungstaucher",
+            "weekday": 0,
+            "start": "20:00",
+            "end": "21:00",
+            "lanes": [
+              4
+            ]
+          },
+          {
+            "club": "SLRG Sektion Züri",
+            "weekday": 0,
+            "start": "20:00",
+            "end": "22:00",
+            "lanes": [
+              5
+            ]
+          },
+          {
+            "club": "SLRG Sektion Züri",
+            "weekday": 4,
+            "start": "19:00",
+            "end": "22:00",
+            "lanes": [
+              4
+            ]
+          },
+          {
+            "club": "SV Zürileu",
+            "weekday": 5,
+            "start": "16:30",
+            "end": "18:00",
+            "lanes": [
+              4
+            ]
+          },
+          {
+            "club": "Schools",
+            "weekday": 0,
+            "start": "08:00",
+            "end": "09:00",
+            "lanes": [
+              4
+            ]
+          },
+          {
+            "club": "Schools",
+            "weekday": 0,
+            "start": "09:30",
+            "end": "11:30",
+            "lanes": [
+              1
+            ]
+          },
+          {
+            "club": "Schools",
+            "weekday": 0,
+            "start": "10:00",
+            "end": "11:00",
+            "lanes": [
+              3
+            ]
+          },
+          {
+            "club": "Schools",
+            "weekday": 0,
+            "start": "14:00",
+            "end": "15:00",
+            "lanes": [
+              1
+            ]
+          },
+          {
+            "club": "Schools",
+            "weekday": 0,
+            "start": "18:30",
+            "end": "20:00",
+            "lanes": [
+              4
+            ]
+          },
+          {
+            "club": "Schools",
+            "weekday": 1,
+            "start": "09:30",
+            "end": "12:00",
+            "lanes": [
+              1
+            ]
+          },
+          {
+            "club": "Schools",
+            "weekday": 1,
+            "start": "14:30",
+            "end": "15:30",
+            "lanes": [
+              2
+            ]
+          },
+          {
+            "club": "Schools",
+            "weekday": 1,
+            "start": "18:30",
+            "end": "20:00",
+            "lanes": [
+              4
+            ]
+          },
+          {
+            "club": "Schools",
+            "weekday": 2,
+            "start": "08:00",
+            "end": "09:00",
+            "lanes": [
+              4
+            ]
+          },
+          {
+            "club": "Schools",
+            "weekday": 2,
+            "start": "10:00",
+            "end": "11:00",
+            "lanes": [
+              2
+            ]
+          },
+          {
+            "club": "Schools",
+            "weekday": 2,
+            "start": "10:00",
+            "end": "12:00",
+            "lanes": [
+              1
+            ]
+          },
+          {
+            "club": "Schools",
+            "weekday": 2,
+            "start": "20:00",
+            "end": "21:00",
+            "lanes": [
+              1
+            ]
+          },
+          {
+            "club": "Schools",
+            "weekday": 3,
+            "start": "09:30",
+            "end": "11:00",
+            "lanes": [
+              1
+            ]
+          },
+          {
+            "club": "Schools",
+            "weekday": 3,
+            "start": "18:30",
+            "end": "19:30",
+            "lanes": [
+              3
+            ]
+          },
+          {
+            "club": "Schools",
+            "weekday": 3,
+            "start": "23:00",
+            "end": "23:30",
+            "lanes": [
+              8
+            ]
+          },
+          {
+            "club": "Schools",
+            "weekday": 4,
+            "start": "08:00",
+            "end": "09:00",
+            "lanes": [
+              4
+            ]
+          },
+          {
+            "club": "Schools",
+            "weekday": 4,
+            "start": "10:00",
+            "end": "11:00",
+            "lanes": [
+              1
+            ]
+          },
+          {
+            "club": "Schools",
+            "weekday": 4,
+            "start": "13:30",
+            "end": "15:00",
+            "lanes": [
+              2
+            ]
+          },
+          {
+            "club": "Tauchclub Bonario",
+            "weekday": 1,
+            "start": "20:00",
+            "end": "22:00",
+            "lanes": [
+              2
+            ]
+          },
+          {
+            "club": "Tauchclub Glaukos",
+            "weekday": 1,
+            "start": "20:00",
+            "end": "21:00",
+            "lanes": [
+              1
+            ]
+          },
+          {
+            "club": "Triathlon Club Zürich",
+            "weekday": 6,
+            "start": "09:00",
+            "end": "10:30",
+            "lanes": [
+              3
+            ]
+          },
+          {
+            "club": "Trigether",
+            "weekday": 0,
+            "start": "06:30",
+            "end": "07:30",
+            "lanes": [
+              3
+            ]
+          },
+          {
+            "club": "Trigether",
+            "weekday": 0,
+            "start": "12:00",
+            "end": "13:00",
+            "lanes": [
+              2
+            ]
+          },
+          {
+            "club": "Trigether",
+            "weekday": 4,
+            "start": "20:00",
+            "end": "22:00",
+            "lanes": [
+              3
+            ]
+          },
+          {
+            "club": "Unterwassersportclub",
+            "weekday": 1,
+            "start": "20:00",
+            "end": "22:00",
+            "lanes": [
+              3,
+              4
+            ]
+          },
+          {
+            "club": "Unterwassersportclub",
+            "weekday": 1,
+            "start": "21:00",
+            "end": "22:00",
+            "lanes": [
+              1,
+              5
+            ]
+          },
+          {
+            "club": "Unterwassersportclub",
+            "weekday": 3,
+            "start": "20:00",
+            "end": "22:00",
+            "lanes": [
+              7,
+              8
+            ]
+          },
+          {
+            "club": "Unterwassersportclub",
+            "weekday": 3,
+            "start": "21:00",
+            "end": "22:00",
+            "lanes": [
+              6
+            ]
+          },
+          {
+            "club": "Wasserballklub Stadtmannschaft",
+            "weekday": 0,
+            "start": "20:00",
+            "end": "22:00",
+            "lanes": [
+              6,
+              7,
+              8
+            ]
+          },
+          {
+            "club": "Wasserballklub Stadtmannschaft",
+            "weekday": 0,
+            "start": "21:00",
+            "end": "22:00",
+            "lanes": [
+              1,
+              2,
+              3,
+              4
+            ]
+          },
+          {
+            "club": "Wasserballklub Stadtmannschaft",
+            "weekday": 3,
+            "start": "20:00",
+            "end": "21:00",
+            "lanes": [
+              6
+            ]
+          },
+          {
+            "club": "Wasserballklub Stadtmannschaft",
+            "weekday": 3,
+            "start": "20:00",
+            "end": "22:00",
+            "lanes": [
+              5
+            ]
+          },
+          {
+            "club": "Wasserballklub Stadtmannschaft",
+            "weekday": 3,
+            "start": "21:00",
+            "end": "22:00",
+            "lanes": [
+              1,
+              2,
+              3,
+              4
+            ]
+          },
+          {
+            "club": "Zürich Sea Lions",
+            "weekday": 0,
+            "start": "12:00",
+            "end": "13:00",
+            "lanes": [
+              3
+            ]
+          },
+          {
+            "club": "Zürich Sea Lions",
+            "weekday": 2,
+            "start": "20:00",
+            "end": "21:00",
+            "lanes": [
+              3
+            ]
+          },
+          {
+            "club": "Zürich Sea Lions",
+            "weekday": 6,
+            "start": "10:30",
+            "end": "11:30",
+            "lanes": [
+              3
+            ]
+          },
+          {
+            "club": "Zürich Versicherung",
+            "weekday": 0,
+            "start": "12:00",
+            "end": "13:00",
+            "lanes": [
+              1
+            ]
+          },
+          {
+            "club": "Zürich Versicherung",
+            "weekday": 3,
+            "start": "12:00",
+            "end": "13:00",
+            "lanes": [
+              1
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "basin_id": "oerlikon-sprungbecken",
+      "basin_name": "Sprungbecken",
+      "panel": {
+        "day_view": {
+          "weekday": 3,
+          "lane_count": 2,
+          "strips": [
+            {
+              "lane": 1,
+              "segments": [
+                {
+                  "start": "06:00",
+                  "end": "06:30",
+                  "access": "PublicSwim",
+                  "owner": null
+                },
+                {
+                  "start": "06:30",
+                  "end": "07:00",
+                  "access": "ClubReserved",
+                  "owner": "Limmat-Nixen"
+                },
+                {
+                  "start": "07:00",
+                  "end": "07:30",
+                  "access": "ClubReserved",
+                  "owner": "Verein Zürcher Wasserspringer"
+                },
+                {
+                  "start": "07:30",
+                  "end": "08:00",
+                  "access": "ClubReserved",
+                  "owner": "Limmat-Nixen"
+                },
+                {
+                  "start": "08:00",
+                  "end": "08:30",
+                  "access": "ClubReserved",
+                  "owner": "Verein Zürcher Wasserspringer"
+                },
+                {
+                  "start": "08:30",
+                  "end": "10:00",
+                  "access": "ClubReserved",
+                  "owner": "Limmat-Nixen"
+                },
+                {
+                  "start": "10:00",
+                  "end": "12:00",
+                  "access": "SchoolReserved",
+                  "owner": "Schools"
+                },
+                {
+                  "start": "12:00",
+                  "end": "16:00",
+                  "access": "PublicSwim",
+                  "owner": null
+                },
+                {
+                  "start": "16:00",
+                  "end": "16:30",
+                  "access": "ClubReserved",
+                  "owner": "Verein Zürcher Wasserspringer"
+                },
+                {
+                  "start": "16:30",
+                  "end": "18:30",
+                  "access": "SchoolReserved",
+                  "owner": "Schools"
+                },
+                {
+                  "start": "18:30",
+                  "end": "20:00",
+                  "access": "PublicSwim",
+                  "owner": null
+                },
+                {
+                  "start": "20:00",
+                  "end": "22:00",
+                  "access": "ClubReserved",
+                  "owner": "Unterwassersportclub"
+                }
+              ]
+            },
+            {
+              "lane": 2,
+              "segments": [
+                {
+                  "start": "06:00",
+                  "end": "07:30",
+                  "access": "PublicSwim",
+                  "owner": null
+                },
+                {
+                  "start": "07:30",
+                  "end": "09:30",
+                  "access": "SchoolReserved",
+                  "owner": "Schools"
+                },
+                {
+                  "start": "09:30",
+                  "end": "11:00",
+                  "access": "ClubReserved",
+                  "owner": "Sportaktiv"
+                },
+                {
+                  "start": "11:00",
+                  "end": "13:30",
+                  "access": "PublicSwim",
+                  "owner": null
+                },
+                {
+                  "start": "13:30",
+                  "end": "15:30",
+                  "access": "SchoolReserved",
+                  "owner": "Schools"
+                },
+                {
+                  "start": "15:30",
+                  "end": "16:30",
+                  "access": "ClubReserved",
+                  "owner": "PH Zürich"
+                },
+                {
+                  "start": "16:30",
+                  "end": "20:00",
+                  "access": "ClubReserved",
+                  "owner": "Verein Zürcher Wasserspringer"
+                },
+                {
+                  "start": "20:00",
+                  "end": "22:00",
+                  "access": "ClubReserved",
+                  "owner": "Unterwassersportclub"
+                }
+              ]
+            }
+          ]
+        },
+        "best_public": {
+          "start": "06:00",
+          "end": "06:30",
+          "public_lanes": 2
+        },
+        "roster": [
+          {
+            "club": "ETH Zürich",
+            "weekday": 2,
+            "start": "11:00",
+            "end": "12:00",
+            "lanes": [
+              1
+            ]
+          },
+          {
+            "club": "Kanupolo",
+            "weekday": 1,
+            "start": "20:00",
+            "end": "20:30",
+            "lanes": [
+              1
+            ]
+          },
+          {
+            "club": "Kanupolo",
+            "weekday": 1,
+            "start": "20:00",
+            "end": "20:30",
+            "lanes": [
+              2
+            ]
+          },
+          {
+            "club": "Limmat-Nixen",
+            "weekday": 1,
+            "start": "06:30",
+            "end": "07:00",
+            "lanes": [
+              1
+            ]
+          },
+          {
+            "club": "Limmat-Nixen",
+            "weekday": 1,
+            "start": "07:30",
+            "end": "08:00",
+            "lanes": [
+              1
+            ]
+          },
+          {
+            "club": "Limmat-Nixen",
+            "weekday": 1,
+            "start": "08:30",
+            "end": "10:00",
+            "lanes": [
+              1
+            ]
+          },
+          {
+            "club": "Limmat-Nixen",
+            "weekday": 2,
+            "start": "13:00",
+            "end": "16:00",
+            "lanes": [
+              2
+            ]
+          },
+          {
+            "club": "Limmat-Nixen",
+            "weekday": 3,
+            "start": "06:30",
+            "end": "07:00",
+            "lanes": [
+              1
+            ]
+          },
+          {
+            "club": "Limmat-Nixen",
+            "weekday": 3,
+            "start": "07:30",
+            "end": "08:00",
+            "lanes": [
+              1
+            ]
+          },
+          {
+            "club": "Limmat-Nixen",
+            "weekday": 3,
+            "start": "08:30",
+            "end": "10:00",
+            "lanes": [
+              1
+            ]
+          },
+          {
+            "club": "Limmat-Nixen",
+            "weekday": 4,
+            "start": "13:00",
+            "end": "16:00",
+            "lanes": [
+              1
+            ]
+          },
+          {
+            "club": "Limmat-Nixen",
+            "weekday": 4,
+            "start": "20:00",
+            "end": "22:00",
+            "lanes": [
+              1
+            ]
+          },
+          {
+            "club": "Limmat-Nixen",
+            "weekday": 5,
+            "start": "07:00",
+            "end": "09:00",
+            "lanes": [
+              1
+            ]
+          },
+          {
+            "club": "Lufthansa Aviation Training",
+            "weekday": 0,
+            "start": "06:30",
+            "end": "08:00",
+            "lanes": [
+              1
+            ]
+          },
+          {
+            "club": "Lufthansa Aviation Training",
+            "weekday": 0,
+            "start": "06:30",
+            "end": "08:00",
+            "lanes": [
+              2
+            ]
+          },
+          {
+            "club": "Lufthansa Aviation Training",
+            "weekday": 2,
+            "start": "06:30",
+            "end": "08:00",
+            "lanes": [
+              1
+            ]
+          },
+          {
+            "club": "Lufthansa Aviation Training",
+            "weekday": 2,
+            "start": "06:30",
+            "end": "08:00",
+            "lanes": [
+              2
+            ]
+          },
+          {
+            "club": "Lufthansa Aviation Training",
+            "weekday": 4,
+            "start": "06:30",
+            "end": "08:00",
+            "lanes": [
+              1
+            ]
+          },
+          {
+            "club": "Lufthansa Aviation Training",
+            "weekday": 4,
+            "start": "06:30",
+            "end": "08:00",
+            "lanes": [
+              2
+            ]
+          },
+          {
+            "club": "PH Zürich",
+            "weekday": 0,
+            "start": "11:00",
+            "end": "12:00",
+            "lanes": [
+              1
+            ]
+          },
+          {
+            "club": "PH Zürich",
+            "weekday": 1,
+            "start": "15:30",
+            "end": "16:30",
+            "lanes": [
+              1
+            ]
+          },
+          {
+            "club": "PH Zürich",
+            "weekday": 3,
+            "start": "15:30",
+            "end": "16:30",
+            "lanes": [
+              2
+            ]
+          },
+          {
+            "club": "PH Zürich",
+            "weekday": 4,
+            "start": "15:30",
+            "end": "16:30",
+            "lanes": [
+              2
+            ]
+          },
+          {
+            "club": "Schools",
+            "weekday": 0,
+            "start": "08:00",
+            "end": "12:00",
+            "lanes": [
+              2
+            ]
+          },
+          {
+            "club": "Schools",
+            "weekday": 0,
+            "start": "13:30",
+            "end": "16:30",
+            "lanes": [
+              2
+            ]
+          },
+          {
+            "club": "Schools",
+            "weekday": 0,
+            "start": "15:30",
+            "end": "16:00",
+            "lanes": [
+              1
+            ]
+          },
+          {
+            "club": "Schools",
+            "weekday": 1,
+            "start": "07:30",
+            "end": "09:30",
+            "lanes": [
+              2
+            ]
+          },
+          {
+            "club": "Schools",
+            "weekday": 1,
+            "start": "10:00",
+            "end": "12:00",
+            "lanes": [
+              2
+            ]
+          },
+          {
+            "club": "Schools",
+            "weekday": 1,
+            "start": "13:30",
+            "end": "15:30",
+            "lanes": [
+              2
+            ]
+          },
+          {
+            "club": "Schools",
+            "weekday": 1,
+            "start": "16:30",
+            "end": "17:30",
+            "lanes": [
+              1
+            ]
+          },
+          {
+            "club": "Schools",
+            "weekday": 2,
+            "start": "08:00",
+            "end": "12:00",
+            "lanes": [
+              2
+            ]
+          },
+          {
+            "club": "Schools",
+            "weekday": 3,
+            "start": "07:30",
+            "end": "09:30",
+            "lanes": [
+              2
+            ]
+          },
+          {
+            "club": "Schools",
+            "weekday": 3,
+            "start": "10:00",
+            "end": "12:00",
+            "lanes": [
+              1
+            ]
+          },
+          {
+            "club": "Schools",
+            "weekday": 3,
+            "start": "13:30",
+            "end": "15:30",
+            "lanes": [
+              2
+            ]
+          },
+          {
+            "club": "Schools",
+            "weekday": 3,
+            "start": "16:30",
+            "end": "18:30",
+            "lanes": [
+              1
+            ]
+          },
+          {
+            "club": "Schools",
+            "weekday": 4,
+            "start": "08:00",
+            "end": "12:00",
+            "lanes": [
+              2
+            ]
+          },
+          {
+            "club": "Schools",
+            "weekday": 4,
+            "start": "11:00",
+            "end": "12:00",
+            "lanes": [
+              1
+            ]
+          },
+          {
+            "club": "Schools",
+            "weekday": 4,
+            "start": "13:30",
+            "end": "15:30",
+            "lanes": [
+              2
+            ]
+          },
+          {
+            "club": "Sportaktiv",
+            "weekday": 0,
+            "start": "09:30",
+            "end": "11:00",
+            "lanes": [
+              1
+            ]
+          },
+          {
+            "club": "Sportaktiv",
+            "weekday": 0,
+            "start": "19:30",
+            "end": "20:00",
+            "lanes": [
+              2
+            ]
+          },
+          {
+            "club": "Sportaktiv",
+            "weekday": 1,
+            "start": "09:30",
+            "end": "10:00",
+            "lanes": [
+              2
+            ]
+          },
+          {
+            "club": "Sportaktiv",
+            "weekday": 1,
+            "start": "10:30",
+            "end": "11:00",
+            "lanes": [
+              1
+            ]
+          },
+          {
+            "club": "Sportaktiv",
+            "weekday": 1,
+            "start": "12:30",
+            "end": "13:00",
+            "lanes": [
+              1
+            ]
+          },
+          {
+            "club": "Sportaktiv",
+            "weekday": 1,
+            "start": "18:30",
+            "end": "19:00",
+            "lanes": [
+              2
+            ]
+          },
+          {
+            "club": "Sportaktiv",
+            "weekday": 1,
+            "start": "19:30",
+            "end": "20:00",
+            "lanes": [
+              2
+            ]
+          },
+          {
+            "club": "Sportaktiv",
+            "weekday": 2,
+            "start": "18:30",
+            "end": "19:00",
+            "lanes": [
+              2
+            ]
+          },
+          {
+            "club": "Sportaktiv",
+            "weekday": 2,
+            "start": "19:30",
+            "end": "20:00",
+            "lanes": [
+              2
+            ]
+          },
+          {
+            "club": "Sportaktiv",
+            "weekday": 3,
+            "start": "09:30",
+            "end": "11:00",
+            "lanes": [
+              2
+            ]
+          },
+          {
+            "club": "Sportaktiv",
+            "weekday": 5,
+            "start": "10:00",
+            "end": "10:30",
+            "lanes": [
+              2
+            ]
+          },
+          {
+            "club": "Sportaktiv",
+            "weekday": 5,
+            "start": "11:00",
+            "end": "11:30",
+            "lanes": [
+              2
+            ]
+          },
+          {
+            "club": "Tauchclub Glaukos",
+            "weekday": 1,
+            "start": "21:00",
+            "end": "21:30",
+            "lanes": [
+              2
+            ]
+          },
+          {
+            "club": "Twist",
+            "weekday": 4,
+            "start": "12:00",
+            "end": "13:00",
+            "lanes": [
+              1
+            ]
+          },
+          {
+            "club": "Unterwassersportclub",
+            "weekday": 1,
+            "start": "20:30",
+            "end": "21:00",
+            "lanes": [
+              2
+            ]
+          },
+          {
+            "club": "Unterwassersportclub",
+            "weekday": 1,
+            "start": "20:30",
+            "end": "22:00",
+            "lanes": [
+              1
+            ]
+          },
+          {
+            "club": "Unterwassersportclub",
+            "weekday": 1,
+            "start": "21:30",
+            "end": "22:00",
+            "lanes": [
+              2
+            ]
+          },
+          {
+            "club": "Unterwassersportclub",
+            "weekday": 3,
+            "start": "20:00",
+            "end": "22:00",
+            "lanes": [
+              1
+            ]
+          },
+          {
+            "club": "Unterwassersportclub",
+            "weekday": 3,
+            "start": "20:00",
+            "end": "22:00",
+            "lanes": [
+              2
+            ]
+          },
+          {
+            "club": "Verein Zürcher Wasserspringer",
+            "weekday": 0,
+            "start": "16:00",
+            "end": "19:00",
+            "lanes": [
+              1
+            ]
+          },
+          {
+            "club": "Verein Zürcher Wasserspringer",
+            "weekday": 1,
+            "start": "07:00",
+            "end": "07:30",
+            "lanes": [
+              1
+            ]
+          },
+          {
+            "club": "Verein Zürcher Wasserspringer",
+            "weekday": 1,
+            "start": "08:00",
+            "end": "08:30",
+            "lanes": [
+              1
+            ]
+          },
+          {
+            "club": "Verein Zürcher Wasserspringer",
+            "weekday": 1,
+            "start": "16:30",
+            "end": "18:30",
+            "lanes": [
+              2
+            ]
+          },
+          {
+            "club": "Verein Zürcher Wasserspringer",
+            "weekday": 1,
+            "start": "18:30",
+            "end": "20:00",
+            "lanes": [
+              1
+            ]
+          },
+          {
+            "club": "Verein Zürcher Wasserspringer",
+            "weekday": 2,
+            "start": "12:30",
+            "end": "14:00",
+            "lanes": [
+              1
+            ]
+          },
+          {
+            "club": "Verein Zürcher Wasserspringer",
+            "weekday": 2,
+            "start": "16:00",
+            "end": "22:00",
+            "lanes": [
+              1
+            ]
+          },
+          {
+            "club": "Verein Zürcher Wasserspringer",
+            "weekday": 3,
+            "start": "07:00",
+            "end": "07:30",
+            "lanes": [
+              1
+            ]
+          },
+          {
+            "club": "Verein Zürcher Wasserspringer",
+            "weekday": 3,
+            "start": "08:00",
+            "end": "08:30",
+            "lanes": [
+              1
+            ]
+          },
+          {
+            "club": "Verein Zürcher Wasserspringer",
+            "weekday": 3,
+            "start": "16:00",
+            "end": "16:30",
+            "lanes": [
+              1
+            ]
+          },
+          {
+            "club": "Verein Zürcher Wasserspringer",
+            "weekday": 3,
+            "start": "16:30",
+            "end": "20:00",
+            "lanes": [
+              2
+            ]
+          },
+          {
+            "club": "Verein Zürcher Wasserspringer",
+            "weekday": 4,
+            "start": "16:00",
+            "end": "20:00",
+            "lanes": [
+              1
+            ]
+          },
+          {
+            "club": "Verein Zürcher Wasserspringer",
+            "weekday": 5,
+            "start": "09:00",
+            "end": "13:00",
+            "lanes": [
+              1
+            ]
+          },
+          {
+            "club": "Wasserballklub Stadtmannschaft",
+            "weekday": 0,
+            "start": "19:00",
+            "end": "21:00",
+            "lanes": [
+              1
+            ]
+          },
+          {
+            "club": "Wasserballklub Stadtmannschaft",
+            "weekday": 0,
+            "start": "20:00",
+            "end": "21:00",
+            "lanes": [
+              2
+            ]
+          }
+        ]
+      }
+    }
+  ],
+  "amenities": [
+    "50m",
+    "diving"
+  ],
+  "accessibility": null,
+  "last_admission_before_min": null
+}

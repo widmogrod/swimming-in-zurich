@@ -369,6 +369,28 @@ its data fetch/derive. Blocks import primitives and the timescale util; they nev
   `max-content` governs (or record the fixed-plot intent); reuse `accessFamily`/`eligForAccess` and the
   UTC date pattern.
 
+### Implementation decisions & divergences — S3 (2026-07-23)
+
+- **The alignment is guaranteed by two falsifiable tests** (critic-confirmed at the S3 pause):
+  (a) a gantt-local-scale regression fails — `gantt.js` throws without an injected `timescale`, and a
+  two-scale test (PLOT 900 vs 500) asserts different cursor-x so an internal fixed scale can't pass;
+  (b) a peak-driven-headline regression fails — the panel headline + lit pips are asserted at a
+  below-peak minute (T where `publicAt`=5 vs peak 8) against the real fixture. The shared pure
+  `cursor.js` (`publicAt`/`cursorX`) is the single source both the board readout and the panel headline
+  consume.
+- **Divergence (accepted): net-new `blocks/cursor.js`** (Part 5 lumped this under gantt/panel) — the
+  pure `publicAt`/`cursorX` leaf, extracted for dependency-free testability. `blocks/detailpanel.js`
+  (Part 5 named it `panel.js`) — naming only.
+- **Divergence (accepted): dev `/ui/detail` route** (own package) rather than extending `/ui/board`;
+  gated by `SWIMZH_DEV_UI`.
+- **Facts-block honesty preserved** (critic-verified): Busyness → "Not available yet"; price null →
+  "Not listed"; temp with nominal/measured note; provenance stamp present; eligibility via shared
+  `eligibility.js`.
+- **Carry to S4/S5:** on a LIVE board→panel click, the selected board row (`/swim` `lane_timeline`
+  aggregate) must resolve to the SAME basin's `/pools/{id}` `day_view` (per-lane) so "board readout ==
+  panel headline" holds on real data. S5 owns the direct board↔gantt DOM-equality contract test and
+  consolidating the duplicated `hhmmToMin`.
+
 ## Risks & mitigations
 
 1. **No-build modularity drift** — without a bundler, import graphs can rot. *Mitigate:* flat
@@ -392,3 +414,4 @@ its data fetch/derive. Blocks import primitives and the timescale util; they nev
 | 2026-07-23 | S0 | done | server-side token injection (Option a); `node --test` bridged into pytest; ruff S603 per-file-ignore added & ratified | throwaway compat tokens in `tokens.css` (retired at S5); `--elig-*` value-collision to fix at S5; token-injection has no marker-present test (add S1); Node is a CI/gate dependency | yes |
 | 2026-07-23 | S1 | done | `create_app()` factory (composition root) for per-flag route registration; headless `_fakedom.js` for zero-dep JS DOM/ARIA tests; real `--badge-in/-chk/-no` eligibility tokens (collision avoided, S0 compat block untouched); broadened `tokens.css` `[data-theme]` selectors (additive) | Python `_COMPONENTS` vs JS `REGISTRY` are two hand-kept lists, only JS-side agreement pinned; datestepper test doesn't pin process TZ; hex-grep doesn't scan the gallery router's inline `<style>` | yes |
 | 2026-07-23 | S2 | done | shared `timescale.js` consumed by the board (critic-verified, no re-derive); pure `ribbonmodel.js` mapping; shared `eligibility.js` (School/Club→no, mirrors domain; WomenOnly diverse/unset→chk); `--fam-*` access-family token aliases; dev `/ui/board` route; overflow-containment via CSS-contract test | per-row `.board__scrollx` not yet scroll-synced (S3 does shared scroll + time cursor); `board.js` inline `track.style.width=900px` overrides the `max-content` CSS the contract test asserts; `--fam-women` reuses closed-red hue (S5 palette polish); canvas pixel output unverified until browser check | yes |
+| 2026-07-23 | S3 | done | net-new pure `blocks/cursor.js` (`publicAt`/`cursorX` leaf); `blocks/detailpanel.js` (plan named it `panel.js`); dev `/ui/detail` route; alignment proven by cursor-x equality (two-scale non-tautology) + below-peak readout tests (critic-confirmed both regressions caught) | `cursor.js` duplicates board's 2-line `hhmmToMin` (drift surface, consolidate later); `board.js` inline 900px track width left (redundant == intrinsic, S2 carry); direct board↔gantt DOM-equality contract deferred to S5 (Risk #3); `pool_oerlikon.json` carries full 87-entry roster (unused) | yes |

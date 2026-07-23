@@ -66,6 +66,35 @@ def test_board_grid_guarantees_overflow_containment() -> None:
     assert "[canvas] 1fr" not in normalized, "a bare 1fr canvas column would overflow the page"
 
 
+def test_detail_panel_bottom_sheet_responsive_contract() -> None:
+    """The DetailPanel is a sticky side panel ≥1060px and a slide-up bottom SHEET
+    below it (transform + a dimming backdrop), with both motions frozen under
+    prefers-reduced-motion. There is no layout engine in the gate, so — mirroring the
+    S2 board overflow-contract — assert the CSS PROPERTIES that guarantee the sheet
+    behaviour are declared:
+
+      * a `@media (max-width: 1060px)` block exists;
+      * inside it the sheet slides via `transform: translateY(100%)` (closed) and the
+        `.is-open` state resets it to `translateY(0)`;
+      * a `.detail__backdrop` dims the page (`position: fixed`);
+      * a `@media (prefers-reduced-motion: reduce)` block freezes the transition.
+
+    The true visual/browser check is the human review at the S3 pause; this is the
+    mechanical proxy that the sheet contract has not regressed in CSS.
+    """
+    blocks = (_STATIC / "blocks.css").read_text(encoding="utf-8")
+    normalized = re.sub(r"\s+", " ", blocks)
+    assert "@media (max-width: 1060px)" in normalized, "the sheet needs a <1060px breakpoint"
+    assert "@media (min-width: 1060px)" in normalized, "the side panel needs a >=1060px branch"
+    assert "transform: translateY(100%)" in normalized, "the closed sheet must be off-screen"
+    assert "transform: translateY(0)" in normalized, "the open sheet must slide into view"
+    assert ".detail__backdrop" in normalized, "the sheet needs a dimming backdrop"
+    assert "position: fixed" in normalized, "the sheet + backdrop must be fixed-positioned"
+    assert "@media (prefers-reduced-motion: reduce)" in normalized, (
+        "the slide + backdrop fade must be frozen under reduced motion"
+    )
+
+
 def test_components_do_not_import_the_blocks_layer() -> None:
     """Layer rule: a primitive may not reach up into the blocks layer."""
     offenders = []

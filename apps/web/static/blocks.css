@@ -124,3 +124,287 @@
 .fam-unknown { color: var(--fam-unknown); }
 .fam-sheath { color: var(--fam-sheath); }
 .fam-axis { color: var(--fam-axis); }
+
+/* ---------------------------------------------------------------------------
+   LaneGantt (Part 3 §5) — S3.
+
+   A per-basin, lane-by-lane plan on the SAME timescale as the board (gantt.js
+   positions every segment/tick/cursor via the injected timescale). Layout ONLY;
+   colour comes from tokens. The lane track scrolls horizontally in its own
+   overflow container on mobile — never the page.
+   --------------------------------------------------------------------------- */
+
+.gantt {
+  margin-top: var(--s3);
+}
+
+.gantt__readout {
+  font-size: var(--fs-caption);
+  font-weight: var(--fw-caption);
+  color: var(--ink-2);
+  margin-bottom: var(--s2);
+}
+
+/* The wide lane track scrolls INSIDE this container (mobile), never the page. */
+.gantt__scroll {
+  overflow-x: auto;
+  overflow-y: hidden;
+  min-width: 0;
+}
+
+.gantt__track {
+  position: relative;               /* the origin for absolutely-placed segments/cursor */
+}
+
+.gantt__axis {
+  position: relative;
+  height: 1.25rem;
+  border-bottom: 1px solid var(--hair-2);
+  color: var(--muted);
+}
+
+.gantt__tick {
+  position: absolute;
+  top: 0;
+  font-size: var(--fs-micro);
+  color: var(--muted);
+  transform: translateX(-50%);
+}
+
+/* Best-public window: a calm highlighted band spanning the "best time to come". */
+.gantt__band {
+  position: absolute;
+  top: 1.25rem;
+  bottom: 0;
+  background: var(--best-band);
+  border-left: 1px solid var(--best-edge);
+  border-right: 1px solid var(--best-edge);
+  pointer-events: none;
+}
+
+.gantt__lane {
+  position: relative;
+  height: 1.375rem;                 /* mirrors LANE_H in gantt.js */
+}
+
+.gantt__lanelabel {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  padding-right: var(--s2);
+  font-size: var(--fs-micro);
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.gantt__seg {
+  position: absolute;
+  top: 2px;
+  bottom: 2px;
+  display: flex;
+  align-items: center;
+  padding: 0 var(--s1);
+  border-radius: var(--r-sm);
+  font-size: var(--fs-micro);
+  line-height: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.gantt__seg.is-public {
+  background: var(--lane-public-fill);
+  border: 1px solid var(--lane-public-edge);
+  color: var(--lane-public-ink);
+}
+
+.gantt__seg.is-reserved {
+  background: var(--lane-res-fill);
+  border: 1px solid var(--lane-res-edge);
+  color: var(--lane-res-ink);
+}
+
+/* The vertical time cursor — the SAME x as the board cursor (shared timescale). */
+.gantt__cursor {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  margin-left: -1px;
+  background: var(--cursor);
+  pointer-events: none;
+}
+
+/* ---------------------------------------------------------------------------
+   DetailPanel / BottomSheet (Part 3 §6) — S3.
+
+   ≥1060px: a sticky side panel. <1060px: a slide-up bottom sheet over a
+   backdrop. Both motions are frozen under prefers-reduced-motion. Layout ONLY.
+   --------------------------------------------------------------------------- */
+
+.detail {
+  background: var(--surface);
+  border: 1px solid var(--hair);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow);
+  padding: var(--s4);
+}
+
+.detail__head {
+  margin-bottom: var(--s3);
+}
+
+.detail__title {
+  margin: 0;
+  font-size: var(--fs-head);
+  font-weight: var(--fw-head);
+  color: var(--ink);
+}
+
+.detail__sub {
+  font-size: var(--fs-caption);
+  font-weight: var(--fw-caption);
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.detail__headline {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: var(--s2);
+  padding: var(--s3) 0;
+  border-top: 1px solid var(--hair-2);
+  border-bottom: 1px solid var(--hair-2);
+}
+
+.detail__bignum {
+  font-size: var(--fs-title);
+  font-weight: var(--fw-head);
+  color: var(--accent);
+}
+
+.detail__bigunit {
+  font-size: var(--fs-body);
+  color: var(--ink-2);
+}
+
+.detail__pips {
+  display: inline-flex;
+  gap: 3px;
+  flex-basis: 100%;
+}
+
+.detail__pip {
+  width: 10px;
+  height: 10px;
+  border-radius: var(--r-sm);
+  background: var(--track);
+}
+
+.detail__pip.is-on {
+  background: var(--accent);
+}
+
+.detail__peaknote {
+  font-size: var(--fs-caption);
+  color: var(--muted);
+}
+
+.detail__facts {
+  display: grid;
+  gap: var(--s2);
+  padding: var(--s3) 0;
+}
+
+.detail__fact {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s3);
+  font-size: var(--fs-body);
+}
+
+.detail__factlabel {
+  color: var(--muted);
+  flex: 0 0 auto;
+}
+
+.detail__factval {
+  color: var(--ink);
+  text-align: right;
+  min-width: 0;
+}
+
+.detail__factnote {
+  color: var(--faint);
+  font-size: var(--fs-caption);
+}
+
+.detail__prov {
+  margin-top: var(--s2);
+}
+
+/* --- side panel vs bottom sheet ------------------------------------------- */
+
+/* ≥1060px: the panel is a sticky sidebar riding alongside the board. */
+@media (min-width: 1060px) {
+  .detail {
+    position: sticky;
+    top: var(--s4);
+  }
+  .detail__backdrop {
+    display: none;                  /* no backdrop for the docked side panel */
+  }
+}
+
+/* <1060px: a slide-up bottom sheet over a dimming backdrop. */
+@media (max-width: 1060px) {
+  .detail__backdrop {
+    position: fixed;
+    inset: 0;
+    background: var(--track);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity var(--dur-sheet) var(--ease-sheet);
+    z-index: 40;
+  }
+  .detail {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    max-height: 85vh;
+    overflow-y: auto;
+    border-radius: var(--r-lg) var(--r-lg) 0 0;
+    box-shadow: var(--shadow-lg);
+    transform: translateY(100%);
+    transition: transform var(--dur-sheet) var(--ease-sheet);
+    z-index: 41;
+  }
+  .detail.is-open {
+    transform: translateY(0);
+  }
+  .detail__backdrop.is-open {
+    opacity: 1;
+    pointer-events: auto;
+  }
+  /* The Gantt lane track gets its own horizontal scroll on the phone. */
+  .gantt__scroll {
+    -webkit-overflow-scrolling: touch;
+  }
+}
+
+/* Reduced motion: freeze the slide + backdrop fade (no transform animation). */
+@media (prefers-reduced-motion: reduce) {
+  .detail,
+  .detail__backdrop {
+    transition: none;
+  }
+}

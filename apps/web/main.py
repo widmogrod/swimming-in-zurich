@@ -94,10 +94,12 @@ def create_app(config: Config | None = None) -> FastAPI:
     app.include_router(access_router)
     if (config or Config.from_env()).dev_ui:
         from apps.web.api.board_preview.router import router as board_preview_router
+        from apps.web.api.detail_preview.router import router as detail_preview_router
         from apps.web.api.gallery.router import router as gallery_router
 
         app.include_router(gallery_router)
         app.include_router(board_preview_router)
+        app.include_router(detail_preview_router)
     return app
 
 
