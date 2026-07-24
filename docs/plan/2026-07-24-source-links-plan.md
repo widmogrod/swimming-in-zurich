@@ -1,8 +1,11 @@
 ---
 type: plan
-status: approved         # draft -> approved -> in-progress -> done
+status: in-progress      # draft -> approved -> in-progress -> done
 created: 2026-07-24
 feature: source-links
+branch: plan/source-links
+worktree: .claude/worktrees/plan-source-links
+base_branch: plan/ui-design-system
 gates:
   qa: full               # ruff, mypy, pytest+coverage, CRAP (run in that order)
   review: adversarial    # dev:critic-reviewer must find no blocking issues
