@@ -20,6 +20,7 @@
 .ui-place__geo:focus-visible,
 .ui-datestepper__nav:focus-visible,
 .ui-toggle input:focus-visible,
+.ui-sourcestrip__chip:focus-visible,
 .ui-combo__opt.is-active {
   outline: none;
   box-shadow: var(--focus-ring);
@@ -431,5 +432,48 @@
 }
 .ui-iconset__cap {
   font-size: var(--fs-micro);
+  color: var(--faint);
+}
+
+/* --- SourceStrip (.ui-sourcestrip) — outbound "verify at the source" chips */
+.ui-sourcestrip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s2);
+  align-items: center;
+  font-family: var(--f);
+}
+.ui-sourcestrip__chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s1);
+  padding: 0 var(--s3);
+  height: var(--ctl-h);
+  background: var(--chip);
+  color: var(--chip-ink);
+  border: 1px solid var(--hair);
+  border-radius: var(--r-pill);
+  font-size: var(--fs-caption);
+  line-height: 1;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.ui-sourcestrip__chip:hover {
+  border-color: var(--accent);
+  color: var(--ink);
+}
+.ui-sourcestrip__icon {
+  display: inline-flex;
+  color: var(--faint);
+}
+.ui-sourcestrip__tag {
+  padding: 0 var(--s1);
+  border: 1px solid var(--hair);
+  border-radius: var(--r-sm);
+  font-size: var(--fs-micro);
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+.ui-sourcestrip__ext {
   color: var(--faint);
 }

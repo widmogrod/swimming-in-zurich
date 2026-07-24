@@ -189,6 +189,7 @@ async function main() {
   let poolOptions = []; // classified pool-picker options (nearest plannable first)
   let defaultPool = null; // { value, label } — the nearest plannable pool
   const poolIdByName = new Map(); // facility name → pool_id (to open closed/uncurated rows)
+  const poolUrlByName = new Map(); // facility name → official-page URL (PoolOut.url, all 57 pools)
 
   // The persisted shared cursor (minutes-of-day) + the pool it belongs to. It survives
   // re-renders so a mode-only switch (Day↔Pool on the SAME pool) KEEPS the cursor for
@@ -249,6 +250,7 @@ async function main() {
       state: opts.state || null,
       reason: opts.reason || null,
       accessTypes: opts.accessTypes || [],
+      officialUrl: opts.officialUrl || null,
       // The single Day→Pool continuity affordance: open Pool view on the SAME pool.
       // `selectedPool` is left untouched (it is already the clicked pool), so the week
       // renders for it — plannable or honestly closed/uncurated (plan item 3).
@@ -311,6 +313,7 @@ async function main() {
         distanceKm: opt.distance_km,
         basinName: opt.basin,
         accessTypes,
+        officialUrl: poolUrlByName.get(row.label) || null,
       });
       if (fromUser) syncUrl(filter); // clicked pool → shareable URL (pool change → pushState)
       return;
@@ -326,7 +329,12 @@ async function main() {
     const state = closed ? 'closed' : 'uncurated';
     const st = closed || row.statuses.find((s) => s.status === 'uncurated') || row.statuses[0];
     const detail = id ? await fetchPoolDetail(id, filter.date || today) : null;
-    openPanel(detail, { state, reason: st ? st.detail : null, basinName: null });
+    openPanel(detail, {
+      state,
+      reason: st ? st.detail : null,
+      basinName: null,
+      officialUrl: poolUrlByName.get(row.label) || null,
+    });
     if (fromUser) syncUrl(filter); // clicked a closed/uncurated pool → still a shareable selection
   }
 
@@ -470,7 +478,14 @@ async function main() {
       // name → id, so a closed / uncurated board row (which carries only a facility
       // NAME, no option) can still resolve its /pools/{id} facts for the panel.
       poolIdByName.clear();
-      for (const p of poolsMeta) poolIdByName.set(p.name, p.pool_id);
+      poolUrlByName.clear();
+      for (const p of poolsMeta) {
+        poolIdByName.set(p.name, p.pool_id);
+        // PoolOut.url is the catalog official page, non-null on all 57 pools — the
+        // ONLY official-page source that also reaches uncurated pools (their
+        // /pools/{id} detail 404s), so it is threaded into the panel frontend-side.
+        poolUrlByName.set(p.name, p.url || null);
+      }
       poolOptions = classifyPools(poolsMeta, dayAnswer);
       // A URL-restored pool arrives as { id, name:null } — resolve its display name now
       // (or drop an unknown/old slug to null; the pool_alias crosswalk resolves renames

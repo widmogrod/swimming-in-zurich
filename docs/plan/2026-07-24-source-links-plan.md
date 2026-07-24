@@ -165,6 +165,7 @@ Appended by /dev:implement after each slice — never rewritten. Newest row last
 | date | slice | status | divergence from plan | tech debt created | human review? |
 |------|-------|--------|----------------------|-------------------|---------------|
 | 2026-07-25 | S1 | done | none (design-faithful); fixture patched not regenerated (see Decisions) | none | yes (pause point) |
+| 2026-07-25 | S2 | done | a11y polish beyond plan: empty strip omits the group role (critic suggestion, applied) | none | yes (critic suggestions) |
 
 ## Decisions & divergences
 
@@ -200,7 +201,15 @@ Substantive choices made during implementation, with the why. Each entry dated.
   relocated by patch into `plan-source-links` (disjoint from the unrelated ui-design-system WIP
   living in the launch worktree, so extraction was clean), and the QA chain was re-run **in
   `plan-source-links`** to gate the slice on its true isolated base (green). No code impact; future
-  slices use the same relocate-then-gate handling.
+  slices use the same relocate-then-gate handling. (Applied identically to S2.)
+
+- **2026-07-25 — S2 a11y polish (critic-driven).** The critic approved S2 with one non-blocking
+  suggestion: the all-empty `SourceStrip` still set `role="group" aria-label="Sources"`, so a
+  screen reader could announce an empty group. Since every real pool has a non-null `officialUrl`
+  this never occurs in the app, but the fix is cheap and aligns the implementation with the plan's
+  Design prose ("renders nothing"): `sourcestrip.js` now sets the group role/label only when
+  `chips.length > 0`, and the all-empty unit test asserts `role`/`aria-label` are absent. The
+  binding acceptance (an element with no chips) is unchanged.
 
 ## Summary
 

@@ -188,6 +188,61 @@ test('the week button is absent when no onOpenWeek callback is given', () => {
   assert.equal(p.el.query(hasClass('detail__weekbtn')), null);
 });
 
+// --- S2: the SourceStrip is wired into the panel in every state ---
+const laneChips = (p) =>
+  p.el.queryAll((e) => e.classList.contains('ui-sourcestrip__chip--lane'));
+const officialChip = (p) =>
+  p.el.query((e) => e.classList.contains('ui-sourcestrip__chip--official'));
+
+test('S2: no selected basin → Official-page chip + BOTH distinct lane-plan PDFs (all-basins branch)', () => {
+  const ts = newTs();
+  const p = createDetailPanel(mount(), {
+    detail: POOL,
+    basin: null,
+    timescale: ts,
+    accessTypes: ['LaneSwim'],
+    officialUrl: 'https://official.example/oerlikon',
+  });
+  const official = officialChip(p);
+  assert.ok(official, 'Official-page chip present');
+  assert.equal(official.getAttribute('href'), 'https://official.example/oerlikon');
+  const lanes = laneChips(p);
+  assert.equal(lanes.length, 2, "oerlikon's two distinct PDFs → two lane chips");
+  assert.deepEqual(
+    lanes.map((c) => c.getAttribute('href')).sort(),
+    POOL.basins.map((b) => b.lane_plan_url).sort(),
+  );
+});
+
+test('S2: WITH a selected basin → exactly that one basin lane-plan chip', () => {
+  const ts = newTs();
+  const p = createDetailPanel(mount(), {
+    detail: POOL,
+    basin: BASIN,
+    timescale: ts,
+    officialUrl: 'https://official.example/oerlikon',
+  });
+  const lanes = laneChips(p);
+  assert.equal(lanes.length, 1, 'only the selected basin contributes a lane chip');
+  const selected = POOL.basins.find((b) => b.basin_id === BASIN.id);
+  assert.equal(lanes[0].getAttribute('href'), selected.lane_plan_url);
+});
+
+test('S2: uncurated panel (detail = {}) still shows the Official-page chip and nothing else', () => {
+  const ts = newTs();
+  const p = createDetailPanel(mount(), {
+    detail: {},
+    basin: null,
+    timescale: ts,
+    state: 'uncurated',
+    officialUrl: 'https://official.example/somepool',
+  });
+  const chips = p.el.queryAll((e) => e.classList.contains('ui-sourcestrip__chip'));
+  assert.equal(chips.length, 1);
+  assert.ok(chips[0].classList.contains('ui-sourcestrip__chip--official'));
+  assert.equal(chips[0].getAttribute('href'), 'https://official.example/somepool');
+});
+
 test('the panel embeds the LaneGantt on the SAME timescale instance (no desync possible)', () => {
   const ts = newTs();
   const p = createDetailPanel(mount(), { detail: POOL, basin: BASIN, timescale: ts });

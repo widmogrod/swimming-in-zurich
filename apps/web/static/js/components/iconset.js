@@ -11,6 +11,14 @@ const PATHS = {
   person: '<circle cx="12" cy="7" r="3"/><path d="M5 21v-2a5 5 0 0 1 14 0v2"/>',
   lock: '<rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/>',
   'water-drop': '<path d="M12 3c3 4 5 6.5 5 9.5a5 5 0 0 1-10 0C7 9.5 9 7 12 3z"/>',
+  // Outbound-link affordances (plan: source-links). external-link = a box with an
+  // arrow leaving it; doc = a page with a folded corner (the PDF/document glyph).
+  'external-link':
+    '<path d="M14 4h6v6"/><path d="M20 4l-9 9"/>' +
+    '<path d="M18 14v4a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4"/>',
+  doc:
+    '<path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/>' +
+    '<path d="M14 3v5h5"/>',
 };
 
 export const ICON_NAMES = Object.keys(PATHS);

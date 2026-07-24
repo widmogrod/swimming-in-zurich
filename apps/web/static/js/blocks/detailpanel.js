@@ -15,6 +15,7 @@ import { createStatePill } from '../components/statepill.js';
 import { createLengthLanesBadge } from '../components/lengthlanesbadge.js';
 import { createEligibilityBadge } from '../components/eligibilitybadge.js';
 import { createProvenanceStamp } from '../components/provenancestamp.js';
+import { createSourceStrip } from '../components/sourcestrip.js';
 import { eligForAccess, dayEligibility } from '../eligibility.js';
 import { publicAt, peakPublic, hhmmToMin, minToHhmm } from './cursor.js';
 import { createGantt } from './gantt.js';
@@ -106,6 +107,8 @@ function tempText(basinOut) {
  * @param {object} [opts.filter] `{ gender, age }` for the eligibility badge.
  * @param {number} [opts.cursorMin] initial cursor minutes-of-day.
  * @param {number|null} [opts.distanceKm] distance from the `/swim` option (null → "not shown").
+ * @param {string|null} [opts.officialUrl] the pool's official-page URL (listing `PoolOut.url`),
+ *   threaded by app.js; drives the SourceStrip's Official-page chip in every state.
  * @param {function} [opts.onOpenWeek] when set, renders a "See this pool's week →"
  *   button in the header that invokes it (Day → Pool continuity for the selected pool).
  * @returns {{el, headlineAt, setCursor, gantt, cursorMin}}
@@ -298,6 +301,27 @@ export function createDetailPanel(el, opts = {}) {
     props: { curated: !!prov.curated, source: prov.source, valid_as_of: prov.valid_as_of },
   });
   el.appendChild(provHost);
+
+  // --- Sources strip ("verify at the source"), in EVERY panel state ---
+  // Official page comes from the listing URL threaded by app.js (reaches uncurated
+  // pools whose /pools/{id} 404s). Lane-plan URLs are the SELECTED basin's PDF when a
+  // basin is opened, else EVERY basin's PDF (a basin-less mount shows them all). Prices
+  // is the price table's source URL. The strip itself dedups + omits missing sources.
+  const lanePlanUrls = basin
+    ? basinOut && basinOut.lane_plan_url
+      ? [basinOut.lane_plan_url]
+      : []
+    : (detail.basins || []).map((b) => b.lane_plan_url).filter((u) => u);
+  const sourcesHost = doc.createElement('div');
+  sourcesHost.className = 'detail__sources';
+  createSourceStrip(sourcesHost, {
+    props: {
+      officialUrl: opts.officialUrl || null,
+      lanePlanUrls,
+      pricesUrl: (detail.prices && detail.prices.source_url) || null,
+    },
+  });
+  el.appendChild(sourcesHost);
 
   // --- the LaneGantt, on the SHARED timescale — ONLY when there is a real lane plan.
   let gantt = null;
