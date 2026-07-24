@@ -1,6 +1,6 @@
 ---
 type: plan
-status: in-progress      # draft -> approved -> in-progress -> done
+status: done             # draft -> approved -> in-progress -> done
 created: 2026-07-24
 feature: source-links
 branch: plan/source-links
@@ -213,5 +213,17 @@ Substantive choices made during implementation, with the why. Each entry dated.
 
 ## Summary
 
-Written when the plan reaches `done`; then distilled into `docs/summaries/source-links.md`
-(what EXISTS now, not what was intended).
+Delivered in two slices. **S1** projects each basin's declared Belegungsplan PDF onto the
+detail API as `BasinOut.lane_plan_url` (mapped from `Basin.lane_plan_source` in `_basin_out`;
+`null` when the basin declares no source), joining the already-present `prices.source_url`. **S2**
+adds the `SourceStrip` component (`components/sourcestrip.js`) and mounts it in the DetailPanel in
+every state: one new-tab-safe `<a target="_blank" rel="noopener noreferrer">` chip per present
+source — **Official page** (the catalog `PoolOut.url` threaded from the `/pools` listing via
+`app.js`, so it reaches uncurated pools whose detail 404s), **Lane plan PDF(s)** (from
+`lane_plan_url`), **Prices** (`prices.source_url`) — deduped by exact URL across kinds, PDF chips
+tagged, honest omission of absent sources, and a screen-reader-safe empty state. `website`
+(2 pools only) was correctly abandoned during pre-approval review in favour of the listing `url`.
+
+Gates: both slices critic-approved and full-QA green (ruff, format, mypy 143 files, pytest 396 +
+`node --test` 164, coverage 95.74% ≥ 95, CRAP OK). No tech debt. Distilled into
+`docs/summaries/source-links.md`.
