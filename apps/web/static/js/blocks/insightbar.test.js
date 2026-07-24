@@ -44,6 +44,23 @@ test('Day insight: N distinct facilities with hours + the best public window', (
   assert.ok(insight.text.includes(`${best.start}–${best.end}`));
 });
 
+test('Day insight appends the honest closed / hours-not-listed coverage split (FIX 5)', () => {
+  const day = load('swim_day.json');
+  const closed = day.statuses.filter((s) => s.status === 'closed').length;
+  const unlisted = day.statuses.filter((s) => s.status === 'uncurated').length;
+  assert.ok(closed + unlisted > 0, 'fixture must carry statuses to summarise');
+  const insight = computeInsight({ day }, { mode: 'day' });
+  assert.equal(insight.closed, closed);
+  assert.equal(insight.unlisted, unlisted);
+  assert.ok(insight.text.includes(`${closed} closed, ${unlisted} hours-not-listed nearby`));
+});
+
+test('Day insight omits the coverage split when there are no statuses (one calm line)', () => {
+  const day = { options: [{ facility: 'A', lane_timeline: null }], statuses: [] };
+  const insight = computeInsight({ day }, { mode: 'day' });
+  assert.ok(!insight.text.includes('hours-not-listed nearby'));
+});
+
 test('Day insight degrades honestly when no lane split is published', () => {
   const day = {
     options: [

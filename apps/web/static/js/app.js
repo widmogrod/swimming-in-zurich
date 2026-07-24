@@ -19,7 +19,7 @@ import { createInsightBar } from './blocks/insightbar.js';
 import { createBoard, BOARD_DAY0, BOARD_DAY1, BOARD_PLOT } from './blocks/board.js';
 import { createDetailPanel } from './blocks/detailpanel.js';
 import { createBoardLegend } from './blocks/legend.js';
-import { createStateBlocks } from './blocks/stateblocks.js';
+import { createStateBlocks, emptyState } from './blocks/stateblocks.js';
 import { createFilterState } from './filterstate.js';
 import { makeTimescale } from './timescale.js';
 import { basinFromPanel, panelForBasin } from './blocks/cursor.js';
@@ -132,10 +132,9 @@ async function main() {
     onThemeChange: (t) => applyTheme(root, t),
   });
 
-  // --- insight + legend + state blocks ---
+  // --- insight + legend ---
   const insight = createInsightBar($('app-insight'), {});
   createBoardLegend($('app-legend'));
-  const states = createStateBlocks($('app-states'), {});
 
   // --- board + panel hosts (rebuilt per render) ---
   const boardHost = $('app-board');
@@ -144,6 +143,7 @@ async function main() {
   let cursorLines = [];
   let poolOptions = []; // classified pool-picker options (nearest plannable first)
   let defaultPool = null; // { value, label } — the nearest plannable pool
+  const poolIdByName = new Map(); // facility name → pool_id (to open closed/uncurated rows)
 
   function headerLabel() {
     if (filter.mode === 'pool') {
@@ -171,28 +171,36 @@ async function main() {
   }
 
   let panel = null;
-  function openPanel(detail, cursorMin, distanceKm, basinName) {
+  // The panel-rail helper shown until a pool is opened — never a blank rail (plan FIX 4).
+  function renderPanelHelper() {
     panelHost.textContent = '';
-    if (!detail || !detail.lane_panels || detail.lane_panels.length === 0) {
-      const msg = document.createElement('p');
-      msg.className = 'app__panelempty';
-      msg.textContent = 'No published lane plan for this pool yet.';
-      panelHost.appendChild(msg);
-      panel = null;
-      return;
-    }
-    // Resolve the clicked row's OWN basin (not always lane_panels[0]) so the panel
-    // headline reads the same basin the board readout does on multi-basin facilities.
-    const basin = basinFromPanel(panelForBasin(detail.lane_panels, basinName));
+    panel = null;
+    const msg = document.createElement('p');
+    msg.className = 'app__panelempty';
+    msg.textContent = 'Click any pool to see its hours, price and lane plan.';
+    panelHost.appendChild(msg);
+  }
+
+  // The DetailPanel ALWAYS opens (plan FIX 3): a plannable pool resolves to its OWN
+  // basin's lane plan (board readout == panel headline); a pool with hours but no lane
+  // split degrades to 'lanes-unknown'; a closed / uncurated pool opens in that state.
+  function openPanel(detail, opts = {}) {
+    panelHost.textContent = '';
     panel = createDetailPanel(panelHost, {
-      detail,
-      basin,
+      detail: detail || {},
+      basin: opts.basin || null,
       timescale: TIMESCALE,
       filter,
-      cursorMin,
-      distanceKm,
+      cursorMin: opts.cursorMin != null ? opts.cursorMin : null,
+      distanceKm: opts.distanceKm != null ? opts.distanceKm : null,
+      basinName: opts.basinName || null,
+      state: opts.state || null,
+      reason: opts.reason || null,
+      accessTypes: opts.accessTypes || [],
     });
-    moveCursors(panel.cursorMin);
+    // Align the shared board cursor to the panel's resolved cursor (only the lane
+    // panel drives a cursor; the degraded states have none to align).
+    if (opts.basin && panel.cursorMin != null) moveCursors(panel.cursorMin);
   }
 
   function setCursor(min) {
@@ -205,16 +213,36 @@ async function main() {
     return TIMESCALE.inverse(x);
   }
 
-  // Resolve a clicked board row to the SAME basin's /pools/{id} detail, then open the
-  // panel there — so "board readout == panel headline" holds on live data. A row with
-  // no options (a ghost/closed/no-lap day) has nothing to open.
+  // Open the DetailPanel for ANY board row (plan FIX 2 + FIX 3). A row WITH options
+  // resolves to the SAME basin's /pools/{id} lane plan (or degrades to lanes-unknown
+  // when no split is published); a closed / uncurated row opens in its own state,
+  // fetching the facility facts by name→id so the panel still carries facts + prov.
   async function onRowClick(rowIndex, min) {
     const row = board.rows[rowIndex];
-    if (!row || row.options.length === 0) return;
-    const opt = row.options[0];
-    const detail = await fetchPoolDetail(opt.facility_id, filter.date || today);
-    openPanel(detail, min, opt.distance_km, opt.basin);
-    setCursor(min);
+    if (!row) return;
+    if (row.options.length > 0) {
+      const opt = row.options[0];
+      const detail = await fetchPoolDetail(opt.facility_id, filter.date || today);
+      const lanePanels = (detail && detail.lane_panels) || [];
+      const lp = panelForBasin(lanePanels, opt.basin);
+      const basin = lp ? basinFromPanel(lp) : null;
+      const accessTypes = [...new Set(row.options.map((o) => o.access))];
+      openPanel(detail, {
+        basin,
+        cursorMin: min,
+        distanceKm: opt.distance_km,
+        basinName: opt.basin,
+        accessTypes,
+      });
+      return;
+    }
+    // Closed / uncurated row: no option to fetch by, so resolve the facility by name.
+    const closed = row.statuses.find((s) => s.status === 'closed');
+    const state = closed ? 'closed' : 'uncurated';
+    const st = closed || row.statuses.find((s) => s.status === 'uncurated') || row.statuses[0];
+    const id = poolIdByName.get(row.label);
+    const detail = id ? await fetchPoolDetail(id, filter.date || today) : null;
+    openPanel(detail, { state, reason: st ? st.detail : null, basinName: null });
   }
 
   function wireBoardCursor() {
@@ -225,6 +253,23 @@ async function main() {
       canvas.addEventListener('mousemove', (ev) => setCursor(minFromEvent(canvas, ev)));
       canvas.addEventListener('click', (ev) => onRowClick(i, minFromEvent(canvas, ev)));
     });
+    // EVERY row label opens the panel too (plan FIX 2) — Day mode included. A label
+    // click opens on the row's best cursor (min=null → the panel picks best_public).
+    const labels = [...boardHost.querySelectorAll('.board__labelsbody .board__rowlabel')];
+    labels.forEach((label, i) => {
+      label.addEventListener('click', () => onRowClick(i, null));
+    });
+  }
+
+  // Auto-open the nearest PLANNABLE pool on first paint so the panel + board↔gantt
+  // alignment are visible immediately (plan FIX 4). The API orders nearest-first, so
+  // the first option-bearing row is the nearest plannable pool. No plannable row →
+  // the helper stays.
+  async function autoOpenNearest() {
+    if (!board) return;
+    const idx = board.rows.findIndex((r) => r.options && r.options.length > 0);
+    if (idx < 0) return;
+    await onRowClick(idx, null);
   }
 
   async function render() {
@@ -234,21 +279,35 @@ async function main() {
     if (board) board.destroy();
     boardHost.textContent = '';
     let data;
+    let answerForEmpty; // the /swim answer the no-pools empty state is judged against
     if (filter.mode === 'pool') {
       const week = await fetchWeek(filter, filter.date || today);
       const focused = focusWeekOnPool(week, filter.pool ? filter.pool.label : week.facility);
       data = { week: applyLapWeek(focused, filter.lapOnly) };
-      states.update({ options: data.week.days.flatMap((d) => d.answer.options), statuses: [] });
+      answerForEmpty = {
+        options: data.week.days.flatMap((d) => d.answer.options),
+        statuses: data.week.days.flatMap((d) => d.answer.statuses),
+      };
     } else {
       const day = applyLap(await fetchDay(filter, filter.date || today), filter.lapOnly);
       data = { day };
-      states.update(day);
+      answerForEmpty = day;
     }
     board = createBoard(boardHost, { data, filter, timescale: TIMESCALE, today });
     insight.update(data, filter);
     wireBoardCursor();
-    panelHost.textContent = '';
-    panel = null;
+    // A SINGLE board-level empty state, shown ONLY when the answer has neither options
+    // nor statuses (plan FIX 1). Closed/uncurated pools read on their own rows above —
+    // there is no duplicate below-board section anymore.
+    if (emptyState(answerForEmpty)) {
+      const emptyHost = document.createElement('div');
+      emptyHost.className = 'app__boardempty';
+      createStateBlocks(emptyHost, { answer: answerForEmpty });
+      boardHost.appendChild(emptyHost);
+    }
+    // Never a blank rail: show the helper, then auto-open the nearest plannable pool.
+    renderPanelHelper();
+    await autoOpenNearest();
   }
 
   // Rebuild the toolbar with the current classified pool list (called after /pools +
@@ -300,6 +359,10 @@ async function main() {
       if (!poolsRes.ok) return;
       const body = await poolsRes.json();
       const poolsMeta = body.pools || [];
+      // name → id, so a closed / uncurated board row (which carries only a facility
+      // NAME, no option) can still resolve its /pools/{id} facts for the panel.
+      poolIdByName.clear();
+      for (const p of poolsMeta) poolIdByName.set(p.name, p.pool_id);
       poolOptions = classifyPools(poolsMeta, dayAnswer);
       const nearestPlannable = poolOptions.find((p) => p.state === 'plannable');
       if (nearestPlannable) {

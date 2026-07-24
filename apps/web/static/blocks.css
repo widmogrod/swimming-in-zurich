@@ -125,6 +125,38 @@ body {
   box-sizing: border-box;
   background: var(--surface);
   box-shadow: inset 0 1px 0 var(--hair-2);
+  cursor: pointer; /* EVERY row opens the DetailPanel (plan FIX 2) */
+}
+
+/* Hover affordance: the whole label is a click target for the panel. */
+.board__rowlabel:not(.board__rowlabel--head):hover {
+  background: var(--surface-2);
+}
+
+/* Name + optional status sub-line stack vertically inside the label. */
+.board__rowmeta {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 1px;
+}
+
+/* The compact terminal-state line on a closed/uncurated row (plan FIX 1). */
+.board__rowsub {
+  font-size: var(--fs-micro);
+  line-height: 1.15;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.board__rowsub--closed {
+  color: var(--closed);
+}
+.board__rowsub--unknown {
+  color: var(--unknown);
 }
 
 .board__rowlabel--head {
@@ -167,7 +199,7 @@ body {
 }
 
 .board__rowname {
-  flex: 1 1 auto;
+  flex: 0 0 auto;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -209,6 +241,7 @@ body {
 .fam-sheath { color: var(--fam-sheath); }
 .fam-axis { color: var(--fam-axis); }
 .fam-hair { color: var(--hair-2); }
+.fam-muted { color: var(--muted); }
 
 /* ---------------------------------------------------------------------------
    LaneGantt (Part 3 §5) — S3.
@@ -436,6 +469,29 @@ body {
   margin-top: var(--s2);
 }
 
+/* An honest degradation note inside a populated panel (plan FIX 3): the lane plan
+   is absent / the pool is closed / uncurated — stated as a note, never as the whole
+   panel. Each variant tints its left rule so the three states read distinctly. */
+.detail__note {
+  margin-top: var(--s3);
+  padding: var(--s2) var(--s3);
+  border: 1px solid var(--hair);
+  border-left-width: 3px;
+  border-radius: var(--r-md);
+  background: var(--surface);
+  font-size: var(--fs-caption);
+  color: var(--muted);
+}
+.detail__note--lanes-unknown {
+  border-left-color: var(--unknown);
+}
+.detail__note--closed {
+  border-left-color: var(--closed);
+}
+.detail__note--uncurated {
+  border-left-color: var(--unknown);
+}
+
 /* --- side panel vs bottom sheet ------------------------------------------- */
 
 /* ≥1060px: the panel is a sticky sidebar riding alongside the board. */
@@ -518,6 +574,8 @@ body {
 .app__board {
   min-width: 0;
 }
+/* The panel-rail helper shown until a pool is opened (plan FIX 4) — never a blank
+   rail. Auto-open replaces it with the nearest plannable pool on first paint. */
 .app__panelempty {
   color: var(--muted);
   font-size: var(--fs-body);
@@ -525,6 +583,11 @@ body {
   padding: var(--s4);
   border: 1px dashed var(--hair);
   border-radius: var(--r-md);
+}
+/* The board-level no-pools empty state (StateBlocks), rendered inside the board host
+   when a /swim answer has neither options nor statuses (plan FIX 1). */
+.app__boardempty {
+  margin-top: var(--s3);
 }
 @media (min-width: 1060px) {
   .app__main {

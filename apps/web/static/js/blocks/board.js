@@ -89,6 +89,21 @@ export function rowStatus(row) {
   return 'unknown';
 }
 
+/** A non-open row's compact status line for the label AND the canvas (plan FIX 1):
+ *  closed → `Closed · <detail>` (keeps its reason), uncurated → `Hours not listed`.
+ *  Returns null for an open row (its ribbons say everything). Pure, exported for tests. */
+export function rowStatusLine(row) {
+  if ((row.options || []).length > 0) return null;
+  const closed = (row.statuses || []).find((s) => s.status === 'closed');
+  if (closed) {
+    return { kind: 'closed', text: closed.detail ? `Closed · ${closed.detail}` : 'Closed' };
+  }
+  if ((row.statuses || []).some((s) => s.status === 'uncurated')) {
+    return { kind: 'unknown', text: 'Hours not listed' };
+  }
+  return null;
+}
+
 // A gender/age filter is "engaged" once the viewer picks a specific gender or age —
 // only then do we stamp the per-row ✓/?/✕ badge (Anyone + Any age → no badge, since
 // every session is open to everyone and there is nothing personal to flag). Toggling
@@ -127,6 +142,7 @@ function resolvePalette(doc, host) {
   pal.sheath = read('fam-sheath');
   pal.axis = read('fam-axis');
   pal.hair = read('fam-hair');
+  pal.muted = read('fam-muted');
   host.removeChild(probe);
   return pal;
 }
@@ -170,16 +186,52 @@ function drawRow(canvas, ribbons, ts, pal, phase) {
   }
 }
 
-function drawStatusRibbon(ctx, r, ts, pal, mid) {
-  // Closed = dashed, ghost/uncurated = dotted; both span the whole plot as a thin rule.
+// Paint the row's terminal state ON the plot (plan FIX 1), the way the prototype's
+// drawClosed/drawGhost do — so state reads without a legend. Closed → a dashed rule +
+// dot + "Closed · <detail>" (its reason kept); uncurated → a dotted envelope +
+// "Hours not listed". The text is a token colour (pal.*), never a raw hex.
+function drawStatusRibbon(ctx, r, ts, pal, mid, h) {
   ctx.save();
-  ctx.strokeStyle = r.variant === 'closed' ? pal.closed : pal.unknown;
-  ctx.lineWidth = 1.5;
-  setDashes(ctx, r.style);
-  ctx.beginPath();
-  ctx.moveTo(2, mid);
-  ctx.lineTo(ts.PLOT - 2, mid);
-  ctx.stroke();
+  if (r.variant === 'closed') {
+    const x0 = 8;
+    ctx.strokeStyle = pal.closed;
+    ctx.lineWidth = 1.5;
+    ctx.globalAlpha = 0.8;
+    setDashes(ctx, 'dashed');
+    ctx.beginPath();
+    ctx.moveTo(x0, mid);
+    ctx.lineTo(ts.PLOT - 8, mid);
+    ctx.stroke();
+    setDashes(ctx, 'solid');
+    ctx.globalAlpha = 1;
+    ctx.beginPath();
+    ctx.arc(x0, mid, 3.5, 0, Math.PI * 2);
+    ctx.fillStyle = pal.closed;
+    ctx.fill();
+    ctx.font = '600 12px system-ui, sans-serif';
+    ctx.textBaseline = 'middle';
+    ctx.textAlign = 'left';
+    ctx.fillText(r.detail ? `Closed · ${r.detail}` : 'Closed', x0 + 10, mid);
+  } else {
+    const x0 = ts.X(7 * 60);
+    const x1 = ts.X(21 * 60);
+    const hh = Math.min(11, h * 0.26);
+    ctx.strokeStyle = pal.unknown;
+    ctx.lineWidth = 1.4;
+    ctx.globalAlpha = 0.85;
+    setDashes(ctx, 'dotted');
+    ctx.beginPath();
+    ctx.rect(x0, mid - hh, x1 - x0, hh * 2);
+    ctx.stroke();
+    setDashes(ctx, 'solid');
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = pal.muted || pal.unknown;
+    ctx.font = '500 11.5px system-ui, sans-serif';
+    ctx.textBaseline = 'middle';
+    ctx.textAlign = 'center';
+    ctx.fillText('Hours not listed', (x0 + x1) / 2, mid);
+    ctx.textAlign = 'left';
+  }
   ctx.restore();
 }
 
@@ -386,6 +438,10 @@ export function createBoard(el, opts = {}) {
       dot.setAttribute('aria-hidden', 'true');
       label.appendChild(dot);
 
+      // The name + an optional status sub-line stack in a meta column so a closed /
+      // uncurated row states its condition ON the label (plan FIX 1), not only below.
+      const meta = doc.createElement('div');
+      meta.className = 'board__rowmeta';
       const name = doc.createElement('span');
       name.className = 'board__rowname';
       if (filter.mode === 'pool') {
@@ -394,7 +450,16 @@ export function createBoard(el, opts = {}) {
       } else {
         name.textContent = row.label;
       }
-      label.appendChild(name);
+      meta.appendChild(name);
+
+      const statusLine = rowStatusLine(row);
+      if (statusLine) {
+        const sub = doc.createElement('span');
+        sub.className = `board__rowsub board__rowsub--${statusLine.kind}`;
+        sub.textContent = statusLine.text;
+        meta.appendChild(sub);
+      }
+      label.appendChild(meta);
 
       if (filter.mode === 'pool' && today && row.date === today) {
         const tag = doc.createElement('span');

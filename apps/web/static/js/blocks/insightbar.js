@@ -44,19 +44,39 @@ function facilitiesWithHours(options) {
   return new Set((options || []).map((o) => o.facility)).size;
 }
 
+// The honest coverage split from the answer's statuses: how many nearby pools are
+// closed (with reason) vs merely hours-not-listed (unknown ≠ closed).
+function honestyCounts(answer) {
+  const statuses = (answer && answer.statuses) || [];
+  let closed = 0;
+  let unlisted = 0;
+  for (const s of statuses) {
+    if (s.status === 'closed') closed += 1;
+    else if (s.status === 'uncurated') unlisted += 1;
+  }
+  return { closed, unlisted };
+}
+
 function dayInsight(answer) {
   const options = (answer && answer.options) || [];
   const n = facilitiesWithHours(options);
   const noun = n === 1 ? 'pool' : 'pools';
   const lead = `${n} ${noun} with curated hours nearby`;
   const best = bestWindow(options);
-  const text = best
+  const base = best
     ? `${lead} · best public window ${best.public_lanes}/${best.lane_count} at ` +
       `${best.facility} ${best.start}–${best.end}`
     : n > 0
       ? `${lead} · lane split not published yet`
       : 'No pools with curated hours for this day nearby';
-  return { mode: 'day', poolsCount: n, best, text };
+  // One calm line: append the honest closed / hours-not-listed coverage split so the
+  // insight states WHY the other nearby pools aren't plannable (plan FIX 5).
+  const { closed, unlisted } = honestyCounts(answer);
+  const text =
+    closed || unlisted
+      ? `${base} · ${closed} closed, ${unlisted} hours-not-listed nearby`
+      : base;
+  return { mode: 'day', poolsCount: n, best, closed, unlisted, text };
 }
 
 function poolInsight(week) {

@@ -20,7 +20,6 @@ _BLOCK_MOUNTS = (
     'id="app-insight"',
     'id="app-board"',
     'id="app-panel"',
-    'id="app-states"',
     'id="app-legend"',
 )
 
@@ -44,6 +43,10 @@ def test_index_serves_the_new_unified_shell() -> None:
     # Every block has its mount point.
     for mount in _BLOCK_MOUNTS:
         assert mount in page, f"missing block mount {mount}"
+    # The standalone below-board StateBlocks section is GONE — closed/uncurated pools
+    # now read ON the board rows, and the no-pools empty state renders inside the board
+    # host (never a duplicate section beneath it).
+    assert 'id="app-states"' not in page
 
 
 def test_index_no_longer_serves_the_four_tab_markup() -> None:

@@ -102,6 +102,62 @@ test('busyness is always "Not available yet" (future, never faked)', () => {
   assert.ok(row.textContent.includes('Not available yet'));
 });
 
+test('(c) a pool with NO lane plan still renders the full facts block, not a dead line (FIX 3)', () => {
+  const ts = newTs();
+  // Aemtler-shaped: curated hours but no lane_panels (basin=null → lanes-unknown).
+  const noPlan = { ...POOL, lane_panels: [] };
+  const p = createDetailPanel(mount(), {
+    detail: noPlan,
+    basin: null,
+    timescale: ts,
+    accessTypes: ['LaneSwim'],
+    distanceKm: 1.2,
+  });
+  // Facts + provenance are present (the panel is populated, never a bare message).
+  assert.ok(p.el.query(hasClass('ui-statepill')), 'StatePill present');
+  assert.ok(p.el.query(hasClass('ui-lenlanes')), 'length·lanes present');
+  assert.ok(p.el.query(hasClass('ui-eligbadge')), 'eligibility present');
+  assert.ok(p.el.query(hasClass('ui-provstamp')), 'provenance present');
+  const facts = p.el.queryAll(hasClass('detail__fact'));
+  assert.ok(facts.find((r) => r.textContent.startsWith('Distance')).textContent.includes('1.2 km'));
+  assert.ok(facts.find((r) => r.textContent.startsWith('Busyness')).textContent.includes('Not available yet'));
+  // The lane absence is a NOTE inside the populated panel — never the whole panel,
+  // and there is NO Gantt to desync.
+  const pill = p.el.query(hasClass('ui-statepill'));
+  assert.ok(pill.textContent.includes('lane split not published'));
+  const note = p.el.query(hasClass('detail__note'));
+  assert.ok(note && note.textContent.toLowerCase().includes('no published lane plan'));
+  assert.equal(p.gantt, null);
+});
+
+test('closed / uncurated panels keep their honesty (FIX 3): closed reason kept, uncurated ≠ closed', () => {
+  const ts = newTs();
+  const closed = createDetailPanel(mount(), {
+    detail: POOL,
+    basin: null,
+    timescale: ts,
+    state: 'closed',
+    reason: 'Sommerpause',
+  });
+  const closedPill = closed.el.query(hasClass('ui-statepill'));
+  assert.ok(closedPill.textContent.includes('Closed'));
+  assert.ok(closed.el.query(hasClass('detail__note')).textContent.includes('Sommerpause'));
+
+  const uncurated = createDetailPanel(mount(), {
+    detail: POOL,
+    basin: null,
+    timescale: ts,
+    state: 'uncurated',
+  });
+  const uncPill = uncurated.el.query(hasClass('ui-statepill'));
+  assert.ok(uncPill.textContent.toLowerCase().includes('hours not listed'));
+  assert.ok(uncurated.el.query(hasClass('detail__note')).textContent.toLowerCase().includes('not the same as closed'));
+  // Both still carry facts + provenance (populated panels), and neither has a Gantt.
+  assert.ok(closed.el.query(hasClass('ui-provstamp')) && uncurated.el.query(hasClass('ui-provstamp')));
+  assert.equal(closed.gantt, null);
+  assert.equal(uncurated.gantt, null);
+});
+
 test('the panel embeds the LaneGantt on the SAME timescale instance (no desync possible)', () => {
   const ts = newTs();
   const p = createDetailPanel(mount(), { detail: POOL, basin: BASIN, timescale: ts });

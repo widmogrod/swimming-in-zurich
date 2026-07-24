@@ -11,6 +11,7 @@ import {
   weekRows,
   boardRows,
   rowStatus,
+  rowStatusLine,
   rowEligibility,
   hhmmToMin,
   BOARD_PLOT,
@@ -58,6 +59,39 @@ test('rowStatus: open when options, closed/unknown from statuses', () => {
   assert.equal(rowStatus({ options: [{}], statuses: [] }), 'open');
   assert.equal(rowStatus({ options: [], statuses: [{ status: 'closed' }] }), 'closed');
   assert.equal(rowStatus({ options: [], statuses: [{ status: 'uncurated' }] }), 'unknown');
+});
+
+test('rowStatusLine folds the terminal state onto the row (FIX 1): closed keeps reason, uncurated is distinct', () => {
+  // Closed keeps its stated reason; uncurated reads "Hours not listed" (never "closed").
+  assert.deepEqual(rowStatusLine({ options: [], statuses: [{ status: 'closed', detail: 'Sommerpause' }] }), {
+    kind: 'closed',
+    text: 'Closed · Sommerpause',
+  });
+  assert.deepEqual(rowStatusLine({ options: [], statuses: [{ status: 'uncurated' }] }), {
+    kind: 'unknown',
+    text: 'Hours not listed',
+  });
+  // Closed with no detail still says Closed; an OPEN row (has options) has no sub-line.
+  assert.equal(rowStatusLine({ options: [], statuses: [{ status: 'closed' }] }).text, 'Closed');
+  assert.equal(rowStatusLine({ options: [{}], statuses: [] }), null);
+});
+
+test('a closed/uncurated row shows its state sub-line ON the label (FIX 1), open rows do not', () => {
+  const el = mount();
+  createBoard(el, {
+    data: { day: DAY },
+    filter: { mode: 'day', gender: '', age: null },
+    matchMedia: () => ({ matches: false }),
+    requestAnimationFrame: () => {},
+  });
+  const subs = el.queryAll(hasClass('board__rowsub'));
+  const nonOpen = dayRows(DAY).filter((r) => r.options.length === 0).length;
+  assert.equal(subs.length, nonOpen, 'one sub-line per closed/uncurated row');
+  // The three terminal states stay distinct: at least one closed keeps its reason.
+  const closedSub = subs.find((s) => s.classList.contains('board__rowsub--closed'));
+  assert.ok(closedSub && closedSub.textContent.startsWith('Closed'));
+  const unknownSub = subs.find((s) => s.classList.contains('board__rowsub--unknown'));
+  assert.ok(unknownSub && unknownSub.textContent === 'Hours not listed');
 });
 
 test('rowEligibility reacts to the FilterState gender/age', () => {
