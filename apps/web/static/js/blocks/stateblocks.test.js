@@ -32,22 +32,28 @@ test('emptyState is no-pools only for a truly empty answer', () => {
   assert.equal(emptyState({ options: [], statuses: [{ status: 'closed' }] }), null);
 });
 
-test('createStateBlocks renders one distinct card per closed/uncurated status', () => {
+test('createStateBlocks keeps a named card per CLOSED pool but collapses uncurated into ONE note', () => {
   const el = mount();
   const day = load('swim_day.json');
   const { keys } = createStateBlocks(el, { answer: day });
   const closed = day.statuses.filter((s) => s.status === 'closed').length;
   const uncurated = day.statuses.filter((s) => s.status === 'uncurated').length;
+  assert.ok(uncurated > 1, 'fixture must have several uncurated pools to prove collapsing');
+  // Closed stays per-pool; uncurated collapses to exactly one summary card.
   assert.equal(keys.filter((k) => k === STATE_CLOSED).length, closed);
-  assert.equal(keys.filter((k) => k === STATE_UNLISTED).length, uncurated);
-  // Each card carries its own modifier class (visually distinct — never a bare blank).
+  assert.equal(keys.filter((k) => k === STATE_UNLISTED).length, 1);
   const cards = el.queryAll((c) => c.classList.contains('stateblock'));
-  assert.equal(cards.length, closed + uncurated);
+  assert.equal(cards.length, closed + 1, 'closed cards + one collapsed unlisted note');
   assert.ok(cards.every((c) => c.getAttribute('role') === 'note'));
+  // Three terminal states stay never-merged: closed cards name their reason...
   const closedCard = cards.find((c) => c.classList.contains(`stateblock--${STATE_CLOSED}`));
-  assert.ok(closedCard, 'a closed card must carry its modifier class');
-  // The closed card names its facility and its reason (not a silent blank).
-  assert.ok(closedCard.textContent.includes('Closed'));
+  assert.ok(closedCard && closedCard.textContent.includes('Closed'));
+  // ...and the single unlisted note carries the COUNT + the unknown≠closed honesty line,
+  // without repeating a paragraph per pool.
+  const unlistedCard = cards.find((c) => c.classList.contains(`stateblock--${STATE_UNLISTED}`));
+  assert.ok(unlistedCard, 'one collapsed hours-not-listed note');
+  assert.ok(unlistedCard.textContent.includes(String(uncurated)), 'note states the count');
+  assert.ok(unlistedCard.textContent.toLowerCase().includes('not the same as closed'));
 });
 
 test('createStateBlocks renders a SINGLE no-pools card for an empty answer', () => {

@@ -77,6 +77,24 @@ function stateCard(doc, key, { facility, detail } = {}) {
   return card;
 }
 
+// One compact note summarising the N uncurated pools, instead of N identical cards.
+// The pools themselves are named on the board above; this states the honesty fact once.
+function unlistedSummaryCard(doc, count) {
+  const card = doc.createElement('div');
+  card.className = `stateblock stateblock--${STATE_UNLISTED}`;
+  card.setAttribute('role', 'note');
+  const head = doc.createElement('div');
+  head.className = 'stateblock__title';
+  head.textContent = `${count} more pool${count === 1 ? '' : 's'} nearby — hours not listed yet`;
+  const body = doc.createElement('p');
+  body.className = 'stateblock__body';
+  body.textContent =
+    'We don’t have their timetables yet — they may well be open. This is not the same as closed. They’re listed on the board above.';
+  card.appendChild(head);
+  card.appendChild(body);
+  return card;
+}
+
 /**
  * createStateBlocks(el, opts) — render the empty/terminal states for a `/swim`
  * answer into `el`. Renders one block per closed / uncurated status (each named),
@@ -97,11 +115,21 @@ export function createStateBlocks(el, opts = {}) {
       rendered.push(none);
       return rendered;
     }
-    for (const status of (answer && answer.statuses) || []) {
-      const key = stateForStatus(status);
-      if (!key) continue;
-      el.appendChild(stateCard(doc, key, { facility: status.facility, detail: status.detail }));
-      rendered.push(key);
+    const statuses = (answer && answer.statuses) || [];
+    // Closed-with-reason: keep one named card per pool — there are few and each carries
+    // its own reason (Sommerpause / Revision) worth stating.
+    for (const status of statuses) {
+      if (stateForStatus(status) !== STATE_CLOSED) continue;
+      el.appendChild(stateCard(doc, STATE_CLOSED, { facility: status.facility, detail: status.detail }));
+      rendered.push(STATE_CLOSED);
+    }
+    // Hours-not-listed: collapse the (many, identical) uncurated pools into ONE count note.
+    // They are already listed BY NAME on the board above as dotted "hours not listed" rows;
+    // repeating the same paragraph 50+ times here is noise, not honesty.
+    const unlisted = statuses.filter((s) => stateForStatus(s) === STATE_UNLISTED).length;
+    if (unlisted) {
+      el.appendChild(unlistedSummaryCard(doc, unlisted));
+      rendered.push(STATE_UNLISTED);
     }
     return rendered;
   }
