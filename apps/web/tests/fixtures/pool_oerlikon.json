@@ -14,7 +14,8 @@
       "nominal_temp_c": null,
       "measured_temp_c": null,
       "diving_platforms_m": [],
-      "physical_source": "curated"
+      "physical_source": "curated",
+      "lane_plan_url": "https://www.stadt-zuerich.ch/content/dam/web/de/stadtleben/sport-und-erholung/dokumente/badeanlagen/belegungsplaene/oerlikon-schwimmerbecken.pdf"
     },
     {
       "basin_id": "oerlikon-sprungbecken",
@@ -26,7 +27,8 @@
       "nominal_temp_c": null,
       "measured_temp_c": null,
       "diving_platforms_m": [],
-      "physical_source": "curated"
+      "physical_source": "curated",
+      "lane_plan_url": "https://www.stadt-zuerich.ch/content/dam/web/de/stadtleben/sport-und-erholung/dokumente/badeanlagen/belegungsplaene/oerlikon-nichtschwimmer-sprungbecken.pdf"
     }
   ],
   "features": [],

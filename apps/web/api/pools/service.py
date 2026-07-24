@@ -130,6 +130,7 @@ def _basin_out(basin: Basin) -> BasinOut:
         ),
         diving_platforms_m=[float(h) for h in basin.diving_platforms_m],
         physical_source=basin.physical_source.value,
+        lane_plan_url=(basin.lane_plan_source.url if basin.lane_plan_source is not None else None),
     )
 
 

@@ -164,6 +164,7 @@ Appended by /dev:implement after each slice — never rewritten. Newest row last
 
 | date | slice | status | divergence from plan | tech debt created | human review? |
 |------|-------|--------|----------------------|-------------------|---------------|
+| 2026-07-25 | S1 | done | none (design-faithful); fixture patched not regenerated (see Decisions) | none | yes (pause point) |
 
 ## Decisions & divergences
 
@@ -183,6 +184,23 @@ Substantive choices made during implementation, with the why. Each entry dated.
   `FacilityDetailOut.website` from scope; remove the unsatisfiable "non-null website"
   acceptance criterion; add cross-kind URL dedup (city pools' `prices.source_url` equals the
   pool page). All other critic-verified facts held.
+
+- **2026-07-25 — S1 fixture: patch, not regenerate.** `apps/web/tests/fixtures/pool_oerlikon.json`
+  is a lane-*enriched* capture (carries `lane_panels` from `scrape-lanes`) that other JS tests and
+  `test_detail_preview_inlines_a_pool_fixture_with_owner_named_lanes` depend on. A wholesale
+  offline-only regeneration would drop that enrichment. Instead the two basins' `lane_plan_url`
+  values were captured from the real `/pools/hallenbad-oerlikon` endpoint (built store) and patched
+  in verbatim — the fixture stays a faithful capture. The API acceptance test asserts against the
+  **live endpoint** over the real `gold_db` store, not the fixture, so it cannot be a tautology.
+
+- **2026-07-25 — orchestration note: subagent worktree isolation.** The gated subagents
+  (slice-implementer, critic-reviewer) executed in the session's launch worktree
+  (`plan-ui-design-system`), not the `plan-source-links` worktree the session had entered — the
+  `EnterWorktree` cwd did not propagate to Agent-tool subagents. S1's four files were therefore
+  relocated by patch into `plan-source-links` (disjoint from the unrelated ui-design-system WIP
+  living in the launch worktree, so extraction was clean), and the QA chain was re-run **in
+  `plan-source-links`** to gate the slice on its true isolated base (green). No code impact; future
+  slices use the same relocate-then-gate handling.
 
 ## Summary
 

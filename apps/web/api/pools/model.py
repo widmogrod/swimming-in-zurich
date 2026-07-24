@@ -94,6 +94,10 @@ class BasinOut(BaseModel):
     diving_platforms_m: list[float]  # board/platform heights, e.g. [1, 3, 5]; empty when none
     # Honesty caveat: "curated" (hand-verified) vs "parsed_prose" (auto-extracted, unverified).
     physical_source: str
+    # The basin's declared Belegungsplan (lane-plan) PDF source URL; None when the basin
+    # declares no `lane_plan_source`. The `section` token stays in the domain (a sheet
+    # sub-section, not a URL fragment) — it has no UI use here.
+    lane_plan_url: str | None
 
 
 class FeatureStatusOut(BaseModel):

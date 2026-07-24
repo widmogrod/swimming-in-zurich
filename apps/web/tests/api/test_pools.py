@@ -118,6 +118,40 @@ def test_pool_detail_surfaces_basins_features_lockers_prices() -> None:
     assert body["provenance"]["curated"] is True
 
 
+def test_pool_detail_surfaces_lane_plan_source_url() -> None:
+    """S1 acceptance: `/pools/{id}` projects each basin's declared Belegungsplan PDF URL
+    (`Basin.lane_plan_source.url`) as `lane_plan_url`, present after an offline `swimzh build`
+    alone (the `gold_db` conftest fixture — no `scrape-lanes` needed). Oerlikon's two basins
+    declare DISTINCT PDFs; a basin with no source projects `null`. The price source_url still
+    reaches the boundary (regression guard). No `website` claim is made here (S2 concern)."""
+    _plan = "https://www.stadt-zuerich.ch/content/dam/web/de/stadtleben/sport-und-erholung/dokumente/badeanlagen/belegungsplaene"
+    with TestClient(app) as client:
+        oerlikon = client.get("/pools/hallenbad-oerlikon").json()
+        city = client.get("/pools/hallenbad-city").json()
+
+    # Oerlikon: two basins, each carrying the EXACT distinct PDF authored in the YAML.
+    oerlikon_basins = {b["basin_id"]: b for b in oerlikon["basins"]}
+    assert (
+        oerlikon_basins["oerlikon-50m"]["lane_plan_url"] == f"{_plan}/oerlikon-schwimmerbecken.pdf"
+    )
+    assert (
+        oerlikon_basins["oerlikon-sprungbecken"]["lane_plan_url"]
+        == f"{_plan}/oerlikon-nichtschwimmer-sprungbecken.pdf"
+    )
+    # The two basins' URLs are genuinely distinct (not one repeated).
+    assert (
+        oerlikon_basins["oerlikon-50m"]["lane_plan_url"]
+        != oerlikon_basins["oerlikon-sprungbecken"]["lane_plan_url"]
+    )
+    # Regression guard: the price source URL still reaches the boundary.
+    assert oerlikon["prices"]["source_url"] is not None
+
+    # A basin with no declared `lane_plan_source` projects `null` (city's teaching basin).
+    city_basins = {b["basin_id"]: b for b in city["basins"]}
+    assert city_basins["city-50m"]["lane_plan_url"] == f"{_plan}/city-schwimmerbecken.pdf"
+    assert city_basins["city-lehrbecken"]["lane_plan_url"] is None
+
+
 def test_facility_detail_out_surfaces_temp_and_parsed_prose_caveat() -> None:
     """The temperature badge datum and the PARSED_PROSE caveat are real projections: a basin
     with a nominal temperature tagged `parsed_prose` surfaces both. (No curated pool carries a
