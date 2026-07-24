@@ -61,6 +61,17 @@ def test_gallery_present_when_dev_ui_on(monkeypatch: pytest.MonkeyPatch) -> None
     assert "text/html" in response.headers["content-type"]
 
 
+def test_dev_serves_static_assets_no_store(monkeypatch: pytest.MonkeyPatch) -> None:
+    # In dev, /static assets must not be cached, so an edit to a CSS/JS module is seen on
+    # reload instead of a stale cached module (the recurring "I don't see my change" trap).
+    monkeypatch.setenv("SWIMZH_DEV_UI", "1")
+    app = create_app()
+    with TestClient(app) as client:
+        response = client.get("/static/js/app.js")
+    assert response.status_code == 200
+    assert response.headers.get("cache-control") == "no-store"
+
+
 def test_gallery_renders_every_primitive_in_every_state_in_both_themes(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

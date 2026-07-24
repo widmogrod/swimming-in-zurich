@@ -7,12 +7,14 @@ gold SQLite store (built by `swimzh build`) — no curated `data/` files are rea
 
 from __future__ import annotations
 
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
+from starlette.requests import Request
+from starlette.responses import Response
 
 from apps.web.api.access.router import router as access_router
 from apps.web.api.health.router import router as health_router
@@ -93,6 +95,19 @@ def create_app(config: Config | None = None) -> FastAPI:
     app.include_router(pools_router)
     app.include_router(access_router)
     if (config or Config.from_env()).dev_ui:
+        # Dev: never let the browser cache the design-system assets, so an edit to a
+        # CSS/JS module is seen on the next reload instead of a stale cached module
+        # (ES modules are cached aggressively otherwise). Production keeps default caching.
+        @app.middleware("http")
+        async def _no_cache_static(
+            request: Request,
+            call_next: Callable[[Request], Awaitable[Response]],
+        ) -> Response:
+            response = await call_next(request)
+            if request.url.path.startswith("/static/"):
+                response.headers["Cache-Control"] = "no-store"
+            return response
+
         from apps.web.api.board_preview.router import router as board_preview_router
         from apps.web.api.detail_preview.router import router as detail_preview_router
         from apps.web.api.gallery.router import router as gallery_router

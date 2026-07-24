@@ -14,7 +14,7 @@
 // are unit-tested in isolation. No colour, no hex lives here.
 
 import { createIdentityHeader, applyTheme } from './blocks/header.js';
-import { createFilterToolbar } from './blocks/toolbar.js';
+import { createFilterToolbar, DEFAULT_AGE_CHIPS } from './blocks/toolbar.js';
 import { createInsightBar } from './blocks/insightbar.js';
 import { createBoard, BOARD_DAY0, BOARD_DAY1, BOARD_PLOT } from './blocks/board.js';
 import { createDetailPanel } from './blocks/detailpanel.js';
@@ -25,6 +25,15 @@ import { makeTimescale } from './timescale.js';
 import { basinFromPanel, panelForBasin } from './blocks/cursor.js';
 import { formatLabel } from './components/datestepper.js';
 import { fetchDay, fetchWeek, fetchPoolDetail, isoDate, weekDates } from './api.js';
+import { toSearch, fromSearch } from './urlstate.js';
+
+// The age value⇆token vocabulary the URL uses, derived from the toolbar's own chips so
+// the URL scheme and the UI never drift. `''` (Any age) has no token — it is the omitted
+// default. e.g. { value: 8, token: 'child' } … { value: 70, token: 'senior' }.
+const AGE_TOKENS = DEFAULT_AGE_CHIPS.filter((c) => c.value !== '').map((c) => ({
+  value: Number(c.value),
+  token: c.label.toLowerCase(),
+}));
 
 const PLACE_PRESETS = [
   { label: 'Zürich HB (main station)', lat: 47.3779, lon: 8.5403 },
@@ -119,11 +128,47 @@ async function main() {
 
   // --- initial FilterState: absolute today (UTC), first place preset, Day mode ---
   const today = isoDate(new Date());
-  let filter = createFilterState({
-    mode: 'day',
-    date: today,
-    place: { ...PLACE_PRESETS[0] },
-  });
+  // The URL projection context: the receiver's today + the age vocabulary. `place` is
+  // deliberately NEVER encoded (a client-side choice), so it lives only in the seed.
+  const urlCtx = { today, ageTokens: AGE_TOKENS };
+  const makeSeed = () =>
+    createFilterState({ mode: 'day', date: today, place: { ...PLACE_PRESETS[0] } });
+
+  // Hydrate: the URL patch wins OVER the default seed, so a shared link restores the
+  // exact pool + filters + view. A URL `pool=` beats the nearest-plannable auto-select
+  // (the Pool-entry seed only fills `selectedPool` when null — see buildToolbar). The
+  // pool label is `null` here; hydratePoolPicker backfills it from /pools.
+  let filter = merge(makeSeed(), fromSearch(location.search, urlCtx));
+
+  // Backfill a URL-restored pool's display name from the classified /pools list (matched
+  // by id). An unknown/old slug has no match → drop to null: graceful fallback to the
+  // auto-select / plain view, never a crash. A no-op unless a pool id is set without a name.
+  function backfillPoolName(f) {
+    if (!f.selectedPool || !f.selectedPool.id || f.selectedPool.name) return f;
+    const match = poolOptions.find((o) => o.value === f.selectedPool.id);
+    return merge(f, {
+      selectedPool: match ? { id: match.value, name: match.label } : null,
+    });
+  }
+
+  // syncUrl(next) — mirror the current filter into the address bar (the URL is a pure
+  // PROJECTION of `filter`, never a second source of truth). pushState when the VIEW or
+  // POOL changed vs the current URL (so Back steps between pools/views); replaceState for
+  // plain filter toggles (no history spam). Guard: if the computed search already equals
+  // location.search, do nothing — a no-op that also breaks any popstate feedback loop.
+  function syncUrl(next) {
+    const search = toSearch(next, urlCtx);
+    if (search === location.search) return;
+    const prev = fromSearch(location.search, urlCtx);
+    const prevPool = prev.selectedPool?.id ?? null;
+    const nextPool = next.selectedPool?.id ?? null;
+    const prevView = prev.mode === 'pool' ? 'pool' : 'day';
+    const nextView = next.mode === 'pool' ? 'pool' : 'day';
+    const structural = prevView !== nextView || prevPool !== nextPool;
+    const url = `${location.pathname}${search}`;
+    if (structural) history.pushState(null, '', url);
+    else history.replaceState(null, '', url);
+  }
 
   // --- header ---
   const header = createIdentityHeader($('app-header'), {
@@ -211,6 +256,7 @@ async function main() {
         filter = merge(filter, { mode: 'pool' });
         buildToolbar(); // rebuild so VIEW shows Pool + the date stepper swaps to the pool picker + week stepper
         render();
+        syncUrl(filter); // Day→Pool on the same pool is a VIEW change → pushState (Back returns)
       },
     });
     // Align the shared board cursor to the panel's resolved cursor (only the lane
@@ -236,7 +282,10 @@ async function main() {
   // resolves to the SAME basin's /pools/{id} lane plan (or degrades to lanes-unknown
   // when no split is published); a closed / uncurated row opens in its own state,
   // fetching the facility facts by name→id so the panel still carries facts + prov.
-  async function onRowClick(rowIndex, min) {
+  async function onRowClick(rowIndex, min, opts = {}) {
+    // A real user click mirrors the chosen pool into the URL (so it's shareable/linkable);
+    // the load-time auto-open passes { fromUser: false } so a bare default link stays bare.
+    const fromUser = opts.fromUser !== false;
     const row = board.rows[rowIndex];
     if (!row) return;
     if (row.options.length > 0) {
@@ -263,6 +312,7 @@ async function main() {
         basinName: opt.basin,
         accessTypes,
       });
+      if (fromUser) syncUrl(filter); // clicked pool → shareable URL (pool change → pushState)
       return;
     }
     // Closed / uncurated row: no option to fetch by, so resolve the facility by name.
@@ -277,6 +327,7 @@ async function main() {
     const st = closed || row.statuses.find((s) => s.status === 'uncurated') || row.statuses[0];
     const detail = id ? await fetchPoolDetail(id, filter.date || today) : null;
     openPanel(detail, { state, reason: st ? st.detail : null, basinName: null });
+    if (fromUser) syncUrl(filter); // clicked a closed/uncurated pool → still a shareable selection
   }
 
   function wireBoardCursor() {
@@ -306,13 +357,13 @@ async function main() {
     if (filter.selectedPool && filter.selectedPool.name) {
       const sel = board.rows.findIndex((r) => r.label === filter.selectedPool.name);
       if (sel >= 0) {
-        await onRowClick(sel, null);
+        await onRowClick(sel, null, { fromUser: false });
         return;
       }
     }
     const idx = board.rows.findIndex((r) => r.options && r.options.length > 0);
     if (idx < 0) return;
-    await onRowClick(idx, null);
+    await onRowClick(idx, null, { fromUser: false });
   }
 
   async function render() {
@@ -378,6 +429,7 @@ async function main() {
           filter = next;
         }
         render();
+        syncUrl(filter); // mirror every toolbar edit (incl. the Pool-entry seed) into the URL
       },
     });
   }
@@ -390,6 +442,15 @@ async function main() {
   await hydratePoolPicker();
 
   await render();
+
+  // Back/forward: re-parse the URL, rebuild the filter over a FRESH seed, backfill the
+  // pool label, and repaint. We NEVER call syncUrl here (popstate READS the URL, it does
+  // not write it) — that, plus the string-compare guard in syncUrl, prevents a loop.
+  window.addEventListener('popstate', async () => {
+    filter = backfillPoolName(merge(makeSeed(), fromSearch(location.search, urlCtx)));
+    buildToolbar();
+    await render();
+  });
 
   // --- helpers scoped to main ---
   function addDays(date, days) {
@@ -411,6 +472,10 @@ async function main() {
       poolIdByName.clear();
       for (const p of poolsMeta) poolIdByName.set(p.name, p.pool_id);
       poolOptions = classifyPools(poolsMeta, dayAnswer);
+      // A URL-restored pool arrives as { id, name:null } — resolve its display name now
+      // (or drop an unknown/old slug to null; the pool_alias crosswalk resolves renames
+      // server-side, so a live slug still matches here).
+      filter = backfillPoolName(filter);
       const nearestPlannable = poolOptions.find((p) => p.state === 'plannable');
       if (nearestPlannable) {
         // The nearest plannable pool — the default seeded into `selectedPool` when the
