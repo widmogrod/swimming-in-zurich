@@ -158,6 +158,36 @@ test('closed / uncurated panels keep their honesty (FIX 3): closed reason kept, 
   assert.equal(uncurated.gantt, null);
 });
 
+// The Day→Pool continuity affordance: a header button that carries the selected pool
+// into Pool view. Rendered ONLY when opts.onOpenWeek is supplied, inside the header,
+// and invokes the callback on click (the app leaves selectedPool untouched so Pool view
+// opens on the SAME pool).
+test('onOpenWeek renders a header button that invokes the callback', () => {
+  const ts = newTs();
+  let opened = 0;
+  const p = createDetailPanel(mount(), {
+    detail: POOL,
+    basin: BASIN,
+    timescale: ts,
+    onOpenWeek: () => {
+      opened += 1;
+    },
+  });
+  const head = p.el.query(hasClass('detail__head'));
+  const btn = head.query(hasClass('detail__weekbtn'));
+  assert.ok(btn, 'the week button is inside the panel header');
+  assert.equal(btn.tagName, 'BUTTON');
+  assert.ok(btn.textContent.toLowerCase().includes("week"));
+  btn.dispatch('click');
+  assert.equal(opened, 1);
+});
+
+test('the week button is absent when no onOpenWeek callback is given', () => {
+  const ts = newTs();
+  const p = createDetailPanel(mount(), { detail: POOL, basin: BASIN, timescale: ts });
+  assert.equal(p.el.query(hasClass('detail__weekbtn')), null);
+});
+
 test('the panel embeds the LaneGantt on the SAME timescale instance (no desync possible)', () => {
   const ts = newTs();
   const p = createDetailPanel(mount(), { detail: POOL, basin: BASIN, timescale: ts });

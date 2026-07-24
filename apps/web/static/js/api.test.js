@@ -88,7 +88,7 @@ test('fetchDay returns the answer; a non-ok response degrades to an empty answer
 });
 
 test('fetchWeek assembles the 7 weekday answers in Mon…Sun order', async () => {
-  const filter = { place: { lat: null, lon: null }, pool: { value: 'oer', label: 'Oerlikon' } };
+  const filter = { place: { lat: null, lon: null }, selectedPool: { id: 'oer', name: 'Oerlikon' } };
   const routes = {};
   for (const iso of weekDates('2026-07-23')) {
     routes[swimUrl(filter, iso)] = {

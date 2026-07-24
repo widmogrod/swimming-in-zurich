@@ -112,14 +112,14 @@ export async function fetchDay(filter, iso, fetchImpl) {
  * fetchWeek(filter, weekIso, fetch?) → `{ facility, days:[{label, iso, answer}] }`
  * — the SAME shape the board's Pool mode consumes (weekRows). One `/swim` call
  * per weekday, gathered with Promise.all (Option A, no API change).
- * @param {object} filter FilterState (place/gender/age + the selected pool id/name).
+ * @param {object} filter FilterState (place/gender/age + the selectedPool id/name).
  */
 export async function fetchWeek(filter, weekIso, fetchImpl) {
   const dates = weekDates(weekIso);
   const answers = await Promise.all(
     dates.map((iso) => getJson(swimUrl(filter, iso), fetchImpl, { ...EMPTY_ANSWER })),
   );
-  const facility = filter.pool && filter.pool.label ? filter.pool.label : null;
+  const facility = filter.selectedPool?.name ? filter.selectedPool.name : null;
   const days = dates.map((iso, i) => ({ label: WEEKDAY_LABELS[i], iso, answer: answers[i] }));
   return { facility, days };
 }

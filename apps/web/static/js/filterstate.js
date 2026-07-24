@@ -14,6 +14,11 @@ export const DEFAULT_FILTER = Object.freeze({
   gender: '', // '' | 'female' | 'male' | 'diverse'
   age: null, // number | null
   mode: 'day', // 'day' | 'pool'
+  // The ONE currently-selected pool, shared by Day and Pool views:
+  // `{ id: <facility_id>, name: <display name> } | null`. `null` = no explicit
+  // choice yet. A normal top-level key — `merge` overwrites it WHOLESALE (never
+  // shallow-merged like `place`), and serialize/deserialize carry it for free.
+  selectedPool: null,
   lapOnly: false,
   eligibleOnly: false,
 });

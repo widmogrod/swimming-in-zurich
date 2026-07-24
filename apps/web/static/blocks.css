@@ -374,7 +374,39 @@ body {
 }
 
 .detail__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--s3);
   margin-bottom: var(--s3);
+}
+
+.detail__headtext {
+  min-width: 0;
+}
+
+/* "See this pool's week →" — the Day→Pool continuity affordance. Token-styled
+   pill matching the header theme button; never a raw hex here. */
+.detail__weekbtn {
+  flex: none;
+  height: var(--ctl-h);
+  padding: 0 var(--s3);
+  border: 1px solid var(--hair);
+  border-radius: var(--r-pill);
+  background: var(--surface);
+  color: var(--accent);
+  font: inherit;
+  font-size: var(--fs-caption);
+  font-weight: var(--fw-caption);
+  white-space: nowrap;
+  cursor: pointer;
+}
+.detail__weekbtn:hover {
+  border-color: var(--accent);
+}
+.detail__weekbtn:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
 }
 
 .detail__title {

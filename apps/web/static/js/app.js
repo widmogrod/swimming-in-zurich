@@ -20,7 +20,7 @@ import { createBoard, BOARD_DAY0, BOARD_DAY1, BOARD_PLOT } from './blocks/board.
 import { createDetailPanel } from './blocks/detailpanel.js';
 import { createBoardLegend } from './blocks/legend.js';
 import { createStateBlocks, emptyState } from './blocks/stateblocks.js';
-import { createFilterState } from './filterstate.js';
+import { createFilterState, merge } from './filterstate.js';
 import { makeTimescale } from './timescale.js';
 import { basinFromPanel, panelForBasin } from './blocks/cursor.js';
 import { formatLabel } from './components/datestepper.js';
@@ -145,6 +145,13 @@ async function main() {
   let defaultPool = null; // { value, label } — the nearest plannable pool
   const poolIdByName = new Map(); // facility name → pool_id (to open closed/uncurated rows)
 
+  // The persisted shared cursor (minutes-of-day) + the pool it belongs to. It survives
+  // re-renders so a mode-only switch (Day↔Pool on the SAME pool) KEEPS the cursor for
+  // continuity; changing the pool (a new combobox pick or a Day row click on a different
+  // pool) RESETS it to that pool's best-public (plan item 8).
+  let cursorMin = null;
+  let cursorPoolId = null;
+
   function headerLabel() {
     if (filter.mode === 'pool') {
       const [monIso] = weekDates(filter.date || today);
@@ -197,10 +204,22 @@ async function main() {
       state: opts.state || null,
       reason: opts.reason || null,
       accessTypes: opts.accessTypes || [],
+      // The single Day→Pool continuity affordance: open Pool view on the SAME pool.
+      // `selectedPool` is left untouched (it is already the clicked pool), so the week
+      // renders for it — plannable or honestly closed/uncurated (plan item 3).
+      onOpenWeek: () => {
+        filter = merge(filter, { mode: 'pool' });
+        buildToolbar(); // rebuild so VIEW shows Pool + the date stepper swaps to the pool picker + week stepper
+        render();
+      },
     });
     // Align the shared board cursor to the panel's resolved cursor (only the lane
-    // panel drives a cursor; the degraded states have none to align).
-    if (opts.basin && panel.cursorMin != null) moveCursors(panel.cursorMin);
+    // panel drives a cursor; the degraded states have none to align). Persist that
+    // resolved cursor so a later mode-only switch on the same pool keeps it.
+    if (opts.basin && panel.cursorMin != null) {
+      cursorMin = panel.cursorMin;
+      moveCursors(cursorMin);
+    }
   }
 
   function setCursor(min) {
@@ -222,14 +241,24 @@ async function main() {
     if (!row) return;
     if (row.options.length > 0) {
       const opt = row.options[0];
-      const detail = await fetchPoolDetail(opt.facility_id, filter.date || today);
+      // Persist the selection into the SHARED filter BEFORE opening the panel, so it
+      // survives re-renders and carries into Pool view (plan item 2).
+      const poolId = opt.facility_id;
+      filter = merge(filter, { selectedPool: { id: poolId, name: row.label } });
+      // Cursor: an explicit canvas click (min != null) places the cursor; otherwise a
+      // pool change resets to best-public (cursorMin=null → the panel picks it) while a
+      // same-pool open keeps the persisted cursor for continuity (plan item 8).
+      let openAt = min;
+      if (min == null) openAt = cursorPoolId === poolId ? cursorMin : null;
+      cursorPoolId = poolId;
+      const detail = await fetchPoolDetail(poolId, filter.date || today);
       const lanePanels = (detail && detail.lane_panels) || [];
       const lp = panelForBasin(lanePanels, opt.basin);
       const basin = lp ? basinFromPanel(lp) : null;
       const accessTypes = [...new Set(row.options.map((o) => o.access))];
       openPanel(detail, {
         basin,
-        cursorMin: min,
+        cursorMin: openAt,
         distanceKm: opt.distance_km,
         basinName: opt.basin,
         accessTypes,
@@ -237,10 +266,15 @@ async function main() {
       return;
     }
     // Closed / uncurated row: no option to fetch by, so resolve the facility by name.
+    // The selection still persists (an unplannable pool is a legitimate choice — it
+    // opens an honest closed/uncurated week in Pool view; plan items 2 + 5).
+    const id = poolIdByName.get(row.label);
+    filter = merge(filter, { selectedPool: { id: id ?? null, name: row.label } });
+    cursorPoolId = id ?? null;
+    cursorMin = null;
     const closed = row.statuses.find((s) => s.status === 'closed');
     const state = closed ? 'closed' : 'uncurated';
     const st = closed || row.statuses.find((s) => s.status === 'uncurated') || row.statuses[0];
-    const id = poolIdByName.get(row.label);
     const detail = id ? await fetchPoolDetail(id, filter.date || today) : null;
     openPanel(detail, { state, reason: st ? st.detail : null, basinName: null });
   }
@@ -261,12 +295,21 @@ async function main() {
     });
   }
 
-  // Auto-open the nearest PLANNABLE pool on first paint so the panel + board↔gantt
-  // alignment are visible immediately (plan FIX 4). The API orders nearest-first, so
-  // the first option-bearing row is the nearest plannable pool. No plannable row →
-  // the helper stays.
-  async function autoOpenNearest() {
+  // Auto-open the panel on (re)paint. Day→Pool continuity (plan item 6): if a pool is
+  // already selected AND a row with its name exists (Day mode), open THAT row so the
+  // panel follows the selection across a mode switch; otherwise fall back to the nearest
+  // PLANNABLE pool (the API orders nearest-first, so the first option-bearing row). No
+  // matching / plannable row → the helper stays. Out-of-range keeps `selectedPool` in
+  // state and only falls the PANEL back — the selection is never silently cleared.
+  async function autoOpenSelectedOrNearest() {
     if (!board) return;
+    if (filter.selectedPool && filter.selectedPool.name) {
+      const sel = board.rows.findIndex((r) => r.label === filter.selectedPool.name);
+      if (sel >= 0) {
+        await onRowClick(sel, null);
+        return;
+      }
+    }
     const idx = board.rows.findIndex((r) => r.options && r.options.length > 0);
     if (idx < 0) return;
     await onRowClick(idx, null);
@@ -282,7 +325,7 @@ async function main() {
     let answerForEmpty; // the /swim answer the no-pools empty state is judged against
     if (filter.mode === 'pool') {
       const week = await fetchWeek(filter, filter.date || today);
-      const focused = focusWeekOnPool(week, filter.pool ? filter.pool.label : week.facility);
+      const focused = focusWeekOnPool(week, filter.selectedPool?.name ?? week.facility);
       data = { week: applyLapWeek(focused, filter.lapOnly) };
       answerForEmpty = {
         options: data.week.days.flatMap((d) => d.answer.options),
@@ -305,9 +348,9 @@ async function main() {
       createStateBlocks(emptyHost, { answer: answerForEmpty });
       boardHost.appendChild(emptyHost);
     }
-    // Never a blank rail: show the helper, then auto-open the nearest plannable pool.
+    // Never a blank rail: show the helper, then auto-open the selected (or nearest) pool.
     renderPanelHelper();
-    await autoOpenNearest();
+    await autoOpenSelectedOrNearest();
   }
 
   // Rebuild the toolbar with the current classified pool list (called after /pools +
@@ -322,10 +365,14 @@ async function main() {
         dateBounds: { today, min: today, max: isoDate(addDays(new Date(), 60)) },
       },
       onChange: (next) => {
-        // Entering Pool mode with no pool chosen yet → default to the nearest plannable
-        // pool so the board opens on a real, named pool (plan item 3).
-        if (next.mode === 'pool' && !next.pool && defaultPool) {
-          filter = { ...next, pool: { ...defaultPool } };
+        // Entering Pool mode with NO pool selected yet → seed the nearest plannable pool
+        // so the combobox + board open on a real, named pool (plan item 5). A non-null
+        // selectedPool is NEVER overridden — an already-chosen (even unplannable) pool is
+        // kept and its week renders honestly.
+        if (next.mode === 'pool' && !next.selectedPool && defaultPool) {
+          filter = merge(next, {
+            selectedPool: { id: defaultPool.value, name: defaultPool.label },
+          });
           buildToolbar(); // re-mount so the combobox shows the auto-selected pool name
         } else {
           filter = next;
@@ -366,10 +413,11 @@ async function main() {
       poolOptions = classifyPools(poolsMeta, dayAnswer);
       const nearestPlannable = poolOptions.find((p) => p.state === 'plannable');
       if (nearestPlannable) {
+        // The nearest plannable pool — the default seeded into `selectedPool` when the
+        // user first enters Pool mode without a choice (see buildToolbar onChange). We do
+        // NOT pre-write it here: Day mode's first paint auto-opens (and thus selects) the
+        // nearest pool on its own, and a non-null selectedPool must never be overridden.
         defaultPool = { value: nearestPlannable.value, label: nearestPlannable.label };
-        // Seed filter.pool so a switch to Pool mode surfaces the pool's identity even
-        // before the user touches the picker.
-        if (!filter.pool) filter = { ...filter, pool: { ...defaultPool } };
       }
       buildToolbar();
     } catch {

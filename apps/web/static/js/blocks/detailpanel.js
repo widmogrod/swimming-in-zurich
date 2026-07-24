@@ -106,6 +106,8 @@ function tempText(basinOut) {
  * @param {object} [opts.filter] `{ gender, age }` for the eligibility badge.
  * @param {number} [opts.cursorMin] initial cursor minutes-of-day.
  * @param {number|null} [opts.distanceKm] distance from the `/swim` option (null → "not shown").
+ * @param {function} [opts.onOpenWeek] when set, renders a "See this pool's week →"
+ *   button in the header that invokes it (Day → Pool continuity for the selected pool).
  * @returns {{el, headlineAt, setCursor, gantt, cursorMin}}
  */
 export function createDetailPanel(el, opts = {}) {
@@ -143,17 +145,32 @@ export function createDetailPanel(el, opts = {}) {
   el.setAttribute('role', 'region');
   el.setAttribute('aria-label', `${detail.facility_name || 'Pool'} — ${subName}`.trim());
 
-  // --- header: facility + basin name ---
+  // --- header: facility + basin name, plus the "see this pool's week" affordance ---
   const head = doc.createElement('div');
   head.className = 'detail__head';
+  const headText = doc.createElement('div');
+  headText.className = 'detail__headtext';
   const title = doc.createElement('h3');
   title.className = 'detail__title';
   title.textContent = detail.facility_name || 'Pool';
   const sub = doc.createElement('div');
   sub.className = 'detail__sub';
   sub.textContent = subName;
-  head.appendChild(title);
-  head.appendChild(sub);
+  headText.appendChild(title);
+  headText.appendChild(sub);
+  head.appendChild(headText);
+  // "See this pool's week →" — the single affordance that carries the SELECTED pool
+  // from Day view into Pool view. Present for EVERY selected pool (plannable AND
+  // unplannable: an unplannable pool opens an honest, closed/uncurated week — the
+  // button is never disabled). Token-styled, keyboard-accessible.
+  if (opts.onOpenWeek) {
+    const weekBtn = doc.createElement('button');
+    weekBtn.type = 'button';
+    weekBtn.className = 'detail__weekbtn';
+    weekBtn.textContent = "See this pool's week →";
+    weekBtn.addEventListener('click', () => opts.onOpenWeek());
+    head.appendChild(weekBtn);
+  }
   el.appendChild(head);
 
   // --- headline: PUBLIC LANES AT CURSOR (not peak) + pips + peak note. ONLY for a

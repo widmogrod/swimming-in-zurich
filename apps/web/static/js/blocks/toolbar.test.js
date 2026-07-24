@@ -109,6 +109,31 @@ test('the busyness toggle is disabled and exposes its reason (honesty invariant)
   assert.equal(toolbar.controls.busyness.checked, false);
 });
 
+// The pool combobox is the READ/WRITE surface for the ONE shared `selectedPool`
+// (retiring the old smuggled `filter.pool`). Its value must read selectedPool.id, and
+// picking an option must write `{ id, name }` back — never a `pool` key.
+test('pool combobox reads selectedPool.id and writes selectedPool on pick (no filter.pool)', () => {
+  const el = mount();
+  const emitted = [];
+  const toolbar = createFilterToolbar(el, {
+    props: { ...PROPS, filter: { mode: 'pool', selectedPool: { id: 'oer', name: 'Hallenbad Oerlikon' } } },
+    onChange: (f) => emitted.push(f),
+  });
+  // The combobox mounts with the selected pool's NAME shown (value read from its id).
+  const combo = toolbar.controls.context.query((c) => c.classList.contains('ui-combo'));
+  const input = combo.query((c) => c.tagName === 'INPUT' || c.classList.contains('ui-combo__input'));
+  assert.equal(input.value, 'Hallenbad Oerlikon');
+
+  // Picking another option emits selectedPool = { id, name } and NO `pool` key.
+  const opt = combo.queryAll((c) => c.classList.contains('ui-combo__opt')).find(
+    (li) => li.dataset.value === 'city',
+  );
+  opt.dispatch('mousedown');
+  const last = emitted[emitted.length - 1];
+  assert.deepEqual(last.selectedPool, { id: 'city', name: 'Hallenbad City' });
+  assert.equal(last.pool, undefined);
+});
+
 test('place selection emits lat/lon/label into the merged state', () => {
   const { toolbar, emitted } = makeToolbar();
   // The PlaceTypeahead renders one <li> per preset; selecting it fires onChange.

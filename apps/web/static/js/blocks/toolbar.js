@@ -204,13 +204,13 @@ export function createFilterToolbar(el, opts = {}) {
       contextControl = createCombobox(comboHost, {
         props: {
           options: pools,
-          value: filter.pool ? filter.pool.value : null,
+          value: filter.selectedPool?.id ?? null,
           label: 'Pool',
           placeholder: 'Search a pool…',
         },
         onChange: (value) => {
           const opt = pools.find((p) => p.value === value) || null;
-          update({ pool: opt ? { value: opt.value, label: opt.label } : null });
+          update({ selectedPool: opt ? { id: opt.value, name: opt.label } : null });
         },
       });
     } else {

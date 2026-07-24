@@ -414,7 +414,7 @@ export function createBoard(el, opts = {}) {
   // name (+ its basin(s)), so the board itself surfaces WHICH pool it is (plan item 3).
   function headCaption(rows) {
     if (filter.mode === 'pool') {
-      const name = filter.pool && filter.pool.label ? filter.pool.label : (data.week && data.week.facility) || 'Pool';
+      const name = filter.selectedPool?.name ? filter.selectedPool.name : (data.week && data.week.facility) || 'Pool';
       const basins = [...new Set(rows.flatMap((r) => r.options.map((o) => o.basin)).filter(Boolean))];
       return basins.length ? `${name} · ${basins.join(' / ')}` : name;
     }

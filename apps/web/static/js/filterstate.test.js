@@ -36,11 +36,33 @@ test('serialize/deserialize round-trips a full state', () => {
     mode: 'pool',
     date: '2026-07-23',
     week: '2026-07-20',
+    selectedPool: { id: 'oer', name: 'Hallenbad Oerlikon' },
     lapOnly: true,
     eligibleOnly: true,
     place: { lat: 47.1, lon: 8.4, label: 'Zürichhorn' },
   });
   assert.deepEqual(deserialize(serialize(s)), s);
+});
+
+// selectedPool is the ONE shared "currently selected pool" (Day + Pool views). It is
+// a declared top-level key (default null), overwritten WHOLESALE by merge (NOT
+// shallow-merged like `place`), so a patch can both set a new pool and clear it.
+test('selectedPool defaults to null and merge overwrites it wholesale (set + clear)', () => {
+  assert.equal(DEFAULT_FILTER.selectedPool, null);
+  assert.equal(createFilterState().selectedPool, null);
+
+  const chosen = merge(createFilterState(), {
+    selectedPool: { id: 'oer', name: 'Hallenbad Oerlikon' },
+  });
+  assert.deepEqual(chosen.selectedPool, { id: 'oer', name: 'Hallenbad Oerlikon' });
+
+  // A new pick replaces the whole object (no field bleed-through from the old pool).
+  const repicked = merge(chosen, { selectedPool: { id: 'city', name: 'Hallenbad City' } });
+  assert.deepEqual(repicked.selectedPool, { id: 'city', name: 'Hallenbad City' });
+
+  // null clears it (no explicit choice) — proving it is not shallow-merged.
+  const cleared = merge(chosen, { selectedPool: null });
+  assert.equal(cleared.selectedPool, null);
 });
 
 test('createFilterState fills gaps from DEFAULT_FILTER', () => {
@@ -52,6 +74,7 @@ test('createFilterState fills gaps from DEFAULT_FILTER', () => {
     gender: '',
     age: null,
     mode: 'day',
+    selectedPool: null,
     lapOnly: false,
     eligibleOnly: false,
   });
