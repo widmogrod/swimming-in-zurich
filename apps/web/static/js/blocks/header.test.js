@@ -65,3 +65,56 @@ test('setDateLabel updates the datebox (Day → Pool week range)', () => {
   const datebox = el.query((c) => c.classList.contains('apphdr__datebox'));
   assert.equal(datebox.textContent, 'Week of Mon 20 Jul');
 });
+
+test('renders an accessible Copy-link button that copies the current href and confirms', () => {
+  // Stub the two browser globals the copy handler touches (headless node has neither).
+  const savedNav = globalThis.navigator;
+  const savedLoc = globalThis.location;
+  const copied = [];
+  Object.defineProperty(globalThis, 'navigator', {
+    value: { clipboard: { writeText: (t) => copied.push(t) } },
+    configurable: true,
+  });
+  Object.defineProperty(globalThis, 'location', {
+    value: { href: 'https://swim.example/?view=pool&pool=hallenbad-oerlikon' },
+    configurable: true,
+  });
+  try {
+    const el = mount();
+    const header = createIdentityHeader(el, { props: {}, root: mount() });
+    const copy = header.copy;
+    assert.equal(copy.tagName, 'BUTTON');
+    assert.ok(copy.getAttribute('aria-label').toLowerCase().includes('copy'));
+    const label = copy.query((c) => c.classList.contains('apphdr__copylabel'));
+    assert.equal(label.textContent, 'Copy link');
+
+    copy.click();
+    // The current href was written to the clipboard, and the label flashed "Copied".
+    assert.deepEqual(copied, ['https://swim.example/?view=pool&pool=hallenbad-oerlikon']);
+    assert.equal(label.textContent, 'Copied');
+  } finally {
+    if (savedNav === undefined) delete globalThis.navigator;
+    else Object.defineProperty(globalThis, 'navigator', { value: savedNav, configurable: true });
+    if (savedLoc === undefined) delete globalThis.location;
+    else Object.defineProperty(globalThis, 'location', { value: savedLoc, configurable: true });
+  }
+});
+
+test('the Copy-link handler does not throw when no clipboard is available', () => {
+  const savedNav = globalThis.navigator;
+  const savedLoc = globalThis.location;
+  if (savedNav !== undefined) delete globalThis.navigator;
+  if (savedLoc !== undefined) delete globalThis.location;
+  try {
+    const el = mount();
+    const header = createIdentityHeader(el, { props: {}, root: mount() });
+    assert.doesNotThrow(() => header.copy.click()); // guarded — no navigator/location
+    const label = header.copy.query((c) => c.classList.contains('apphdr__copylabel'));
+    assert.equal(label.textContent, 'Copied'); // still confirms optimistically
+  } finally {
+    if (savedNav !== undefined)
+      Object.defineProperty(globalThis, 'navigator', { value: savedNav, configurable: true });
+    if (savedLoc !== undefined)
+      Object.defineProperty(globalThis, 'location', { value: savedLoc, configurable: true });
+  }
+});

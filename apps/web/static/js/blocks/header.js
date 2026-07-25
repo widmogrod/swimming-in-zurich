@@ -66,6 +66,40 @@ export function createIdentityHeader(el, opts = {}) {
   datebox.className = 'apphdr__datebox tnum';
   datebox.textContent = props.dateLabel || '';
 
+  // --- copy link: the "share as a link" surface (the URL already auto-mirrors the
+  // filter, so this just copies the current href). It touches `navigator.clipboard`
+  // and `location` — the ONLY impure bit of the header — guarded so a headless / no-
+  // clipboard context (or a test stub) never throws.
+  const copy = doc.createElement('button');
+  copy.setAttribute('type', 'button');
+  copy.className = 'apphdr__copy';
+  copy.setAttribute('aria-label', 'Copy a shareable link to this view');
+  const copyIcon = doc.createElement('span');
+  copyIcon.setAttribute('aria-hidden', 'true');
+  copyIcon.textContent = '🔗';
+  const copyLabel = doc.createElement('span');
+  copyLabel.className = 'apphdr__copylabel';
+  copyLabel.setAttribute('aria-live', 'polite');
+  copyLabel.textContent = 'Copy link';
+  copy.appendChild(copyIcon);
+  copy.appendChild(copyLabel);
+
+  let copyTimer = null;
+  function flashCopied() {
+    copyLabel.textContent = 'Copied';
+    if (copyTimer) clearTimeout(copyTimer);
+    copyTimer = setTimeout(() => {
+      copyLabel.textContent = 'Copy link';
+    }, 1600);
+    if (copyTimer && typeof copyTimer.unref === 'function') copyTimer.unref();
+  }
+  copy.addEventListener('click', () => {
+    const href = globalThis.location != null ? globalThis.location.href : '';
+    const clip = globalThis.navigator != null ? globalThis.navigator.clipboard : null;
+    if (clip && typeof clip.writeText === 'function') clip.writeText(href);
+    flashCopied();
+  });
+
   // --- theme toggle: cycles auto → light → dark ---
   const toggle = doc.createElement('button');
   toggle.setAttribute('type', 'button');
@@ -86,6 +120,7 @@ export function createIdentityHeader(el, opts = {}) {
 
   el.appendChild(brand);
   el.appendChild(datebox);
+  el.appendChild(copy);
   el.appendChild(toggle);
   renderToggle();
   applyTheme(root, theme);
@@ -93,6 +128,7 @@ export function createIdentityHeader(el, opts = {}) {
   return {
     el,
     toggle,
+    copy,
     setDateLabel(text) {
       datebox.textContent = text || '';
     },

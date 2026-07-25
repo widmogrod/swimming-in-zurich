@@ -662,7 +662,8 @@ body {
   font-weight: var(--fw-caption);
   color: var(--ink-2);
 }
-.apphdr__theme {
+.apphdr__theme,
+.apphdr__copy {
   height: var(--ctl-h);
   padding: 0 var(--s3);
   border: 1px solid var(--hair);
@@ -673,7 +674,19 @@ body {
   font-size: var(--fs-caption);
   cursor: pointer;
 }
-.apphdr__theme:focus-visible {
+/* Copy-link: icon + label sit inline; hover borrows the accent hairline like the
+   other pill controls. The label swaps to "Copied" briefly on click (JS-driven). */
+.apphdr__copy {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s1);
+}
+.apphdr__copy:hover {
+  border-color: var(--accent);
+  color: var(--accent-ink);
+}
+.apphdr__theme:focus-visible,
+.apphdr__copy:focus-visible {
   outline: none;
   box-shadow: var(--focus-ring);
 }
