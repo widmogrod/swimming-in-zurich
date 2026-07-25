@@ -42,6 +42,7 @@ from swimzh.storage import codec
 from swimzh.storage.rows import PoolAliasRow, PoolRow, PoolSpine, PoolXrefRow
 
 _PROSE_SOURCE = "infrastruktur"
+_LOCATION_SOURCE = "catalog"
 
 
 def build_spine(
@@ -80,17 +81,19 @@ def build_spine(
         # generic WFS catalog kind; catalog is the authority only where no curation exists.
         kind = identity.kind if identity is not None else entry.kind
 
-        # Curated pool -> serialize its curated facility. Otherwise, best-effort prose extraction:
-        # a location-only pool whose WFS `infrastruktur` prose (carried on `entry.description`)
-        # names swimmable basins gains an auto-extracted, SCHEDULE-LESS facility (PARSED_PROSE
-        # basins + amenity Features). Offline, from committed inputs only. `PoolId` is minted here
-        # (an allowed seam), exactly as for the curated rows.
-        facility_doc: str | None
+        # Curated pool -> serialize its curated facility. Otherwise mint a SCHEDULE-LESS
+        # location-only facility so EVERY catalog pool has a non-NULL `facility_doc` (a viewable
+        # `/pools/{id}` detail — no 404). Best-effort WFS `infrastruktur` prose (on
+        # `entry.description`) supplies PARSED_PROSE basins + amenity Features when it names any;
+        # a pool whose prose names none (e.g. an outdoor pin like Freibad Heuried) gets a
+        # location-only facility with ZERO basins. Either way it stays uncurated and yields no
+        # `/swim` option (no basin has a rule). Offline, from committed inputs only; `PoolId` is
+        # minted here (an allowed seam), exactly as for the curated rows.
+        facility_doc: str
         if facility is not None:
             facility_doc = codec.dumps(facility)
         else:
-            prose = _prose_facility(entry, pool_id, kind)
-            facility_doc = codec.dumps(prose) if prose is not None else None
+            facility_doc = codec.dumps(_location_only_facility(entry, pool_id, kind, identity))
 
         pools.append(
             PoolRow(
@@ -132,32 +135,52 @@ def build_spine(
     return PoolSpine(pools=tuple(pools), aliases=tuple(aliases), xrefs=tuple(xrefs))
 
 
-def _prose_facility(entry: PoolCatalogEntry, pool_id: PoolId, kind: PoolKind) -> Facility | None:
-    """Extract a schedule-less ``Facility`` from a location-only pool's WFS ``infrastruktur``
-    prose (``entry.description``). Returns ``None`` when the prose names no swimmable basin — a
-    facility must have water, so amenity-only prose (a lone "Restaurant") does not mint one, and
-    the pool stays purely location-only (no ``facility_doc``).
+def _location_only_facility(
+    entry: PoolCatalogEntry,
+    pool_id: PoolId,
+    kind: PoolKind,
+    identity: PoolIdentity | None,
+) -> Facility:
+    """Mint a schedule-less ``Facility`` for a catalog pool that has no curated schedule, so
+    every roster pool has a non-NULL ``facility_doc`` and a viewable ``/pools/{id}`` detail —
+    WITHOUT becoming a ``/swim`` option or flipping to ``curated``.
 
-    Because every parsed basin is schedule-less (``basin_from_physical``), the derived facility is
-    ``uncurated`` (``codec.is_curated`` needs a rule) and produces no ``/swim`` option — it is
-    surfaced only in ``/pools/{id}`` detail, with the PARSED_PROSE caveat (Decision #5).
+    Basins are best-effort from the pool's WFS ``infrastruktur`` prose (``entry.description``)
+    when it names swimmable basins (schedule-less ``PARSED_PROSE``); a pool whose prose names
+    none (an outdoor pin like *Freibad Heuried*, whose catalog description is the literal
+    ``"NULL"``) gets a **location-only** facility with ZERO basins. Either way every basin is
+    rule-less, so ``codec.is_curated`` stays False and ``find_swim_options`` yields no option
+    (it ``continue``s on ``not basin.rules``) and no spurious "closed" status — the uncurated
+    invariant holds.
+
+    Identity is the **registry** identity when the pool has a registry entry, so external keys
+    (crowdmonitor today, ``baditicker_poiid`` next) survive onto an *uncurated* pool's facility
+    identity — falling back to the bare ``PoolIdentity(facility_id, name, kind)`` only when no
+    registry entry exists. Geo is stamped from the committed catalog (parity with the curated
+    path). Offline, from committed inputs only.
     """
-    if entry.description is None:
-        return None
-    physicals = parse_infrastruktur(entry.description)
-    if not physicals:
-        return None
+    prose = entry.description
+    physicals = parse_infrastruktur(prose) if prose is not None else ()
     basins = tuple(
         basin_from_physical(physical, BasinId(f"{entry.pool_id}-prose-{index}"))
         for index, physical in enumerate(physicals)
     )
+    features = parse_features(prose) if prose is not None else ()
+    mint_identity = (
+        identity
+        if identity is not None
+        else PoolIdentity(facility_id=pool_id, name=entry.name, kind=kind)
+    )
+    # Honest provenance: a prose-derived facility credits `infrastruktur`; a pure location-only
+    # pool (no prose basins/features) credits the `catalog` it was minted from.
+    source = _PROSE_SOURCE if basins or features else _LOCATION_SOURCE
     return Facility(
-        identity=PoolIdentity(facility_id=pool_id, name=entry.name, kind=kind),
+        identity=mint_identity,
         address=entry.address,
-        provenance=Provenance(source=_PROSE_SOURCE, curated=False),
+        provenance=Provenance(source=source, curated=False),
         basins=basins,
         geo=entry.geo,
-        features=parse_features(entry.description),
+        features=features,
     )
 
 

@@ -58,6 +58,48 @@ def test_pool_detail_unknown_facility_is_404() -> None:
     assert response.status_code == 404
 
 
+def test_pool_detail_location_only_pool_is_viewable() -> None:
+    """S1 acceptance: Freibad Heuried — an outdoor pin with no curated/prose facility — now
+    returns a location-only detail (200) instead of a 404. Name + location come back on the
+    detail; its `kind` + coordinates are served by the `/pools` listing (`PoolOut`), and its
+    `basins` list is empty (location-only, zero basins)."""
+    with TestClient(app) as client:
+        detail = client.get("/pools/freibad-heuried")
+        listing = client.get("/pools").json()
+    assert detail.status_code == 200  # was 404 before S1
+    body = detail.json()
+    assert body["facility_id"] == "freibad-heuried"
+    assert body["facility_name"] == "Freibad Heuried"  # name
+    assert body["address"]  # location (the catalog address is present)
+    assert body["basins"] == []  # location-only: zero basins, rendered without error
+    assert body["lane_panels"] == [] and body["features"] == []
+    assert body["provenance"]["curated"] is False  # never flipped to curated
+    # kind + geo (location) are on the listing entry for the same pool.
+    heuried = next(p for p in listing["pools"] if p["pool_id"] == "freibad-heuried")
+    assert heuried["kind"] == "outdoor"
+    assert heuried["lat"] is not None and heuried["lon"] is not None
+    assert heuried["curated"] is False
+
+
+def test_location_only_pool_is_never_a_swim_option_nor_closed() -> None:
+    """S1 uncurated invariant: a location-only pool (Heuried) produces NO `/swim` option and no
+    spurious `closed` status — it is reported `uncurated` (identity known, schedule not), never
+    conflated with a real session or a stated closure."""
+    swim_params = {
+        "at": "2026-09-15T09:00",
+        "gender": "female",
+        "age": 34,
+        "eligible_only": "false",
+    }
+    with TestClient(app) as client:
+        swim = client.get("/swim", params=swim_params).json()
+    assert "Freibad Heuried" not in {o["facility"] for o in swim["options"]}
+    closed = {s["facility"] for s in swim["statuses"] if s["status"] == "closed"}
+    assert "Freibad Heuried" not in closed  # no spurious "closed" for a rule-less facility
+    uncurated = {s["facility"] for s in swim["statuses"] if s["status"] == "uncurated"}
+    assert "Freibad Heuried" in uncurated
+
+
 def test_pool_detail_has_no_lane_panels_without_a_plan() -> None:
     # The curated app carries no lane plans yet: the detail resolves (200) but its lane-panel
     # list is empty — never an invented panel.

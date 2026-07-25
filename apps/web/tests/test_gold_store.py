@@ -58,8 +58,10 @@ def test_facility_resolves_a_catalog_pool_to_its_schedule(tmp_path: Path) -> Non
     # A curated catalog id resolves to its facility (schedule) via the canonical-id join.
     facility = data.facility("hallenbad-city")
     assert facility is not None and facility.identity.name == "Hallenbad City"
-    # A pure location-only pool (no prose describing a basin) has no facility_doc → None (→ 404).
-    assert data.facility("schulschwimmanlage-hardau") is None
+    # S1: a pure location-only pool (no prose describing a basin) now resolves to a SCHEDULE-LESS,
+    # ZERO-basin facility (viewable detail, no 404) — not None. Only an UNKNOWN id is None (→ 404).
+    hardau = data.facility("schulschwimmanlage-hardau")
+    assert hardau is not None and hardau.basins == () and not hardau.provenance.curated
     assert data.facility("does-not-exist") is None
     # Slice F: a location-only pool whose WFS prose names basins resolves to a SCHEDULE-LESS
     # facility (auto-extracted PARSED_PROSE basins) — surfaced in detail, but never a /swim option.

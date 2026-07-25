@@ -229,6 +229,7 @@ Optional: unset config → `None` provider → `TempUnavailable("live temperatur
 
 | date | slice | status | divergence from plan | tech debt created | human review? |
 |------|-------|--------|----------------------|-------------------|---------------|
+| 2026-07-26 | S1 | done | `kind`/geo served by the `/pools` list, not the detail body (deferred to S2, which owns `model.py`); the prose mint now also reuses the registry identity (additive) | none | yes |
 
 ## Decisions & divergences
 
@@ -253,6 +254,23 @@ Optional: unset config → `None` provider → `TempUnavailable("live temperatur
   acceptance criterion proving an uncurated pool's registry identity survives the round-trip.
   Chose keys-on-identity (matching the crowdmonitor precedent) over the critic's resolve-via-
   xref alternative, which would add a new read-side xref query to the request path.
+
+- **2026-07-26 (S1 implementation)** — `_prose_facility` was replaced by
+  `_location_only_facility`, which ALWAYS mints a schedule-less `Facility` (prose
+  `PARSED_PROSE` basins when the description names any, else **zero basins**), with provenance
+  `source="catalog"` for pure location-only pools. Result: `GoldRepository` now returns all 57
+  facilities (was 9); the 53 rule-less ones are correctly skipped by `find_swim_options`
+  (`continue` on `not basin.rules`) — so the request path now iterates the full roster for
+  detail (noted for S2/S3 `read_temperature` wiring). A `freibad-heuried` outdoor entry was
+  added to `data/registry.yaml` (`crowdmonitor_keys: []`) to exercise the registry-identity
+  seam. **Divergence adjudicated (critic, non-blocking):** `kind`/`lat`/`lon` are NOT on
+  `FacilityDetailOut` — they come from `PoolOut` on `/pools`; adding them to the detail body is
+  an S2 change (S2 owns `model.py`). Accepted as consistent with the plan's own slicing.
+- **2026-07-26 (S1 process)** — Known worktree-isolation trap hit: the slice/critic subagents'
+  cwd was pinned to the session launch dir (main checkout `feat/new-ui`), so S1 landed there,
+  not in the plan worktree. Relocated by `git diff` → `git apply` into the worktree, restored
+  the main checkout clean, and re-ran the FULL QA chain **in the worktree** myself (a
+  cwd-pinned `qa-gate` subagent would re-hit the trap). All green there before commit.
 
 ## Summary
 

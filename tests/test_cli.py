@@ -138,11 +138,11 @@ def test_scrape_gold_composes_onto_built_store(tmp_path: Path) -> None:
         fetched_at=FETCHED_AT,
     )
     assert code == 0
-    # No second row for City: the scrape composed onto the curated pool. The read path holds 4
-    # fully-curated pools + 3 lane-plan-only pools + 2 Slice-F prose pools = 9 (and exactly one
-    # City row, no long-slug duplicate).
+    # No second row for City: the scrape composed onto the curated pool. Since S1 gives EVERY
+    # catalog pool a `facility_doc` (universal detail), the read path holds the full roster (57),
+    # and there is exactly one City row (no long-slug duplicate).
     facilities = GoldRepository(open_db(db)).load_all()
-    assert len(facilities) == 9
+    assert len(facilities) == 57
     assert sum(1 for f in facilities if str(f.identity.facility_id) == "hallenbad-city") == 1
 
 

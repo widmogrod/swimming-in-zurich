@@ -66,19 +66,24 @@ def test_pool_facility_doc_read_matches_curated_dataset_modulo_geo(tmp_path: Pat
     for pool_id in scheduled:
         assert _without_geo(scheduled[pool_id]) == _without_geo(scheduled_curated[pool_id]), pool_id
 
-    # Schedule-less read-path pools are of two kinds. Pin BOTH exactly so a catalog/curation change
-    # surfaces here, not silently: the Slice-F prose pools (all PARSED_PROSE basins) and the
-    # lane-plan-only curated pools (CURATED basins carrying only a `lane_plan_source`).
+    # Schedule-less read-path pools are of THREE kinds (S1 added the third). Pin each exactly so a
+    # catalog/curation change surfaces here, not silently: location-only pools (ZERO basins — the
+    # universal-detail remainder), Slice-F prose pools (all PARSED_PROSE basins), and lane-plan-only
+    # curated pools (CURATED basins carrying only a `lane_plan_source`).
     schedule_less = {pid for pid, f in new_read.items() if not any(b.rules for b in f.basins)}
+    location_only = {pid for pid in schedule_less if not new_read[pid].basins}
+    assert "freibad-heuried" in location_only  # S1: the exemplar outdoor pin, zero basins
+    assert location_only, "S1: every catalog pool that names no basin is a location-only blob"
+    with_basins = schedule_less - location_only
     prose = {
         pid
-        for pid in schedule_less
+        for pid in with_basins
         if all(b.physical_source is BasinSource.PARSED_PROSE for b in new_read[pid].basins)
     }
     assert prose == {"hallenbad-altstetten", "strandbad-tiefenbrunnen"}
     for pid in prose:
         assert new_read[pid].basins
-    lane_only = schedule_less - prose
+    lane_only = with_basins - prose
     assert lane_only == {"hallenbad-leimbach", "hallenbad-blaesi", "waermebad-kaeferberg"}
     for pid in lane_only:
         basins = new_read[pid].basins

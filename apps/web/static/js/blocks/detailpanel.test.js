@@ -250,3 +250,38 @@ test('the panel embeds the LaneGantt on the SAME timescale instance (no desync p
   assert.equal(p.gantt.timescale, ts); // literally the same object
   assert.ok(p.el.query(hasClass('gantt')));
 });
+
+test('S1: a basin-less location-only detail (Heuried-shaped) renders without error', () => {
+  // A universal-detail pool (S1): the `/pools/{id}` response carries name + location but an
+  // EMPTY basins list. The panel must render its facts + the honest "uncurated" note without
+  // throwing on the zero-basin facility (no basin, no timescale, no lane plan).
+  const detail = {
+    facility_id: 'freibad-heuried',
+    facility_name: 'Freibad Heuried',
+    address: '8055 Zürich',
+    basins: [],
+    features: [],
+    lane_panels: [],
+    prices: null,
+    provenance: { curated: false, source: 'catalog', valid_as_of: null },
+  };
+  const p = createDetailPanel(mount(), {
+    detail,
+    basin: null,
+    state: 'uncurated',
+    officialUrl: 'https://official.example/heuried',
+  });
+  // Title reflects the pool; the facts block rendered.
+  assert.equal(p.el.query(hasClass('detail__title')).textContent, 'Freibad Heuried');
+  assert.ok(p.el.query(hasClass('detail__facts')));
+  // No per-lane headline for a basin-less panel, and no Gantt was built.
+  assert.equal(p.el.query(hasClass('detail__headline')), null);
+  assert.equal(p.gantt, null);
+  // Water temp degrades honestly to "Not listed" (no basin to read a temperature from).
+  const water = p.el.queryAll(hasClass('detail__factval')).map((e) => e.textContent);
+  assert.ok(water.some((t) => t.includes('Not listed')));
+  // The uncurated honesty note is present (location known, timetable not).
+  assert.ok(p.el.query((e) => e.classList.contains('detail__note--uncurated')));
+  // headlineAt is safe to call on a basin-less panel (returns the zero reading, no throw).
+  assert.deepEqual(p.headlineAt(600), { public: 0, total: 0 });
+});

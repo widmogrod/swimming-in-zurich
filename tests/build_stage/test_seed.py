@@ -69,14 +69,16 @@ def test_curated_pools_carry_a_facility_blob_uncurated_carry_at_most_prose(
     for p in spine.pools:
         if codec.is_curated(p.facility_doc):
             assert p.facility_doc is not None
-        elif p.facility_doc is not None:
-            # A present-but-uncurated blob is SCHEDULE-LESS (no rule → no `/swim` option) and is
-            # one of two kinds: a Slice-F prose pool (auto-extracted PARSED_PROSE basins), or a
-            # lane-plan-only pool (hand-authored CURATED basin carrying only a `lane_plan_source`
-            # — leimbach/blaesi/käferberg). Both are legitimately uncurated.
+        else:
+            # S1: every catalog pool now carries a non-NULL blob, but an uncurated one is always
+            # SCHEDULE-LESS (no rule → no `/swim` option). It is one of three kinds: a location-only
+            # pool (ZERO basins — an outdoor pin like Freibad Heuried whose prose names no basin), a
+            # Slice-F prose pool (auto-extracted PARSED_PROSE basins), or a lane-plan-only pool (a
+            # hand-authored CURATED basin carrying only a `lane_plan_source` — leimbach/blaesi/
+            # käferberg). All three are legitimately uncurated.
+            assert p.facility_doc is not None  # S1: no roster pool has a NULL blob any more
             facility = codec.loads(p.facility_doc)
             assert not any(b.rules for b in facility.basins)
-            assert facility.basins  # a blob is only minted when it carries at least one basin
             for basin in facility.basins:
                 if basin.physical_source is BasinSource.PARSED_PROSE:
                     continue  # prose pool
@@ -116,6 +118,40 @@ def test_build_extracts_parsed_prose_basins_for_a_location_only_pool(spine: Pool
     diving = next(b for b in facility.basins if b.diving_platforms_m)
     assert diving.diving_platforms_m  # e.g. (1, 3, 5) from "Sprungbecken 1/3/5m"
     assert facility.features  # sauna/steam/slide/… from the non-Becken segments
+
+
+def test_every_catalog_pool_has_a_non_null_facility_doc(
+    spine: PoolSpine, catalog: tuple[PoolCatalogEntry, ...]
+) -> None:
+    # S1: universal detail. Every one of the ~57 catalog pools now carries a non-NULL
+    # `facility_doc`, so `/pools/{id}` never 404s for a real catalog pin (Heuried included).
+    assert len(spine.pools) == len(catalog) == 57
+    assert all(p.facility_doc is not None for p in spine.pools)
+
+
+def test_location_only_pool_is_zero_basin_and_uncurated(spine: PoolSpine) -> None:
+    # S1: Freibad Heuried is an outdoor pin whose catalog description is the literal "NULL" (no
+    # prose basins). It gets a location-only facility with ZERO basins that stays uncurated — so
+    # it is viewable in detail but never a `/swim` option.
+    row = next(p for p in spine.pools if p.id == PoolId("freibad-heuried"))
+    assert row.facility_doc is not None
+    facility = codec.loads(row.facility_doc)
+    assert facility.basins == ()  # location-only: no basin at all
+    assert facility.provenance.curated is False
+    assert codec.is_curated(row.facility_doc) is False
+
+
+def test_uncurated_pool_with_registry_entry_keeps_its_identity(spine: PoolSpine) -> None:
+    # S1 (round-2 fix): the location-only mint builds its `PoolIdentity` from `registry.get(id)`
+    # when a registry entry exists — so an *uncurated* pool's external identity fields survive the
+    # mint AND the gold round-trip (dumps in `build_spine` → `codec.loads` here). This is the exact
+    # seam S2's `baditicker_poiid` rides on; here the authored `aliases` prove a REGISTRY identity
+    # (not a bare `PoolIdentity(id, name, kind)`, whose aliases/keys would be empty) reached it.
+    row = next(p for p in spine.pools if p.id == PoolId("freibad-heuried"))
+    assert row.facility_doc is not None
+    identity = codec.loads(row.facility_doc).identity
+    assert identity.aliases == ("heuried", "Freibad Heuried")  # authored registry aliases survive
+    assert identity.crowdmonitor_keys == ()  # empty as authored (round-trips faithfully)
 
 
 def test_kaeferberg_kind_is_curated_wins_thermal(spine: PoolSpine) -> None:

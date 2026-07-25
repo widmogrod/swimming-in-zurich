@@ -70,13 +70,14 @@ def test_dataset_loads_curated_and_lane_plan_only_pools(dataset: Dataset) -> Non
         "Hallenbad Bläsi",
         "Wärmebad Käferberg",
     }
-    # Registry knows more than we have curated.
-    assert len(dataset.registry.identities) == 8
+    # Registry knows more than we have curated (9 since S1 added a Freibad Heuried identity so
+    # its live-data keys survive onto the location-only facility the build mints for it).
+    assert len(dataset.registry.identities) == 9
 
 
 def _roster(dataset: Dataset) -> tuple[RosterEntry, ...]:
     """The roster the app feeds `find_swim_options`, here derived from the curated dataset's
-    registry (8 known pools) so the three-state `uncurated = roster − scheduled` answer is
+    registry (9 known pools) so the three-state `uncurated = roster − scheduled` answer is
     exercised without a gold DB."""
     return tuple(
         RosterEntry(
@@ -114,6 +115,7 @@ def test_uncurated_facilities_are_distinguished_from_closed(dataset: Dataset) ->
         "Hallenbad Bläsi",
         "Hallenbad Leimbach",
         "Wärmebad Käferberg",
+        "Freibad Heuried",  # S1: registry-known outdoor pin, no schedule → uncurated (not closed)
     }
 
 

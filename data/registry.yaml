@@ -63,3 +63,13 @@ facilities:
     name: "Wärmebad Käferberg"
     kind: "thermal"
     aliases: ["kaeferberg", "Käferberg", "Kaeferberg", "Wärmebad Käferberg"]
+
+  # Outdoor pin, no curated schedule — but a registry identity so its external live-data keys
+  # (crowdmonitor today, baditicker next) survive onto the location-only facility the build
+  # mints for it. `crowdmonitor_keys` is empty (CrowdMonitor covers indoor baths only); the
+  # `aliases` prove the registry identity reaches the mint (S2 adds `baditicker_poiid: fb012`).
+  - facility_id: "freibad-heuried"
+    name: "Freibad Heuried"
+    kind: "outdoor"
+    crowdmonitor_keys: []
+    aliases: ["heuried", "Freibad Heuried"]
