@@ -96,6 +96,14 @@ describe("toParams / toSearch", () => {
     expect(roundTrip(future).date).toBe("2026-08-01");
   });
 
+  it("writes the date unchanged when the context carries no `today`", () => {
+    // No receiver `today` → the "equals today, omit" shortcut can't apply, so the date
+    // is always written (covers writtenDate's falsy-`today` branch).
+    const noToday: UrlStateContext = { ageTokens: CTX.ageTokens };
+    const s = seed({ mode: "day", date: TODAY });
+    expect(toParams(s, noToday).get("date")).toBe(TODAY);
+  });
+
   it("encodes age as a token, with a numeric fallback for off-chip ages", () => {
     const senior = seed({ age: 70 });
     expect(toParams(senior, CTX).get("age")).toBe("senior");

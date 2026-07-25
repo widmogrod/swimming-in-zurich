@@ -62,3 +62,7 @@ jobs:
 
       - name: Test (vitest + V8 coverage)
         run: npm run test
+
+      # CRAP reads the coverage vitest just wrote — must run AFTER test (mirrors pytest→crap).
+      - name: CRAP gate (TS, formula-parity with scripts/crap.py)
+        run: npm run crap

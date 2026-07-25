@@ -1,6 +1,6 @@
 ---
 type: plan
-status: in-progress      # draft -> approved -> in-progress -> done
+status: done             # draft -> approved -> in-progress -> done
 created: 2026-07-25
 feature: typescript-migration
 branch: plan/typescript-migration
@@ -253,6 +253,7 @@ Appended by /dev:implement after each slice — never rewritten. Newest row last
 |------|-------|--------|----------------------|-------------------|---------------|
 | 2026-07-25 | S1 | done | `module`/`target` = `nodenext`/`es2022` (not `esnext`; forced by tsc TS5110 given the plan's `moduleResolution: nodenext`) | none | yes (pause point) |
 | 2026-07-25 | S2 | done | node bridge scoped to `**/*.test.js` (Node 26 globs `.test.ts` too); eslint `project: tsconfig.dev.json` (not `projectService`); test self-contained (drops `filterstate` coupling — `merge` is a blind spread) | migration-window scaffolding (the `.test.js` glob + legacy-`.js` lint/fmt ignores) — shrinks to nothing as modules convert | yes (divergences + critic notes) |
+| 2026-07-25 | S3 | done | `crap_ts` iterates the eslint function list (not the coverage `fnMap`) + whole-file coverage fallback — closes an untested-`.ts`-escapes-the-gate hole the critic found in round 1 | join-miss on arrows uses file-level (not per-fn) coverage; statement- not branch-coverage (both parity-faithful to `crap.py`) — calibration caveats | yes (blocking bug found + fixed) |
 
 ## Decisions & divergences
 
@@ -349,6 +350,34 @@ Substantive choices made during implementation, with the why. Each entry dated.
   `writtenDate`'s `today`-falsy branch is the one uncovered branch (97.91%) — add a `ctx:{}` round-trip
   case so it doesn't drag the CRAP ratchet.
 
+- **2026-07-25 — S3 implemented (`crap_ts` gate at formula parity).** `scripts/crap_ts.mjs` mirrors
+  `scripts/crap.py`'s formula (`cc²·(1−cov)³ + cc`), offender rule, and top-N report; cc from
+  eslint's `complexity` rule (regex from the message), coverage from vitest's Istanbul
+  `coverage-final.json`. `[tool.crap-ts]` = 30/5 (same bar as Python; current max is `urlstate.ts`
+  `fromParams` cc 20 @ 100% → CRAP 20). **Critic round-1 blocking bug (found + fixed):** with
+  `coverage.all: true` a never-executed `.ts` appears in coverage but v8 writes only an
+  `(empty-report)` `fnMap`; the first implementation iterated `fnMap`, so every function in an
+  untested file was silently dropped — a `.ts` converted before its test escaped the gate (the exact
+  anti-gaming hole S3 exists to close). **Fix:** `collectScores` now iterates the **eslint** function
+  list (the primary source of functions, like `crap.py` iterates radon) and falls back to whole-file
+  statement coverage (→ 0% for a never-executed file) when a function has no real per-function
+  `fnMap` span. Re-verified against the critic's exact probe: an untested cc-9 function scores
+  CRAP 90 @ 0% → exit 1; `urlstate.ts` scoring unchanged. Non-blocking caveats (parity-faithful to
+  `crap.py`): a join-miss on an arrow uses file-level (not per-function) coverage; coverage is
+  statement- not branch-based.
+
 ## Summary
 
-Written when the plan reaches `done`; then distilled into `docs/summaries/typescript-migration.md`.
+Delivered in three slices, each critic-approved and gated on BOTH QA chains. **S1** compiles the UI
+with `tsc` (`allowJs`) from `apps/web/static/js` to a git-ignored `apps/web/static/dist`, served at
+`/static/dist/…` via all four repointed entry routers, with a `main()` build preflight and a separate
+`ts-qa` CI job — no `.ts` conversion, app verified booting from compiled output. **S2** migrates the
+pilot `urlstate.js`+test → strict TypeScript + vitest (V8 coverage), standing up eslint/prettier/
+vitest scoped to `**/*.ts`, with the `node --test` bridge scoped to `**/*.test.js`; the compiled
+`urlstate.ts` verified round-tripping a real URL in the browser. **S3** adds `scripts/crap_ts.mjs`, a
+CRAP gate at formula-parity with `scripts/crap.py`, wired into `npm run qa` (crap last) and the
+`ts-qa` CI job, with `coverage.all: true` + a whole-file fallback so untested modules can't hide.
+
+The incremental pipeline is now in place: converting the remaining 34 modules is follow-up work
+(each a small `.js → .ts` change that joins the lint/format/vitest/CRAP scope and drops out of the
+`node --test` bridge). Distilled into `docs/summaries/typescript-migration.md`.

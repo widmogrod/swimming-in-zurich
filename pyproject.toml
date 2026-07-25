@@ -92,6 +92,15 @@ fail_under = 95
 threshold = 30.0
 min-complexity = 5
 
+# TypeScript CRAP gate (scripts/crap_ts.mjs) — FORMULA parity with [tool.crap] above
+# (cc²·(1−cov)³ + cc; offender when cc > min-complexity AND crap > threshold). ESLint's
+# cyclomatic count differs algorithmically from radon's, so this is its own no-regression
+# ratchet; calibrated to current TS reality (max is urlstate.ts fromParams: cc 20 @ 100% cov
+# → CRAP 20), same 30/5 bar as the Python gate. Raise as coverage grows; never lower to pass.
+[tool.crap-ts]
+threshold = 30.0
+min-complexity = 5
+
 [dependency-groups]
 dev = [
     "fastapi>=0.139.2",

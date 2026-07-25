@@ -9,7 +9,8 @@
     "fmt": "prettier --write .",
     "fmt:check": "prettier --check .",
     "test": "vitest run --coverage",
-    "qa": "npm run fmt:check && npm run lint && npm run type-check && npm run test"
+    "crap": "node ../../../../scripts/crap_ts.mjs",
+    "qa": "npm run fmt:check && npm run lint && npm run type-check && npm run test && npm run crap"
   },
   "devDependencies": {
     "@vitest/coverage-v8": "^3.2.4",

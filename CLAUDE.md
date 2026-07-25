@@ -115,6 +115,31 @@ uv run pytest                 # writes coverage.json; enforces coverage fail_und
 uv run python scripts/crap.py # complexity²·(1−coverage)³ + complexity gate
 ```
 
+### TypeScript UI chain (SEPARATE from the Python chain — its own CI job `ts-qa`)
+
+The `apps/web/` UI is authored in TypeScript and **compiled** by `tsc` to git-ignored
+`apps/web/static/dist/` (served at `/static/dist/…`; see [[typescript-build-pipeline]]). Its QA
+chain runs from `apps/web/static/js/` and is **not** bridged into `uv run pytest` — the Python
+chain keeps only the `node --test` bridge for still-`.js` modules (scoped to `**/*.test.js` since
+Node 26's default discovery also matches `.test.ts`). Run in this order (crap LAST — it reads the
+coverage `vitest` writes, mirroring pytest→crap):
+
+```sh
+npm --prefix apps/web/static/js run qa   # fmt:check → lint → type-check → test → crap
+# or individually: npm run build | type-check | lint | fmt:check | test | crap
+```
+
+- `type-check` (`tsc -p tsconfig.dev.json --noEmit`) and `lint` (eslint) both cover **tests** at
+  full strictness. During the migration they are scoped to `**/*.ts`; legacy `.js` is ignored and
+  joins as each module converts.
+- **`scripts/crap_ts.mjs`** is the TS CRAP gate — the SAME formula as `scripts/crap.py`
+  (`cc²·(1−cov)³ + cc`, offender when `cc > min-complexity` AND `crap > threshold`; `[tool.crap-ts]`
+  in `pyproject.toml`). Parity is **formula** parity, not metric parity (eslint's cyclomatic count ≠
+  radon's), so `[tool.crap-ts]` is its own ratchet. cc from eslint's `complexity` rule; per-function
+  coverage from vitest's Istanbul `coverage-final.json` (`coverage.all: true` lists every source
+  `.ts`; crap_ts scores a never-executed file — whose v8 `fnMap` is only `(empty-report)` — via a
+  whole-file coverage fallback at 0%, so an untested high-complexity module can't hide).
+
 - **Type checker**: `mypy .` (strict) is the canonical, enforced gate and is **green**.
   `pyright` (strict) is also configured but has **known, deferred debt** — remaining
   `reportPrivateUsage` findings in `tests/.../test_belegungsplan.py` and `storage/catalog_json.py`
