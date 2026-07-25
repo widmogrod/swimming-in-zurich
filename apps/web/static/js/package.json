@@ -1,5 +1,12 @@
 {
   "type": "module",
   "private": true,
-  "description": "Native ES modules for the swim UI (no build step). type:module lets `node --test` treat the .js files as ESM, matching the browser's <script type=module> loading."
+  "description": "ES modules for the swim UI, compiled by tsc (allowJs) from apps/web/static/js -> apps/web/static/dist. type:module lets `node --test` treat the .js files as ESM and makes tsc emit ESM with explicit ./x.js specifiers, matching the browser's <script type=module> loading.",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "type-check": "tsc -p tsconfig.dev.json --noEmit"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.2"
+  }
 }

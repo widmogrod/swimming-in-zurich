@@ -42,7 +42,7 @@ def test_board_preview_renders_both_mode_mounts_and_the_block_assets(
     assert 'id="board-pool"' in page
     # The block layer's stylesheet + the board ES module are linked from /static.
     assert '<link rel="stylesheet" href="/static/blocks.css">' in page
-    assert '<script type="module" src="/static/js/blocks/board_preview.js"></script>' in page
+    assert '<script type="module" src="/static/dist/blocks/board_preview.js"></script>' in page
 
 
 def test_board_preview_inlines_the_swim_fixtures(monkeypatch: pytest.MonkeyPatch) -> None:

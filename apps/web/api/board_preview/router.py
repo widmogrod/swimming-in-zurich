@@ -84,7 +84,7 @@ scrolls INSIDE each row's card; the page never scrolls sideways.</p>
 
 <script id="board-day-data" type="application/json">{day}</script>
 <script id="board-week-data" type="application/json">{week}</script>
-<script type="module" src="/static/js/blocks/board_preview.js"></script>
+<script type="module" src="/static/dist/blocks/board_preview.js"></script>
 </body>
 </html>
 """

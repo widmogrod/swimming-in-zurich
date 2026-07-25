@@ -101,7 +101,7 @@ themes. Dev-only surface (SWIMZH_DEV_UI) — absent in production.</p>
 <div class="gallery-panels">
 {panels}
 </div>
-<script type="module" src="/static/js/components/gallery.js"></script>
+<script type="module" src="/static/dist/components/gallery.js"></script>
 </body>
 </html>
 """

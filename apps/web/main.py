@@ -121,8 +121,24 @@ def create_app(config: Config | None = None) -> FastAPI:
 app = create_app()
 
 
+_JS_DIR = _STATIC_DIR / "js"
+
+
+def _build_static_assets() -> None:  # pragma: no cover
+    """Compile the TS/JS UI (`static/js` → `static/dist`) before serving, so a source
+    edit is reflected in what the browser loads. Fail fast if the build errors — a stale
+    or missing `dist/` would serve a blank SPA. Not run in `create_app()` (the test path):
+    `TestClient` serves the source `/static/js` tree, and `dist/` is a git-ignored artifact."""
+    import subprocess
+
+    subprocess.run(  # noqa: S603
+        ["npm", "--prefix", str(_JS_DIR), "run", "build"],  # noqa: S607
+        check=True,
+    )
+
+
 def main() -> None:  # pragma: no cover
-    """Clean dev entrypoint: preflight the gold store, then serve.
+    """Clean dev entrypoint: build the UI, preflight the gold store, then serve.
 
     Reports a one-line, actionable error and exits 1 if the store is missing/empty —
     no ASGI traceback. Run: `SWIMZH_GOLD_DB=gold.sqlite uv run python -m apps.web.main`."""
@@ -130,6 +146,7 @@ def main() -> None:  # pragma: no cover
 
     import uvicorn
 
+    _build_static_assets()
     config = Config.from_env()
     error = startup_error(config)
     if error is not None:

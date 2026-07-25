@@ -234,7 +234,7 @@ def test_index_shell_links_the_token_layer_and_hydrator() -> None:
     assert '<link rel="stylesheet" href="/static/tokens.css">' in page
     assert '<link rel="stylesheet" href="/static/components.css">' in page
     assert '<link rel="stylesheet" href="/static/blocks.css">' in page
-    assert '<script type="module" src="/static/js/app.js"></script>' in page
+    assert '<script type="module" src="/static/dist/app.js"></script>' in page
     # The legacy symbols are gone — the router no longer carries them.
     import apps.web.api.ui.router as ui_router
 

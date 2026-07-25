@@ -51,7 +51,7 @@ _SHELL = """<!doctype html>
   </main>
   <section id="app-legend" class="legend"></section>
 </div>
-<script type="module" src="/static/js/app.js"></script>
+<script type="module" src="/static/dist/app.js"></script>
 </body>
 </html>
 """

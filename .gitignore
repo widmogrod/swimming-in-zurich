@@ -23,6 +23,10 @@ htmlcov/
 # project artifacts
 *.sqlite
 *.db
+
+# TS build output (tsc emits static/js -> static/dist; a build artifact, never committed)
+apps/web/static/dist/
+apps/web/static/js/node_modules/
 /data/raw/
 
 # IDE / editor

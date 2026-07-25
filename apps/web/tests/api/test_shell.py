@@ -36,7 +36,7 @@ def test_index_serves_the_new_unified_shell() -> None:
     assert "Swimming in Zürich" in page
     # The app.js ES module is wired, and the design-system stylesheets are LINKED
     # (not inlined) from the /static mount.
-    assert '<script type="module" src="/static/js/app.js">' in page
+    assert '<script type="module" src="/static/dist/app.js">' in page
     assert '<link rel="stylesheet" href="/static/tokens.css">' in page
     assert '<link rel="stylesheet" href="/static/components.css">' in page
     assert '<link rel="stylesheet" href="/static/blocks.css">' in page

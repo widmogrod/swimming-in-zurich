@@ -77,7 +77,7 @@ below 1060px to see the panel become a slide-up bottom sheet.</span></p>
 
 <script id="detail-day-data" type="application/json">{day}</script>
 <script id="detail-pool-data" type="application/json">{pool}</script>
-<script type="module" src="/static/js/blocks/detail_preview.js"></script>
+<script type="module" src="/static/dist/blocks/detail_preview.js"></script>
 </body>
 </html>
 """

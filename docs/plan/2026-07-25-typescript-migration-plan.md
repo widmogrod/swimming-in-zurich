@@ -251,6 +251,7 @@ Appended by /dev:implement after each slice — never rewritten. Newest row last
 
 | date | slice | status | divergence from plan | tech debt created | human review? |
 |------|-------|--------|----------------------|-------------------|---------------|
+| 2026-07-25 | S1 | done | `module`/`target` = `nodenext`/`es2022` (not `esnext`; forced by tsc TS5110 given the plan's `moduleResolution: nodenext`) | none | yes (pause point) |
 
 ## Decisions & divergences
 
@@ -314,6 +315,20 @@ Substantive choices made during implementation, with the why. Each entry dated.
   earlier-verified claims (pilot isolation, `.js`-extension discipline, four routers, crap_ts input
   feasibility) were re-confirmed sound. This pass was beyond the plan-critic budget, at the user's
   request; fixes self-verified against `main.py` / `.gitignore` / `qa.yml`.
+
+- **2026-07-25 — S1 implemented (build+serve pipeline).** tsconfig emit uses `module: "nodenext"`
+  + `target: "es2022"` (not the plan's loose `esnext`): tsc rejects `module: esnext` with
+  `moduleResolution: nodenext` (TS5110), so `nodenext` is forced by the round-2 resolution decision;
+  `es2022` is byte-preserving for this codebase (no downleveling — verified in emitted `dist/`). Emit
+  keeps explicit `./x.js` specifiers → browser-loadable ESM (no `require`/`__importDefault`/`.mjs`).
+  Verified beyond the mechanical gate: the app **renders from `/static/dist/app.js`** end-to-end in a
+  browser (board + DetailPanel + Sources strip, zero console errors), and `uv run pytest` is **396
+  passed even with `dist/` deleted** (fresh-checkout safe — no test depends on the build artifact).
+  Two critic notes (non-blocking): the `target` divergence is recorded here alongside `module`; and
+  S1's `type-check` is effectively a **no-op** (`checkJs:false`, zero `.ts` files) — it becomes
+  load-bearing in S2. **Discovery for S2:** `tsconfig.dev.json` currently inherits the parent's
+  `**/*.test.ts` exclude, so S2 must override `exclude` (or widen include past it) for
+  `urlstate.test.ts` to be type-checked.
 
 ## Summary
 

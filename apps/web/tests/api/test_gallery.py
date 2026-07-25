@@ -109,4 +109,4 @@ def test_gallery_links_static_design_system_assets(
         page = client.get("/ui/gallery").text
     assert '<link rel="stylesheet" href="/static/tokens.css">' in page
     assert '<link rel="stylesheet" href="/static/components.css">' in page
-    assert '<script type="module" src="/static/js/components/gallery.js"></script>' in page
+    assert '<script type="module" src="/static/dist/components/gallery.js"></script>' in page

@@ -40,7 +40,7 @@ def test_detail_preview_renders_mounts_and_block_assets(monkeypatch: pytest.Monk
     assert 'id="detail-board"' in page  # the board the cursor is driven FROM
     assert 'id="detail-panel"' in page  # the panel + Gantt
     assert '<link rel="stylesheet" href="/static/blocks.css">' in page
-    assert '<script type="module" src="/static/js/blocks/detail_preview.js"></script>' in page
+    assert '<script type="module" src="/static/dist/blocks/detail_preview.js"></script>' in page
 
 
 def test_detail_preview_inlines_a_pool_fixture_with_owner_named_lanes(

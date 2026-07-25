@@ -1,0 +1,17 @@
+{
+  "compilerOptions": {
+    "rootDir": ".",
+    "outDir": "../dist",
+    "allowJs": true,
+    "checkJs": false,
+    "strict": true,
+    "module": "nodenext",
+    "target": "es2022",
+    "moduleResolution": "nodenext",
+    "lib": ["es2022", "dom", "dom.iterable"],
+    "declaration": false,
+    "sourceMap": false,
+    "skipLibCheck": true
+  },
+  "exclude": ["node_modules", "../dist", "**/*.test.js", "**/*.test.ts"]
+}
