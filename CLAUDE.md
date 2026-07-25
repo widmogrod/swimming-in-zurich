@@ -1,7 +1,9 @@
 # swimzh — agent guide
 
-Typed data core answering "where can I go swimming in Zürich indoor pools?" filtered by
-gender, age, location, and a date (now or future). See
+Typed data core answering "where can I go swimming in Zürich?" — **all** pools, indoor
+(Hallenbäder) *and* outdoor (Freibäder/Seebäder), and possibly other cities in the future —
+filtered by gender, age, location, and a date (now or future). (Much of the curated data and
+scraping today is indoor-first, but that is a coverage gap, not a scope boundary.) See
 [`docs/2026-07-18-initial-expectations.md`](docs/2026-07-18-initial-expectations.md) for
 intent and design decisions, and `README.md` for orientation.
 
