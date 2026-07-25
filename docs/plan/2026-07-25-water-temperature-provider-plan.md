@@ -1,8 +1,11 @@
 ---
 type: plan
-status: approved
+status: in-progress
 created: 2026-07-25
 feature: pool-detail-and-live-water-temp
+branch: plan/pool-detail-and-live-water-temp
+worktree: .claude/worktrees/plan-pool-detail-and-live-water-temp
+base_branch: feat/new-ui
 gates:
   qa: full
   review: adversarial
