@@ -1,8 +1,11 @@
 ---
 type: plan
-status: approved         # draft -> approved -> in-progress -> done
+status: in-progress      # draft -> approved -> in-progress -> done
 created: 2026-07-25
 feature: typescript-migration
+branch: plan/typescript-migration
+worktree: .claude/worktrees/plan-typescript-migration
+base_branch: plan/ui-design-system
 gates:
   qa: full               # ruff, mypy, pytest+coverage, CRAP (Python) + the new TS chain per slice
   review: adversarial    # dev:critic-reviewer must find no blocking issues
