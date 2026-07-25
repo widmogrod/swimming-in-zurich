@@ -154,6 +154,25 @@ def test_uncurated_pool_with_registry_entry_keeps_its_identity(spine: PoolSpine)
     assert identity.crowdmonitor_keys == ()  # empty as authored (round-trips faithfully)
 
 
+def test_baditicker_poiid_survives_gold_round_trip(spine: PoolSpine) -> None:
+    # S2: the Baditicker `poiid` authored in `registry.yaml` rides the identity through the spine
+    # build (`codec.dumps`) and back (`codec.loads`) for BOTH a curated pool (hallenbad-city, whose
+    # identity comes via the curated facility) and the UNCURATED freibad-heuried (whose identity
+    # comes via the S1 location-only mint reusing `registry.get(id)`). If either seam dropped the
+    # key, `read_temperature` would return "no baditicker key" and no live temp would attach.
+    docs = {str(p.id): p.facility_doc for p in spine.pools}
+
+    heuried_doc = docs["freibad-heuried"]
+    assert heuried_doc is not None
+    heuried = codec.loads(heuried_doc).identity
+    assert heuried.baditicker_poiid == "fb012"  # uncurated pin: real feed poiid survives the mint
+
+    city_doc = docs["hallenbad-city"]
+    assert city_doc is not None
+    city = codec.loads(city_doc).identity
+    assert city.baditicker_poiid == "hb_city"  # curated pool: placeholder poiid round-trips
+
+
 def test_kaeferberg_kind_is_curated_wins_thermal(spine: PoolSpine) -> None:
     # S1 discovery: registry says `thermal`, catalog (WFS) says `indoor`. Decision: curated
     # authoring wins (thermal is the richer, hand-verified classification).

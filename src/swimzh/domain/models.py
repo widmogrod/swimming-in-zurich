@@ -73,6 +73,10 @@ class PoolIdentity:
     kind: PoolKind
     geo_sport_id: str | None = None
     crowdmonitor_keys: tuple[str, ...] = field(default_factory=tuple)
+    # Baditicker (OGD water-temperature feed) stable external id (e.g. `fb012` for Freibad
+    # Heuried). A single poiid because the feed is poiid-keyed; `None` when this pool has no
+    # Baditicker mapping. Persisted in gold (unlike the live reading, which never is).
+    baditicker_poiid: str | None = None
     aliases: tuple[str, ...] = field(default_factory=tuple)
 
 

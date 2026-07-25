@@ -401,6 +401,7 @@ class IdentityDTO(_Strict):
     kind: _PoolKind
     geo_sport_id: str | None = None
     crowdmonitor_keys: list[str] = Field(default_factory=list)
+    baditicker_poiid: str | None = None  # Baditicker water-temp feed poiid; None when unmapped
     aliases: list[str] = Field(default_factory=list)
 
 

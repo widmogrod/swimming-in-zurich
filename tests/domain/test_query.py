@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import dataclasses
 from datetime import date, datetime, time, timedelta
+from decimal import Decimal
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
@@ -36,11 +37,15 @@ from swimzh.domain.models import (
 from swimzh.domain.person import Gender, Person
 from swimzh.domain.query import (
     LiveOccupancy,
+    LiveTemp,
     Occupancy,
     OccupancyUnavailable,
     QueryResult,
     SwimQuery,
+    TempReading,
+    TempUnavailable,
     find_swim_options,
+    read_temperature,
 )
 from swimzh.domain.schedule import ScheduleRule, TimeRange, Weekday
 from swimzh.providers.curated import Dataset, load_dataset
@@ -323,6 +328,87 @@ def test_facility_without_crowdmonitor_keys_is_unavailable(dataset: Dataset) -> 
     assert result.options
     assert result.options[0].live_occupancy == OccupancyUnavailable(reason="no crowdmonitor key")
     assert provider.calls == []  # never asked without a key
+
+
+# --- Live water temperature attach (fake provider — the real Baditicker adapter is deferred
+# --- to a later slice) -------------------------------------------------------------------
+
+
+class _FakeTemperatureProvider:
+    """In-memory `TemperatureProvider`: returns a canned Result and records the poiids asked."""
+
+    def __init__(self, result: Result[TempReading, ProviderError]) -> None:
+        self._result = result
+        self.calls: list[str] = []
+
+    def read(self, poiid: str) -> Result[TempReading, ProviderError]:
+        self.calls.append(poiid)
+        return self._result
+
+
+def _temp_reading(measured_at: datetime, celsius: Decimal | None = Decimal("23.0")) -> TempReading:
+    return TempReading(measured_at=measured_at, celsius=celsius, is_open=True, source="baditicker")
+
+
+def _keyed_identity(poiid: str | None) -> PoolIdentity:
+    return PoolIdentity(
+        facility_id=PoolId("temp-test"),
+        name="Freibad Temp-Test",
+        kind=PoolKind.OUTDOOR,
+        baditicker_poiid=poiid,
+    )
+
+
+def test_read_temperature_attaches_live_temp_with_derived_age() -> None:
+    now = datetime.now(ZURICH)
+    provider = _FakeTemperatureProvider(Ok(_temp_reading(now - timedelta(minutes=42))))
+    result = read_temperature(provider, _keyed_identity("fb012"), now)
+    assert isinstance(result, LiveTemp)
+    assert result.reading.celsius == Decimal("23.0")
+    # age is derived at attach time from measured_at (~42 min ago), not stored upstream.
+    assert timedelta(minutes=41) < result.age < timedelta(minutes=43)
+    assert result.is_stale() is False  # well within the 6h default limit
+    assert provider.calls == ["fb012"]  # keyed by the identity's baditicker poiid, once
+
+
+def test_read_temperature_empty_cell_is_live_temp_with_none_celsius() -> None:
+    # Pinned: an empty feed cell (measured nothing yet) is still a LiveTemp — we know
+    # open/closed + freshness — NEVER a TempUnavailable.
+    now = datetime.now(ZURICH)
+    provider = _FakeTemperatureProvider(Ok(_temp_reading(now - timedelta(minutes=5), celsius=None)))
+    result = read_temperature(provider, _keyed_identity("fb012"), now)
+    assert isinstance(result, LiveTemp)
+    assert result.reading.celsius is None
+
+
+def test_read_temperature_without_key_is_unavailable() -> None:
+    provider = _FakeTemperatureProvider(Ok(_temp_reading(datetime.now(ZURICH))))
+    result = read_temperature(provider, _keyed_identity(None), datetime.now(ZURICH))
+    assert result == TempUnavailable(reason="no baditicker key")
+    assert provider.calls == []  # never asked without a key
+
+
+def test_read_temperature_provider_error_becomes_unavailable() -> None:
+    error = Timeout(url="https://www.stadt-zuerich.ch/stzh/bathdatadownload", after_s=3.0)
+    provider = _FakeTemperatureProvider(Err(error))
+    result = read_temperature(provider, _keyed_identity("fb012"), datetime.now(ZURICH))
+    # No exception escapes the errors-as-values surface; the cause is described.
+    assert result == TempUnavailable(reason=describe(error))
+
+
+def test_temp_reading_naive_measured_at_is_rejected_at_construction() -> None:
+    with pytest.raises(ValueError, match="tz-aware"):
+        _temp_reading(datetime(2026, 7, 25, 20, 39))
+
+
+def test_live_temp_staleness_is_derived_not_stored() -> None:
+    reading = _temp_reading(datetime(2026, 7, 25, 20, 39, tzinfo=ZURICH))
+    assert LiveTemp(reading=reading, age=timedelta(hours=5)).is_stale() is False
+    stale = LiveTemp(reading=reading, age=timedelta(hours=7))
+    assert stale.is_stale() is True
+    assert stale.is_stale(limit=timedelta(hours=8)) is False
+    # No stored freshness enum — freshness derives from the reading via `age`.
+    assert {f.name for f in dataclasses.fields(LiveTemp)} == {"reading", "age"}
 
 
 # --- Lane availability (query-time derivation of the STORED lane plan) -------------------

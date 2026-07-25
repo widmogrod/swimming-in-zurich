@@ -124,6 +124,89 @@ class OccupancyProvider(Protocol):
     def read(self, keys: tuple[str, ...]) -> Result[Occupancy, ProviderError]: ...
 
 
+# --- Live water temperature (Baditicker) ------------------------------------------------
+#
+# Water temperature is LIVE-ONLY, exactly like occupancy: these types live here in `query.py`,
+# are NEVER imported into `models.py` or the gold codec (guarded by an import-token regression
+# test — note that `identity.baditicker_poiid`, the *key*, IS persisted; only the reading is
+# not). The reading is timestamped and seasonal, so it carries its own freshness (`age`) rather
+# than a stored freshness enum. The adapter is keyed by `poiid` and NEVER constructs a `PoolId`;
+# `read_temperature` attaches the reading to a known `identity`.
+
+
+@dataclass(frozen=True, slots=True)
+class TempReading:
+    """A raw live water-temperature reading for one bath from the Baditicker feed.
+
+    Carries NO `PoolId` — the adapter is poiid-keyed and never mints an identity."""
+
+    measured_at: datetime  # tz-aware Europe/Zurich (the feed's `dateModified`)
+    celsius: Decimal | None  # None when the feed cell is empty (measured nothing yet)
+    is_open: bool  # from `openClosedTextPlain`
+    source: str  # "baditicker"
+
+    def __post_init__(self) -> None:
+        # Guard the tz-aware house convention at construction, mirroring `Occupancy`: a naive
+        # `measured_at` would make the derived-age subtraction raise deep in `read_temperature`
+        # (an exception escape in an errors-as-values surface). Fail loudly here instead.
+        if self.measured_at.tzinfo is None:
+            raise ValueError("TempReading.measured_at must be tz-aware (project rule)")
+
+
+@dataclass(frozen=True, slots=True)
+class LiveTemp:
+    """A reading successfully attached to a facility; freshness is *derived* from `measured_at`
+    (via `age`), never stored as a separate freshness enum. `celsius` may be `None` (open but
+    not yet measured) — that is still a live answer, distinct from `TempUnavailable`."""
+
+    reading: TempReading
+    age: timedelta  # now - reading.measured_at, computed at attach time
+
+    def is_stale(self, limit: timedelta = timedelta(hours=6)) -> bool:
+        return self.age > limit
+
+
+@dataclass(frozen=True, slots=True)
+class TempUnavailable:
+    """Water temperature was requested but could not be resolved — with the reason, so an empty
+    answer is never ambiguous ("no baditicker key" | provider `describe()`). Reserved for the
+    no-key and provider-error cases; an empty feed cell yields `LiveTemp(celsius=None)` instead."""
+
+    reason: str
+
+
+type TempResult = LiveTemp | TempUnavailable
+
+
+class TemperatureProvider(Protocol):
+    """Port for a live water-temperature source (errors as values, per house convention).
+
+    The real Baditicker adapter (`providers/baditicker.py`) lands in a later slice; until then
+    only fakes implement this port."""
+
+    def read(self, poiid: str) -> Result[TempReading, ProviderError]: ...
+
+
+def read_temperature(
+    provider: TemperatureProvider, identity: PoolIdentity, now: datetime
+) -> TempResult:
+    """Resolve one facility's live water temperature, keyed by `identity.baditicker_poiid`.
+
+    No key -> `TempUnavailable("no baditicker key")`. Otherwise the provider's `Ok` reading
+    becomes a `LiveTemp` (age derived from `measured_at` at attach) — INCLUDING an empty
+    `celsius`, which stays a `LiveTemp(celsius=None)`, never `TempUnavailable`. A provider `Err`
+    becomes an explainable `TempUnavailable`, never an exception (errors-as-values)."""
+    if identity.baditicker_poiid is None:
+        return TempUnavailable(reason="no baditicker key")
+    match provider.read(identity.baditicker_poiid):
+        case Ok(reading):
+            return LiveTemp(reading=reading, age=now - reading.measured_at)
+        case Err(error):
+            return TempUnavailable(reason=describe(error))
+        case _ as unreachable:
+            assert_never(unreachable)
+
+
 # A query counts as "~now" (occupancy-relevant) within this window of wall-clock now.
 _NOW_TOLERANCE = timedelta(minutes=30)
 

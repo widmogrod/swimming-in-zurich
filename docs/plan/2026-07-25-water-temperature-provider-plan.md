@@ -230,6 +230,7 @@ Optional: unset config → `None` provider → `TempUnavailable("live temperatur
 | date | slice | status | divergence from plan | tech debt created | human review? |
 |------|-------|--------|----------------------|-------------------|---------------|
 | 2026-07-26 | S1 | done | `kind`/geo served by the `/pools` list, not the detail body (deferred to S2, which owns `model.py`); the prose mint now also reuses the registry identity (additive) | none | yes |
+| 2026-07-26 | S2 | done | `config.py`/`mapping.py`/`seed.py` untouched (no work needed — adjudicated acceptable); added `apps/web/deps.py` accessor (idiomatic) | placeholder poiids `hb_city`/`hb_oerlikon` for 2 indoor pools (S3/S4 verify vs. the real feed) | yes |
 
 ## Decisions & divergences
 
@@ -271,6 +272,22 @@ Optional: unset config → `None` provider → `TempUnavailable("live temperatur
   not in the plan worktree. Relocated by `git diff` → `git apply` into the worktree, restored
   the main checkout clean, and re-ran the FULL QA chain **in the worktree** myself (a
   cwd-pinned `qa-gate` subagent would re-hit the trap). All green there before commit.
+
+- **2026-07-26 (S2 implementation)** — Live-only types + `read_temperature` added to
+  `domain/query.py` mirroring the occupancy scaffold; `PoolIdentity.baditicker_poiid` threaded
+  DTO → `curated.py` → `codec.py` (gold persists only the key, guarded by a new import-token
+  test `tests/storage/test_live_temp_not_imported.py`). Facility-level `live_water_temp` on
+  `FacilityDetailOut` (per-basin `measured_temp_c` untouched). Fail-open wiring: `main.py`
+  sets `app.state.temperature = None` → `TempUnavailable("live temperature not configured")`,
+  never a 500. **Divergences adjudicated (critic, non-blocking):** `config.py` untouched (env
+  belongs to S3's real adapter), `mapping.py` untouched (it holds no identity codec),
+  `seed.py` untouched (S1's registry-identity reuse already carries the key onto uncurated
+  pools — proven by the uncurated round-trip arm). No `at≈now` gate on the detail temp
+  (correctly deferred — the reading is always live-now and honestly labelled with `age`).
+  **Tech debt:** `hallenbad-city`/`hallenbad-oerlikon` carry placeholder poiids
+  (`hb_city`/`hb_oerlikon`), commented in `registry.yaml`; S3/S4 verify every declared poiid
+  against the recorded feed. Worktree isolation held this slice (forced absolute worktree
+  paths in the subagent prompt) — no relocation needed.
 
 ## Summary
 

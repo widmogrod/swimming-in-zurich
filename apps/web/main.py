@@ -83,6 +83,11 @@ def create_app(config: Config | None = None) -> FastAPI:
         _require_gold_db(cfg.gold_db)
         app.state.config = cfg
         app.state.swim_data = _load_swim_data(cfg)
+        # Live water-temperature provider (OPTIONAL, fail-open). No real Baditicker adapter is
+        # wired yet — that lands in a later slice behind config; until then the app runs with
+        # `None`, which `/pools/{id}` reports as `TempUnavailable("live temperature not
+        # configured")`. Tests override `app.state.temperature` with an in-memory fake.
+        app.state.temperature = None
         yield
 
     app = FastAPI(title="Swimming in Zürich", lifespan=lifespan)

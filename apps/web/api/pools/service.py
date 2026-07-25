@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from datetime import datetime
+
 from apps.web.api.pools.model import (
     BasinLanePanelOut,
     BasinOut,
@@ -12,6 +14,7 @@ from apps.web.api.pools.model import (
     LanePanelOut,
     LaneSegmentOut,
     LaneStripOut,
+    LiveWaterTempOut,
     LockerOut,
     PoolOut,
     PoolsOut,
@@ -21,6 +24,7 @@ from apps.web.api.pools.model import (
     PublicWindowOut,
     TimeRangeOut,
 )
+from apps.web.services.ports import TemperatureProvider
 from swimzh.domain.access import PublicSwim
 from swimzh.domain.catalog import RosterEntry
 from swimzh.domain.lane_plan import (
@@ -31,9 +35,17 @@ from swimzh.domain.lane_plan import (
     owner_label,
 )
 from swimzh.domain.lockers import LockerOption
-from swimzh.domain.models import Basin, Provenance
+from swimzh.domain.models import Basin, PoolIdentity, Provenance
 from swimzh.domain.pricing import PriceTable
-from swimzh.domain.query import BasinLanePanel, FacilityDetail, FeatureStatus
+from swimzh.domain.query import (
+    BasinLanePanel,
+    FacilityDetail,
+    FeatureStatus,
+    LiveTemp,
+    TempResult,
+    TempUnavailable,
+    read_temperature,
+)
 from swimzh.domain.schedule import ClosedDay, OpenDay, TimeRange
 
 
@@ -194,7 +206,47 @@ def _provenance_out(provenance: Provenance) -> ProvenanceOut:
     )
 
 
-def facility_detail_out(detail: FacilityDetail, prices: PriceTable | None) -> FacilityDetailOut:
+def resolve_live_water_temp(
+    provider: TemperatureProvider | None, identity: PoolIdentity, now: datetime
+) -> TempResult:
+    """Resolve the facility's live water temperature, fail-open. A `None` provider (none wired /
+    not configured) is a valid state — it becomes an explainable `TempUnavailable`, never an
+    exception; otherwise the domain `read_temperature` keys by `identity.baditicker_poiid`."""
+    if provider is None:
+        return TempUnavailable(reason="live temperature not configured")
+    return read_temperature(provider, identity, now)
+
+
+def _live_water_temp_out(result: TempResult) -> LiveWaterTempOut:
+    match result:
+        case LiveTemp(reading, age):
+            return LiveWaterTempOut(
+                available=True,
+                # An empty feed cell stays a live answer: celsius=None, NOT unavailable.
+                celsius=float(reading.celsius) if reading.celsius is not None else None,
+                measured_at=reading.measured_at.isoformat(),
+                age_min=int(age.total_seconds() // 60),
+                is_open=reading.is_open,
+                is_stale=result.is_stale(),
+                source=reading.source,
+                reason=None,
+            )
+        case TempUnavailable(reason):
+            return LiveWaterTempOut(
+                available=False,
+                celsius=None,
+                measured_at=None,
+                age_min=None,
+                is_open=None,
+                is_stale=None,
+                source=None,
+                reason=reason,
+            )
+
+
+def facility_detail_out(
+    detail: FacilityDetail, prices: PriceTable | None, live_water_temp: TempResult
+) -> FacilityDetailOut:
     """Shape the domain facility-detail answer for the API: the physical basins (size, lanes,
     water temperature + `physical_source` caveat), features with hours resolved for the queried
     moment, lockers, the facility price table, provenance, and the per-basin lane panels.
@@ -221,4 +273,5 @@ def facility_detail_out(detail: FacilityDetail, prices: PriceTable | None) -> Fa
             if detail.last_admission_before is not None
             else None
         ),
+        live_water_temp=_live_water_temp_out(live_water_temp),
     )

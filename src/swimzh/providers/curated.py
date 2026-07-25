@@ -116,6 +116,7 @@ def _build_registry(dto: RegistryDTO) -> Registry:
             kind=_KINDS[i.kind],
             geo_sport_id=i.geo_sport_id,
             crowdmonitor_keys=tuple(i.crowdmonitor_keys),
+            baditicker_poiid=i.baditicker_poiid,
             aliases=tuple(i.aliases),
         )
         for i in dto.facilities

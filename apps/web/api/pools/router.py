@@ -8,8 +8,8 @@ from zoneinfo import ZoneInfo
 from fastapi import APIRouter, HTTPException, Request
 
 from apps.web.api.pools.model import FacilityDetailOut, PoolsOut
-from apps.web.api.pools.service import facility_detail_out, list_pools
-from apps.web.deps import get_swim_data
+from apps.web.api.pools.service import facility_detail_out, list_pools, resolve_live_water_temp
+from apps.web.deps import get_swim_data, get_temperature_provider
 from swimzh.domain.models import PoolKind
 from swimzh.domain.query import facility_detail
 
@@ -42,4 +42,12 @@ def pool_detail(
     if facility is None:
         raise HTTPException(status_code=404, detail=f"unknown facility {facility_id!r}")
     when = at if at is not None else datetime.now(_ZURICH)
-    return facility_detail_out(facility_detail(facility, when, data.calendar()), facility.prices)
+    # Live water temperature is resolved ONCE per facility, keyed by the facility identity's
+    # Baditicker poiid, against wall-clock now (the reading's age). Fail-open: an unconfigured
+    # provider yields a TempUnavailable, never an exception.
+    live_temp = resolve_live_water_temp(
+        get_temperature_provider(request), facility.identity, datetime.now(_ZURICH)
+    )
+    return facility_detail_out(
+        facility_detail(facility, when, data.calendar()), facility.prices, live_temp
+    )

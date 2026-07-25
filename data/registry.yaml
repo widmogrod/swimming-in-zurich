@@ -20,6 +20,9 @@ facilities:
     kind: "indoor"
     geo_sport_id: null
     crowdmonitor_keys: ["City", "Hallenbad City", "Sportbad City"]
+    # PLACEHOLDER poiid — the real Baditicker feed poiid is verified against the recorded feed
+    # fixture in S3/S4; Baditicker covers the indoor Hallenbäder (City, Oerlikon, …) too.
+    baditicker_poiid: "hb_city"
     aliases: ["city", "City", "Sportbad City"]
 
   - facility_id: "hallenbad-oerlikon"
@@ -27,6 +30,7 @@ facilities:
     kind: "indoor"
     geo_sport_id: null
     crowdmonitor_keys: ["Oerlikon", "Hallenbad Oerlikon"]
+    baditicker_poiid: "hb_oerlikon"  # PLACEHOLDER — verified against the real feed in S3/S4
     aliases: ["oerlikon", "Oerlikon"]
 
   - facility_id: "hallenbad-bungertwies"
@@ -72,4 +76,8 @@ facilities:
     name: "Freibad Heuried"
     kind: "outdoor"
     crowdmonitor_keys: []
+    # Real Baditicker poiid (verified live 2026-07-25: fb012 = 23 °C). This uncurated pin has no
+    # curated schedule, yet its live water temp rides on the S1 location-only mint's registry
+    # identity through gold to `/pools/freibad-heuried`.
+    baditicker_poiid: "fb012"
     aliases: ["heuried", "Freibad Heuried"]

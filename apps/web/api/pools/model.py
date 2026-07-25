@@ -141,6 +141,28 @@ class ProvenanceOut(BaseModel):
     fetched_at: str | None
 
 
+class LiveWaterTempOut(BaseModel):
+    """The facility-level LIVE water temperature (Baditicker), resolved at request time — NOT the
+    per-basin `measured_temp_c`/`nominal_temp_c` design values. Always present on the detail so
+    the UI can distinguish three states honestly:
+
+      * `available=True, celsius=<n>`  — a live reading; show "23 °C · measured N min ago".
+      * `available=True, celsius=None` — open but not yet measured (empty feed cell) — a live
+        answer, NOT unavailable.
+      * `available=False`              — `reason` says why (no key / provider error / not
+        configured); the UI shows the reason, never a stale number.
+    """
+
+    available: bool  # True = a live reading (LiveTemp); False = TempUnavailable
+    celsius: float | None  # the reading; None when open-but-unmeasured, or when unavailable
+    measured_at: str | None  # ISO tz-aware timestamp of the reading; None when unavailable
+    age_min: int | None  # whole minutes since the reading; None when unavailable
+    is_open: bool | None  # feed open/closed at read time; None when unavailable
+    is_stale: bool | None  # derived freshness (reading older than the staleness limit)
+    source: str | None  # e.g. "baditicker"; None when unavailable
+    reason: str | None  # why unavailable; None when available
+
+
 class FacilityDetailOut(BaseModel):
     facility_id: str
     facility_name: str
@@ -159,3 +181,6 @@ class FacilityDetailOut(BaseModel):
     amenities: list[str]  # facility amenity tags (sorted); empty when none recorded
     accessibility: str | None  # free-text accessibility note; None when unknown
     last_admission_before_min: int | None  # minutes before closing that admission stops
+    # Facility-level LIVE water temperature (Baditicker), resolved at request time. Always
+    # present — additive and labelled, it never overwrites a basin's `measured_temp_c`.
+    live_water_temp: LiveWaterTempOut

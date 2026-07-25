@@ -10,6 +10,11 @@ from swimzh.domain.calendar import ZurichCalendar
 from swimzh.domain.catalog import RosterEntry
 from swimzh.domain.models import Facility
 
+# The live water-temperature port lives in the domain (`domain.query`); re-exported here so the
+# app's boundary surface names it in one place (business code depends on this Protocol, never on
+# a concrete adapter). `main.py` is the only module that wires a concrete implementation.
+from swimzh.domain.query import TemperatureProvider as TemperatureProvider
+
 
 class SwimStore(Protocol):
     """The one gold store the app reads: curated facilities (schedules), the full pool roster

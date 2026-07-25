@@ -2,13 +2,16 @@
 
 from __future__ import annotations
 
-from datetime import date, time
+from datetime import date, datetime, time, timedelta
 from decimal import Decimal
+from zoneinfo import ZoneInfo
 
 from fastapi.testclient import TestClient
 
 from apps.web.api.pools.service import facility_detail_out
 from apps.web.main import app
+from swimzh.core.errors import ProviderError
+from swimzh.core.result import Ok, Result
 from swimzh.domain.access import PublicSwim
 from swimzh.domain.lockers import LockerCategory, LockerOption
 from swimzh.domain.models import (
@@ -23,8 +26,21 @@ from swimzh.domain.models import (
     Provenance,
 )
 from swimzh.domain.pricing import PriceCategory, PriceEntry, PriceTable
-from swimzh.domain.query import FacilityDetail, FeatureStatus
+from swimzh.domain.query import FacilityDetail, FeatureStatus, TempReading, TempUnavailable
 from swimzh.domain.schedule import OpenDay, ResolvedSession, TimeRange
+
+_ZURICH = ZoneInfo("Europe/Zurich")
+
+
+class _FakeTemperatureProvider:
+    """In-memory `TemperatureProvider` for the app tests — returns a canned reading for any
+    poiid (S2 proves the wiring end-to-end; the real Baditicker adapter lands later)."""
+
+    def __init__(self, result: Result[TempReading, ProviderError]) -> None:
+        self._result = result
+
+    def read(self, poiid: str) -> Result[TempReading, ProviderError]:
+        return self._result
 
 
 def test_pools_lists_all_categories() -> None:
@@ -231,7 +247,11 @@ def test_facility_detail_out_surfaces_temp_and_parsed_prose_caveat() -> None:
             entries=(PriceEntry(PriceCategory.ADULT, Decimal("8"), "Adult CHF 8"),),
             valid_as_of=date(2026, 7, 1),
         ),
+        TempUnavailable(reason="no baditicker key"),
     )
+    # The live facility temp is additive and labelled — it never overwrites a basin's temp.
+    assert out.live_water_temp.available is False
+    assert out.live_water_temp.reason == "no baditicker key"
     assert out.basins[0].nominal_temp_c == 32.0
     assert out.basins[0].physical_source == "parsed_prose"  # drives the UI caveat
     assert out.basins[0].width_m == 8.0
@@ -267,6 +287,61 @@ def test_parsed_prose_pool_shows_in_detail_but_never_a_swim_option() -> None:
     assert "Hallenbad Altstetten" not in {o["facility"] for o in swim["options"]}
     uncurated = {s["facility"] for s in swim["statuses"] if s["status"] == "uncurated"}
     assert "Hallenbad Altstetten" in uncurated
+
+
+def test_pool_detail_surfaces_live_water_temp_from_a_wired_provider() -> None:
+    """S2 acceptance: with a fake provider @ 23 °C wired into `app.state`, `/pools/freibad-heuried`
+    (the UNCURATED pin whose `fb012` key rides the S1 location-only mint into gold) surfaces a
+    facility-level `live_water_temp` with a numeric age — the whole live-attach path end-to-end."""
+    measured_at = datetime.now(_ZURICH) - timedelta(minutes=15)
+    reading = TempReading(
+        measured_at=measured_at, celsius=Decimal("23.0"), is_open=True, source="baditicker"
+    )
+    with TestClient(app) as client:
+        app.state.temperature = _FakeTemperatureProvider(Ok(reading))
+        try:
+            body = client.get("/pools/freibad-heuried").json()
+        finally:
+            app.state.temperature = None
+    temp = body["live_water_temp"]
+    assert temp["available"] is True
+    assert temp["celsius"] == 23.0
+    assert isinstance(temp["age_min"], int) and temp["age_min"] >= 0  # derived freshness
+    assert temp["is_open"] is True
+    assert temp["source"] == "baditicker"
+    assert temp["reason"] is None
+    assert temp["measured_at"] is not None
+
+
+def test_pool_detail_live_water_temp_unavailable_without_a_key() -> None:
+    """A pool with no `baditicker_poiid` (e.g. curated Bungertwies) never asks the provider: the
+    facility-level temp reports the unavailable reason, not a stale number."""
+    reading = TempReading(
+        measured_at=datetime.now(_ZURICH),
+        celsius=Decimal("23.0"),
+        is_open=True,
+        source="baditicker",
+    )
+    with TestClient(app) as client:
+        app.state.temperature = _FakeTemperatureProvider(Ok(reading))
+        try:
+            body = client.get("/pools/hallenbad-bungertwies").json()
+        finally:
+            app.state.temperature = None
+    temp = body["live_water_temp"]
+    assert temp["available"] is False
+    assert temp["celsius"] is None
+    assert temp["reason"] == "no baditicker key"
+
+
+def test_pool_detail_live_water_temp_fail_open_when_unconfigured() -> None:
+    """Fail-open: the default app wires NO temperature provider, so the detail reports an
+    explainable unavailable reason (never an exception, never a fabricated reading)."""
+    with TestClient(app) as client:
+        body = client.get("/pools/freibad-heuried").json()
+    temp = body["live_water_temp"]
+    assert temp["available"] is False
+    assert temp["reason"] == "live temperature not configured"
 
 
 def test_access_types_explained() -> None:

@@ -75,6 +75,10 @@ class StoredFacilityDTO(BaseModel):
     fetched_at: datetime | None
     geo_sport_id: str | None
     crowdmonitor_keys: list[str]
+    # Baditicker water-temp feed poiid — the *key* (persisted); the live reading is never stored.
+    # Defaulted so a pre-existing gold blob (which lacks this key) still validates under
+    # `extra="forbid"`, matching the other facility-level optionals (emitted unconditionally).
+    baditicker_poiid: str | None = None
     aliases: list[str]
     geo: GeoDTO | None
     amenities: list[str]
@@ -110,6 +114,7 @@ def to_stored(facility: Facility) -> StoredFacilityDTO:
         fetched_at=prov.fetched_at,
         geo_sport_id=ident.geo_sport_id,
         crowdmonitor_keys=list(ident.crowdmonitor_keys),
+        baditicker_poiid=ident.baditicker_poiid,
         aliases=list(ident.aliases),
         geo=mapping.geo_to_dto(facility.geo) if facility.geo is not None else None,
         amenities=sorted(facility.amenities),
@@ -136,6 +141,7 @@ def from_stored(stored: StoredFacilityDTO) -> Facility:
         kind=_KIND_FROM[stored.kind],
         geo_sport_id=stored.geo_sport_id,
         crowdmonitor_keys=tuple(stored.crowdmonitor_keys),
+        baditicker_poiid=stored.baditicker_poiid,
         aliases=tuple(stored.aliases),
     )
     return Facility(
