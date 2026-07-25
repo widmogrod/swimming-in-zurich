@@ -129,6 +129,23 @@ npm --prefix apps/web/static/js run qa   # fmt:check → lint → type-check →
 # or individually: npm run build | type-check | lint | fmt:check | test | crap
 ```
 
+**Dev loop (IMPORTANT — the app serves compiled `dist/`, not source):** `uvicorn apps.web.main:app`
+imports `app` via `create_app()` and **does NOT build** — only `python -m apps.web.main`'s `main()`
+runs the `npm run build` preflight (once, at startup). And `--reload` watches `.py`, not `.ts`/`.js`.
+So a UI edit is invisible until `dist/` is rebuilt. Use either:
+
+```sh
+# A) documented entrypoint — builds once, then serves (reload on unless SWIMZH_RELOAD=0)
+SWIMZH_GOLD_DB=gold.sqlite SWIMZH_DEV_UI=1 uv run python -m apps.web.main
+# B) live TS recompile in one terminal + your server in another
+npm --prefix apps/web/static/js run watch   # tsc --watch: rebuilds dist/ on every save
+SWIMZH_GOLD_DB=gold.sqlite SWIMZH_DEV_UI=1 uv run uvicorn apps.web.main:app --reload
+```
+
+`SWIMZH_DEV_UI=1` sets `cache-control: no-store` on `/static`, so the browser picks up a rebuilt
+module on refresh instead of serving a cached one. `apps/web/static/dist/` is git-ignored — a fresh
+checkout has no `dist/` until the first build (blank SPA / 404 on `/static/dist/app.js` otherwise).
+
 - `type-check` (`tsc -p tsconfig.dev.json --noEmit`) and `lint` (eslint) both cover **tests** at
   full strictness. During the migration they are scoped to `**/*.ts`; legacy `.js` is ignored and
   joins as each module converts.

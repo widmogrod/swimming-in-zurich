@@ -4,6 +4,7 @@
   "description": "ES modules for the swim UI, compiled by tsc (allowJs) from apps/web/static/js -> apps/web/static/dist. type:module lets `node --test` treat the .js files as ESM and makes tsc emit ESM with explicit ./x.js specifiers, matching the browser's <script type=module> loading. Migrated .ts modules run their tests on vitest (type-checked, V8 coverage); the un-migrated .js suites stay on the `node --test` pytest bridge.",
   "scripts": {
     "build": "tsc -p tsconfig.json",
+    "watch": "tsc -p tsconfig.json --watch",
     "type-check": "tsc -p tsconfig.dev.json --noEmit",
     "lint": "eslint .",
     "fmt": "prettier --write .",
