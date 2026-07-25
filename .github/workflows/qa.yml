@@ -30,8 +30,8 @@ jobs:
       - name: CRAP gate
         run: uv run python scripts/crap.py
 
-  # Separate, self-contained TypeScript chain (its own Node toolchain). S2/S3 extend this
-  # job with lint/fmt/vitest/crap; here it just proves the build + type-check are green.
+  # Separate, self-contained TypeScript chain (its own Node toolchain). S3 extends this
+  # job with the crap gate; S2 added lint/fmt/vitest.
   ts-qa:
     runs-on: ubuntu-latest
     defaults:
@@ -51,5 +51,14 @@ jobs:
       - name: Build (tsc emit static/js -> static/dist)
         run: npm run build
 
-      - name: Type-check (strict, source)
+      - name: Type-check (strict, source + tests)
         run: npm run type-check
+
+      - name: Lint (eslint, migrated .ts)
+        run: npm run lint
+
+      - name: Format check (prettier, migrated .ts + configs)
+        run: npm run fmt:check
+
+      - name: Test (vitest + V8 coverage)
+        run: npm run test

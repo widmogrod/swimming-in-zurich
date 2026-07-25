@@ -1,0 +1,9 @@
+# Legacy, never-formatted source — joins the format scope as it migrates to .ts.
+# (`*.js` matches recursively, covering blocks/ and components/; listed for clarity.)
+*.js
+blocks/
+components/
+
+# Tooling artifacts
+node_modules/
+coverage/

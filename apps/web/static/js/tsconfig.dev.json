@@ -3,5 +3,6 @@
   "compilerOptions": {
     "noEmit": true
   },
-  "include": ["**/*.js", "**/*.ts"]
+  "include": ["**/*.js", "**/*.ts"],
+  "exclude": ["node_modules", "../dist", "**/*.test.js"]
 }

@@ -13,5 +13,12 @@
     "sourceMap": false,
     "skipLibCheck": true
   },
-  "exclude": ["node_modules", "../dist", "**/*.test.js", "**/*.test.ts"]
+  "exclude": [
+    "node_modules",
+    "../dist",
+    "**/*.test.js",
+    "**/*.test.ts",
+    "vitest.config.ts",
+    "eslint.config.js"
+  ]
 }

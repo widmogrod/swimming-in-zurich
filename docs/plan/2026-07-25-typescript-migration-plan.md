@@ -252,6 +252,7 @@ Appended by /dev:implement after each slice — never rewritten. Newest row last
 | date | slice | status | divergence from plan | tech debt created | human review? |
 |------|-------|--------|----------------------|-------------------|---------------|
 | 2026-07-25 | S1 | done | `module`/`target` = `nodenext`/`es2022` (not `esnext`; forced by tsc TS5110 given the plan's `moduleResolution: nodenext`) | none | yes (pause point) |
+| 2026-07-25 | S2 | done | node bridge scoped to `**/*.test.js` (Node 26 globs `.test.ts` too); eslint `project: tsconfig.dev.json` (not `projectService`); test self-contained (drops `filterstate` coupling — `merge` is a blind spread) | migration-window scaffolding (the `.test.js` glob + legacy-`.js` lint/fmt ignores) — shrinks to nothing as modules convert | yes (divergences + critic notes) |
 
 ## Decisions & divergences
 
@@ -329,6 +330,24 @@ Substantive choices made during implementation, with the why. Each entry dated.
   load-bearing in S2. **Discovery for S2:** `tsconfig.dev.json` currently inherits the parent's
   `**/*.test.ts` exclude, so S2 must override `exclude` (or widen include past it) for
   `urlstate.test.ts` to be type-checked.
+
+- **2026-07-25 — S2 implemented (`urlstate` pilot → TypeScript + vitest).** Divergences, all
+  critic-verified sound: (1) **the `node --test` bridge is scoped to `**/*.test.js`** —
+  Node 26's default discovery ALSO matches `*.test.ts`, so a bare `node --test` grabbed the new
+  vitest `urlstate.test.ts` and failed on its `./urlstate.js` import; this scoping is now REQUIRED for
+  every future module migration. (2) eslint uses `parserOptions.project: ["./tsconfig.dev.json"]`
+  (not `projectService: true`) because the latter keys off `tsconfig.json`, which excludes `*.test.ts`
+  — the dev config gives the type-aware program spanning source + tests. (3) `tsconfig.json` also
+  excludes `vitest.config.ts`/`eslint.config.js` from emit (keeps `dist/` to runtime modules). (4) the
+  pilot test is **self-contained** — it drops the `filterstate.js` import and builds `UrlFilterState`
+  via a local typed `seed()` + spread; the critic confirmed `filterstate.merge` is a blind shallow
+  spread, so all 11 original assertions are preserved faithfully with no `any` boundary. A dead
+  `state.age !== ''` guard was dropped (toolbar maps `'' → null` before age reaches state). Verified
+  beyond the gate: the compiled `urlstate.ts` **round-trips a real URL in the browser** —
+  `?view=pool&who=female&pool=hallenbad-oerlikon` restored Pool view + Female + Oerlikon, no console
+  errors; `uv run pytest` 396 passed WITH `dist/` deleted. **For S3 (critic suggestion):** `urlstate.ts`
+  `writtenDate`'s `today`-falsy branch is the one uncovered branch (97.91%) — add a `ctx:{}` round-trip
+  case so it doesn't drag the CRAP ratchet.
 
 ## Summary
 

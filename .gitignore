@@ -27,6 +27,8 @@ htmlcov/
 # TS build output (tsc emits static/js -> static/dist; a build artifact, never committed)
 apps/web/static/dist/
 apps/web/static/js/node_modules/
+apps/web/static/js/coverage/
+apps/web/static/js/.eslintcache
 /data/raw/
 
 # IDE / editor
