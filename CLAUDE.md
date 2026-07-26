@@ -95,6 +95,33 @@ to that basin — the facility still builds), or `None`. The command prints an h
 stderr (`unbound` URLs/headers, per-basin `unavailable` causes, `unmatched section` alarms). See
 `docs/concepts/lane-plan-url-binding.md`.
 
+## Internationalization (pl / en / de / it / fr)
+
+Plan: [`docs/plan/2026-07-25-i18n-plan.md`](docs/plan/2026-07-25-i18n-plan.md). **S1 is done** (the
+runtime + the `Intl` layer); the catalog itself is still a seed.
+
+- **`plurals.ts` is the load-bearing file.** `Plural<L>` is a record keyed by the CLDR categories
+  *that locale* uses, so a `pl` message missing `many` is a **`tsc` error**, not a silent fallback
+  that reads as broken grammar. This is the whole reason the runtime is hand-rolled rather than
+  vendored: we own the catalog types. `PLURAL_CATEGORIES` is itself asserted against
+  `Intl.PluralRules` so it can never drift from CLDR and lie to the compiler.
+- **`i18n.ts` owns `resolveLocale()` — the single locale seam.** Locale lives in a cookie (the only
+  channel the server can read, and the shell must emit `<html lang>`); localStorage is a mirror.
+  No other module may read that cookie. Adding `/{locale}/` URL prefixes later must be a change
+  here and nowhere else.
+- **`datefmt.ts` owns every date/number/unit rendering.** Formatting locales are regional:
+  `en → en-GB`, `de → de-CH`, `fr → fr-CH`, `it → it-CH`. Bare `en` means **en-US** and would flip
+  every date to month-first. Two counter-intuitive facts pinned by tests: Polish takes a *genitive*
+  month (`23 lipca`) and lowercases weekday/month names, so no lookup table can do it; and **de-CH
+  and it-CH use a DOT decimal separator**, unlike de-DE/it-IT — only fr-CH and pl use a comma.
+- **Never re-parse a formatted date.** Use `dayParts()` (`Intl.formatToParts`) and compose. The old
+  `formatLabel(...).split(' ')` assumed three space-separated tokens and failed silently elsewhere.
+- **Units bypass the catalog**: `Intl.NumberFormat` with `style:'unit'` gets plurals and fractions
+  right per locale, so there is no message to get wrong. Only domain nouns (pool, lane, day) need
+  catalog plurals.
+- Catalogs are **`.ts` modules, not JSON** — `tsc` emits only `.js`, so a JSON catalog would never
+  reach `dist/`, and the compile-time guarantees need a module the checker sees.
+
 ## Engineering conventions
 
 This project follows the agentic-engineering conventions. When implementing code here,
@@ -123,7 +150,8 @@ The `apps/web/` UI is authored in TypeScript and **compiled** by `tsc` to git-ig
 `apps/web/static/dist/` (served at `/static/dist/…`; see [[typescript-build-pipeline]]). Its QA
 chain runs from `apps/web/static/js/` and is **not** bridged into `uv run pytest` — the Python
 chain keeps only the `node --test` bridge for still-`.js` modules (scoped to `**/*.test.js` since
-Node 26's default discovery also matches `.test.ts`). Run in this order (crap LAST — it reads the
+Node 26's default discovery also matches `.test.ts`). Migration state: **23 `.js` modules + 15
+`node --test` suites remain**; everything the i18n runtime touches is TypeScript on vitest. Run in this order (crap LAST — it reads the
 coverage `vitest` writes, mirroring pytest→crap):
 
 ```sh
@@ -151,6 +179,19 @@ checkout has no `dist/` until the first build (blank SPA / 404 on `/static/dist/
 - `type-check` (`tsc -p tsconfig.dev.json --noEmit`) and `lint` (eslint) both cover **tests** at
   full strictness. During the migration they are scoped to `**/*.ts`; legacy `.js` is ignored and
   joins as each module converts.
+- **A `.js` module cannot import a `.ts` one.** The legacy suites run UNCOMPILED from source under
+  `node --test`, so `./foo.js` resolves only if `foo.js` exists on disk — a `.ts` module is `.js`
+  only inside `dist/`. Converting a module therefore drags in every `.js` file that imports it,
+  *and* their tests (which must move to vitest). Compute that closure before starting, and include
+  **dynamic** `await import()` — a static-import scan misses it. Type-checking reaches further
+  still: a converted caller cannot type-check against an untyped `.js` export, so give the
+  still-`.js` module a `.d.ts` (see `filterstate.d.ts`, `blocks/cursor.d.ts`, `blocks/gantt.d.ts`,
+  `components/_fakedom.d.ts`) rather than converting it too.
+- **DOM types are structural, not `HTMLElement`** — see `domtypes.ts`. Every component factory is
+  duck-typed so the headless suites can hand it `_fakedom.js`'s FakeElement instead of a browser
+  node; that is why the tests need no jsdom. Real DOM crosses in via one documented `asEl()` per
+  boundary. Factories are generic in their element type (`<T extends El>`) so a caller keeps its
+  concrete type instead of widening to `El`.
 - **`scripts/crap_ts.mjs`** is the TS CRAP gate — the SAME formula as `scripts/crap.py`
   (`cc²·(1−cov)³ + cc`, offender when `cc > min-complexity` AND `crap > threshold`; `[tool.crap-ts]`
   in `pyproject.toml`). Parity is **formula** parity, not metric parity (eslint's cyclomatic count ≠
@@ -158,6 +199,11 @@ checkout has no `dist/` until the first build (blank SPA / 404 on `/static/dist/
   coverage from vitest's Istanbul `coverage-final.json` (`coverage.all: true` lists every source
   `.ts`; crap_ts scores a never-executed file — whose v8 `fnMap` is only `(empty-report)` — via a
   whole-file coverage fallback at 0%, so an untested high-complexity module can't hide).
+  A file **absent** from `coverage-final.json` is a different case: it was deliberately excluded in
+  `vitest.config.ts` and is **not scored**, exactly as `crap.py` never sees a module that
+  coverage.py `omit`s or `# pragma: no cover`s. Only the four browser entrypoints (`app.ts` and the
+  three dev-only surfaces) are excluded — narrow that list, never widen it: a new *rule* belongs in
+  a measured module, which is what `appdata.ts` exists for.
 
 - **Type checker**: `mypy .` (strict) is the canonical, enforced gate and is **green**.
   `pyright` (strict) is also configured but has **known, deferred debt** — remaining
