@@ -36,3 +36,7 @@ apps/web/static/js/.eslintcache
 .vscode/
 *.swp
 .DS_Store
+
+# Local dev env (copied from .env.example; never commit real .env)
+.env
+!.env.example

@@ -1,6 +1,9 @@
 """Single source of truth for environment configuration.
 
-All `os.getenv()` calls live here only, read and validated fail-fast at startup.
+All `os.getenv()` calls live here only, read and validated fail-fast at startup. A local
+`.env` (copied from `.env.example`) is loaded as a convenience so a developer can run the
+server without exporting anything — real environment variables always win (`.env` never
+overrides an already-set var), and an absent `.env` is a silent no-op.
 """
 
 from __future__ import annotations
@@ -8,6 +11,8 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass
 from pathlib import Path
+
+from dotenv import load_dotenv
 
 
 @dataclass(frozen=True)
@@ -24,6 +29,10 @@ class Config:
 
     @staticmethod
     def from_env() -> Config:
+        # Load `.env` (if present) BEFORE reading os.getenv. `override=False` (the default)
+        # means a real, already-exported env var beats the `.env` value — `.env` is a
+        # default layer for local dev, not an override. No `.env` -> no-op (prod sets real env).
+        load_dotenv()
         return Config(
             gold_db=Path(os.getenv("SWIMZH_GOLD_DB", "gold.sqlite")),
             host=os.getenv("SWIMZH_HOST", "127.0.0.1"),

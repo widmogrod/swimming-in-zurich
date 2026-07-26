@@ -31,3 +31,8 @@ def gold_db(tmp_path_factory: pytest.TempPathFactory) -> Path:
 def _point_app_at_gold_db(gold_db: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """Aim the app at the session gold DB by default (tests may override)."""
     monkeypatch.setenv("SWIMZH_GOLD_DB", str(gold_db))
+    # Hermetic against a developer's local `.env`: neutralise the live-feed URL so the
+    # composition root never wires a real `BaditickerProvider` (and never hits the network)
+    # during tests. `config.from_env()` calls `load_dotenv(override=False)`, which respects
+    # this already-set value; tests that want a provider set `app.state.temperature` directly.
+    monkeypatch.setenv("SWIMZH_BADITICKER_URL", "")
