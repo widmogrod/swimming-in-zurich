@@ -76,10 +76,18 @@ test('update() re-renders (empty → statuses)', () => {
   const blocks = createStateBlocks(el, { answer: { options: [], statuses: [] } });
   const after = blocks.update({
     options: [],
-    statuses: [{ facility: 'City', status: 'closed', detail: 'renovation' }],
+    statuses: [
+      {
+        facility: 'City',
+        status: 'closed',
+        closure_code: 'maintenance',
+        detail_params: {},
+      },
+    ],
   });
   expect(after).toEqual([STATE_CLOSED]);
   const card = must(el.query((c: FakeElement) => c.classList.contains('stateblock')));
   expect(card.textContent.includes('City')).toBeTruthy();
-  expect(card.textContent.includes('renovation')).toBeTruthy();
+  // The reason is rendered from the CLOSURE CODE now, not the server's prose.
+  expect(card.textContent.includes('Maintenance')).toBeTruthy();
 });

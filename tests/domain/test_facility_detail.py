@@ -86,10 +86,7 @@ def test_facility_closure_shuts_the_sauna_too(dataset: Dataset, city: Facility) 
     # the sauna is closed for the same reason, not silently "open 08:00-22:00".
     detail = facility_detail(city, datetime(2026, 7, 20, 12, 0, tzinfo=ZURICH), dataset.calendar)
     sauna = next(fs for fs in detail.features if fs.feature.kind is FeatureKind.SAUNA)
-    assert sauna.schedule == ClosedDay(
-        reason="Sommerpause / Revision",
-        code=ClosureCode.SEASONAL_BREAK_MAINTENANCE,
-    )
+    assert sauna.schedule == ClosedDay(code=ClosureCode.SEASONAL_BREAK_MAINTENANCE)
     # The curated German is CLASSIFIED at build time (S4), so the sauna's closure carries
     # a machine identity — not just prose the UI would have to print verbatim.
     assert sauna.schedule.code is ClosureCode.SEASONAL_BREAK_MAINTENANCE

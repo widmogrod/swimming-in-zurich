@@ -15,7 +15,7 @@ import pytest
 
 from swimzh.core.errors import ProviderError, Timeout, describe
 from swimzh.core.result import Err, Ok, Result
-from swimzh.domain.access import ClubReserved, PublicSwim
+from swimzh.domain.access import ClubReserved, PublicSwim, ReasonCode
 from swimzh.domain.catalog import PoolCatalogEntry, RosterEntry
 from swimzh.domain.lane_plan import (
     LaneAvailability,
@@ -202,7 +202,8 @@ def test_school_pool_adults_only_window_rejects_child(dataset: Dataset) -> None:
     option = open_aemtler[0]
     assert option.eligibility.allowed is False
     assert option.eligibility.rule == "adults-only"
-    assert "requires age 18+" in option.eligibility.reason
+    assert option.eligibility.code is ReasonCode.ADULTS_ONLY_TOO_YOUNG
+    assert option.eligibility.params == {"min_age": 18}
     # The same window admits an adult.
     adult = _query(dataset, when)
     open_adult = [

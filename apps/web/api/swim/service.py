@@ -70,7 +70,6 @@ def _option_out(option: SwimOption) -> OptionOut:
         end=option.session.time.end.strftime("%H:%M"),
         access=type(option.session.access).__name__,
         eligible=option.eligibility.allowed,
-        reason=option.eligibility.reason,
         reason_code=option.eligibility.code.value,
         reason_params=dict(option.eligibility.params),
         price=option.price.display if option.price is not None else None,
@@ -114,7 +113,6 @@ def build_answer(
             StatusOut(
                 facility=s.facility_name,
                 status=s.status,
-                detail=s.detail,
                 detail_code=s.code.value,
                 closure_code=s.closure.value if s.closure else None,
                 detail_params=dict(s.params),

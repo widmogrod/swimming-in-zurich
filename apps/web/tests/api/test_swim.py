@@ -120,12 +120,16 @@ def _women_only_option(client: TestClient, gender: str) -> dict[str, object]:
     return women[0]
 
 
-def test_options_carry_a_reason_code_beside_the_prose() -> None:
-    """S2 is ADDITIVE — both fields ship, so the UI keeps working untouched."""
+def test_options_carry_a_reason_code_and_no_prose() -> None:
+    """S5: the English `reason` is GONE from the wire.
+
+    The server states WHICH outcome; only the client turns that into words, so one API
+    serves every locale and no response is implicitly English.
+    """
     with TestClient(app) as client:
         option = _women_only_option(client, "female")
     assert option["reason_code"] == "women_only_welcome"
-    assert option["reason"]  # the English rendering still ships
+    assert "reason" not in option
 
 
 def test_the_reason_code_discriminates_what_rule_could_not() -> None:
@@ -153,20 +157,19 @@ def test_reason_params_carry_interpolation_values_not_baked_prose() -> None:
             assert "min_age" in option["reason_params"]
 
 
-def test_statuses_carry_a_detail_code_that_names_the_mixed_language_field() -> None:
-    """`detail` today is English in one branch and German in the other. The code says
-    which sentence it is; the German reason travels as a param until S4 maps it."""
+def test_statuses_carry_codes_and_no_mixed_language_prose() -> None:
+    """`detail` used to be English in one branch and curated German in the other — the
+    seam the whole plan existed to close. It is gone; the codes replace it."""
     with TestClient(app) as client:
         response = client.get("/swim", params={"at": MONDAY_EVENING, "eligible_only": "false"})
     statuses = response.json()["statuses"]
     assert statuses, "expected at least one closed/uncurated facility"
     for status in statuses:
         assert status["detail_code"] in {"closed_reason", "uncurated"}
+        assert "detail" not in status, "the mixed-language prose is retired (S5)"
         if status["detail_code"] == "closed_reason":
-            # the curated (German) text is data, not copy — it rides as a param
-            assert status["detail_params"]["reason"] == status["detail"]
-        else:
-            assert status["detail_params"] == {}
+            # S4: WHICH closure, as a code the client can translate.
+            assert status["closure_code"]
 
 
 def test_access_types_key_is_sufficient_to_render_without_server_prose() -> None:

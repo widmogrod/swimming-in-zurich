@@ -265,9 +265,9 @@ class FacilityStatus:
     facility_id: PoolId
     facility_name: str
     status: str  # "closed" | "uncurated"
-    detail: str
-    #: The message key + its interpolation values. `detail` is the current rendering of
-    #: exactly this; it stays on the wire until S5.
+    #: The message key + its interpolation values. The mixed-language `detail` prose this
+    #: replaced was retired in S5 — it was English in one branch and curated German in the
+    #: other, which is the seam the whole i18n plan existed to close.
     code: StatusCode = StatusCode.UNCURATED
     #: For a closure, WHICH closure (S4). None for `uncurated`.
     closure: ClosureCode | None = None
@@ -427,7 +427,6 @@ def find_swim_options(
                     facility_id=facility.identity.facility_id,
                     facility_name=facility.identity.name,
                     status="closed",
-                    detail=facility_closed_reason,
                     # S4: the classified code from the resolver, not a prose passthrough.
                     # `UNMAPPED` still carries the original German in `params.text`, so an
                     # unrecognised phrase degrades to the truth rather than to a blank.
@@ -565,7 +564,6 @@ def _uncurated_statuses(
             facility_id=reconstruct_pool_id(row.entry.pool_id),
             facility_name=row.entry.name,
             status="uncurated",
-            detail="schedule not yet curated",
             code=StatusCode.UNCURATED,
         )
         for row in roster

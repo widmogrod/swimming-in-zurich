@@ -34,7 +34,11 @@ def test_public_lane_family_open_to_all() -> None:
         for person in (ADULT, WOMAN, UNKNOWN):
             result = eligibility(person, access)
             assert result.allowed is True
-            assert result.reason
+            assert result.code in {
+                ReasonCode.PUBLIC,
+                ReasonCode.LANE_SWIM,
+                ReasonCode.FAMILY,
+            }
 
 
 def test_women_only() -> None:
@@ -43,10 +47,10 @@ def test_women_only() -> None:
     # Non-binary and unspecified are not silently assumed either way.
     diverse = eligibility(DIVERSE, WomenOnly())
     assert diverse.allowed is False
-    assert "confirm" in diverse.reason
+    assert diverse.code is ReasonCode.WOMEN_ONLY_CONFIRM
     unknown = eligibility(UNKNOWN, WomenOnly())
     assert unknown.allowed is False
-    assert "specify gender" in unknown.reason
+    assert unknown.code is ReasonCode.WOMEN_ONLY_NEEDS_GENDER
 
 
 def test_seniors_only() -> None:
@@ -54,7 +58,7 @@ def test_seniors_only() -> None:
     assert eligibility(ADULT, SeniorsOnly(min_age=60)).allowed is False
     unknown_age = eligibility(Person(gender=Gender.MALE), SeniorsOnly(min_age=60))
     assert unknown_age.allowed is False
-    assert "specify age" in unknown_age.reason
+    assert unknown_age.code is ReasonCode.SENIORS_ONLY_NEEDS_AGE
 
 
 def test_reserved_sessions_are_not_public() -> None:
@@ -63,7 +67,10 @@ def test_reserved_sessions_are_not_public() -> None:
     assert school.rule == "school-reserved"
     club = eligibility(ADULT, ClubReserved(club="SC Uster"))
     assert club.allowed is False
-    assert "SC Uster" in club.reason
+    # The club name is DATA, not copy — it rides as a param so a translated sentence
+    # can place it.
+    assert club.code is ReasonCode.CLUB_RESERVED
+    assert club.params == {"club": "SC Uster"}
 
 
 def test_adults_only() -> None:
@@ -72,10 +79,11 @@ def test_adults_only() -> None:
     child = eligibility(CHILD, AdultsOnly())
     assert child.allowed is False
     assert child.rule == "adults-only"
-    assert "requires age 18+" in child.reason
+    assert child.code is ReasonCode.ADULTS_ONLY_TOO_YOUNG
+    assert child.params == {"min_age": 18}
     unknown_age = eligibility(Person(gender=Gender.MALE), AdultsOnly())
     assert unknown_age.allowed is False
-    assert "specify age" in unknown_age.reason
+    assert unknown_age.code is ReasonCode.ADULTS_ONLY_NEEDS_AGE
 
 
 def test_result_reports_rule_name() -> None:
@@ -177,9 +185,9 @@ def test_club_reserved_carries_the_club_name_as_a_param() -> None:
     assert eligibility(Person(gender=None, age=30), ClubReserved()).params == {}
 
 
-def test_reason_prose_still_ships_alongside_the_code() -> None:
-    """S2 is ADDITIVE: the English `reason` stays on the wire until S5, so the UI keeps
-    rendering today's text while the client learns to render codes."""
+def test_the_server_no_longer_decides_the_answers_language() -> None:
+    """S5: the English prose is GONE. An outcome is a code + params; only the client
+    turns it into words, so the same API serves every locale."""
     got = eligibility(Person(gender=Gender.MALE, age=30), WomenOnly())
     assert got.code is ReasonCode.WOMEN_ONLY_EXCLUDED
-    assert got.reason == "women-only session"
+    assert not hasattr(got, "reason")

@@ -46,11 +46,11 @@ class OptionOut(BaseModel):
     end: str
     access: str
     eligible: bool
-    reason: str  # English prose; retired in S5 once the client renders `reason_code`
-    # --- i18n (S2, additive) ---------------------------------------------------------
-    # The message key for `reason` + its interpolation values, so a client can render the
-    # outcome in the viewer's language instead of printing the server's English. The `rule`
-    # field is NOT sufficient for this: four women-only outcomes share one rule.
+    # --- i18n ------------------------------------------------------------------------
+    # The message key for the eligibility outcome + its interpolation values. The English
+    # `reason` prose this replaced was retired in S5: the server no longer decides what
+    # language the answer is in. `rule` is NOT sufficient as a key — four women-only
+    # outcomes share one rule.
     reason_code: str
     reason_params: dict[str, str | int] = {}
     price: str | None
@@ -69,11 +69,10 @@ class OptionOut(BaseModel):
 class StatusOut(BaseModel):
     facility: str
     status: str  # "closed" | "uncurated"
-    detail: str  # current rendering; retired in S5 once the client renders `detail_code`
-    # --- i18n (S2, additive) ---------------------------------------------------------
-    # `detail` today mixes languages: English "schedule not yet curated" in one branch and
-    # curated German ("Sommerpause") in the other. The code names which sentence it is; the
-    # German text travels as a param until S4 maps it to a closed code set.
+    # --- i18n ------------------------------------------------------------------------
+    # `detail` used to mix languages here: English "schedule not yet curated" in one branch
+    # and curated German ("Sommerpause") in the other. Retired in S5 — the code names which
+    # sentence it is, and S4's `closure_code` names WHICH closure.
     detail_code: str
     # S4: WHICH closure, from the classified code set — `null` for uncurated. The client
     # renders this; `closure_code == "unmapped"` means we could not classify the curated

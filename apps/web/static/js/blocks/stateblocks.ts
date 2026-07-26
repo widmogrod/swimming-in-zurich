@@ -13,6 +13,7 @@
 // The three state keys. Exported so callers name them, never string-drift.
 import { asDoc, type Doc, type El } from '../domtypes.js';
 import { t } from '../i18n.js';
+import { closureLabel } from './board.js';
 
 export const STATE_CLOSED = 'closed';
 export const STATE_UNLISTED = 'hours-not-listed';
@@ -22,7 +23,8 @@ export const STATE_NONE = 'no-pools';
 export interface StatusLike {
   facility?: string;
   status?: string;
-  detail?: string | null;
+  closure_code?: string | null;
+  detail_params?: Record<string, string>;
 }
 
 export interface AnswerLike {
@@ -144,7 +146,12 @@ export function createStateBlocks<T extends El>(
     // its own reason (Sommerpause / Revision) worth stating.
     for (const status of statuses) {
       if (stateForStatus(status) !== STATE_CLOSED) continue;
-      el.appendChild(stateCard(doc, STATE_CLOSED, { facility: status.facility, detail: status.detail }));
+      el.appendChild(
+        stateCard(doc, STATE_CLOSED, {
+          facility: status.facility,
+          detail: closureLabel(status),
+        }),
+      );
       rendered.push(STATE_CLOSED);
     }
     // Hours-not-listed: collapse the (many, identical) uncurated pools into ONE count note.

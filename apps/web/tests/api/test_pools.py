@@ -345,11 +345,18 @@ def test_pool_detail_live_water_temp_fail_open_when_unconfigured() -> None:
     assert temp["reason"] == "live temperature not configured"
 
 
-def test_access_types_explained() -> None:
+def test_access_types_are_keys_the_client_translates() -> None:
+    """S5: the endpoint serves KEYS, not English prose.
+
+    It used to ship `label`/`description`, which made the server decide the explanation's
+    language. The client now renders both from its own catalogue, so one response serves
+    every locale — and the endpoint's contract is the key set.
+    """
     with TestClient(app) as client:
         response = client.get("/access-types")
     assert response.status_code == 200
-    types = {t["key"]: t for t in response.json()["types"]}
-    assert "women-only" in types
-    assert types["women-only"]["description"]
-    assert "school-reserved" in types
+    types = response.json()["types"]
+    keys = {t["key"] for t in types}
+    assert "women-only" in keys
+    assert "school-reserved" in keys
+    assert all(set(t) == {"key"} for t in types), "no prose should remain on the wire"

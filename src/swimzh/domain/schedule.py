@@ -14,7 +14,7 @@ from datetime import date, time
 from enum import Enum, IntEnum
 
 from swimzh.domain.access import SessionAccess
-from swimzh.domain.closure import ClosureCode
+from swimzh.domain.closure import ClosureCode, classify_closure
 
 
 class Weekday(IntEnum):
@@ -83,6 +83,20 @@ class ResolvedSession:
     access: SessionAccess
 
 
+def _derive_closure(obj: ScheduleException | ClosureRange) -> None:
+    """Fill `code`/`params` from `reason` unless the caller set them.
+
+    Frozen dataclasses need `object.__setattr__`; the alternative — classifying only at
+    the DTO boundary — let a directly-constructed domain object carry `SPECIAL` for a
+    reason that was perfectly classifiable.
+    """
+    if obj.code is not ClosureCode.SPECIAL or obj.params:
+        return
+    code, params = classify_closure(obj.reason)
+    object.__setattr__(obj, "code", code)
+    object.__setattr__(obj, "params", params)
+
+
 @dataclass(frozen=True, slots=True)
 class ScheduleException:
     """A one-off override for a specific date (event, gala, altered hours, or a closure).
@@ -93,12 +107,19 @@ class ScheduleException:
 
     date: date
     closed: bool = False
+    #: The curated German this was authored as. Kept as the SOURCE of `code` (and for the
+    #: build audit); it is never rendered — the UI reads the code.
     reason: str = ""
-    #: The classified reason (S4). `reason` is the curated German it was derived from;
-    #: it stays until S5 so nothing breaks mid-migration.
-    code: ClosureCode = ClosureCode.SPECIAL
+    #: The classified reason. Derived from `reason` on construction unless given
+    #: explicitly, so NO construction path can skip classification — an earlier version
+    #: classified only at the DTO boundary, and a domain object built directly in a test
+    #: silently carried `SPECIAL`.
+    code: ClosureCode = field(default=ClosureCode.SPECIAL)
     params: Mapping[str, str] = field(default_factory=dict)
     sessions: tuple[ResolvedSession, ...] = field(default_factory=tuple)
+
+    def __post_init__(self) -> None:
+        _derive_closure(self)
 
 
 @dataclass(frozen=True, slots=True)
@@ -107,10 +128,13 @@ class ClosureRange:
 
     start: date
     end: date  # inclusive
+    #: See ScheduleException.reason.
     reason: str = ""
-    #: The classified reason (S4) — see ScheduleException.code.
-    code: ClosureCode = ClosureCode.SPECIAL
+    code: ClosureCode = field(default=ClosureCode.SPECIAL)
     params: Mapping[str, str] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        _derive_closure(self)
 
     def contains(self, d: date) -> bool:
         return self.start <= d <= self.end
@@ -125,11 +149,12 @@ class OpenDay:
 
 @dataclass(frozen=True, slots=True)
 class ClosedDay:
-    """The facility/basin is closed on this day, with a human-readable reason."""
+    """The facility/basin is closed on this day, as a CODE plus its parameters.
 
-    reason: str
-    #: The machine identity of that reason + its interpolation values. `reason` is the
-    #: English/German rendering of exactly this; it is retired in S5.
+    The human-readable `reason` was retired in S5: the domain states WHY in a form every
+    locale can render, and only the client turns that into words.
+    """
+
     code: ClosureCode = ClosureCode.SPECIAL
     params: Mapping[str, str] = field(default_factory=dict)
 

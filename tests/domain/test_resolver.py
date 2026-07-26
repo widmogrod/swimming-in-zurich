@@ -8,6 +8,7 @@ from datetime import date, time
 
 from swimzh.domain.access import LaneSwim, PublicSwim, SeniorsOnly
 from swimzh.domain.calendar import HolidayRange, ZurichCalendar
+from swimzh.domain.closure import ClosureCode
 from swimzh.domain.models import (
     Basin,
     BasinId,
@@ -112,20 +113,23 @@ def test_public_holiday_closed_policy() -> None:
     facility = _facility(policy=HolidayPolicy.CLOSED)
     result = resolve_basin(facility, facility.basins[0], date(2026, 4, 3), _calendar())
     assert isinstance(result, ClosedDay)
-    assert "Karfreitag" in result.reason
+    # The holiday NAME is a param, not prose baked into a sentence — that is what lets a
+    # translated closure say "Good Friday" while an untranslatable one stays German.
+    assert result.code is ClosureCode.PUBLIC_HOLIDAY
+    assert result.params["holiday"] == "Karfreitag"
 
 
 def test_maintenance_closure_wins() -> None:
     # 2026-07-20 is inside the Revision closure.
     result = resolve_basin(_facility(), _facility().basins[0], date(2026, 7, 20), _calendar())
     assert isinstance(result, ClosedDay)
-    assert "Revision" in result.reason
+    assert result.code is ClosureCode.SEASONAL_BREAK_MAINTENANCE
 
 
 def test_one_off_exception_closes_day() -> None:
     result = resolve_basin(_facility(), _facility().basins[0], date(2026, 12, 24), _calendar())
     assert isinstance(result, ClosedDay)
-    assert result.reason == "Heiligabend"
+    assert result.code is ClosureCode.CHRISTMAS_EVE
 
 
 def test_calendar_coverage_boundary() -> None:

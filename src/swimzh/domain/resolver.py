@@ -72,19 +72,14 @@ def resolve_hours(
     # 1. Facility-wide closures win over everything.
     for closure in facility.closures:
         if closure.contains(d):
-            reason = closure.reason or "closed (maintenance)"
-            return ClosedDay(reason=reason, code=closure.code, params=dict(closure.params))
+            return ClosedDay(code=closure.code, params=dict(closure.params))
 
     # 2. A one-off exception for this exact date overrides the recurring pattern.
     exception = _find_exception(exceptions, d)
     if exception is not None:
         if exception.closed:
             # The code was settled at build time (boundary/mapping); carry it through.
-            return ClosedDay(
-                reason=exception.reason or "closed (special)",
-                code=exception.code,
-                params=dict(exception.params),
-            )
+            return ClosedDay(code=exception.code, params=dict(exception.params))
         return OpenDay(sessions=exception.sessions)
 
     ctx = calendar.context(d)
@@ -104,11 +99,7 @@ def resolve_hours(
                 params = (
                     {"holiday": name, "holiday_code": classify_holiday(name).value} if name else {}
                 )
-                return ClosedDay(
-                    reason=f"closed ({name or 'public holiday'})",
-                    code=ClosureCode.PUBLIC_HOLIDAY,
-                    params=params,
-                )
+                return ClosedDay(code=ClosureCode.PUBLIC_HOLIDAY, params=params)
             case HolidayPolicy.SUNDAY_SCHEDULE:
                 effective_weekday = Weekday.SUNDAY
             case HolidayPolicy.NORMAL:
@@ -117,7 +108,7 @@ def resolve_hours(
     # 4. Recurring rules for the effective weekday and calendar scope.
     sessions = _sessions_for_weekday(rules, effective_weekday, ctx)
     if not sessions:
-        return ClosedDay(reason="no sessions scheduled", code=ClosureCode.NO_SESSIONS)
+        return ClosedDay(code=ClosureCode.NO_SESSIONS)
     return OpenDay(sessions=sessions)
 
 

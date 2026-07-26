@@ -33,6 +33,7 @@ import {
   BOARD_DAY0,
   BOARD_DAY1,
   BOARD_PLOT,
+  closureLabel,
   createBoard,
 } from "./blocks/board.js";
 import {
@@ -322,7 +323,7 @@ async function main() {
     const detail = id ? await fetchPoolDetail(id, filter.date || today) : null;
     openPanel(detail, {
       state,
-      reason: st ? st.detail : null,
+      reason: st ? closureLabel(st) : null,
       basinName: null,
       officialUrl: poolUrlByName.get(row.label) || null,
     });

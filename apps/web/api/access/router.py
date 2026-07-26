@@ -9,9 +9,14 @@ from swimzh.domain.access import ACCESS_TYPES
 
 
 class AccessTypeOut(BaseModel):
+    """One access type, as a KEY only.
+
+    The English `label`/`description` prose was retired in S5: the client renders both
+    from its own catalogue (`access.*`), so this endpoint no longer decides what language
+    the explanation is in. The key is the contract.
+    """
+
     key: str
-    label: str
-    description: str
 
 
 class AccessTypesOut(BaseModel):
@@ -23,8 +28,4 @@ router = APIRouter()
 
 @router.get("/access-types", response_model=AccessTypesOut)
 def access_types() -> AccessTypesOut:
-    return AccessTypesOut(
-        types=[
-            AccessTypeOut(key=a.key, label=a.label, description=a.description) for a in ACCESS_TYPES
-        ]
-    )
+    return AccessTypesOut(types=[AccessTypeOut(key=a.key) for a in ACCESS_TYPES])

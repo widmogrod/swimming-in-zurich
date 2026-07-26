@@ -84,7 +84,6 @@ from swimzh.domain.access import (
     SessionAccess,
     WomenOnly,
 )
-from swimzh.domain.closure import classify_closure
 from swimzh.domain.geo import GeoPoint
 from swimzh.domain.lane_plan import (
     LanePlan,
@@ -273,15 +272,12 @@ def resolved_to_dto(session: ResolvedSession) -> ResolvedSessionDTO:
 
 
 def exception_from_dto(dto: ExceptionDTO) -> ScheduleException:
-    # Classify the curated German HERE — on the way in, at build time. The query layer
-    # must never parse prose; by the time it reads the gold store the code is settled.
-    code, params = classify_closure(dto.reason)
+    # `reason` is classified into a code by ScheduleException.__post_init__, so every
+    # construction path gets it — not just this one.
     return ScheduleException(
         date=dto.date,
         closed=dto.closed,
         reason=dto.reason,
-        code=code,
-        params=params,
         sessions=tuple(resolved_from_dto(s) for s in dto.sessions),
     )
 
@@ -296,8 +292,7 @@ def exception_to_dto(exc: ScheduleException) -> ExceptionDTO:
 
 
 def closure_from_dto(dto: ClosureDTO) -> ClosureRange:
-    code, params = classify_closure(dto.reason)
-    return ClosureRange(start=dto.start, end=dto.end, reason=dto.reason, code=code, params=params)
+    return ClosureRange(start=dto.start, end=dto.end, reason=dto.reason)
 
 
 def closure_to_dto(closure: ClosureRange) -> ClosureDTO:
