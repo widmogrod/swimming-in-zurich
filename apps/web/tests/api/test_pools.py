@@ -314,8 +314,9 @@ def test_pool_detail_surfaces_live_water_temp_from_a_wired_provider() -> None:
 
 
 def test_pool_detail_live_water_temp_unavailable_without_a_key() -> None:
-    """A pool with no `baditicker_poiid` (e.g. curated Bungertwies) never asks the provider: the
-    facility-level temp reports the unavailable reason, not a stale number."""
+    """A pool with no `baditicker_poiid` (Hallenbad Altstetten — genuinely absent from the
+    Baditicker feed) never asks the provider: the facility-level temp reports the unavailable
+    reason, not a stale number."""
     reading = TempReading(
         measured_at=datetime.now(_ZURICH),
         celsius=Decimal("23.0"),
@@ -325,7 +326,7 @@ def test_pool_detail_live_water_temp_unavailable_without_a_key() -> None:
     with TestClient(app) as client:
         app.state.temperature = _FakeTemperatureProvider(Ok(reading))
         try:
-            body = client.get("/pools/hallenbad-bungertwies").json()
+            body = client.get("/pools/hallenbad-altstetten").json()
         finally:
             app.state.temperature = None
     temp = body["live_water_temp"]

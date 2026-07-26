@@ -75,15 +75,16 @@ def test_dataset_loads_curated_and_lane_plan_only_pools(dataset: Dataset) -> Non
         "Hallenbad Bläsi",
         "Wärmebad Käferberg",
     }
-    # Registry knows more than we have curated (9 since S1 added a Freibad Heuried identity so
-    # its live-data keys survive onto the location-only facility the build mints for it).
-    assert len(dataset.registry.identities) == 9
+    # Registry knows more than we have curated (25 since S4 added identity-only entries for every
+    # reconcilable Baditicker pool so their live water-temp `baditicker_poiid` survives onto the
+    # location-only facility the build mints — 9 through S1/S2 + 16 new outdoor/river/lake pins).
+    assert len(dataset.registry.identities) == 25
 
 
 def _roster(dataset: Dataset) -> tuple[RosterEntry, ...]:
     """The roster the app feeds `find_swim_options`, here derived from the curated dataset's
-    registry (9 known pools) so the three-state `uncurated = roster − scheduled` answer is
-    exercised without a gold DB."""
+    registry (25 known pools after S4) so the three-state `uncurated = roster − scheduled` answer
+    is exercised without a gold DB."""
     return tuple(
         RosterEntry(
             entry=PoolCatalogEntry(
@@ -116,11 +117,31 @@ def test_uncurated_facilities_are_distinguished_from_closed(dataset: Dataset) ->
     result = _query(dataset, datetime(2026, 3, 11, 14, 0, tzinfo=ZURICH))
     uncurated = [s for s in result.statuses if s.status == "uncurated"]
     assert {s.facility_name for s in uncurated} == {
+        # Registry-known but not scheduled (identity-only or lane-plan-only) → "uncurated", never
+        # "closed". S4 grew this set: every reconcilable Baditicker pool now carries a registry
+        # identity so its live water-temp key survives onto the location-only facility.
         "Hallenbad Altstetten",
         "Hallenbad Bläsi",
         "Hallenbad Leimbach",
         "Wärmebad Käferberg",
         "Freibad Heuried",  # S1: registry-known outdoor pin, no schedule → uncurated (not closed)
+        # S4: the outdoor/river/lake pins that gained a Baditicker `baditicker_poiid`.
+        "Freibad Allenmoos",
+        "Freibad Auhof",
+        "Freibad Dolder",
+        "Freibad Letzigraben",
+        "Freibad Seebach",
+        "Freibad Zwischen den Hölzern",
+        "Flussbad Au-Höngg",
+        "Flussbad Oberer Letten",
+        "Frauenbad Stadthausquai",
+        "Männerbad Schanzengraben",
+        "Seebad Enge",
+        "Seebad Katzensee",
+        "Seebad Utoquai",
+        "Strandbad Mythenquai",
+        "Strandbad Tiefenbrunnen",
+        "Strandbad Wollishofen",
     }
 
 

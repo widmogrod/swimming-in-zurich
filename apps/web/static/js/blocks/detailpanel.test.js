@@ -251,6 +251,102 @@ test('the panel embeds the LaneGantt on the SAME timescale instance (no desync p
   assert.ok(p.el.query(hasClass('gantt')));
 });
 
+// --- S4: the facility-level LIVE water temperature (Baditicker), rendered honestly ---
+const liveRow = (p) =>
+  p.el.queryAll(hasClass('detail__fact')).find((r) => r.textContent.startsWith('Live water'));
+
+test('S4: a live reading with a temp shows "23 °C · measured N min ago" (Heuried-shaped)', () => {
+  const detail = {
+    ...POOL,
+    live_water_temp: {
+      available: true,
+      celsius: 23,
+      measured_at: '2026-07-25T20:39:00+02:00',
+      age_min: 7,
+      is_open: false,
+      is_stale: false,
+      source: 'baditicker',
+      reason: null,
+    },
+  };
+  const p = createDetailPanel(mount(), { detail, basin: null, state: 'uncurated' });
+  const row = liveRow(p);
+  assert.ok(row, 'the Live water row is present');
+  assert.ok(row.textContent.includes('23 °C'));
+  assert.ok(row.textContent.includes('measured 7 min ago'), row.textContent);
+  // a fresh reading is NOT marked stale.
+  assert.equal(p.el.query(hasClass('detail__live--stale')), null);
+});
+
+test('S4: an empty feed cell reads "Not yet measured" (+ closed), never a number or 0', () => {
+  const detail = {
+    ...POOL,
+    live_water_temp: {
+      available: true,
+      celsius: null, // open, but the feed cell is empty — a live answer, not unavailable
+      measured_at: '2026-06-05T14:02:00+02:00',
+      age_min: 99999,
+      is_open: false,
+      is_stale: true,
+      source: 'baditicker',
+      reason: null,
+    },
+  };
+  const p = createDetailPanel(mount(), { detail, basin: null, state: 'uncurated' });
+  const row = liveRow(p);
+  assert.ok(row.textContent.includes('Not yet measured'), row.textContent);
+  assert.ok(row.textContent.includes('closed'));
+  assert.ok(!/°C/.test(row.textContent), 'no temperature number for an empty cell');
+  assert.ok(p.el.query(hasClass('detail__live--muted')));
+});
+
+test('S4: unavailable shows the reason and NEVER a stale number', () => {
+  const detail = {
+    ...POOL,
+    live_water_temp: {
+      available: false,
+      celsius: null,
+      measured_at: null,
+      age_min: null,
+      is_open: null,
+      is_stale: null,
+      source: null,
+      reason: 'no baditicker key',
+    },
+  };
+  const p = createDetailPanel(mount(), { detail, basin: null, state: 'uncurated' });
+  const row = liveRow(p);
+  assert.ok(row.textContent.includes('no baditicker key'), row.textContent);
+  assert.ok(!/°C/.test(row.textContent), 'no number when unavailable');
+  assert.ok(p.el.query(hasClass('detail__live--muted')));
+});
+
+test('S4: a stale reading (older than the freshness limit) is visibly marked', () => {
+  const detail = {
+    ...POOL,
+    live_water_temp: {
+      available: true,
+      celsius: 22,
+      measured_at: '2026-07-23T09:00:00+02:00',
+      age_min: 3000, // ~2 days → past the 6h freshness limit
+      is_open: true,
+      is_stale: true,
+      source: 'baditicker',
+      reason: null,
+    },
+  };
+  const p = createDetailPanel(mount(), { detail, basin: null, state: 'uncurated' });
+  const row = liveRow(p);
+  assert.ok(row.textContent.includes('22 °C'));
+  assert.ok(row.textContent.includes('measured 2 days ago'), row.textContent);
+  assert.ok(p.el.query(hasClass('detail__live--stale')), 'a stale reading is visibly marked');
+});
+
+test('S4: no live_water_temp block → the Live water row is simply omitted', () => {
+  const p = createDetailPanel(mount(), { detail: POOL, basin: BASIN, timescale: newTs() });
+  assert.equal(liveRow(p), undefined);
+});
+
 test('S1: a basin-less location-only detail (Heuried-shaped) renders without error', () => {
   // A universal-detail pool (S1): the `/pools/{id}` response carries name + location but an
   // EMPTY basins list. The panel must render its facts + the honest "uncurated" note without

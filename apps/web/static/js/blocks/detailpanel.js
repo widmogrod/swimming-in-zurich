@@ -98,6 +98,40 @@ function tempText(basinOut) {
   return { text: 'Not listed', note: 'Water temperature not published' };
 }
 
+// Human-readable "how long ago" from the API's whole-minute age. min → h → days, so a fresh
+// reading reads "3 min ago" and a stale one "2 days ago" (the freshness the API already derived).
+function humanizeAge(ageMin) {
+  if (ageMin == null) return '';
+  if (ageMin < 60) return `${ageMin} min`;
+  if (ageMin < 60 * 24) return `${Math.round(ageMin / 60)} h`;
+  const days = Math.round(ageMin / (60 * 24));
+  return `${days} ${days === 1 ? 'day' : 'days'}`;
+}
+
+// The facility-level LIVE water temperature (Baditicker `live_water_temp`), rendered HONESTLY —
+// never a stale or invented number. Returns null when the detail carries no live block at all
+// (older payloads / callers that don't thread it), so the row is simply omitted. Four states:
+//   * a live reading with a temp   → "23 °C" + "· measured N min ago" (muted+stale when old).
+//   * a live reading, empty cell   → "Not yet measured" (+ open/closed) — a live answer, not 0.
+//   * unavailable (no key / error) → the reason, muted, and NEVER a number.
+function liveTempText(lwt) {
+  if (!lwt) return null;
+  if (!lwt.available) {
+    return { text: lwt.reason || 'Not available', note: '', muted: true, stale: false };
+  }
+  if (lwt.celsius == null) {
+    const openNote = lwt.is_open === true ? 'open' : lwt.is_open === false ? 'closed' : '';
+    return { text: 'Not yet measured', note: openNote, muted: true, stale: false };
+  }
+  const age = humanizeAge(lwt.age_min);
+  return {
+    text: `${lwt.celsius} °C`,
+    note: age ? `measured ${age} ago` : 'measured',
+    muted: !!lwt.is_stale,
+    stale: !!lwt.is_stale,
+  };
+}
+
 /**
  * createDetailPanel(el, opts) — mount the DetailPanel + LaneGantt into `el`.
  * @param {object} opts
@@ -270,6 +304,26 @@ export function createDetailPanel(el, opts = {}) {
   tempVal.appendChild(tempMain);
   tempVal.appendChild(tempNote);
   facts.appendChild(factRow(doc, 'Water', tempVal));
+
+  // live water temp (facility-level Baditicker) — additive + labelled, distinct from the
+  // per-basin design/measured "Water" row above; honest empty / unavailable / stale states.
+  const live = liveTempText(detail.live_water_temp);
+  if (live) {
+    const liveVal = doc.createElement('span');
+    liveVal.className = 'detail__live';
+    if (live.muted) liveVal.classList.add('detail__live--muted');
+    if (live.stale) liveVal.classList.add('detail__live--stale');
+    const liveMain = doc.createElement('span');
+    liveMain.textContent = live.text;
+    liveVal.appendChild(liveMain);
+    if (live.note) {
+      const liveNote = doc.createElement('span');
+      liveNote.className = 'detail__factnote';
+      liveNote.textContent = ` · ${live.note}`;
+      liveVal.appendChild(liveNote);
+    }
+    facts.appendChild(factRow(doc, 'Live water', liveVal));
+  }
 
   // eligibility (shared eligibility.js) — from the lane plan's access types, or the
   // clicked row's access types when there is no lane plan; unknown when we have neither

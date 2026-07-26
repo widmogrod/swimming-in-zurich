@@ -232,6 +232,7 @@ Optional: unset config → `None` provider → `TempUnavailable("live temperatur
 | 2026-07-26 | S1 | done | `kind`/geo served by the `/pools` list, not the detail body (deferred to S2, which owns `model.py`); the prose mint now also reuses the registry identity (additive) | none | yes |
 | 2026-07-26 | S2 | done | `config.py`/`mapping.py`/`seed.py` untouched (no work needed — adjudicated acceptable); added `apps/web/deps.py` accessor (idiomatic) | placeholder poiids `hb_city`/`hb_oerlikon` for 2 indoor pools (S3/S4 verify vs. the real feed) | yes |
 | 2026-07-26 | S3 | done | saved-fixture pin instead of a vcrpy cassette (offline by construction, matches house convention); single `SWIMZH_BADITICKER_URL` (presence=enabled) | `parse()` fails the whole snapshot on one malformed bath (vs. `schedule_scraper`'s skip-and-report) — wide blast radius; no explicit errors-not-cached test | yes |
+| 2026-07-26 | S4 | done | mapped 20 pools to real poiids; Bungertwies withheld-for-test → critic-blocking, fixed (mapped `hb002`, no-key test repointed to genuinely-keyless `altstetten`); UI suite is `node:test` (not vitest `.ts`), gated via the pytest node bridge | Flussbad Unterer Letten unmapped (two feed poiids `flb6940`/`flb8803` for two catalog pools, undisambiguable — needs a human decision) | yes |
 
 ## Decisions & divergences
 
@@ -309,6 +310,34 @@ Optional: unset config → `None` provider → `TempUnavailable("live temperatur
   cached / a failed fetch doesn't poison later reads" behavior is correct in code but not
   directly asserted by a test.
 
+- **2026-07-26 (S4 implementation)** — Mapped `baditicker_poiid` for the reconcilable roster
+  (added 16 minimal registry identities for outdoor/river/lake pins + poiids on the curated
+  indoor pools), each `facility_id` cross-checked against `catalog.json` (no orphans). Detail
+  panel (`detailpanel.js`) renders the facility-level `live_water_temp` honestly: reading →
+  "N °C · measured M ago", empty cell → "not yet measured" (never a number), unavailable →
+  reason (never a stale number), stale > limit → visibly marked. No-dangling-keys test pins
+  every declared poiid to the saved feed fixture. **Critic-blocking, fixed (round 1):**
+  `hallenbad-bungertwies` had been left unmapped solely to preserve an S2 no-key test exemplar
+  — production data kept wrong for a test; fixed by mapping it to its real `hb002` and
+  repointing the no-key test to `hallenbad-altstetten`, which is genuinely absent from the feed.
+  **Deferred (needs a human decision):** Flussbad Unterer Letten has two feed poiids
+  (`flb6940`/`flb8803`) for two catalog pools with nothing to disambiguate them — skipped
+  rather than guessed; the poiid-uniqueness test keeps this honest.
+
 ## Summary
 
-_(written when the plan reaches `done`)_
+The gold store now materializes a detail for **every** catalog pool (universal `/pools/{id}`,
+no 404s — Freibad Heuried and all outdoor/lake pins are viewable), and the pool detail carries
+a **facility-level live water temperature** attached at request time from the OGD Baditicker
+feed — a freshness-bearing `LiveTemp(reading, age)` that mirrors the occupancy scaffold and is
+**never persisted** to gold (only the `baditicker_poiid` key is). The feed is read through
+`providers/baditicker.py` (fetch/parse, errors-as-values, saved-fixture-pinned, TTL-cached),
+wired into the composition root behind `SWIMZH_BADITICKER_URL` and fail-open (unset or provider
+error → `TempUnavailable`, never a 500). The detail UI renders the reading with honest
+freshness/empty/stale/unavailable states. `measured_temp_c` (per-basin, design/curated) and
+`nominal_temp_c` are untouched; the live temp is additive at facility level.
+
+Open follow-ups (tech debt, non-blocking): make `parse()` best-effort per bath (one malformed
+feed entry currently drops live temp for all pools); add a direct "errors-not-cached" test;
+disambiguate Flussbad Unterer Letten's two feed poiids; optionally add an `at≈now` gate on the
+detail temp for future-dated queries.

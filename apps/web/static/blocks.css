@@ -497,6 +497,18 @@ body {
   font-size: var(--fs-caption);
 }
 
+/* Facility-level LIVE water temperature (Baditicker). A muted variant de-emphasises the
+   "not yet measured" / unavailable states (honest, not a number); the stale variant marks a
+   reading older than the freshness limit so a fresh reading never reads as identical to an
+   old one. */
+.detail__live--muted {
+  color: var(--muted);
+}
+.detail__live--stale {
+  color: var(--muted);
+  font-style: italic;
+}
+
 .detail__prov {
   margin-top: var(--s2);
 }
