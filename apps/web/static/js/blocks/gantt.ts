@@ -15,6 +15,7 @@
 // derived from the timescale only.
 
 import { asDoc, type El } from '../domtypes.js';
+import { t } from '../i18n.js';
 import { cursorX, hhmmToMin, minToHhmm, publicAt, type Basin } from './cursor.js';
 
 // The left label gutter (GL): lane names sit here; the plot starts at GL. A segment
@@ -125,7 +126,7 @@ export function createGantt<T extends El>(el: T, opts: GanttOpts) {
     const label = doc.createElement('span');
     label.className = 'gantt__lanelabel';
     label.style.width = `${GL}px`;
-    label.textContent = `Lane ${strip.lane}`;
+    label.textContent = t('gantt.lane', { lane: String(strip.lane) });
     lane.appendChild(label);
 
     for (const seg of strip.segments) {
@@ -137,10 +138,10 @@ export function createGantt<T extends El>(el: T, opts: GanttOpts) {
       box.style.left = `${x0}px`;
       box.style.width = `${Math.max(1, x1 - x0)}px`;
       // Owner-named reserved lanes carry the owner text (never hue-only — CVD-safe).
-      box.textContent = isPublic ? 'Public' : seg.owner || 'Reserved';
+      box.textContent = isPublic ? t('gantt.public') : seg.owner || t('gantt.reserved');
       box.setAttribute(
         'title',
-        `${seg.start}–${seg.end} · ${isPublic ? 'Public' : seg.owner || 'Reserved'}`,
+        `${seg.start}–${seg.end} · ${isPublic ? t('gantt.public') : seg.owner || t('gantt.reserved')}`,
       );
       lane.appendChild(box);
     }

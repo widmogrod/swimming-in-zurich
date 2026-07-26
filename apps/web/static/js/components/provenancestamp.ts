@@ -4,7 +4,7 @@
 
 import { formatDate } from '../datefmt.js';
 import { asDoc, type El } from '../domtypes.js';
-import { locale } from '../i18n.js';
+import { locale, t } from '../i18n.js';
 
 export interface ProvenanceProps {
   curated?: boolean;
@@ -29,12 +29,12 @@ export function createProvenanceStamp<T extends El>(
   const text = doc.createElement('span');
   text.classList.add('ui-provstamp__text');
   const trust = curated
-    ? 'Official schedule'
-    : "Illustrative — read from the pool's website";
+    ? t('prov.official')
+    : t('prov.illustrative');
   const src = props.source ? ` · ${props.source}` : '';
   // A raw ISO date was shown here; render it in the viewer's locale.
   const when = props.valid_as_of
-    ? ` · last checked ${formatDate(props.valid_as_of, locale())}`
+    ? t('prov.lastChecked', { date: formatDate(props.valid_as_of, locale()) })
     : '';
   text.textContent = `${trust}${src}${when}`;
 

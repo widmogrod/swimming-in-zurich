@@ -20,7 +20,7 @@ import { eligForAccess, dayEligibility } from '../eligibility.js';
 import { formatCelsius, formatDate, formatKm } from '../datefmt.js';
 import { asDoc, type Doc, type El } from '../domtypes.js';
 import { type GanttTimescale } from './gantt.js';
-import { locale } from '../i18n.js';
+import { locale, t } from '../i18n.js';
 import {
   publicAt,
   peakPublic,
@@ -134,12 +134,9 @@ function pickBasinOut(detail: FacilityDetail | null, name?: string | null): Basi
 // The honest degradation note for a non-lanes panel (plan FIX 3). It is a NOTE inside
 // a fully-populated facts panel — never the whole panel.
 const NOTE_COPY = {
-  'lanes-unknown':
-    'No published lane plan for this pool yet — the hours are curated, but the per-lane public/reserved split isn’t.',
-  closed:
-    'This pool is closed for a stated reason on this day — it is not merged with pools we simply lack data for.',
-  uncurated:
-    'We have this pool’s location but no session timetable yet. Unknown is not the same as closed — it may well be open.',
+  'lanes-unknown': t('detail.note.lanesUnknown'),
+  closed: t('detail.note.closed'),
+  uncurated: t('detail.note.uncurated'),
 };
 
 function factRow(doc: Doc, label: string, valueNode: El | string): El {
@@ -162,14 +159,14 @@ function factRow(doc: Doc, label: string, valueNode: El | string): El {
 }
 
 function tempText(basinOut: BasinOut | null) {
-  if (!basinOut) return { text: 'Not listed', note: 'Water temperature not published' };
+  if (!basinOut) return { text: t('detail.notListed'), note: t('detail.waterNotPublished') };
   if (basinOut.measured_temp_c != null) {
-    return { text: formatCelsius(basinOut.measured_temp_c, locale()), note: 'measured' };
+    return { text: formatCelsius(basinOut.measured_temp_c, locale()), note: t('detail.tempMeasured') };
   }
   if (basinOut.nominal_temp_c != null) {
-    return { text: formatCelsius(basinOut.nominal_temp_c, locale()), note: 'nominal (design)' };
+    return { text: formatCelsius(basinOut.nominal_temp_c, locale()), note: t('detail.tempNominal') };
   }
-  return { text: 'Not listed', note: 'Water temperature not published' };
+  return { text: t('detail.notListed'), note: t('detail.waterNotPublished') };
 }
 
 // Human-readable "how long ago" from the API's whole-minute age. min → h → days, so a fresh
@@ -191,11 +188,11 @@ function humanizeAge(ageMin: number | null | undefined): string {
 function liveTempText(lwt: LiveWaterTemp | null | undefined) {
   if (!lwt) return null;
   if (!lwt.available) {
-    return { text: lwt.reason || 'Not available', note: '', muted: true, stale: false };
+    return { text: lwt.reason || t('detail.notAvailable'), note: '', muted: true, stale: false };
   }
   if (lwt.celsius == null) {
     const openNote = lwt.is_open === true ? 'open' : lwt.is_open === false ? 'closed' : '';
-    return { text: 'Not yet measured', note: openNote, muted: true, stale: false };
+    return { text: t('detail.notYetMeasured'), note: openNote, muted: true, stale: false };
   }
   const age = humanizeAge(lwt.age_min);
   return {
@@ -242,7 +239,7 @@ function buildHeader(
   headText.className = 'detail__headtext';
   const title = doc.createElement('h3');
   title.className = 'detail__title';
-  title.textContent = detail.facility_name ?? 'Pool';
+  title.textContent = detail.facility_name ?? t('detail.pool');
   const sub = doc.createElement('div');
   sub.className = 'detail__sub';
   sub.textContent = subName;
@@ -257,7 +254,7 @@ function buildHeader(
     const weekBtn = doc.createElement('button');
     weekBtn.type = 'button';
     weekBtn.className = 'detail__weekbtn';
-    weekBtn.textContent = "See this pool's week →";
+    weekBtn.textContent = t('detail.weekButton');
     weekBtn.addEventListener('click', () => onOpenWeek());
     head.appendChild(weekBtn);
   }
@@ -296,11 +293,11 @@ function buildFacts(
         props: { state: 'open', label: `Open · ${minToHhmm(span.lo)}–${minToHhmm(span.hi)}` },
       });
     } else {
-      createStatePill(pillHost, { props: { state: 'unknown', label: 'No public lanes today' } });
+      createStatePill(pillHost, { props: { state: 'unknown', label: t('detail.noPublicLanes') } });
     }
   } else if (panelState === 'lanes-unknown') {
     createStatePill(pillHost, {
-      props: { state: 'open', label: 'Open · lane split not published' },
+      props: { state: 'open', label: t('detail.openLaneSplit') },
     });
   } else if (panelState === 'closed') {
     createStatePill(pillHost, {
@@ -308,44 +305,44 @@ function buildFacts(
     });
   } else {
     createStatePill(pillHost, {
-      props: { state: 'unknown', label: 'Hours not listed — may well be open' },
+      props: { state: 'unknown', label: t('detail.hoursUnknown') },
     });
   }
-  facts.appendChild(factRow(doc, 'Today', pillHost));
+  facts.appendChild(factRow(doc, t('detail.fact.today'), pillHost));
 
   // length · lanes → LengthLanesBadge
   const lenHost = doc.createElement('span');
   createLengthLanesBadge(lenHost, {
     props: { length_m: basinOut ? basinOut.length_m : null, lanes: basinOut ? basinOut.lanes : null },
   });
-  facts.appendChild(factRow(doc, 'Basin', lenHost));
+  facts.appendChild(factRow(doc, t('detail.fact.basin'), lenHost));
 
   // distance
   // formatKm, not `.toFixed(1) + ' km'`: de/fr/it/pl use a comma decimal separator, and
   // CLDR supplies the unit form (so there is no plural entry in the catalog to get wrong).
   const dist =
-    opts.distanceKm != null ? formatKm(Number(opts.distanceKm), locale()) : 'Not shown';
-  facts.appendChild(factRow(doc, 'Distance', dist));
+    opts.distanceKm != null ? formatKm(Number(opts.distanceKm), locale()) : t('detail.notShown');
+  facts.appendChild(factRow(doc, t('detail.fact.distance'), dist));
 
   // price ("Not listed" when null)
   const priceDisplay =
     detail.prices && detail.prices.entries && detail.prices.entries.length > 0
       ? detail.prices.entries[0].display
-      : 'Not listed';
-  facts.appendChild(factRow(doc, 'Price', priceDisplay ?? 'Not listed'));
+      : t('detail.notListed');
+  facts.appendChild(factRow(doc, t('detail.fact.price'), priceDisplay ?? t('detail.notListed')));
 
   // water temp (nominal / measured + honesty note)
-  const t = tempText(basinOut);
+  const temp = tempText(basinOut);
   const tempVal = doc.createElement('span');
   tempVal.className = 'detail__factval';
   const tempMain = doc.createElement('span');
-  tempMain.textContent = t.text;
+  tempMain.textContent = temp.text;
   const tempNote = doc.createElement('span');
   tempNote.className = 'detail__factnote';
-  tempNote.textContent = ` ${t.note}`;
+  tempNote.textContent = ` ${temp.note}`;
   tempVal.appendChild(tempMain);
   tempVal.appendChild(tempNote);
-  facts.appendChild(factRow(doc, 'Water', tempVal));
+  facts.appendChild(factRow(doc, t('detail.fact.water'), tempVal));
 
   // live water temp (facility-level Baditicker) — additive + labelled, distinct from the
   // per-basin design/measured "Water" row above; honest empty / unavailable / stale states.
@@ -364,7 +361,7 @@ function buildFacts(
       liveNote.textContent = ` · ${live.note}`;
       liveVal.appendChild(liveNote);
     }
-    facts.appendChild(factRow(doc, 'Live water', liveVal));
+    facts.appendChild(factRow(doc, t('detail.fact.liveWater'), liveVal));
   }
 
   // eligibility (shared eligibility.js) — from the lane plan's access types, or the
@@ -376,17 +373,17 @@ function buildFacts(
     : 'chk';
   const eligHost = doc.createElement('span');
   createEligibilityBadge(eligHost, { props: { state: eligState } });
-  facts.appendChild(factRow(doc, 'Eligibility', eligHost));
+  facts.appendChild(factRow(doc, t('detail.fact.eligibility'), eligHost));
 
   // busyness — future, never faked
-  facts.appendChild(factRow(doc, 'Busyness', 'Not available yet'));
+  facts.appendChild(factRow(doc, t('detail.fact.busyness'), t('detail.notAvailableYet')));
 
   // freshness
   // A raw ISO date was shown to the user here; render it in the viewer's locale.
   const freshness = detail.provenance && detail.provenance.valid_as_of
-    ? `Checked ${formatDate(detail.provenance.valid_as_of, locale())}`
-    : 'Not dated';
-  facts.appendChild(factRow(doc, 'Freshness', freshness));
+    ? t('detail.checked', { date: formatDate(detail.provenance.valid_as_of, locale()) })
+    : t('detail.notDated');
+  facts.appendChild(factRow(doc, t('detail.fact.freshness'), freshness));
 
   return facts;
 }
@@ -477,7 +474,7 @@ function buildHeadline(
   }
   const peaknote = doc.createElement('span');
   peaknote.className = 'detail__peaknote';
-  peaknote.textContent = `peak ${peak} of ${basin.lane_count ?? 0}`;
+  peaknote.textContent = t('detail.peakNote', { peak, total: basin.lane_count ?? 0 });
   el.appendChild(bignum);
   el.appendChild(bigunit);
   el.appendChild(pipHost);
@@ -598,13 +595,13 @@ export function createDetailPanel<T extends El>(el: T, opts: DetailPanelOpts = {
     const at = cursorMin ?? 0;
     const { public: n, total: m } = headlineAt(at);
     headline.bignum.textContent = String(n);
-    headline.bigunit.textContent = `of ${m} lanes public · ${minToHhmm(at)}`;
+    headline.bigunit.textContent = t('detail.headline', { total: m, hhmm: minToHhmm(at) });
     headline.pips.forEach((pip, i) => {
       pip.classList.toggle('is-on', i < n);
     });
     headline.el.setAttribute(
       'aria-label',
-      `${n} of ${m} lanes public at ${minToHhmm(at)} (peak ${peak})`,
+      t('detail.headlineAria', { public: n, total: m, hhmm: minToHhmm(at), peak }),
     );
   }
   paintHeadline();

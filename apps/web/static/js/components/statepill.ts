@@ -2,12 +2,13 @@
 // dot + a word (never opacity-only, never colour-only). role=status.
 
 import { asDoc, type El } from '../domtypes.js';
+import { t } from '../i18n.js';
 
 const STATES = {
-  open: { label: 'Open', cls: 'is-open' },
-  'opens-later': { label: 'Opens later', cls: 'is-later' },
-  closed: { label: 'Closed', cls: 'is-closed' },
-  unknown: { label: 'Hours not listed', cls: 'is-unknown' },
+  open: { label: t('pill.open'), cls: 'is-open' },
+  'opens-later': { label: t('pill.opensLater'), cls: 'is-later' },
+  closed: { label: t('pill.closed'), cls: 'is-closed' },
+  unknown: { label: t('pill.unknown'), cls: 'is-unknown' },
 };
 
 export interface StatePillProps {

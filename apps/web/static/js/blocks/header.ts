@@ -10,13 +10,14 @@
 // colour, no hex — the header borrows tokens through its blocks.css classes.
 
 import { asDoc, type El } from '../domtypes.js';
+import { t } from '../i18n.js';
 
 /** The three theme choices, in cycle order. 'auto' defers to the OS/media query. */
 export type Theme = 'auto' | 'light' | 'dark';
 
 // The three theme choices, in cycle order. 'auto' defers to the OS/media query.
 export const THEMES: readonly Theme[] = ['auto', 'light', 'dark'];
-const THEME_LABEL = { auto: 'Auto', light: 'Light', dark: 'Dark' };
+const THEME_LABEL = { auto: t('theme.auto'), light: t('theme.light'), dark: t('theme.dark') };
 const THEME_ICON = { auto: '◐', light: '☀', dark: '☾' };
 
 /** nextTheme(current) → the next theme in the auto→light→dark→auto cycle. Pure. */
@@ -76,7 +77,7 @@ export function createIdentityHeader<T extends El>(el: T, opts: HeaderOpts = {})
   logo.textContent = '🏊';
   const title = doc.createElement('h1');
   title.className = 'apphdr__title';
-  title.textContent = props.title || 'Swimming in Zürich';
+  title.textContent = props.title || t('app.title');
   brand.appendChild(logo);
   brand.appendChild(title);
 
@@ -92,23 +93,23 @@ export function createIdentityHeader<T extends El>(el: T, opts: HeaderOpts = {})
   const copy = doc.createElement('button');
   copy.setAttribute('type', 'button');
   copy.className = 'apphdr__copy';
-  copy.setAttribute('aria-label', 'Copy a shareable link to this view');
+  copy.setAttribute('aria-label', t('header.copyAria'));
   const copyIcon = doc.createElement('span');
   copyIcon.setAttribute('aria-hidden', 'true');
   copyIcon.textContent = '🔗';
   const copyLabel = doc.createElement('span');
   copyLabel.className = 'apphdr__copylabel';
   copyLabel.setAttribute('aria-live', 'polite');
-  copyLabel.textContent = 'Copy link';
+  copyLabel.textContent = t('header.copyLink');
   copy.appendChild(copyIcon);
   copy.appendChild(copyLabel);
 
   let copyTimer: ReturnType<typeof setTimeout> | null = null;
   function flashCopied() {
-    copyLabel.textContent = 'Copied';
+    copyLabel.textContent = t('header.copied');
     if (copyTimer) clearTimeout(copyTimer);
     copyTimer = setTimeout(() => {
-      copyLabel.textContent = 'Copy link';
+      copyLabel.textContent = t('header.copyLink');
     }, 1600);
     if (copyTimer && typeof copyTimer.unref === 'function') copyTimer.unref();
   }

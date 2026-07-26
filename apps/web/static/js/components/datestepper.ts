@@ -8,7 +8,7 @@
 // `23 lipiec`) and lowercases both, which no lookup table can express.
 import { formatDay, shiftIso } from '../datefmt.js';
 import { asDoc, type El } from '../domtypes.js';
-import { locale } from '../i18n.js';
+import { locale, t } from '../i18n.js';
 
 /** formatLabel('2026-07-23') → 'Thu, 23 Jul' in `en`. Locale-aware; pure. */
 export function formatLabel(iso: string): string {
@@ -43,12 +43,12 @@ export function createDateStepper<T extends El>(
 
   el.classList.add('ui-datestepper');
   el.setAttribute('role', 'group');
-  el.setAttribute('aria-label', props.label || 'Selected day');
+  el.setAttribute('aria-label', props.label || t('date.selectedDay'));
 
   const prev = doc.createElement('button');
   prev.setAttribute('type', 'button');
   prev.classList.add('ui-datestepper__nav');
-  prev.setAttribute('aria-label', 'Previous day');
+  prev.setAttribute('aria-label', t('date.previousDay'));
   prev.textContent = '‹';
 
   const labelEl = doc.createElement('span');
@@ -57,12 +57,12 @@ export function createDateStepper<T extends El>(
 
   const todaytag = doc.createElement('span');
   todaytag.classList.add('ui-datestepper__today');
-  todaytag.textContent = 'Today';
+  todaytag.textContent = t('common.today');
 
   const next = doc.createElement('button');
   next.setAttribute('type', 'button');
   next.classList.add('ui-datestepper__nav');
-  next.setAttribute('aria-label', 'Next day');
+  next.setAttribute('aria-label', t('date.nextDay'));
   next.textContent = '›';
 
   const atMin = () => !!(min && value <= min);

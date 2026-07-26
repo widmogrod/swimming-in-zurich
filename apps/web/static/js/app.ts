@@ -53,6 +53,7 @@ import { createFilterToolbar, DEFAULT_AGE_CHIPS } from "./blocks/toolbar.js";
 import { formatLabel } from "./components/datestepper.js";
 import { asEl, type El } from "./domtypes.js";
 import { createFilterState, merge, type FilterState } from "./filterstate.js";
+import { t } from "./i18n.js";
 import { makeTimescale } from "./timescale.js";
 import { fromSearch, toSearch, type UrlFilterState } from "./urlstate.js";
 
@@ -202,7 +203,7 @@ async function main() {
     panel = null;
     const msg = newEl("p");
     msg.className = "app__panelempty";
-    msg.textContent = "Click any pool to see its hours, price and lane plan.";
+    msg.textContent = t("detail.emptyPanel");
     panelHost.appendChild(msg);
   }
 

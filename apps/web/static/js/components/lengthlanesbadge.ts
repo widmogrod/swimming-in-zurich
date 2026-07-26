@@ -3,6 +3,7 @@
 // degrades to a plain "Teaching pool" label rather than fabricating a size.
 
 import { asDoc, type El } from '../domtypes.js';
+import { t } from '../i18n.js';
 
 export interface LengthLanesProps {
   length_m?: number | null;
@@ -25,7 +26,7 @@ export function createLengthLanesBadge<T extends El>(
     el.classList.add('is-degraded');
     const degrade = doc.createElement('span');
     degrade.classList.add('ui-lenlanes__degrade');
-    degrade.textContent = String(props.degradeLabel ?? 'Teaching pool');
+    degrade.textContent = String(props.degradeLabel ?? t('badge.teachingPool'));
     el.setAttribute('aria-label', degrade.textContent);
     el.appendChild(degrade);
     return { el };

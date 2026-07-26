@@ -1,3 +1,4 @@
+import { t } from '../i18n.js';
 // ribbonmodel.js — PURE mapping of a `/swim` option/status → a ribbon render state.
 //
 // No canvas, no DOM (plan Risk #2: keep the drawable logic testable without a
@@ -111,7 +112,7 @@ export function optionRibbon(option: RibbonOption): Ribbon {
     variant: 'unpublished',
     style: 'solid',
     sheath: false,
-    label: 'Lane split not published',
+    label: t('insight.noSplit.label'),
   };
 }
 

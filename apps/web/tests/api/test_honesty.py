@@ -79,9 +79,14 @@ def test_served_legend_honesty_note_disclaims_busyness() -> None:
 def test_served_detail_panel_renders_busyness_as_future_never_faked() -> None:
     """The served DetailPanel renders Busyness as the honest future state 'Not available
     yet' — never a fabricated figure."""
+    # The panel keys the row; the honest wording lives in the catalogue (S3).
     panel = _get("/static/js/blocks/detailpanel.ts")
-    assert "'Not available yet'" in panel
-    assert "Busyness" in panel
+    assert "detail.fact.busyness" in panel
+    assert "detail.notAvailableYet" in panel
+    # And the wording itself must stay a "no data yet" statement, never a number.
+    busyness = _message(_catalog(), "detail.notAvailableYet")
+    assert busyness == "Not available yet"
+    assert not any(ch.isdigit() for ch in busyness), "busyness must never read as a figure"
 
 
 def test_served_ribbonmodel_keeps_unknown_distinct_from_closed() -> None:

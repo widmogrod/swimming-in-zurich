@@ -13,6 +13,7 @@
 // onChange merges a patch into the single filter and re-emits.
 
 import { createSegmentedControl } from '../components/segmentedcontrol.js';
+import { t } from '../i18n.js';
 import { createDateStepper, formatLabel, shiftDate } from '../components/datestepper.js';
 import { createCombobox } from '../components/combobox.js';
 import { createPlaceTypeahead } from '../components/placetypeahead.js';
@@ -67,12 +68,12 @@ export function createWeekStepper<T extends El>(
 
   el.classList.add('ui-datestepper', 'ui-weekstepper');
   el.setAttribute('role', 'group');
-  el.setAttribute('aria-label', props.label || 'Selected week');
+  el.setAttribute('aria-label', props.label || t('date.selectedWeek'));
 
   const prev = doc.createElement('button');
   prev.type = 'button';
   prev.className = 'ui-datestepper__nav';
-  prev.setAttribute('aria-label', 'Previous week');
+  prev.setAttribute('aria-label', t('date.previousWeek'));
   prev.textContent = '‹';
 
   const labelEl = doc.createElement('span');
@@ -81,19 +82,19 @@ export function createWeekStepper<T extends El>(
 
   const todaytag = doc.createElement('span');
   todaytag.className = 'ui-datestepper__today';
-  todaytag.textContent = 'Today';
+  todaytag.textContent = t('common.today');
 
   const next = doc.createElement('button');
   next.type = 'button';
   next.className = 'ui-datestepper__nav';
-  next.setAttribute('aria-label', 'Next week');
+  next.setAttribute('aria-label', t('date.nextWeek'));
   next.textContent = '›';
 
   const atMin = () => !!(minMon && monday <= minMon);
   const atMax = () => !!(maxMon && monday >= maxMon);
 
   function render() {
-    labelEl.textContent = `Week of ${formatLabel(monday)}`;
+    labelEl.textContent = t('date.weekOf', { date: formatLabel(monday) });
     prev.disabled = atMin();
     prev.setAttribute('aria-disabled', String(atMin()));
     next.disabled = atMax();
@@ -127,24 +128,24 @@ export function createWeekStepper<T extends El>(
 }
 
 const MODE_ITEMS = [
-  { value: 'day', label: 'Day' },
-  { value: 'pool', label: 'Pool' },
+  { value: 'day', label: t('toolbar.mode.day') },
+  { value: 'pool', label: t('toolbar.mode.pool') },
 ];
 const GENDER_ITEMS = [
-  { value: '', label: 'Any' },
-  { value: 'female', label: 'Female' },
-  { value: 'male', label: 'Male' },
-  { value: 'diverse', label: 'Diverse' },
+  { value: '', label: t('toolbar.gender.any') },
+  { value: 'female', label: t('toolbar.gender.female') },
+  { value: 'male', label: t('toolbar.gender.male') },
+  { value: 'diverse', label: t('toolbar.gender.diverse') },
 ];
 // Age chips carry a REPRESENTATIVE age for the range (plan Part 2), '' = unset.
 export const DEFAULT_AGE_CHIPS = [
-  { value: '', label: 'Any age' },
-  { value: '8', label: 'Child' },
-  { value: '16', label: 'Teen' },
-  { value: '34', label: 'Adult' },
-  { value: '70', label: 'Senior' },
+  { value: '', label: t('toolbar.age.any') },
+  { value: '8', label: t('toolbar.age.child') },
+  { value: '16', label: t('toolbar.age.teen') },
+  { value: '34', label: t('toolbar.age.adult') },
+  { value: '70', label: t('toolbar.age.senior') },
 ];
-const BUSYNESS_REASON = 'Busyness has no data source yet — not available.';
+const BUSYNESS_REASON = t('toolbar.busynessReason');
 
 // A labelled field wrapper so controls read (and stack full-width on a phone).
 function field(doc: Doc, caption: string | null, control: El): El {
@@ -184,7 +185,7 @@ export function createFilterToolbar<T extends El>(
 
   el.classList.add('toolbar');
   el.setAttribute('role', 'group');
-  el.setAttribute('aria-label', 'Search filters');
+  el.setAttribute('aria-label', t('toolbar.label'));
 
   function emit() {
     if (onChange) onChange(filter);
@@ -196,7 +197,7 @@ export function createFilterToolbar<T extends El>(
 
   // --- mode Day/Pool (the pivot) ---
   const mode = createSegmentedControl(doc.createElement('div'), {
-    props: { items: MODE_ITEMS, selected: filter.mode, variant: 'mode', label: 'View mode' },
+    props: { items: MODE_ITEMS, selected: filter.mode, variant: 'mode', label: t('toolbar.viewMode') },
     onChange: (v: string) => setMode(v as FilterState['mode']),
   });
 
@@ -222,7 +223,7 @@ export function createFilterToolbar<T extends El>(
           min: bounds.min,
           max: bounds.max,
           today: bounds.today,
-          label: 'Selected week',
+          label: t('date.selectedWeek'),
         },
         onChange: (mondayIso) => update({ date: mondayIso }),
       });
@@ -232,8 +233,8 @@ export function createFilterToolbar<T extends El>(
         props: {
           options: pools,
           value: filter.selectedPool?.id ?? null,
-          label: 'Pool',
-          placeholder: 'Search a pool…',
+          label: t('toolbar.pool'),
+          placeholder: t('toolbar.searchPool'),
         },
         onChange: (value: string) => {
           const opt = pools.find((p) => p.value === value) || null;
@@ -251,7 +252,7 @@ export function createFilterToolbar<T extends El>(
           min: bounds.min,
           max: bounds.max,
           today: bounds.today,
-          label: 'Selected day',
+          label: t('date.selectedDay'),
         },
         onChange: (iso) => update({ date: iso }),
       });
@@ -267,14 +268,14 @@ export function createFilterToolbar<T extends El>(
 
   // --- place ---
   const place = createPlaceTypeahead(doc.createElement('div'), {
-    props: { presets: places, label: 'Near', placeholder: 'Where from?' },
+    props: { presets: places, label: t('toolbar.near'), placeholder: t('toolbar.wherefrom') },
     onChange: ({ lat, lon, label }: { lat: number; lon: number; label: string }) =>
       update({ place: { lat, lon, label } }),
   });
 
   // --- gender ---
   const gender = createSegmentedControl(doc.createElement('div'), {
-    props: { items: GENDER_ITEMS, selected: filter.gender || '', label: 'Gender' },
+    props: { items: GENDER_ITEMS, selected: filter.gender || '', label: t('toolbar.gender') },
     onChange: (v: string) => update({ gender: v }),
   });
 
@@ -283,29 +284,29 @@ export function createFilterToolbar<T extends El>(
     props: {
       items: ages,
       selected: filter.age != null ? String(filter.age) : '',
-      label: 'Age',
+      label: t('toolbar.age'),
     },
     onChange: (v: string) => update({ age: v === '' ? null : Number(v) }),
   });
 
   // --- lap-only ---
   const lap = createToggle(doc.createElement('div'), {
-    props: { checked: !!filter.lapOnly, label: 'Lap lanes only' },
+    props: { checked: !!filter.lapOnly, label: t('toolbar.lapOnly') },
     onChange: (checked: boolean) => update({ lapOnly: checked }),
   });
 
   // --- busyness (DISABLED — no data source yet; the honesty invariant made visible) ---
   const busyness = createToggle(doc.createElement('div'), {
-    props: { checked: false, disabled: true, label: 'Busyness', reason: BUSYNESS_REASON },
+    props: { checked: false, disabled: true, label: t('toolbar.busyness'), reason: BUSYNESS_REASON },
   });
 
   // Assemble the strip.
   renderContext();
-  el.appendChild(field(doc, 'View', mode.el));
+  el.appendChild(field(doc, t('toolbar.view'), mode.el));
   el.appendChild(field(doc, null, contextSlot));
-  el.appendChild(field(doc, 'Near', place.el));
-  el.appendChild(field(doc, 'Gender', gender.el));
-  el.appendChild(field(doc, 'Age', age.el));
+  el.appendChild(field(doc, t('toolbar.near'), place.el));
+  el.appendChild(field(doc, t('toolbar.gender'), gender.el));
+  el.appendChild(field(doc, t('toolbar.age'), age.el));
   el.appendChild(field(doc, null, lap.el));
   el.appendChild(field(doc, null, busyness.el));
 

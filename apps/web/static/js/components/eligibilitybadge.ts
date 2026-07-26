@@ -4,11 +4,12 @@
 // title. `variant: 'tag'` renders the filled board-row pill.
 
 import { asDoc, type El } from '../domtypes.js';
+import { t } from '../i18n.js';
 
 const ELIG = {
-  in: { word: "You're in", cls: 'is-in', mark: '✓' },
-  chk: { word: 'Check', cls: 'is-chk', mark: '?' },
-  no: { word: 'Not for you', cls: 'is-no', mark: '✕' },
+  in: { word: t('elig.in'), cls: 'is-in', mark: '✓' },
+  chk: { word: t('elig.chk.short'), cls: 'is-chk', mark: '?' },
+  no: { word: t('elig.no'), cls: 'is-no', mark: '✕' },
 };
 
 export interface EligibilityBadgeProps {

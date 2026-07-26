@@ -10,6 +10,7 @@
 // unit-testable without a browser; it defaults to navigator.geolocation.
 
 import { asDoc, type El } from '../domtypes.js';
+import { t } from '../i18n.js';
 import { filterOptions } from './keynav.js';
 
 export interface GeoPosition {
@@ -79,7 +80,7 @@ export function createPlaceTypeahead<T extends El>(
   const geoBtn = doc.createElement('button');
   geoBtn.setAttribute('type', 'button');
   geoBtn.classList.add('ui-place__geo');
-  geoBtn.textContent = props.geoLabel || 'Use my location';
+  geoBtn.textContent = props.geoLabel || t('place.useMyLocation');
   if (disabled) {
     geoBtn.disabled = true;
     geoBtn.setAttribute('aria-disabled', 'true');
@@ -145,7 +146,7 @@ export function createPlaceTypeahead<T extends El>(
           onChange({
             lat: pos.coords.latitude,
             lon: pos.coords.longitude,
-            label: props.hereLabel || 'My location',
+            label: props.hereLabel || t('place.myLocation'),
             source: 'geolocation',
           });
         }

@@ -42,6 +42,8 @@ export const en = {
   "insight.bestWindow":
     "best public window {public}/{total} at {facility} {start}–{end}",
   "insight.noSplit": "lane split not published yet",
+  // The board ribbon's own label — sentence-cased, distinct from the insight clause.
+  "insight.noSplit.label": "Lane split not published",
   "insight.coverage": "{closed} closed, {unlisted} hours-not-listed nearby",
   "insight.pool.reliable":
     "Reliable public lanes at {facility}: up to {public} of {total} around {start}",
@@ -97,4 +99,124 @@ export const en = {
   "elig.in": "You’re in",
   "elig.chk": "Check with the venue",
   "elig.no": "Not for you",
+  "elig.chk.short": "Check",
+
+  // --- StatePill --------------------------------------------------------------------
+  "pill.open": "Open",
+  "pill.opensLater": "Opens later",
+  "pill.closed": "Closed",
+  "pill.unknown": "Hours not listed",
+
+  // --- Badges -----------------------------------------------------------------------
+  "badge.teachingPool": "Teaching pool",
+  "badge.metres": "{length} m",
+  "badge.poolAria": "{length} metre pool, {lanes}",
+
+  // --- SourceStrip ------------------------------------------------------------------
+  "sources.label": "Sources",
+  "sources.official": "Official page",
+  "sources.lanePlan": "Lane plan",
+  "sources.prices": "Prices",
+  "sources.pdf": "PDF",
+  "sources.chipAria": "{name} — opens {host} in a new tab",
+
+  // --- Combobox / PlaceTypeahead ----------------------------------------------------
+  "combo.noMatches": "No matches",
+  "combo.noPoolsMatch": "No pools match",
+  "place.useMyLocation": "Use my location",
+  "place.myLocation": "My location",
+
+  // --- DateStepper ------------------------------------------------------------------
+  "date.selectedDay": "Selected day",
+  "date.previousDay": "Previous day",
+  "date.nextDay": "Next day",
+  "date.selectedWeek": "Selected week",
+  "date.previousWeek": "Previous week",
+  "date.nextWeek": "Next week",
+  "date.weekOf": "Week of {date}",
+
+  // --- Header -----------------------------------------------------------------------
+  "app.title": "Swimming in Zürich",
+  "header.copyLink": "Copy link",
+  "header.copied": "Copied",
+  "header.copyAria": "Copy a shareable link to this view",
+  "header.themeAria": "Theme: {theme} (click to change)",
+  "theme.auto": "Auto",
+  "theme.light": "Light",
+  "theme.dark": "Dark",
+
+  // --- LaneGantt --------------------------------------------------------------------
+  "gantt.lane": "Lane {lane}",
+  "gantt.public": "Public",
+  "gantt.reserved": "Reserved",
+  "gantt.readout": "{hhmm} · {public} of {total} lanes public",
+
+  // --- FilterToolbar ----------------------------------------------------------------
+  "toolbar.label": "Search filters",
+  "toolbar.view": "View",
+  "toolbar.viewMode": "View mode",
+  "toolbar.mode.day": "Day",
+  "toolbar.mode.pool": "Pool",
+  "toolbar.near": "Near",
+  "toolbar.wherefrom": "Where from?",
+  "toolbar.gender": "Gender",
+  "toolbar.gender.any": "Any",
+  "toolbar.gender.female": "Female",
+  "toolbar.gender.male": "Male",
+  "toolbar.gender.diverse": "Diverse",
+  "toolbar.age": "Age",
+  "toolbar.age.any": "Any age",
+  "toolbar.age.child": "Child",
+  "toolbar.age.teen": "Teen",
+  "toolbar.age.adult": "Adult",
+  "toolbar.age.senior": "Senior",
+  "toolbar.lapOnly": "Lap lanes only",
+  "toolbar.busyness": "Busyness",
+  "toolbar.busynessReason": "Busyness has no data source yet — not available.",
+  "toolbar.searchPool": "Search a pool…",
+  "toolbar.pool": "Pool",
+
+  // --- DetailPanel ------------------------------------------------------------------
+  "detail.fact.today": "Today",
+  "detail.fact.basin": "Basin",
+  "detail.fact.distance": "Distance",
+  "detail.fact.price": "Price",
+  "detail.fact.water": "Water",
+  "detail.fact.liveWater": "Live water",
+  "detail.fact.eligibility": "Eligibility",
+  "detail.fact.busyness": "Busyness",
+  "detail.fact.freshness": "Freshness",
+  "detail.notListed": "Not listed",
+  "detail.notShown": "Not shown",
+  "detail.notDated": "Not dated",
+  "detail.notAvailable": "Not available",
+  "detail.notAvailableYet": "Not available yet",
+  "detail.notYetMeasured": "Not yet measured",
+  "detail.waterNotPublished": "Water temperature not published",
+  "detail.tempMeasured": "measured",
+  "detail.tempNominal": "nominal (design)",
+  "detail.checked": "Checked {date}",
+  "detail.weekButton": "See this pool’s week →",
+  "detail.pool": "Pool",
+  "detail.openLaneSplit": "Open · lane split not published",
+  "detail.noPublicLanes": "No public lanes today",
+  "detail.openRange": "Open · {from}–{to}",
+  "detail.closedReason": "Closed · {reason}",
+  "detail.hoursUnknown": "Hours not listed — may well be open",
+  "detail.headline": "of {total} lanes public · {hhmm}",
+  "detail.peakNote": "peak {peak} of {total}",
+  "detail.headlineAria":
+    "{public} of {total} lanes public at {hhmm} (peak {peak})",
+  "detail.note.lanesUnknown":
+    "No published lane plan for this pool yet — the hours are curated, but the per-lane public/reserved split isn’t.",
+  "detail.note.closed":
+    "This pool is closed for a stated reason on this day — it is not merged with pools we simply lack data for.",
+  "detail.note.uncurated":
+    "We have this pool’s location but no session timetable yet. Unknown is not the same as closed — it may well be open.",
+  "detail.emptyPanel": "Click any pool to see its hours, price and lane plan.",
+
+  // --- Provenance -------------------------------------------------------------------
+  "prov.official": "Official schedule",
+  "prov.illustrative": "Illustrative — read from the pool’s website",
+  "prov.lastChecked": " · last checked {date}",
 } as const;

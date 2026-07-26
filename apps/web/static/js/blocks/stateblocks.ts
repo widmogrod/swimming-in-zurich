@@ -42,7 +42,7 @@ const COPY = {
     body: () => t('state.unlisted.body'),
   },
   [STATE_NONE]: {
-    title: 'No pools nearby',
+    title: t('state.none.title'),
     body: () => 'Nothing matched here — try a wider area or a different day. Not the same as closed.',
   },
 };

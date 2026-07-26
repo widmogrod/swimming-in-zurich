@@ -642,7 +642,7 @@ export function createBoard<T extends El>(el: T, opts: BoardOpts = {}) {
       if (filter.mode === 'pool' && today && row.date === today) {
         const tag = doc.createElement('span');
         tag.className = 'board__todaytag';
-        tag.textContent = 'Today';
+        tag.textContent = t('common.today');
         label.appendChild(tag);
       }
 

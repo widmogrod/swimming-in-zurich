@@ -5,6 +5,7 @@
 // (renders a closed badge). Empty filter shows an explicit "no matches" row.
 
 import { asDoc, type El } from '../domtypes.js';
+import { t } from '../i18n.js';
 import { listboxIndex, filterOptions } from './keynav.js';
 
 let _seq = 0;
@@ -112,7 +113,7 @@ export function createCombobox<T extends El>(
       empty.classList.add('ui-combo__empty');
       empty.setAttribute('role', 'option');
       empty.setAttribute('aria-disabled', 'true');
-      empty.textContent = props.emptyText || 'No matches';
+      empty.textContent = props.emptyText || t('combo.noMatches');
       list.appendChild(empty);
     }
     updateActiveDescendant();

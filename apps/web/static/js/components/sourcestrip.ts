@@ -16,6 +16,7 @@
 // hue (every colour is a token via a class in components.css).
 
 import { asDoc, type El } from '../domtypes.js';
+import { t } from '../i18n.js';
 import { iconSvg } from './iconset.js';
 
 // hostname for the aria-label; falls back to the raw URL if it can't be parsed
@@ -63,17 +64,17 @@ export function createSourceStrip<T extends El>(
     seen.add(url);
     chips.push({ url, ...spec });
   };
-  consider(officialUrl, { kind: 'official', label: 'Official page', icon: 'external-link' });
+  consider(officialUrl, { kind: 'official', label: t('sources.official'), icon: 'external-link' });
   for (const u of lanePlanUrls) {
-    consider(u, { kind: 'lane', label: 'Lane plan', icon: 'doc', pdf: true });
+    consider(u, { kind: 'lane', label: t('sources.lanePlan'), icon: 'doc', pdf: true });
   }
-  consider(pricesUrl, { kind: 'prices', label: 'Prices', icon: 'external-link' });
+  consider(pricesUrl, { kind: 'prices', label: t('sources.prices'), icon: 'external-link' });
 
   // Only label the host as a "Sources" group when it actually holds chips — an empty
   // strip stays a bare element so a screen reader never announces an empty group.
   if (chips.length > 0) {
     el.setAttribute('role', 'group');
-    el.setAttribute('aria-label', 'Sources');
+    el.setAttribute('aria-label', t('sources.label'));
   }
 
   for (const chip of chips) {
@@ -99,7 +100,7 @@ export function createSourceStrip<T extends El>(
     if (chip.pdf) {
       const tag = doc.createElement('span');
       tag.classList.add('ui-sourcestrip__tag');
-      tag.textContent = 'PDF';
+      tag.textContent = t('sources.pdf');
       a.appendChild(tag);
     }
 
