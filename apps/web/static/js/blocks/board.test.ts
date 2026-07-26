@@ -270,3 +270,31 @@ test('a payload with no closure code at all degrades to the server prose', () =>
   });
   expect(line).toEqual({ kind: 'closed', text: 'Closed · Sommerpause' });
 });
+
+test('a public holiday names ITSELF, in each of the three tiers', () => {
+  const closure = (holiday: string, holiday_code: string) =>
+    rowStatusLine({
+      options: [],
+      statuses: [
+        {
+          status: 'closed',
+          detail: `closed (${holiday})`,
+          detail_code: 'closed_reason',
+          closure_code: 'public_holiday',
+          detail_params: { holiday, holiday_code },
+        },
+      ],
+    })?.text;
+
+  // Tier 1 — a shared feast, translated.
+  expect(closure('Weihnachten', 'christmas')).toBe('Closed · Christmas Day');
+  // Tier 2 — nameable descriptively, like Bastille Day abroad.
+  expect(closure('Bundesfeier', 'national_day')).toBe('Closed · Swiss National Day');
+  // Tier 3 — Swiss-only, no equivalent: keep the German and GLOSS it. Inventing an
+  // English name here would be a worse answer than admitting it has none.
+  expect(closure('Berchtoldstag', 'berchtoldstag')).toBe(
+    'Closed · Berchtoldstag (2 January, Swiss public holiday)',
+  );
+  // Unrecognised — the curated name rides through verbatim, never a blank.
+  expect(closure('Sechseläuten', 'unknown')).toBe('Closed · Sechseläuten');
+});

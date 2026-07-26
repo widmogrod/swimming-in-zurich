@@ -17,10 +17,10 @@ import { createEligibilityBadge } from '../components/eligibilitybadge.js';
 import { createProvenanceStamp } from '../components/provenancestamp.js';
 import { createSourceStrip } from '../components/sourcestrip.js';
 import { eligForAccess, dayEligibility } from '../eligibility.js';
-import { formatCelsius, formatDate, formatKm } from '../datefmt.js';
+import { formatCelsius, formatChf, formatDate, formatKm } from '../datefmt.js';
 import { asDoc, type Doc, type El } from '../domtypes.js';
 import { type GanttTimescale } from './gantt.js';
-import { locale, t } from '../i18n.js';
+import { locale, t, type MessageKey } from '../i18n.js';
 import {
   publicAt,
   peakPublic,
@@ -63,7 +63,10 @@ export interface LiveWaterTemp {
 export interface FacilityDetail {
   facility_name?: string;
   basins?: BasinOut[];
-  prices?: { entries?: { display?: string }[]; source_url?: string | null } | null;
+  prices?: {
+    entries?: { display?: string; category?: string; amount_chf?: number }[];
+    source_url?: string | null;
+  } | null;
   provenance?: {
     curated?: boolean;
     source?: string;
@@ -327,7 +330,7 @@ function buildFacts(
   // price ("Not listed" when null)
   const priceDisplay =
     detail.prices && detail.prices.entries && detail.prices.entries.length > 0
-      ? detail.prices.entries[0].display
+      ? priceLabel(detail.prices.entries[0])
       : t('detail.notListed');
   facts.appendChild(factRow(doc, t('detail.fact.price'), priceDisplay ?? t('detail.notListed')));
 
@@ -498,6 +501,22 @@ function buildDegradationNote(
       ? `Closed — ${reason}. ${NOTE_COPY.closed}`
       : (NOTE_COPY as Record<string, string>)[panelState] || '';
   return note;
+}
+
+/** A price row, GENERATED from its structured fields rather than translated from the
+ *  curated German `display`. Falls back to `display` only when the structure is missing —
+ *  never invents a figure. */
+function priceLabel(entry: {
+  display?: string;
+  category?: string;
+  amount_chf?: number;
+}): string {
+  if (entry.category == null || entry.amount_chf == null) {
+    return entry.display ?? t('detail.notListed');
+  }
+  const amount = formatChf(entry.amount_chf, locale());
+  const key = `price.${entry.category}` as MessageKey;
+  return t(key, { amount });
 }
 
 /** The physical-facts basin: the one matching the opened lane plan, else the one named

@@ -216,8 +216,16 @@ export function closureLabel(status: {
 }): string {
   const code = status.closure_code;
   if (!code) return status.detail ?? '';
+  const params = status.detail_params ?? {};
+  // A public holiday names ITSELF: render the holiday, not the generic word. An
+  // unrecognised or untranslatable one (Berchtoldstag) falls back to the German name,
+  // which is still true — never a blank.
+  if (code === 'public_holiday' && params.holiday) {
+    const hk = `holiday.${params.holiday_code ?? 'unknown'}` as MessageKey;
+    return t(hk, params);
+  }
   const key = `closure.${code}` as MessageKey;
-  return t(key, status.detail_params ?? {});
+  return t(key, params);
 }
 
 export function rowStatusLine(row: {

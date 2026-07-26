@@ -182,3 +182,15 @@ export function formatCelsius(
     maximumFractionDigits: 1,
   }).format(c);
 }
+
+/**
+ * `8` → `'CHF 8.00'` (en-GB/de-CH) or `'8,00 CHF'` (pl) — the symbol POSITION and the
+ * decimal separator both move with the locale, which is precisely why this cannot be a
+ * catalogue string with the amount pasted in.
+ */
+export function formatChf(
+  amount: number,
+  locale: Locale = DEFAULT_LOCALE,
+): string {
+  return nf(locale, { style: "currency", currency: "CHF" }).format(amount);
+}

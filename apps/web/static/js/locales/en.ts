@@ -109,6 +109,28 @@ export const en = {
   "closure.christmas_eve": "Christmas Eve",
   "closure.public_holiday": "Public holiday",
   "closure.public_holiday_named": "{holiday}",
+
+  // --- Public holidays (S4) ---------------------------------------------------------
+  //
+  // Three tiers, per the plan's "Resolved: holidays":
+  //   * shared feasts translate cleanly (Auffahrt is just Swiss German for Ascension);
+  //   * Bundesfeier is nameable descriptively, the way Bastille Day is abroad;
+  //   * Berchtoldstag is Swiss/Liechtenstein-only with NO equivalent — keep the German
+  //     and gloss it rather than inventing a translation.
+  // For fr/it these must be SOURCED from the Confederation's official names, not invented:
+  // French and Italian are Swiss national languages, so an authoritative name exists.
+  "holiday.new_year": "New Year’s Day",
+  "holiday.berchtoldstag": "Berchtoldstag (2 January, Swiss public holiday)",
+  "holiday.good_friday": "Good Friday",
+  "holiday.easter_monday": "Easter Monday",
+  "holiday.labour_day": "May Day",
+  "holiday.ascension": "Ascension Day",
+  "holiday.whit_monday": "Whit Monday",
+  "holiday.national_day": "Swiss National Day",
+  "holiday.christmas": "Christmas Day",
+  "holiday.st_stephens": "St Stephen’s Day",
+  // Fail-safe: an unrecognised name rides through verbatim.
+  "holiday.unknown": "{holiday}",
   "closure.no_sessions": "No sessions scheduled",
   "closure.special": "Closed",
   "closure.unmapped": "{text}",
@@ -203,6 +225,14 @@ export const en = {
   "detail.fact.eligibility": "Eligibility",
   "detail.fact.busyness": "Busyness",
   "detail.fact.freshness": "Freshness",
+  // Price rows are GENERATED from `category` + `amount_chf`, never translated from the
+  // curated German `display` ("Erwachsene CHF 8.00") — the category is already a machine
+  // value, and the currency is formatted by Intl so its symbol position follows the
+  // locale (CHF 8.00 in en/de-CH, 8,00 CHF in fr-CH/pl).
+  "price.adult": "Adult {amount}",
+  "price.youth": "Youth {amount}",
+  "price.child": "Child {amount}",
+  "price.senior": "Senior {amount}",
   "detail.notListed": "Not listed",
   "detail.notShown": "Not shown",
   "detail.notDated": "Not dated",

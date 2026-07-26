@@ -18,6 +18,7 @@ from datetime import date
 
 from swimzh.domain.calendar import DayContext, ZurichCalendar
 from swimzh.domain.closure import ClosureCode
+from swimzh.domain.holiday import classify_holiday
 from swimzh.domain.models import Basin, Facility
 from swimzh.domain.schedule import (
     ClosedDay,
@@ -97,10 +98,16 @@ def resolve_hours(
                 # translated sentence can place it (and an untranslatable one — see
                 # Berchtoldstag — can be shown verbatim without breaking the sentence).
                 name = ctx.holiday_name or ""
+                # Both travel: the CODE so a known holiday can be translated, and the
+                # NAME so an unrecognised (or untranslatable, e.g. Berchtoldstag) one is
+                # still shown truthfully rather than as a blank.
+                params = (
+                    {"holiday": name, "holiday_code": classify_holiday(name).value} if name else {}
+                )
                 return ClosedDay(
                     reason=f"closed ({name or 'public holiday'})",
                     code=ClosureCode.PUBLIC_HOLIDAY,
-                    params={"holiday": name} if name else {},
+                    params=params,
                 )
             case HolidayPolicy.SUNDAY_SCHEDULE:
                 effective_weekday = Weekday.SUNDAY

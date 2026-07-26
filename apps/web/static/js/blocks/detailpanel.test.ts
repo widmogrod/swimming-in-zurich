@@ -388,3 +388,37 @@ test('S1: a basin-less location-only detail (Heuried-shaped) renders without err
   // headlineAt is safe to call on a basin-less panel (returns the zero reading, no throw).
   expect(p.headlineAt(600)).toEqual({ public: 0, total: 0 });
 });
+
+// --- S4: generated price rows ---------------------------------------------------------
+
+test('the price row is GENERATED from category + amount, not the curated German', () => {
+  const p = createDetailPanel(mount(), {
+    detail: {
+      ...POOL,
+      prices: { entries: [{ display: 'Erwachsene CHF 8.00', category: 'adult', amount_chf: 8 }] },
+    },
+    basin: BASIN,
+    timescale: newTs(),
+  });
+  const row = must(
+    p.el.queryAll(hasClass('detail__fact')).find((r) => r.textContent.startsWith('Price')),
+    'Price row',
+  );
+  expect(row.textContent).toContain('Adult');
+  expect(row.textContent).toContain('8.00');
+  expect(row.textContent).not.toContain('Erwachsene');
+});
+
+test('a price row with no structured fields degrades to the curated display', () => {
+  // Never invent a figure: if the structure is missing, show what we were given.
+  const p = createDetailPanel(mount(), {
+    detail: { ...POOL, prices: { entries: [{ display: 'Erwachsene CHF 8.00' }] } },
+    basin: BASIN,
+    timescale: newTs(),
+  });
+  const row = must(
+    p.el.queryAll(hasClass('detail__fact')).find((r) => r.textContent.startsWith('Price')),
+    'Price row',
+  );
+  expect(row.textContent).toContain('Erwachsene CHF 8.00');
+});
