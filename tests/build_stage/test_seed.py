@@ -170,7 +170,7 @@ def test_baditicker_poiid_survives_gold_round_trip(spine: PoolSpine) -> None:
     city_doc = docs["hallenbad-city"]
     assert city_doc is not None
     city = codec.loads(city_doc).identity
-    assert city.baditicker_poiid == "hb_city"  # curated pool: placeholder poiid round-trips
+    assert city.baditicker_poiid == "hb001"  # curated pool: real feed poiid round-trips
 
 
 def test_kaeferberg_kind_is_curated_wins_thermal(spine: PoolSpine) -> None:

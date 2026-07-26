@@ -1,0 +1,294 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bathinfos>
+<baths>
+<bath>
+<title>Flussbad Au-Höngg</title>
+<temperatureWater>23</temperatureWater>
+<poiid>flb6938</poiid>
+<dateModified><![CDATA[Sa., 25.07.2026 21:02]]></dateModified>
+<openClosedTextPlain><![CDATA[geschlossen]]></openClosedTextPlain>
+<urlPage>https://www.stadt-zuerich.ch/content/web/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/sommerbaeder/au-hoengg.html</urlPage>
+<pathPage>/content/web/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/sommerbaeder/au-hoengg</pathPage>
+</bath>
+<bath>
+<title>Flussbad Oberer Letten</title>
+<temperatureWater>23</temperatureWater>
+<poiid>flb6939</poiid>
+<dateModified><![CDATA[Sa., 25.07.2026 20:55]]></dateModified>
+<openClosedTextPlain><![CDATA[geschlossen]]></openClosedTextPlain>
+<urlPage>https://www.stadt-zuerich.ch/content/web/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/sommerbaeder/oberer-letten.html</urlPage>
+<pathPage>/content/web/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/sommerbaeder/oberer-letten</pathPage>
+</bath>
+<bath>
+<title>Flussbad Unterer Letten</title>
+<temperatureWater>22</temperatureWater>
+<poiid>flb6940</poiid>
+<dateModified><![CDATA[Sa., 25.07.2026 09:03]]></dateModified>
+<openClosedTextPlain><![CDATA[offen]]></openClosedTextPlain>
+<urlPage>https://www.stadt-zuerich.ch/content/web/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/sommerbaeder/unterer-letten.html</urlPage>
+<pathPage>/content/web/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/sommerbaeder/unterer-letten</pathPage>
+</bath>
+<bath>
+<title>Flussbad Unterer Letten</title>
+<temperatureWater>24</temperatureWater>
+<poiid>flb8803</poiid>
+<dateModified><![CDATA[Sa., 25.07.2026 09:04]]></dateModified>
+<openClosedTextPlain><![CDATA[offen]]></openClosedTextPlain>
+<urlPage>https://www.stadt-zuerich.ch/content/web/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/sommerbaeder/unterer-letten.html</urlPage>
+<pathPage>/content/web/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/sommerbaeder/unterer-letten</pathPage>
+</bath>
+<bath>
+<title>Frauenbad Stadthausquai</title>
+<temperatureWater>24</temperatureWater>
+<poiid>flb6941</poiid>
+<dateModified><![CDATA[Sa., 25.07.2026 19:31]]></dateModified>
+<openClosedTextPlain><![CDATA[geschlossen]]></openClosedTextPlain>
+<urlPage>https://www.stadt-zuerich.ch/content/web/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/sommerbaeder/stadthausquai.html</urlPage>
+<pathPage>/content/web/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/sommerbaeder/stadthausquai</pathPage>
+</bath>
+<bath>
+<title>Freibad Allenmoos</title>
+<temperatureWater>24</temperatureWater>
+<poiid>fb006</poiid>
+<dateModified><![CDATA[Sa., 25.07.2026 20:56]]></dateModified>
+<openClosedTextPlain><![CDATA[geschlossen]]></openClosedTextPlain>
+<urlPage>https://www.stadt-zuerich.ch/content/web/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/sommerbaeder/allenmoos.html</urlPage>
+<pathPage>/content/web/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/sommerbaeder/allenmoos</pathPage>
+</bath>
+<bath>
+<title>Freibad Auhof</title>
+<temperatureWater>25</temperatureWater>
+<poiid>fb008</poiid>
+<dateModified><![CDATA[Sa., 25.07.2026 20:32]]></dateModified>
+<openClosedTextPlain><![CDATA[geschlossen]]></openClosedTextPlain>
+<urlPage>https://www.stadt-zuerich.ch/content/web/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/sommerbaeder/auhof.html</urlPage>
+<pathPage>/content/web/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/sommerbaeder/auhof</pathPage>
+</bath>
+<bath>
+<title>Freibad Dolder</title>
+<temperatureWater>22</temperatureWater>
+<poiid>fb016</poiid>
+<dateModified><![CDATA[Sa., 25.07.2026 19:43]]></dateModified>
+<openClosedTextPlain><![CDATA[geschlossen]]></openClosedTextPlain>
+<urlPage>https://www.stadt-zuerich.ch/content/web/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/sommerbaeder/dolder.html</urlPage>
+<pathPage>/content/web/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/sommerbaeder/dolder</pathPage>
+</bath>
+<bath>
+<title>Freibad Heuried</title>
+<temperatureWater>23</temperatureWater>
+<poiid>fb012</poiid>
+<dateModified><![CDATA[Sa., 25.07.2026 20:39]]></dateModified>
+<openClosedTextPlain><![CDATA[geschlossen]]></openClosedTextPlain>
+<urlPage>https://www.stadt-zuerich.ch/content/web/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/sommerbaeder/heuried.html</urlPage>
+<pathPage>/content/web/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/sommerbaeder/heuried</pathPage>
+</bath>
+<bath>
+<title>Freibad Letzigraben</title>
+<temperatureWater>24</temperatureWater>
+<poiid>fb002</poiid>
+<dateModified><![CDATA[Sa., 25.07.2026 20:29]]></dateModified>
+<openClosedTextPlain><![CDATA[geschlossen]]></openClosedTextPlain>
+<urlPage>https://www.stadt-zuerich.ch/content/web/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/sommerbaeder/letzigraben.html</urlPage>
+<pathPage>/content/web/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/sommerbaeder/letzigraben</pathPage>
+</bath>
+<bath>
+<title>Freibad Seebach</title>
+<temperatureWater>24</temperatureWater>
+<poiid>fb013</poiid>
+<dateModified><![CDATA[Sa., 25.07.2026 20:51]]></dateModified>
+<openClosedTextPlain><![CDATA[geschlossen]]></openClosedTextPlain>
+<urlPage>https://www.stadt-zuerich.ch/content/web/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/sommerbaeder/seebach.html</urlPage>
+<pathPage>/content/web/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/sommerbaeder/seebach</pathPage>
+</bath>
+<bath>
+<title>Freibad Zwischen den Hölzern</title>
+<temperatureWater>23</temperatureWater>
+<poiid>fb018</poiid>
+<dateModified><![CDATA[Sa., 25.07.2026 20:33]]></dateModified>
+<openClosedTextPlain><![CDATA[geschlossen]]></openClosedTextPlain>
+<urlPage>https://www.stadt-zuerich.ch/content/web/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/sommerbaeder/zwischen-den-hoelzern.html</urlPage>
+<pathPage>/content/web/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/sommerbaeder/zwischen-den-hoelzern</pathPage>
+</bath>
+<bath>
+<title>Hallenbad Bläsi</title>
+<temperatureWater></temperatureWater>
+<poiid>hb005</poiid>
+<dateModified><![CDATA[Do., 05.06.2025 14:02]]></dateModified>
+<openClosedTextPlain><![CDATA[]]></openClosedTextPlain>
+<urlPage>https://www.stadt-zuerich.ch/content/web/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/hallenbaeder/blaesi.html</urlPage>
+<pathPage>/content/web/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/hallenbaeder/blaesi</pathPage>
+</bath>
+<bath>
+<title>Hallenbad Bungertwies</title>
+<temperatureWater></temperatureWater>
+<poiid>hb002</poiid>
+<dateModified><![CDATA[Fr., 26.01.2024 08:54]]></dateModified>
+<openClosedTextPlain><![CDATA[]]></openClosedTextPlain>
+<urlPage>https://www.stadt-zuerich.ch/content/web/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/hallenbaeder/bungertwies.html</urlPage>
+<pathPage>/content/web/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/hallenbaeder/bungertwies</pathPage>
+</bath>
+<bath>
+<title>Hallenbad City</title>
+<temperatureWater></temperatureWater>
+<poiid>hb001</poiid>
+<dateModified><![CDATA[Mi., 02.10.2024 10:20]]></dateModified>
+<openClosedTextPlain><![CDATA[]]></openClosedTextPlain>
+<urlPage>https://www.stadt-zuerich.ch/content/web/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/hallenbaeder/city.html</urlPage>
+<pathPage>/content/web/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/hallenbaeder/city</pathPage>
+</bath>
+<bath>
+<title>Hallenbad Leimbach</title>
+<temperatureWater></temperatureWater>
+<poiid>hb006</poiid>
+<dateModified><![CDATA[Do., 05.06.2025 14:00]]></dateModified>
+<openClosedTextPlain><![CDATA[]]></openClosedTextPlain>
+<urlPage>https://www.stadt-zuerich.ch/content/web/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/hallenbaeder/leimbach.html</urlPage>
+<pathPage>/content/web/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/hallenbaeder/leimbach</pathPage>
+</bath>
+<bath>
+<title>Hallenbad Oerlikon</title>
+<temperatureWater></temperatureWater>
+<poiid>hb004</poiid>
+<dateModified><![CDATA[Do., 11.07.2024 07:07]]></dateModified>
+<openClosedTextPlain><![CDATA[]]></openClosedTextPlain>
+<urlPage>https://www.stadt-zuerich.ch/content/web/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/hallenbaeder/oerlikon.html</urlPage>
+<pathPage>/content/web/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/hallenbaeder/oerlikon</pathPage>
+</bath>
+<bath>
+<title>Männerbad Schanzengraben</title>
+<temperatureWater>24</temperatureWater>
+<poiid>flb6942</poiid>
+<dateModified><![CDATA[Sa., 25.07.2026 11:14]]></dateModified>
+<openClosedTextPlain><![CDATA[offen]]></openClosedTextPlain>
+<urlPage>https://www.stadt-zuerich.ch/content/web/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/sommerbaeder/schanzengraben.html</urlPage>
+<pathPage>/content/web/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/sommerbaeder/schanzengraben</pathPage>
+</bath>
+<bath>
+<title>Seebad Enge</title>
+<temperatureWater>25</temperatureWater>
+<poiid>seb6943</poiid>
+<dateModified><![CDATA[Sa., 25.07.2026 08:01]]></dateModified>
+<openClosedTextPlain><![CDATA[offen]]></openClosedTextPlain>
+<urlPage>https://www.stadt-zuerich.ch/content/web/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/sommerbaeder/enge.html</urlPage>
+<pathPage>/content/web/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/sommerbaeder/enge</pathPage>
+</bath>
+<bath>
+<title>Seebad Katzensee</title>
+<temperatureWater>26</temperatureWater>
+<poiid>seb6944</poiid>
+<dateModified><![CDATA[Sa., 25.07.2026 21:01]]></dateModified>
+<openClosedTextPlain><![CDATA[geschlossen]]></openClosedTextPlain>
+<urlPage>https://www.stadt-zuerich.ch/content/web/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/sommerbaeder/katzensee.html</urlPage>
+<pathPage>/content/web/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/sommerbaeder/katzensee</pathPage>
+</bath>
+<bath>
+<title>Seebad Utoquai</title>
+<temperatureWater>24</temperatureWater>
+<poiid>seb6945</poiid>
+<dateModified><![CDATA[Sa., 25.07.2026 20:53]]></dateModified>
+<openClosedTextPlain><![CDATA[geschlossen]]></openClosedTextPlain>
+<urlPage>https://www.stadt-zuerich.ch/content/web/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/sommerbaeder/utoquai.html</urlPage>
+<pathPage>/content/web/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/sommerbaeder/utoquai</pathPage>
+</bath>
+<bath>
+<title>Strandbad Mythenquai</title>
+<temperatureWater>25</temperatureWater>
+<poiid>seb6946</poiid>
+<dateModified><![CDATA[Sa., 25.07.2026 21:00]]></dateModified>
+<openClosedTextPlain><![CDATA[geschlossen]]></openClosedTextPlain>
+<urlPage>https://www.stadt-zuerich.ch/content/web/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/sommerbaeder/mythenquai.html</urlPage>
+<pathPage>/content/web/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/sommerbaeder/mythenquai</pathPage>
+</bath>
+<bath>
+<title>Strandbad Tiefenbrunnen</title>
+<temperatureWater>25</temperatureWater>
+<poiid>seb6947</poiid>
+<dateModified><![CDATA[Sa., 25.07.2026 21:14]]></dateModified>
+<openClosedTextPlain><![CDATA[geschlossen]]></openClosedTextPlain>
+<urlPage>https://www.stadt-zuerich.ch/content/web/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/sommerbaeder/tiefenbrunnen.html</urlPage>
+<pathPage>/content/web/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/sommerbaeder/tiefenbrunnen</pathPage>
+</bath>
+<bath>
+<title>Strandbad Wollishofen</title>
+<temperatureWater>25</temperatureWater>
+<poiid>seb6948</poiid>
+<dateModified><![CDATA[Sa., 25.07.2026 21:01]]></dateModified>
+<openClosedTextPlain><![CDATA[geschlossen]]></openClosedTextPlain>
+<urlPage>https://www.stadt-zuerich.ch/content/web/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/sommerbaeder/wollishofen.html</urlPage>
+<pathPage>/content/web/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/sommerbaeder/wollishofen</pathPage>
+</bath>
+<bath>
+<title>Wärmebad Käferberg</title>
+<temperatureWater></temperatureWater>
+<poiid>hb007</poiid>
+<dateModified><![CDATA[So., 08.02.2026 10:42]]></dateModified>
+<openClosedTextPlain><![CDATA[offen]]></openClosedTextPlain>
+<urlPage>https://www.stadt-zuerich.ch/content/web/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/hallenbaeder/kaeferberg.html</urlPage>
+<pathPage>/content/web/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/hallenbaeder/kaeferberg</pathPage>
+</bath>
+</baths>
+<meta><version>4</version>
+<releasenotes><![CDATA[Version, Date   Description
+
+4, Apr 2024:    remove urlAddressAndOpeningHours
+
+3.1, Jun 2023:  export correct urlAddressAndOpeningHours also in case of rearranged substructure of bath page
+
+3, Jan 2023:    renamed meta/dateTimeLastModified to meta/latestDateModified
+                introduced versioning with request parameter version (default=2) which represents the major version
+
+2.2.2, Aug/Sep 2022:
+                doc: note that this data is also exposed at https://data.stadt-zuerich.ch/dataset/wassertemperaturen-freibaeder
+
+2.2.1, Jul 2020: fix evaluation of element dateTimeLastModified to represent the date of the latest bath data modification
+                include Hallenbaeder (prefix hb) in selection
+
+2.2.0, Jan 2019: support additional bath categories introduced by business:
+                selectively splitting category Freibad (prefix fb, still existing, e.g. fb002 Freibad Letzigraben)
+                into categories Seebad (prefix seb) and Flussbad (prefix flb):
+
+                poiid    poiid   title
+                old      new     (unchanged)
+                fb001 -> flb6938 Flussbad Au-Höngg
+                fb015 -> flb6942 Männerbad Schanzengraben
+                fb009 -> flb6940 Flussbad Unterer Letten
+                fb014 -> flb6939 Flussbad Oberer Letten
+                fb007 -> seb6948 Strandbad Wollishofen
+                fb011 -> seb6947 Strandbad Tiefenbrunnen
+                fb010 -> seb6946 Strandbad Mythenquai
+                fb017 -> seb6943 Seebad Enge
+                fb003 -> seb6944 Seebad Katzensee
+                fb005 -> seb6945 Seebad Utoquai
+                fb004 -> flb6941 Frauenbad Stadthausquai
+
+2.1.0, Jun 2018: provide element dateModified again
+                doc on elements dateTimeLastModified, dateTimeSent and deprecated
+
+2.0.1, Jun 2017: fixed link in tag urlAddressAndOpeningHours (respect new page substructure)
+
+2.0.0, May 2017: UV-Index forecast data no more fetched from https://www.meteoschweiz.admin.ch and included in this download
+
+1.1.1, Apr 2017: uvindexImgLinkPath may contain a path as part of an URL https://www.stadt-zuerich.ch or a full absolute URL
+                as of 2018, there will by a bathType element and Hallenbaeder present in addition
+
+1.1.0, Mar 2017: introduced meta elements version, releasenotes, deprecated, contactEmail
+
+1.0.0, Dec 2008: initial version]]></releasenotes>
+<!-- deprecated: any deprecated features or data elements are listed here -->
+<deprecated><![CDATA[]]></deprecated>
+<contactEmail>servicedesk@stadt-zuerich.ch</contactEmail>
+<dateformat>EE, dd.MM.yyyy HH:mm</dateformat>
+<urlLegal>https://www.stadt-zuerich.ch/rechtliche-hinweise</urlLegal>
+<!-- the server side http response dateTime -->
+<dateTimeSent><![CDATA[So., 26.07.2026 01:00]]></dateTimeSent>
+<!-- the dateTime when the latest update of bath data was received (see element baths/bath/dateModified) -->
+<latestDateModified><![CDATA[Sa., 25.07.2026 21:14]]></latestDateModified>
+<outputformat><requestParamName>outputformat</requestParamName>
+<supportedformats>XML</supportedformats>
+<defaultformat>XML</defaultformat>
+</outputformat>
+<orderedBy>
+<property>title</property>
+<mode>ascending</mode>
+</orderedBy>
+</meta></bathinfos>

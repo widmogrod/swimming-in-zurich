@@ -20,9 +20,9 @@ facilities:
     kind: "indoor"
     geo_sport_id: null
     crowdmonitor_keys: ["City", "Hallenbad City", "Sportbad City"]
-    # PLACEHOLDER poiid — the real Baditicker feed poiid is verified against the recorded feed
-    # fixture in S3/S4; Baditicker covers the indoor Hallenbäder (City, Oerlikon, …) too.
-    baditicker_poiid: "hb_city"
+    # Real Baditicker feed poiid (verified against tests/providers/fixtures/baditicker.xml).
+    # Baditicker covers the indoor Hallenbäder (City, Oerlikon, …) too.
+    baditicker_poiid: "hb001"
     aliases: ["city", "City", "Sportbad City"]
 
   - facility_id: "hallenbad-oerlikon"
@@ -30,7 +30,7 @@ facilities:
     kind: "indoor"
     geo_sport_id: null
     crowdmonitor_keys: ["Oerlikon", "Hallenbad Oerlikon"]
-    baditicker_poiid: "hb_oerlikon"  # PLACEHOLDER — verified against the real feed in S3/S4
+    baditicker_poiid: "hb004"  # real feed poiid (tests/providers/fixtures/baditicker.xml)
     aliases: ["oerlikon", "Oerlikon"]
 
   - facility_id: "hallenbad-bungertwies"

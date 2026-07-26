@@ -11,6 +11,7 @@ from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
 from pathlib import Path
 
+import httpx
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from starlette.requests import Request
@@ -23,9 +24,24 @@ from apps.web.api.swim.router import router as swim_router
 from apps.web.api.ui.router import router as ui_router
 from apps.web.config import Config
 from apps.web.services.gold_store import GoldSwimStore
-from apps.web.services.ports import SwimStore
+from apps.web.services.ports import SwimStore, TemperatureProvider
+from swimzh.core.http import HttpClient
+from swimzh.providers.baditicker import BaditickerProvider
 
 _STATIC_DIR = Path(__file__).resolve().parent / "static"
+_HTTP_TIMEOUT_S = 10.0
+
+
+def build_temperature_provider(config: Config) -> TemperatureProvider | None:
+    """Wire the real Baditicker adapter when a feed URL is configured, else `None` (fail-open).
+
+    `None` is a valid state: `/pools/{id}` reports `TempUnavailable("live temperature not
+    configured")` rather than raising. The single place a concrete live provider is constructed."""
+    if config.baditicker_url is None:
+        return None
+    inner = httpx.Client(timeout=_HTTP_TIMEOUT_S)
+    client = HttpClient(inner, source="baditicker", timeout_s=_HTTP_TIMEOUT_S)
+    return BaditickerProvider(client, url=config.baditicker_url)
 
 
 def _missing_db_message(gold_db: Path) -> str:
@@ -83,11 +99,11 @@ def create_app(config: Config | None = None) -> FastAPI:
         _require_gold_db(cfg.gold_db)
         app.state.config = cfg
         app.state.swim_data = _load_swim_data(cfg)
-        # Live water-temperature provider (OPTIONAL, fail-open). No real Baditicker adapter is
-        # wired yet — that lands in a later slice behind config; until then the app runs with
-        # `None`, which `/pools/{id}` reports as `TempUnavailable("live temperature not
-        # configured")`. Tests override `app.state.temperature` with an in-memory fake.
-        app.state.temperature = None
+        # Live water-temperature provider (OPTIONAL, fail-open). The real Baditicker adapter is
+        # wired when `SWIMZH_BADITICKER_URL` is set; otherwise the app runs with `None`, which
+        # `/pools/{id}` reports as `TempUnavailable("live temperature not configured")`. Tests
+        # override `app.state.temperature` with an in-memory fake.
+        app.state.temperature = build_temperature_provider(cfg)
         yield
 
     app = FastAPI(title="Swimming in Zürich", lifespan=lifespan)

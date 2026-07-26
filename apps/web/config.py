@@ -17,6 +17,10 @@ class Config:
     port: int
     reload: bool  # auto-reload on code change (dev server via `python -m apps.web.main`)
     dev_ui: bool  # register the dev-only /ui/gallery component gallery (absent in production)
+    # Live water-temperature feed (Baditicker). None = unset = no provider wired (fail-open:
+    # `/pools/{id}` reports "live temperature not configured"). Set the URL to enable the real
+    # adapter; `apps.web.main` wires a `BaditickerProvider` against it.
+    baditicker_url: str | None
 
     @staticmethod
     def from_env() -> Config:
@@ -26,4 +30,5 @@ class Config:
             port=int(os.getenv("SWIMZH_PORT", "8000")),
             reload=os.getenv("SWIMZH_RELOAD", "1") not in {"0", "false", "False", ""},
             dev_ui=os.getenv("SWIMZH_DEV_UI", "0") in {"1", "true", "True", "yes"},
+            baditicker_url=os.getenv("SWIMZH_BADITICKER_URL") or None,
         )

@@ -231,6 +231,7 @@ Optional: unset config → `None` provider → `TempUnavailable("live temperatur
 |------|-------|--------|----------------------|-------------------|---------------|
 | 2026-07-26 | S1 | done | `kind`/geo served by the `/pools` list, not the detail body (deferred to S2, which owns `model.py`); the prose mint now also reuses the registry identity (additive) | none | yes |
 | 2026-07-26 | S2 | done | `config.py`/`mapping.py`/`seed.py` untouched (no work needed — adjudicated acceptable); added `apps/web/deps.py` accessor (idiomatic) | placeholder poiids `hb_city`/`hb_oerlikon` for 2 indoor pools (S3/S4 verify vs. the real feed) | yes |
+| 2026-07-26 | S3 | done | saved-fixture pin instead of a vcrpy cassette (offline by construction, matches house convention); single `SWIMZH_BADITICKER_URL` (presence=enabled) | `parse()` fails the whole snapshot on one malformed bath (vs. `schedule_scraper`'s skip-and-report) — wide blast radius; no explicit errors-not-cached test | yes |
 
 ## Decisions & divergences
 
@@ -288,6 +289,25 @@ Optional: unset config → `None` provider → `TempUnavailable("live temperatur
   (`hb_city`/`hb_oerlikon`), commented in `registry.yaml`; S3/S4 verify every declared poiid
   against the recorded feed. Worktree isolation held this slice (forced absolute worktree
   paths in the subagent prompt) — no relocation needed.
+
+- **2026-07-26 (S3 implementation)** — Real `providers/baditicker.py`: `fetch(client, url)` +
+  `parse(bytes) -> Mapping[poiid, TempReading]` (regex extraction, house style — no XML lib),
+  and a `BaditickerProvider` `TemperatureProvider` with an injectable-clock TTL cache (~120 s;
+  errors never cached). Empty `<temperatureWater>` → `celsius=None`; German `dateModified`
+  CDATA parsed to tz-aware Europe/Zurich. Errors-as-values: timeout/connection → typed
+  `ProviderError`, malformed → `ParseError`, wrong shape / missing `<poiid>` →
+  `SchemaMismatch`, unknown poiid → existing `ProviderSpecific` (no new cause). Wired behind
+  `SWIMZH_BADITICKER_URL` (presence = enabled) in `config.py`/`main.build_temperature_provider`;
+  unset → `None` → S2 fail-open. Pinned by the real saved feed fixture
+  `tests/providers/fixtures/baditicker.xml` (mirrors `schedule_scraper`). Corrected the S2
+  placeholder poiids to real values (`hb001`/`hb004`). `data/sources.md` marked implemented.
+  **Divergences adjudicated (critic, non-blocking):** saved-fixture pin vs. vcrpy cassette
+  (offline by construction), single presence-gated env var. **Tech debt:** (1) `parse()` fails
+  the whole snapshot on one malformed bath — a single bad hand-typed feed entry drops live temp
+  for ALL pools; the house convention for brittle scrapers is skip-and-report per item. Worth a
+  follow-up to make parsing best-effort (skip + audit a bad bath). (2) The "errors are not
+  cached / a failed fetch doesn't poison later reads" behavior is correct in code but not
+  directly asserted by a test.
 
 ## Summary
 
