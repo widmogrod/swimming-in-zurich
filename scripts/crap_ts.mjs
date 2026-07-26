@@ -149,6 +149,13 @@ function collectScores(complexity, coverage) {
   const scores = [];
   for (const [absPath, fnByLine] of complexity) {
     const fileCov = covByPath.get(absPath);
+    // A file ABSENT from coverage-final.json was deliberately excluded from measurement
+    // in vitest.config.ts (the browser entrypoints), so it is not scored — exactly as
+    // crap.py never sees a module that coverage.py `omit`s or `# pragma: no cover`s.
+    // This is NOT the untested-file case: `coverage.all: true` lists every measured
+    // source file, so an untested one IS present (with an `(empty-report)` fnMap) and
+    // still falls through to the 0% whole-file path below.
+    if (!fileCov) continue;
     // Real per-function spans (drop v8's `(empty-report)` placeholder), keyed by start line.
     const spanByLine = new Map();
     if (fileCov) {
@@ -161,7 +168,7 @@ function collectScores(complexity, coverage) {
       let cov;
       const loc = spanByLine.get(line);
       if (loc) cov = coverageInSpan(fileCov, loc.start.line, loc.end.line);
-      else cov = fileCov ? fileCoverage(fileCov) : 0.0; // no span → file-level (0% when untested)
+      else cov = fileCoverage(fileCov); // no span → file-level (0% when untested)
       scores.push({ path: absPath, line, name, cc, cov, crap: crapScore(cc, cov) });
     }
   }

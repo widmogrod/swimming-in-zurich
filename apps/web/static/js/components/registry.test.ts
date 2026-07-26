@@ -1,8 +1,8 @@
-import test from 'node:test';
-import assert from 'node:assert/strict';
+import { expect, test } from 'vitest';
 
 import { FakeDocument } from './_fakedom.js';
 import { REGISTRY } from './registry.js';
+import { must } from '../testutil.js';
 
 // The states the Python gallery route renders per component (must stay in sync
 // with apps/web/api/gallery/router.py::_COMPONENTS).
@@ -22,24 +22,21 @@ const GALLERY_STATES = {
 
 test('every gallery component name has a registry entry', () => {
   for (const name of Object.keys(GALLERY_STATES)) {
-    assert.ok(REGISTRY[name], `missing registry entry: ${name}`);
+    expect(REGISTRY[name as keyof typeof REGISTRY]).toBeTruthy();
   }
-  assert.deepEqual(
-    Object.keys(REGISTRY).sort(),
-    Object.keys(GALLERY_STATES).sort(),
-  );
+  expect(Object.keys(REGISTRY).sort()).toEqual(Object.keys(GALLERY_STATES).sort());
 });
 
 test('every registry entry hydrates headlessly for each documented state', () => {
   for (const [name, states] of Object.entries(GALLERY_STATES)) {
-    const entry = REGISTRY[name];
+    const entry = REGISTRY[name as keyof typeof REGISTRY];
     for (const state of states) {
       const doc = new FakeDocument();
       const el = doc.createElement('div');
-      assert.doesNotThrow(() => {
+      expect(() => {
         entry.create(el, { props: entry.props(state), onChange: () => {} });
-      }, `${name}/${state} threw`);
-      assert.ok(el.children.length > 0, `${name}/${state} rendered nothing`);
+      }).not.toThrow();
+      expect(el.children.length > 0).toBeTruthy();
     }
   }
 });
@@ -52,11 +49,12 @@ test('every interactive primitive exposes a role on its control element', () => 
     const doc = new FakeDocument();
     const el = doc.createElement('div');
     entry.create(el, { props: entry.props('default'), onChange: () => {} });
-    if (rootRole[name]) {
-      assert.equal(el.getAttribute('role'), rootRole[name], `${name} root role`);
+    const wantRootRole = (rootRole as Record<string, string | undefined>)[name];
+    if (wantRootRole) {
+      expect(el.getAttribute('role')).toBe(wantRootRole);
     } else {
-      const control = el.query((c) => c.getAttribute && c.getAttribute('role') === inputRole[name]);
-      assert.ok(control, `${name} exposes role=${inputRole[name]}`);
+      const control = must(el.query((c) => c.getAttribute && c.getAttribute('role') === (inputRole as Record<string, string | undefined>)[name]));
+      expect(control).toBeTruthy();
     }
   }
 });

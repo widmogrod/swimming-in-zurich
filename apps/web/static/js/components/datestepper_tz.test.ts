@@ -6,8 +6,7 @@
 // UTC parsing guards against. Kept in its own file so the zone is scoped to this
 // process (node --test isolates each file), never bleeding into sibling suites.
 
-import test, { after } from 'node:test';
-import assert from 'node:assert/strict';
+import { afterAll, expect, test } from 'vitest';
 
 const ORIG_TZ = process.env.TZ;
 process.env.TZ = 'America/Los_Angeles';
@@ -16,7 +15,7 @@ process.env.TZ = 'America/Los_Angeles';
 // functions read the zone per-call, but this documents the intent).
 const { formatLabel, shiftDate } = await import('./datestepper.js');
 
-after(() => {
+afterAll(() => {
   if (ORIG_TZ === undefined) delete process.env.TZ;
   else process.env.TZ = ORIG_TZ;
 });
@@ -24,16 +23,16 @@ after(() => {
 test('the pinned zone is actually in effect (guards against a vacuous test)', () => {
   // Under LA, UTC-midnight of the 23rd reads as the 22nd in LOCAL time — so if the
   // stepper ever used local Date accessors, its day would be wrong here.
-  assert.equal(new Date('2026-07-23T00:00:00Z').getDate(), 22, 'TZ=America/Los_Angeles not applied');
+  expect(new Date('2026-07-23T00:00:00Z').getDate()).toBe(22); // TZ not applied → vacuous
 });
 
 test('formatLabel yields the absolute day unshifted under a negative-offset zone', () => {
-  assert.equal(formatLabel('2026-07-23'), 'Thu 23 Jul');
-  assert.equal(formatLabel('2026-01-01'), 'Thu 1 Jan');
+  expect(formatLabel('2026-07-23')).toBe('Thu 23 Jul');
+  expect(formatLabel('2026-01-01')).toBe('Thu 1 Jan');
 });
 
 test('shiftDate crosses day/month boundaries unshifted under a negative-offset zone', () => {
-  assert.equal(shiftDate('2026-07-23', 1), '2026-07-24');
-  assert.equal(shiftDate('2026-07-31', 1), '2026-08-01');
-  assert.equal(shiftDate('2026-08-01', -1), '2026-07-31');
+  expect(shiftDate('2026-07-23', 1)).toBe('2026-07-24');
+  expect(shiftDate('2026-07-31', 1)).toBe('2026-08-01');
+  expect(shiftDate('2026-08-01', -1)).toBe('2026-07-31');
 });

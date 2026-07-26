@@ -62,26 +62,10 @@ export interface FilterPatch {
   selectedPool?: PoolRef;
 }
 
-// --- tiny pure UTC date helpers (inlined so this module imports nothing) ---
-function parseUtc(iso: string): Date {
-  const [y, m, d] = String(iso).split("-").map(Number);
-  return new Date(Date.UTC(y, m - 1, d));
-}
-function isoDate(date: Date): string {
-  return date.toISOString().slice(0, 10);
-}
-function shiftIso(iso: string, days: number): string {
-  const d = parseUtc(iso);
-  d.setUTCDate(d.getUTCDate() + days);
-  return isoDate(d);
-}
-/** The ISO Monday (Mon=0) of a date's week. */
-function mondayOf(iso: string): string {
-  const d = parseUtc(iso);
-  const dow = (d.getUTCDay() + 6) % 7;
-  d.setUTCDate(d.getUTCDate() - dow);
-  return isoDate(d);
-}
+// parseUtc / isoDate / shiftIso / mondayOf were duplicated across this module, api and
+// toolbar. They now have one home in datefmt.ts.
+import { isoDate, mondayOf, parseUtc, shiftIso } from "./datefmt.js";
+
 const ISO_RE = /^\d{4}-\d{2}-\d{2}$/;
 /** A well-formed, real calendar date in ISO form (rejects 2026-02-31 &c). */
 function isRealIso(iso: string): boolean {

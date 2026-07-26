@@ -41,7 +41,7 @@ export const REGISTRY = {
   'segmented-control': {
     create: createSegmentedControl,
     interactive: true,
-    props: (state) => ({
+    props: (state: string) => ({
       label: 'View mode',
       variant: 'mode',
       items: MODES,
@@ -52,7 +52,7 @@ export const REGISTRY = {
   'chip-group': {
     create: createChipGroup,
     interactive: true,
-    props: (state) => ({
+    props: (state: string) => ({
       label: 'Age',
       items: AGES,
       selected: state === 'selected' ? '34' : null,
@@ -62,7 +62,7 @@ export const REGISTRY = {
   combobox: {
     create: createCombobox,
     interactive: true,
-    props: (state) => ({
+    props: (state: string) => ({
       label: 'Pool',
       placeholder: 'Search pools…',
       options: state === 'empty' ? [] : POOLS,
@@ -74,7 +74,7 @@ export const REGISTRY = {
   'place-typeahead': {
     create: createPlaceTypeahead,
     interactive: true,
-    props: (state) => ({
+    props: (state: string) => ({
       label: 'Place',
       placeholder: 'Where from?',
       presets: state === 'empty' ? [] : PLACES,
@@ -84,7 +84,7 @@ export const REGISTRY = {
   toggle: {
     create: createToggle,
     interactive: true,
-    props: (state) => ({
+    props: (state: string) => ({
       label: state === 'disabled' ? 'Busyness' : 'Lap only',
       checked: state === 'selected',
       disabled: state === 'disabled',
@@ -94,7 +94,7 @@ export const REGISTRY = {
   'date-stepper': {
     create: createDateStepper,
     interactive: true,
-    props: (state) => ({
+    props: (state: string) => ({
       label: 'Selected day',
       value: '2026-07-23',
       today: '2026-07-23',
@@ -105,12 +105,12 @@ export const REGISTRY = {
   'state-pill': {
     create: createStatePill,
     interactive: false,
-    props: (state) => ({ state }),
+    props: (state: string) => ({ state }),
   },
   'eligibility-badge': {
     create: createEligibilityBadge,
     interactive: false,
-    props: (state) => ({
+    props: (state: string) => ({
       state,
       reason:
         state === 'no'
@@ -123,13 +123,13 @@ export const REGISTRY = {
   'length-lanes-badge': {
     create: createLengthLanesBadge,
     interactive: false,
-    props: (state) =>
+    props: (state: string) =>
       state === 'empty' ? { length_m: null } : { length_m: 25, lanes: 6 },
   },
   'provenance-stamp': {
     create: createProvenanceStamp,
     interactive: false,
-    props: (state) => ({
+    props: (state: string) => ({
       curated: state === 'curated',
       source: 'stadt-zuerich.ch',
       valid_as_of: '2026-07-18',

@@ -1,5 +1,5 @@
 """S5 honesty invariants at the SERVED-asset layer (the Python half of the sweep;
-the model/render logic is gated node-side in static/js/blocks/honesty.test.js).
+the model/render logic is gated node-side in static/js/blocks/honesty.test.ts).
 
 These assert that the invariants survive all the way to what the browser actually
 loads: the served BoardLegend module, the served DetailPanel module, and the `/`
@@ -53,7 +53,7 @@ def test_served_legend_honesty_note_disclaims_busyness() -> None:
 def test_served_detail_panel_renders_busyness_as_future_never_faked() -> None:
     """The served DetailPanel renders Busyness as the honest future state 'Not available
     yet' — never a fabricated figure."""
-    panel = _get("/static/js/blocks/detailpanel.js")
+    panel = _get("/static/js/blocks/detailpanel.ts")
     assert "'Not available yet'" in panel
     assert "Busyness" in panel
 

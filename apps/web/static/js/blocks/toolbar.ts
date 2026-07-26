@@ -18,14 +18,35 @@ import { createCombobox } from '../components/combobox.js';
 import { createPlaceTypeahead } from '../components/placetypeahead.js';
 import { createChipGroup } from '../components/chipgroup.js';
 import { createToggle } from '../components/toggle.js';
-import { createFilterState, merge } from '../filterstate.js';
+import { createFilterState, merge, type FilterState } from '../filterstate.js';
+import { mondayOf } from '../datefmt.js';
+import { asDoc, type Doc, type El } from '../domtypes.js';
 
-// The ISO Monday of a date's week (Mon=0). Pure UTC arithmetic (mirrors api.js).
-function mondayOf(iso) {
-  const [y, m, d] = String(iso).split('-').map(Number);
-  const dow = (new Date(Date.UTC(y, m - 1, d)).getUTCDay() + 6) % 7; // Mon=0 … Sun=6
-  return shiftDate(iso, -dow);
+export interface DateBounds {
+  min?: string;
+  max?: string;
+  today?: string;
 }
+
+export interface WeekStepperProps extends DateBounds {
+  value?: string;
+  label?: string;
+}
+
+export interface ChipItem {
+  value: string;
+  label: string;
+}
+
+export interface ToolbarProps {
+  filter?: Partial<FilterState>;
+  pools?: { value: string; label: string; closed?: boolean }[];
+  places?: { label: string; lat: number; lon: number }[];
+  ages?: ChipItem[];
+  dateBounds?: DateBounds;
+}
+
+// mondayOf was duplicated here, in api and in urlstate; it now has one home.
 
 /**
  * createWeekStepper(el, { props, onChange }) — a "‹ Week of Mon 20 Jul ›" pager for
@@ -34,9 +55,12 @@ function mondayOf(iso) {
  * for a consistent look; `onChange(mondayIso)` fires with the new week's Monday.
  * Absolute dates only — never "this week".
  */
-export function createWeekStepper(el, { props = {}, onChange } = {}) {
-  const doc = el.ownerDocument || globalThis.document;
-  let monday = mondayOf(props.value || props.today);
+export function createWeekStepper<T extends El>(
+  el: T,
+  { props = {}, onChange }: { props?: WeekStepperProps; onChange?: (iso: string) => void } = {},
+): { el: T; readonly value: string } {
+  const doc = el.ownerDocument || asDoc(globalThis.document);
+  let monday = mondayOf(props.value || props.today || '');
   const minMon = props.min ? mondayOf(props.min) : null;
   const maxMon = props.max ? mondayOf(props.max) : null;
   const todayMon = props.today ? mondayOf(props.today) : null;
@@ -79,7 +103,7 @@ export function createWeekStepper(el, { props = {}, onChange } = {}) {
     todaytag.setAttribute('aria-hidden', String(!isThisWeek));
   }
 
-  function step(days, guard) {
+  function step(days: number, guard: () => boolean) {
     if (guard()) return;
     monday = mondayOf(shiftDate(monday, days));
     render();
@@ -123,7 +147,7 @@ export const DEFAULT_AGE_CHIPS = [
 const BUSYNESS_REASON = 'Busyness has no data source yet — not available.';
 
 // A labelled field wrapper so controls read (and stack full-width on a phone).
-function field(doc, caption, control) {
+function field(doc: Doc, caption: string | null, control: El): El {
   const wrap = doc.createElement('div');
   wrap.className = 'toolbar__field';
   if (caption) {
@@ -144,8 +168,11 @@ function field(doc, caption, control) {
  * @param {function} opts.onChange called with the merged FilterState on every edit.
  * @returns {{el, controls, getFilter, contextKind}}
  */
-export function createFilterToolbar(el, opts = {}) {
-  const doc = el.ownerDocument || globalThis.document;
+export function createFilterToolbar<T extends El>(
+  el: T,
+  opts: { props?: ToolbarProps; onChange?: (f: FilterState) => void } = {},
+) {
+  const doc = el.ownerDocument || asDoc(globalThis.document);
   const props = opts.props || {};
   const onChange = opts.onChange;
   const pools = props.pools || [];
@@ -162,7 +189,7 @@ export function createFilterToolbar(el, opts = {}) {
   function emit() {
     if (onChange) onChange(filter);
   }
-  function update(patch) {
+  function update(patch: Record<string, unknown>) {
     filter = merge(filter, patch);
     emit();
   }
@@ -170,15 +197,15 @@ export function createFilterToolbar(el, opts = {}) {
   // --- mode Day/Pool (the pivot) ---
   const mode = createSegmentedControl(doc.createElement('div'), {
     props: { items: MODE_ITEMS, selected: filter.mode, variant: 'mode', label: 'View mode' },
-    onChange: (v) => setMode(v),
+    onChange: (v: string) => setMode(v as FilterState['mode']),
   });
 
   // --- context slot: DateStepper (Day) ↔ pool Combobox (Pool) ---
   const contextSlot = doc.createElement('div');
   contextSlot.className = 'toolbar__context';
-  let contextKind = null;
-  let contextControl = null;
-  let weekControl = null;
+  let contextKind: string | null = null;
+  let contextControl: { el: El; [k: string]: unknown } | null = null;
+  let weekControl: { el: El; readonly value: string } | null = null;
 
   function renderContext() {
     contextSlot.textContent = '';
@@ -208,7 +235,7 @@ export function createFilterToolbar(el, opts = {}) {
           label: 'Pool',
           placeholder: 'Search a pool…',
         },
-        onChange: (value) => {
+        onChange: (value: string) => {
           const opt = pools.find((p) => p.value === value) || null;
           update({ selectedPool: opt ? { id: opt.value, name: opt.label } : null });
         },
@@ -231,7 +258,7 @@ export function createFilterToolbar(el, opts = {}) {
     }
   }
 
-  function setMode(v) {
+  function setMode(v: FilterState['mode']) {
     if (v === filter.mode) return;
     filter = merge(filter, { mode: v });
     renderContext();
@@ -241,13 +268,14 @@ export function createFilterToolbar(el, opts = {}) {
   // --- place ---
   const place = createPlaceTypeahead(doc.createElement('div'), {
     props: { presets: places, label: 'Near', placeholder: 'Where from?' },
-    onChange: ({ lat, lon, label }) => update({ place: { lat, lon, label } }),
+    onChange: ({ lat, lon, label }: { lat: number; lon: number; label: string }) =>
+      update({ place: { lat, lon, label } }),
   });
 
   // --- gender ---
   const gender = createSegmentedControl(doc.createElement('div'), {
     props: { items: GENDER_ITEMS, selected: filter.gender || '', label: 'Gender' },
-    onChange: (v) => update({ gender: v }),
+    onChange: (v: string) => update({ gender: v }),
   });
 
   // --- age chips ---
@@ -257,13 +285,13 @@ export function createFilterToolbar(el, opts = {}) {
       selected: filter.age != null ? String(filter.age) : '',
       label: 'Age',
     },
-    onChange: (v) => update({ age: v === '' ? null : Number(v) }),
+    onChange: (v: string) => update({ age: v === '' ? null : Number(v) }),
   });
 
   // --- lap-only ---
   const lap = createToggle(doc.createElement('div'), {
     props: { checked: !!filter.lapOnly, label: 'Lap lanes only' },
-    onChange: (checked) => update({ lapOnly: checked }),
+    onChange: (checked: boolean) => update({ lapOnly: checked }),
   });
 
   // --- busyness (DISABLED — no data source yet; the honesty invariant made visible) ---

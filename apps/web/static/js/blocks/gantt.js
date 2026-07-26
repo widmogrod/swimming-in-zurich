@@ -24,11 +24,11 @@ const LANE_H = 22; // per-lane row height (CSS px)
 /**
  * createGantt(el, opts) — mount a LaneGantt into `el`.
  * @param {object} opts
- * @param {object} opts.basin canonical basin `{ lane_count, strips, best_public, name }`.
+ * @param {{lane_count: number, strips: any[], best_public?: any, name?: string}} opts.basin canonical basin.
  * @param {object} opts.timescale the SHARED timescale (REQUIRED — throws if absent,
  *   which is what forbids a Gantt-local scale and guarantees board↔Gantt alignment).
  * @param {number} [opts.cursorMin] initial cursor minutes-of-day (default: best-public start).
- * @returns {{el, timescale, cursorPlotX, readoutAt, setCursor, cursorMin}}
+ * @returns {{el, timescale, cursorPlotX, trackX, readoutAt, setCursor, cursorMin}}
  */
 export function createGantt(el, opts = {}) {
   const doc = el.ownerDocument || globalThis.document;

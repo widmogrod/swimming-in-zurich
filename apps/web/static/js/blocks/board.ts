@@ -24,7 +24,114 @@ import { eligForAccess, dayEligibility } from '../eligibility.js';
 import { ribbonsFor } from './ribbonmodel.js';
 import { cursorX as sharedCursorX, hhmmToMin } from './cursor.js';
 import { createEligibilityBadge } from '../components/eligibilitybadge.js';
-import { formatLabel } from '../components/datestepper.js';
+import { dayParts } from '../datefmt.js';
+import { asDoc, type Doc, type El, type WindowLike } from '../domtypes.js';
+import { locale } from '../i18n.js';
+
+
+// ---- Local structural types (the urlstate.ts convention) ---------------------------
+
+/** A `/swim` option, read structurally — only the fields the board projects. */
+export interface BoardOption {
+  facility: string;
+  facility_id?: string;
+  basin?: string;
+  access?: string;
+  distance_km?: number | null;
+  [k: string]: unknown;
+}
+
+/** A `/swim` facility status. */
+export interface BoardStatus {
+  facility: string;
+  status: string;
+  detail?: string | null;
+}
+
+/** One board row: a facility (Day mode) or a day (Pool mode). */
+export interface BoardRow {
+  label: string;
+  date?: string | null;
+  options: BoardOption[];
+  statuses: BoardStatus[];
+}
+
+export interface BoardAnswer {
+  options: BoardOption[];
+  statuses: BoardStatus[];
+}
+
+export interface BoardWeek {
+  facility?: string | null;
+  days: { label: string; date?: string; iso?: string; answer: BoardAnswer }[];
+}
+
+export interface BoardData {
+  day?: BoardAnswer;
+  week?: BoardWeek;
+}
+
+export interface BoardFilter {
+  mode: string;
+  gender?: string;
+  age?: number | null;
+  selectedPool?: { id?: string | null; name?: string | null } | null;
+}
+
+/** The runtime-resolved colour table (probed from the CSS `.fam-*` classes). */
+export type Palette = Record<string, string>;
+
+/** A ribbon from ribbonmodel.js, read structurally. */
+export interface RibbonSegment {
+  start: string;
+  end: string;
+  family?: string;
+  publicLanes?: number;
+  laneCount?: number;
+  [k: string]: unknown;
+}
+
+export interface Ribbon {
+  kind?: string;
+  variant?: string;
+  family?: string;
+  style?: string;
+  facility?: string;
+  detail?: string | null;
+  label?: string;
+  start?: string;
+  end?: string;
+  segments?: RibbonSegment[];
+  [k: string]: unknown;
+}
+
+/** The shared timescale (timescale.js) — the ONE X(min) mapping the Gantt also uses. */
+export interface Timescale {
+  X(min: number): number;
+  inverse(x: number): number;
+  DAY0: number;
+  DAY1: number;
+  PLOT: number;
+  lo: number;
+  hi: number;
+  span: number;
+}
+
+/** The 2D context surface the renderer uses (null headless). */
+type Ctx2D = CanvasRenderingContext2D;
+
+/** A canvas node — real or the headless stand-in whose getContext returns null. */
+export interface CanvasEl extends El {
+  width: number;
+  height: number;
+  getContext?(id: string): Ctx2D | null;
+}
+
+/** `doc.createElement('canvas')` yields a structural `El`; this is the one documented
+ *  narrowing to the canvas surface (the headless fake has no getContext, hence optional). */
+function asCanvas(el: El): CanvasEl {
+  return el as CanvasEl;
+}
 
 // Default board window [06:00, 22:00] across a 900px plot. The plot width is the
 // canvas' intrinsic (scrollable) width; the card clips it via overflow-x:auto.
@@ -45,11 +152,11 @@ export { hhmmToMin };
 
 /** Day mode: group a `/swim` answer's options + statuses into one row per facility,
  *  preserving first-seen order (the API already orders nearest-first). */
-export function dayRows(answer) {
-  const byFacility = new Map();
-  const rowFor = (name) => {
+export function dayRows(answer: BoardAnswer): BoardRow[] {
+  const byFacility = new Map<string, BoardRow>();
+  const rowFor = (name: string): BoardRow => {
     if (!byFacility.has(name)) byFacility.set(name, { label: name, options: [], statuses: [] });
-    return byFacility.get(name);
+    return byFacility.get(name) as BoardRow;
   };
   for (const o of answer.options || []) rowFor(o.facility).options.push(o);
   for (const s of answer.statuses || []) rowFor(s.facility).statuses.push(s);
@@ -59,7 +166,7 @@ export function dayRows(answer) {
 /** Pool mode: one row per day of the captured week. `week` is
  *  `{ facility, days: [{ label, date|iso, answer }] }`. Each row keeps its ISO
  *  `date` so the label can show the weekday + DATE and mark today. */
-export function weekRows(week) {
+export function weekRows(week: BoardWeek): BoardRow[] {
   return (week.days || []).map((d) => ({
     label: d.label,
     date: d.date != null ? d.date : d.iso,
@@ -70,20 +177,26 @@ export function weekRows(week) {
 
 /** Build the row list for the given FilterState from the preloaded `data`
  *  (`{ day: answer, week: {facility, days} }`). */
-export function boardRows(data, filter) {
+export function boardRows(data: BoardData, filter: BoardFilter): BoardRow[] {
   if (filter.mode === 'pool' && data.week) return weekRows(data.week);
   if (data.day) return dayRows(data.day);
   return [];
 }
 
 /** A row's eligibility badge state, from its options under the current gender/age. */
-export function rowEligibility(row, filter) {
-  const states = row.options.map((o) => eligForAccess(o.access, filter.gender, filter.age));
+export function rowEligibility(
+  row: { options: { access?: string }[] },
+  filter: { gender?: string; age?: number | null },
+) {
+  const states = row.options.map((o) => eligForAccess(o.access ?? '', filter.gender, filter.age));
   return dayEligibility(states);
 }
 
 /** A row's status-dot state: open (has options) / closed / unknown. */
-export function rowStatus(row) {
+export function rowStatus(row: {
+  options: unknown[];
+  statuses: { status: string }[];
+}): string {
   if (row.options.length > 0) return 'open';
   if (row.statuses.some((s) => s.status === 'closed')) return 'closed';
   return 'unknown';
@@ -92,7 +205,10 @@ export function rowStatus(row) {
 /** A non-open row's compact status line for the label AND the canvas (plan FIX 1):
  *  closed → `Closed · <detail>` (keeps its reason), uncurated → `Hours not listed`.
  *  Returns null for an open row (its ribbons say everything). Pure, exported for tests. */
-export function rowStatusLine(row) {
+export function rowStatusLine(row: {
+  options?: unknown[];
+  statuses?: { status: string; detail?: string | null }[];
+}) {
   if ((row.options || []).length > 0) return null;
   const closed = (row.statuses || []).find((s) => s.status === 'closed');
   if (closed) {
@@ -108,33 +224,41 @@ export function rowStatusLine(row) {
 // only then do we stamp the per-row ✓/?/✕ badge (Anyone + Any age → no badge, since
 // every session is open to everyone and there is nothing personal to flag). Toggling
 // a gender/age therefore VISIBLY adds/updates the badges (plan item 6).
-function eligEngaged(filter) {
+function eligEngaged(filter: BoardFilter | null | undefined): boolean {
   return !!(filter && ((filter.gender && filter.gender !== '') || filter.age != null));
 }
 
-/** Pool-mode row label: "Mon · 20 Jul", derived from the row's ISO date. */
-function weekdayDateLabel(row) {
+/**
+ * Pool-mode row label: "Mon · 20 Jul", derived from the row's ISO date.
+ *
+ * Reads the NAMED parts from `Intl` rather than splitting a formatted string on spaces.
+ * The old version did `formatLabel(row.date).split(' ')` and indexed [0][1][2], which
+ * silently fell back to `row.label` for any locale that does not format a date as
+ * exactly three space-separated tokens — i.e. most of them.
+ */
+function weekdayDateLabel(row: BoardRow): string {
   if (!row.date) return row.label;
-  const parts = formatLabel(row.date).split(' '); // ["Mon","20","Jul"]
-  if (parts.length < 3) return row.label;
-  return `${parts[0]} · ${parts[1]} ${parts[2]}`;
+  const { weekday, day, month } = dayParts(row.date, locale());
+  if (!weekday || !day || !month) return row.label;
+  return `${weekday} · ${day} ${month}`;
 }
 
 // ---- Colour resolution (runtime, browser only) ----------------------------------
 
 // Resolve each family/semantic colour by probing a CSS `.fam-*` class and reading the
 // computed `color`. Keeps ALL colour in tokens.css; returns null headless (no browser).
-function resolvePalette(doc, host) {
-  const view = doc.defaultView || (typeof window !== 'undefined' ? window : null);
+function resolvePalette(doc: Doc, host: El): Palette | null {
+  const view: WindowLike | null =
+    doc.defaultView || (typeof window !== 'undefined' ? (window as unknown as WindowLike) : null);
   if (!view || typeof view.getComputedStyle !== 'function') return null;
   const probe = doc.createElement('span');
   probe.className = 'board__probe';
   host.appendChild(probe);
-  const read = (cls) => {
+  const read = (cls: string): string => {
     probe.className = `board__probe ${cls}`;
     return view.getComputedStyle(probe).color;
   };
-  const pal = {};
+  const pal: Palette = {};
   for (const f of FAMILIES) pal[f] = read(`fam-${f}`);
   pal.other = read('fam-public');
   pal.closed = read('fam-closed');
@@ -143,21 +267,27 @@ function resolvePalette(doc, host) {
   pal.axis = read('fam-axis');
   pal.hair = read('fam-hair');
   pal.muted = read('fam-muted');
-  host.removeChild(probe);
+  host.removeChild?.(probe);
   return pal;
 }
 
 // ---- Canvas rendering -----------------------------------------------------------
 
-function setDashes(ctx, style) {
+function setDashes(ctx: Ctx2D, style: string): void {
   if (style === 'dashed') ctx.setLineDash([9, 6]);
   else if (style === 'dotted') ctx.setLineDash([2, 5]);
   else ctx.setLineDash([]);
 }
 
 // Draw one row's ribbons. `phase` animates the waterline (0 when frozen).
-function drawRow(canvas, ribbons, ts, pal, phase) {
-  const ctx = canvas.getContext && canvas.getContext('2d');
+function drawRow(
+  canvas: CanvasEl,
+  ribbons: Ribbon[],
+  ts: Timescale,
+  pal: Palette | null,
+  phase: number,
+): void {
+  const ctx = canvas.getContext ? canvas.getContext('2d') : null;
   if (!ctx || !pal) return; // headless / no canvas → nothing to paint (logic already tested)
   const w = ts.PLOT;
   const h = ROW_H;
@@ -190,7 +320,14 @@ function drawRow(canvas, ribbons, ts, pal, phase) {
 // drawClosed/drawGhost do — so state reads without a legend. Closed → a dashed rule +
 // dot + "Closed · <detail>" (its reason kept); uncurated → a dotted envelope +
 // "Hours not listed". The text is a token colour (pal.*), never a raw hex.
-function drawStatusRibbon(ctx, r, ts, pal, mid, h) {
+function drawStatusRibbon(
+  ctx: Ctx2D,
+  r: Ribbon,
+  ts: Timescale,
+  pal: Palette,
+  mid: number,
+  h: number,
+) {
   ctx.save();
   if (r.variant === 'closed') {
     const x0 = 8;
@@ -238,13 +375,20 @@ function drawStatusRibbon(ctx, r, ts, pal, mid, h) {
 // A published-hours-but-NO-lane-split ribbon (plan item 5): a faint capacity sheath
 // with a HATCHED (dotted-outline + diagonal hatch) fill so it reads clearly as
 // "open, lane split not published" — never as a solid public block.
-function drawUnpublishedRibbon(ctx, r, ts, pal, mid, h) {
-  const x0 = ts.X(hhmmToMin(r.start));
-  const x1 = ts.X(hhmmToMin(r.end));
+function drawUnpublishedRibbon(
+  ctx: Ctx2D,
+  r: Ribbon,
+  ts: Timescale,
+  pal: Palette,
+  mid: number,
+  h: number,
+) {
+  const x0 = ts.X(hhmmToMin(r.start ?? ''));
+  const x1 = ts.X(hhmmToMin(r.end ?? ''));
   const wSeg = Math.max(1, x1 - x0);
   const top = mid - h * 0.24;
   const height = h * 0.48;
-  const col = pal[r.family] || pal.other;
+  const col = (r.family ? pal[r.family] : undefined) || pal.other;
   ctx.save();
   // faint capacity sheath
   ctx.fillStyle = pal.sheath;
@@ -275,10 +419,18 @@ function drawUnpublishedRibbon(ctx, r, ts, pal, mid, h) {
   ctx.restore();
 }
 
-function drawLaneRibbon(ctx, r, ts, pal, mid, h, phase) {
-  const col = pal[r.family] || pal.other;
+function drawLaneRibbon(
+  ctx: Ctx2D,
+  r: Ribbon,
+  ts: Timescale,
+  pal: Palette,
+  mid: number,
+  h: number,
+  phase: number,
+) {
+  const col = (r.family ? pal[r.family] : undefined) || pal.other;
   const maxHalf = h * 0.4; // full capacity half-height
-  for (const seg of r.segments) {
+  for (const seg of r.segments ?? []) {
     const x0 = ts.X(hhmmToMin(seg.start));
     const x1 = ts.X(hhmmToMin(seg.end));
     const wSeg = Math.max(1, x1 - x0);
@@ -291,7 +443,7 @@ function drawLaneRibbon(ctx, r, ts, pal, mid, h, phase) {
       ctx.restore();
     }
     // Public ribbon: thickness = public fraction; pinched (thinner) where reserved.
-    const half = Math.max(1, maxHalf * seg.thickness * (seg.pinched ? 0.72 : 1));
+    const half = Math.max(1, maxHalf * Number(seg.thickness) * (seg.pinched ? 0.72 : 1));
     ctx.save();
     ctx.fillStyle = col;
     ctx.globalAlpha = 0.85;
@@ -317,7 +469,7 @@ function drawLaneRibbon(ctx, r, ts, pal, mid, h, phase) {
   }
 }
 
-function drawAxis(canvas, ts, pal) {
+function drawAxis(canvas: CanvasEl, ts: Timescale, pal: Palette | null) {
   const ctx = canvas.getContext && canvas.getContext('2d');
   if (!ctx || !pal) return;
   ctx.clearRect(0, 0, ts.PLOT, AXIS_H);
@@ -350,8 +502,21 @@ function drawAxis(canvas, ts, pal) {
  * @returns {{el, board, reducedMotion:boolean, timescale, cursorX, rows,
  *            setFilter, setData, destroy}}
  */
-export function createBoard(el, opts = {}) {
-  const doc = el.ownerDocument || globalThis.document;
+
+export interface BoardOpts {
+  timescale?: Timescale;
+  matchMedia?: (q: string) => { matches: boolean };
+  requestAnimationFrame?: (cb: (t: number) => void) => number | void;
+  filter?: BoardFilter;
+  data?: BoardData;
+  today?: string | null;
+  onPick?: (...args: unknown[]) => void;
+  onCursor?: (...args: unknown[]) => void;
+  [k: string]: unknown;
+}
+
+export function createBoard<T extends El>(el: T, opts: BoardOpts = {}) {
+  const doc = el.ownerDocument || asDoc(globalThis.document);
   const ts = opts.timescale || makeTimescale(BOARD_DAY0, BOARD_DAY1, BOARD_PLOT);
   const mm = opts.matchMedia || (typeof globalThis.matchMedia === 'function' ? globalThis.matchMedia : null);
   const raf = opts.requestAnimationFrame || (typeof globalThis.requestAnimationFrame === 'function' ? globalThis.requestAnimationFrame : null);
@@ -359,7 +524,7 @@ export function createBoard(el, opts = {}) {
 
   let filter = opts.filter || { mode: 'day', gender: '', age: null };
   let data = opts.data || {};
-  let today = opts.today || null;
+  const today = opts.today || null;
 
   el.classList.add('stage');
   const board = doc.createElement('div');
@@ -383,7 +548,7 @@ export function createBoard(el, opts = {}) {
   headLabel.className = 'board__rowlabel board__rowlabel--head';
   headLabel.style.height = `${AXIS_H}px`;
   labels.appendChild(headLabel);
-  const axisCanvas = doc.createElement('canvas');
+  const axisCanvas = asCanvas(doc.createElement('canvas'));
   axisCanvas.className = 'board__axiscanvas';
   axisCanvas.width = ts.PLOT;
   axisCanvas.height = AXIS_H;
@@ -404,18 +569,20 @@ export function createBoard(el, opts = {}) {
   // One entry per data row: { canvas, row, ribbons, animated }. `ribbons` is computed
   // ONCE here (not per frame); only the ~1–2 rows carrying a flowing lane ribbon are
   // redrawn in the RAF loop — the static ghost/closed/unpublished rows are painted once.
-  const canvases = [];
+  const canvases: { canvas: CanvasEl; row: BoardRow; ribbons: Ribbon[]; animated: boolean }[] = [];
 
-  function isAnimated(ribbons) {
-    return ribbons.some((r) => r.kind !== 'status' && r.variant === 'lanes');
+  function isAnimated(ribbons: Ribbon[]): boolean {
+    return ribbons.some((r: Ribbon) => r.kind !== 'status' && r.variant === 'lanes');
   }
 
   // The identity caption shown in the axis corner: in Pool mode the selected pool's
   // name (+ its basin(s)), so the board itself surfaces WHICH pool it is (plan item 3).
-  function headCaption(rows) {
+  function headCaption(rows: BoardRow[]): string {
     if (filter.mode === 'pool') {
       const name = filter.selectedPool?.name ? filter.selectedPool.name : (data.week && data.week.facility) || 'Pool';
-      const basins = [...new Set(rows.flatMap((r) => r.options.map((o) => o.basin)).filter(Boolean))];
+      const basins = [
+        ...new Set(rows.flatMap((r) => r.options.map((o) => o.basin)).filter(Boolean)),
+      ];
       return basins.length ? `${name} · ${basins.join(' / ')}` : name;
     }
     return 'Nearest first';
@@ -481,7 +648,7 @@ export function createBoard(el, opts = {}) {
       labelsBody.appendChild(label);
 
       // --- row canvas (column 2, inside the shared scroll track) ---
-      const canvas = doc.createElement('canvas');
+      const canvas = asCanvas(doc.createElement('canvas'));
       canvas.className = 'board__canvas';
       canvas.width = ts.PLOT;
       canvas.height = ROW_H;
@@ -490,7 +657,7 @@ export function createBoard(el, opts = {}) {
       if (elig === 'no' && eligEngaged(filter)) canvas.classList.add('board__canvas--noelig');
       trackBody.appendChild(canvas);
 
-      const ribbons = ribbonsFor(row);
+      const ribbons = ribbonsFor(row) as Ribbon[];
       canvases.push({ canvas, row, ribbons, animated: isAnimated(ribbons) });
     }
     return rows;
@@ -503,14 +670,14 @@ export function createBoard(el, opts = {}) {
     for (const { canvas, ribbons } of canvases) drawRow(canvas, ribbons, ts, pal, phase);
   }
 
-  function paintAnimated(phase) {
+  function paintAnimated(phase: number) {
     for (const { canvas, ribbons, animated } of canvases) {
       if (animated) drawRow(canvas, ribbons, ts, pal, phase);
     }
   }
 
   let running = false;
-  function loop(t) {
+  function loop(t: number) {
     paintAnimated((t || 0) / 600);
     if (running && raf) raf(loop);
   }
@@ -520,13 +687,13 @@ export function createBoard(el, opts = {}) {
     raf(loop);
   }
 
-  function setFilter(next) {
+  function setFilter(next: BoardFilter) {
     filter = next;
     rows = buildRows();
     paintStatic(0);
   }
 
-  function setData(next) {
+  function setData(next: BoardData) {
     data = next;
     rows = buildRows();
     paintStatic(0);
@@ -534,7 +701,7 @@ export function createBoard(el, opts = {}) {
 
   function destroy() {
     running = false; // stop the shared RAF loop so a rebuilt board leaves no orphan
-    if (board.parentNode === el) el.removeChild(board);
+    if (board.parentNode === el) el.removeChild?.(board);
   }
 
   // The board's cursor-x for minute `min`, routed through the SHARED cursor helper
@@ -542,7 +709,7 @@ export function createBoard(el, opts = {}) {
   // way (gantt.js → cursorX(ts, min)); handed the same `ts`, board.cursorX(T) ===
   // gantt.cursorPlotX(T) BY CONSTRUCTION. This is the anti-desync anchor the
   // board_gantt_align test asserts directly.
-  function cursorXAt(min) {
+  function cursorXAt(min: number) {
     return sharedCursorX(ts, min);
   }
 

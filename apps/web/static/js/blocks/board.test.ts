@@ -1,10 +1,11 @@
-import test from 'node:test';
-import assert from 'node:assert/strict';
+import { expect, test } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
 import { mount } from '../components/_fakedom.js';
+import type { FakeElement } from '../components/_fakedom.js';
+import { must } from '../testutil.js';
 import {
   createBoard,
   dayRows,
@@ -15,21 +16,24 @@ import {
   rowEligibility,
   hhmmToMin,
   BOARD_PLOT,
+  type BoardAnswer,
+  type BoardWeek,
 } from './board.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const FIXTURES = join(HERE, '..', '..', '..', 'tests', 'fixtures');
-const load = (name) => JSON.parse(readFileSync(join(FIXTURES, name), 'utf-8'));
+const load = <T,>(name: string): T =>
+  JSON.parse(readFileSync(join(FIXTURES, name), 'utf-8')) as T;
 
-const DAY = load('swim_day.json');
-const WEEK = load('swim_week_oerlikon.json');
+const DAY = load<BoardAnswer>('swim_day.json');
+const WEEK = load<BoardWeek>('swim_week_oerlikon.json');
 
-const isCanvas = (e) => e.tagName === 'CANVAS';
-const hasClass = (c) => (e) => e.classList.contains(c);
+const isCanvas = (e: FakeElement) => e.tagName === 'CANVAS';
+const hasClass = (c: string) => (e: FakeElement) => e.classList.contains(c);
 
 test('hhmmToMin parses times to minutes-of-day', () => {
-  assert.equal(hhmmToMin('06:00'), 360);
-  assert.equal(hhmmToMin('09:30'), 570);
+  expect(hhmmToMin('06:00')).toBe(360);
+  expect(hhmmToMin('09:30')).toBe(570);
 });
 
 test('dayRows groups a /swim answer into one row per facility', () => {
@@ -38,42 +42,44 @@ test('dayRows groups a /swim answer into one row per facility', () => {
     ...DAY.options.map((o) => o.facility),
     ...DAY.statuses.map((s) => s.facility),
   ]);
-  assert.equal(rows.length, facilities.size);
-  const oerlikon = rows.find((r) => r.label === 'Hallenbad Oerlikon');
-  assert.ok(oerlikon.options.length >= 1);
+  expect(rows.length).toBe(facilities.size);
+  const oerlikon = must(rows.find((r) => r.label === 'Hallenbad Oerlikon'), 'Oerlikon row');
+  expect(oerlikon.options.length >= 1).toBeTruthy();
 });
 
 test('weekRows yields one row per captured day', () => {
   const rows = weekRows(WEEK);
-  assert.equal(rows.length, WEEK.days.length);
-  assert.equal(rows[0].label, WEEK.days[0].label);
+  expect(rows.length).toBe(WEEK.days.length);
+  expect(rows[0].label).toBe(WEEK.days[0].label);
 });
 
 test('boardRows honours FilterState.mode (day vs pool)', () => {
   const data = { day: DAY, week: WEEK };
-  assert.equal(boardRows(data, { mode: 'day' }).length, dayRows(DAY).length);
-  assert.equal(boardRows(data, { mode: 'pool' }).length, weekRows(WEEK).length);
+  expect(boardRows(data, { mode: 'day' }).length).toBe(dayRows(DAY).length);
+  expect(boardRows(data, { mode: 'pool' }).length).toBe(weekRows(WEEK).length);
 });
 
 test('rowStatus: open when options, closed/unknown from statuses', () => {
-  assert.equal(rowStatus({ options: [{}], statuses: [] }), 'open');
-  assert.equal(rowStatus({ options: [], statuses: [{ status: 'closed' }] }), 'closed');
-  assert.equal(rowStatus({ options: [], statuses: [{ status: 'uncurated' }] }), 'unknown');
+  expect(rowStatus({ options: [{}], statuses: [] })).toBe('open');
+  expect(rowStatus({ options: [], statuses: [{ status: 'closed' }] })).toBe('closed');
+  expect(rowStatus({ options: [], statuses: [{ status: 'uncurated' }] })).toBe('unknown');
 });
 
 test('rowStatusLine folds the terminal state onto the row (FIX 1): closed keeps reason, uncurated is distinct', () => {
   // Closed keeps its stated reason; uncurated reads "Hours not listed" (never "closed").
-  assert.deepEqual(rowStatusLine({ options: [], statuses: [{ status: 'closed', detail: 'Sommerpause' }] }), {
+  expect(rowStatusLine({ options: [], statuses: [{ status: 'closed', detail: 'Sommerpause' }] })).toEqual({
     kind: 'closed',
     text: 'Closed · Sommerpause',
   });
-  assert.deepEqual(rowStatusLine({ options: [], statuses: [{ status: 'uncurated' }] }), {
+  expect(rowStatusLine({ options: [], statuses: [{ status: 'uncurated' }] })).toEqual({
     kind: 'unknown',
     text: 'Hours not listed',
   });
   // Closed with no detail still says Closed; an OPEN row (has options) has no sub-line.
-  assert.equal(rowStatusLine({ options: [], statuses: [{ status: 'closed' }] }).text, 'Closed');
-  assert.equal(rowStatusLine({ options: [{}], statuses: [] }), null);
+  expect(must(rowStatusLine({ options: [], statuses: [{ status: 'closed' }] })).text).toBe(
+    'Closed',
+  );
+  expect(rowStatusLine({ options: [{}], statuses: [] })).toBe(null);
 });
 
 test('a closed/uncurated row shows its state sub-line ON the label (FIX 1), open rows do not', () => {
@@ -86,19 +92,19 @@ test('a closed/uncurated row shows its state sub-line ON the label (FIX 1), open
   });
   const subs = el.queryAll(hasClass('board__rowsub'));
   const nonOpen = dayRows(DAY).filter((r) => r.options.length === 0).length;
-  assert.equal(subs.length, nonOpen, 'one sub-line per closed/uncurated row');
+  expect(subs.length).toBe(nonOpen);
   // The three terminal states stay distinct: at least one closed keeps its reason.
   const closedSub = subs.find((s) => s.classList.contains('board__rowsub--closed'));
-  assert.ok(closedSub && closedSub.textContent.startsWith('Closed'));
+  expect(closedSub && closedSub.textContent.startsWith('Closed')).toBeTruthy();
   const unknownSub = subs.find((s) => s.classList.contains('board__rowsub--unknown'));
-  assert.ok(unknownSub && unknownSub.textContent === 'Hours not listed');
+  expect(unknownSub && unknownSub.textContent === 'Hours not listed').toBeTruthy();
 });
 
 test('rowEligibility reacts to the FilterState gender/age', () => {
   const row = { options: [{ access: 'WomenOnly' }] };
-  assert.equal(rowEligibility(row, { gender: 'female', age: null }), 'in');
-  assert.equal(rowEligibility(row, { gender: 'male', age: null }), 'no');
-  assert.equal(rowEligibility(row, { gender: '', age: null }), 'chk');
+  expect(rowEligibility(row, { gender: 'female', age: null })).toBe('in');
+  expect(rowEligibility(row, { gender: 'male', age: null })).toBe('no');
+  expect(rowEligibility(row, { gender: '', age: null })).toBe('chk');
 });
 
 test('Day mode builds: axis row + one row/canvas/rowlabel per facility', () => {
@@ -112,26 +118,26 @@ test('Day mode builds: axis row + one row/canvas/rowlabel per facility', () => {
   const expected = dayRows(DAY).length;
   // one axis canvas + one canvas per data row
   const canvases = el.queryAll(isCanvas);
-  assert.equal(canvases.length, expected + 1);
-  assert.equal(el.queryAll(hasClass('board__axiscanvas')).length, 1);
-  assert.equal(el.queryAll(hasClass('board__canvas')).length, expected);
+  expect(canvases.length).toBe(expected + 1);
+  expect(el.queryAll(hasClass('board__axiscanvas')).length).toBe(1);
+  expect(el.queryAll(hasClass('board__canvas')).length).toBe(expected);
   // one rowlabel per data row (the axis header spacer has no rowname)
-  assert.equal(el.queryAll(hasClass('board__rowname')).length, expected);
+  expect(el.queryAll(hasClass('board__rowname')).length).toBe(expected);
   // SHARED SCROLL: there is exactly ONE scroll cell + ONE max-content track holding
   // the axis canvas AND every row canvas — so axis + rows scroll together (the old
   // per-row scroll had one track per row; that structural contract changed with the
   // single-shared-scroll layout, plan item 1).
-  assert.equal(el.queryAll(hasClass('board__scrollx')).length, 1);
+  expect(el.queryAll(hasClass('board__scrollx')).length).toBe(1);
   const tracks = el.queryAll(hasClass('board__track'));
-  assert.equal(tracks.length, 1);
+  expect(tracks.length).toBe(1);
   // The track carries NO inline width — `.board__track { width: max-content }`
   // (blocks.css) governs it from the canvases' intrinsic width.
-  assert.equal(tracks[0].style.width, undefined);
+  expect(tracks[0].style.width).toBe(undefined);
   // the one track holds the axis canvas + every row canvas.
-  assert.equal(tracks[0].queryAll(isCanvas).length, expected + 1);
+  expect(tracks[0].queryAll(isCanvas).length).toBe(expected + 1);
   // the canvases inside carry the intrinsic plot width they draw at.
-  const firstCanvas = tracks[0].query(isCanvas);
-  assert.equal(firstCanvas.style.width, `${BOARD_PLOT}px`);
+  const firstCanvas = must(tracks[0].query(isCanvas), 'row canvas');
+  expect(firstCanvas.style.width).toBe(`${BOARD_PLOT}px`);
 });
 
 test('option rows carry an EligibilityBadge once a gender/age filter is engaged', () => {
@@ -145,9 +151,9 @@ test('option rows carry an EligibilityBadge once a gender/age filter is engaged'
     requestAnimationFrame: () => {},
   });
   const optionRowCount = dayRows(DAY).filter((r) => r.options.length > 0).length;
-  assert.equal(el.queryAll(hasClass('board__rowbadge')).length, optionRowCount);
+  expect(el.queryAll(hasClass('board__rowbadge')).length).toBe(optionRowCount);
   // status dots: one per row
-  assert.equal(el.queryAll(hasClass('board__dot')).length, dayRows(DAY).length);
+  expect(el.queryAll(hasClass('board__dot')).length).toBe(dayRows(DAY).length);
 });
 
 test('with NO gender/age filter engaged, no eligibility badges are stamped', () => {
@@ -158,9 +164,9 @@ test('with NO gender/age filter engaged, no eligibility badges are stamped', () 
     matchMedia: () => ({ matches: false }),
     requestAnimationFrame: () => {},
   });
-  assert.equal(el.queryAll(hasClass('board__rowbadge')).length, 0);
+  expect(el.queryAll(hasClass('board__rowbadge')).length).toBe(0);
   // but the status dots are always present.
-  assert.equal(el.queryAll(hasClass('board__dot')).length, dayRows(DAY).length);
+  expect(el.queryAll(hasClass('board__dot')).length).toBe(dayRows(DAY).length);
 });
 
 test('Pool mode builds one row per day of the week', () => {
@@ -171,8 +177,8 @@ test('Pool mode builds one row per day of the week', () => {
     matchMedia: () => ({ matches: false }),
     requestAnimationFrame: () => {},
   });
-  assert.equal(el.queryAll(hasClass('board__canvas')).length, WEEK.days.length);
-  assert.equal(el.queryAll(hasClass('board__rowname')).length, WEEK.days.length);
+  expect(el.queryAll(hasClass('board__canvas')).length).toBe(WEEK.days.length);
+  expect(el.queryAll(hasClass('board__rowname')).length).toBe(WEEK.days.length);
 });
 
 test('reduced-motion: the RAF loop is NOT started when the media query matches', () => {
@@ -186,8 +192,8 @@ test('reduced-motion: the RAF loop is NOT started when the media query matches',
       rafCalls += 1;
     },
   });
-  assert.equal(board.reducedMotion, true);
-  assert.equal(rafCalls, 0); // frozen waterline, no animation loop
+  expect(board.reducedMotion).toBe(true);
+  expect(rafCalls).toBe(0); // frozen waterline, no animation loop
 });
 
 test('motion allowed: the RAF loop IS started when the media query does not match', () => {
@@ -201,8 +207,8 @@ test('motion allowed: the RAF loop IS started when the media query does not matc
       rafCalls += 1;
     }, // records the call but does not recurse → the loop runs exactly once
   });
-  assert.equal(board.reducedMotion, false);
-  assert.ok(rafCalls >= 1);
+  expect(board.reducedMotion).toBe(false);
+  expect(rafCalls >= 1).toBeTruthy();
 });
 
 test('setFilter re-renders the board for the new mode', () => {
@@ -213,8 +219,8 @@ test('setFilter re-renders the board for the new mode', () => {
     matchMedia: () => ({ matches: false }),
     requestAnimationFrame: () => {},
   });
-  assert.equal(board.rows.length, dayRows(DAY).length);
+  expect(board.rows.length).toBe(dayRows(DAY).length);
   board.setFilter({ mode: 'pool', gender: '', age: null });
-  assert.equal(board.rows.length, weekRows(WEEK).length);
-  assert.equal(el.queryAll(hasClass('board__canvas')).length, weekRows(WEEK).length);
+  expect(board.rows.length).toBe(weekRows(WEEK).length);
+  expect(el.queryAll(hasClass('board__canvas')).length).toBe(weekRows(WEEK).length);
 });

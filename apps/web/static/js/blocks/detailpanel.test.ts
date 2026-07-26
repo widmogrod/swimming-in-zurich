@@ -1,34 +1,39 @@
-import test from 'node:test';
-import assert from 'node:assert/strict';
+import { expect, test } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
 import { mount } from '../components/_fakedom.js';
+import type { FakeElement } from '../components/_fakedom.js';
 import { makeTimescale } from '../timescale.js';
 import { basinFromPanel, publicAt, peakPublic } from './cursor.js';
 import { BOARD_DAY0, BOARD_DAY1, BOARD_PLOT } from './board.js';
 import { createGantt } from './gantt.js';
 import { createDetailPanel } from './detailpanel.js';
+import type { FacilityDetail } from './detailpanel.js';
+import type { LanePanel } from './cursor.js';
+import { must } from '../testutil.js';
+
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const FIXTURES = join(HERE, '..', '..', '..', 'tests', 'fixtures');
-const load = (name) => JSON.parse(readFileSync(join(FIXTURES, name), 'utf-8'));
+const load = <T,>(name: string): T =>
+  JSON.parse(readFileSync(join(FIXTURES, name), 'utf-8')) as T;
 
-const POOL = load('pool_oerlikon.json');
+const POOL = load<FacilityDetail & { lane_panels: LanePanel[] }>('pool_oerlikon.json');
 const BASIN = basinFromPanel(POOL.lane_panels[0]); // 50m-Becken, 8 lanes
-const hasClass = (c) => (e) => e.classList.contains(c);
+const hasClass = (c: string) => (e: FakeElement) => e.classList.contains(c);
 const newTs = () => makeTimescale(BOARD_DAY0, BOARD_DAY1, BOARD_PLOT);
 const SAMPLES = [360, 540, 600, 690, 780, 900, 1080, 1200];
 
 // A cursor minute where the public count is NOT the day's peak (cursor-driven proof).
 function belowPeakMinute() {
   const peak = peakPublic(BASIN);
-  const boundaries = new Set();
+  const boundaries = new Set<number>();
   for (const strip of BASIN.strips) for (const s of strip.segments) boundaries.add(hhmmToMinLocal(s.start));
   return [...boundaries].find((min) => publicAt(BASIN, min).public !== peak);
 }
-function hhmmToMinLocal(hhmm) {
+function hhmmToMinLocal(hhmm: string) {
   const [h, m] = hhmm.split(':').map(Number);
   return h * 60 + m;
 }
@@ -41,25 +46,24 @@ test('(b) readout equality: panel headline == Gantt readout == publicAt for samp
     g.setCursor(T);
     p.setCursor(T);
     const expected = publicAt(BASIN, T);
-    assert.deepEqual(g.readoutAt(T), expected); // Gantt readout
-    assert.deepEqual(p.headlineAt(T), expected); // panel headline
-    assert.equal(g.readoutAt(T).public, p.headlineAt(T).public); // and they agree
+    expect(g.readoutAt(T)).toEqual(expected); // Gantt readout
+    expect(p.headlineAt(T)).toEqual(expected); // panel headline
+    expect(g.readoutAt(T).public).toBe(p.headlineAt(T).public); // and they agree
   }
 });
 
 test('(b) the headline is CURSOR-driven, not PEAK-driven (the bug the prototype fixed)', () => {
   const ts = newTs();
   const peak = peakPublic(BASIN);
-  const T = belowPeakMinute();
-  assert.ok(T != null, 'fixture must have a minute below peak');
+  const T = must(belowPeakMinute(), 'a below-peak minute');
   const p = createDetailPanel(mount(), { detail: POOL, basin: BASIN, timescale: ts, cursorMin: T });
   const n = p.headlineAt(T).public;
-  assert.equal(n, publicAt(BASIN, T).public);
-  assert.notEqual(n, peak); // a peak-driven headline would (wrongly) show `peak` here
+  expect(n).toBe(publicAt(BASIN, T).public);
+  expect(n).not.toBe(peak); // a peak-driven headline would (wrongly) show `peak` here
   // the rendered headline number reflects the cursor, and the pip count matches it
-  const bignum = p.el.query(hasClass('detail__bignum'));
-  assert.equal(bignum.textContent, String(n));
-  assert.equal(p.el.queryAll((e) => e.classList.contains('detail__pip') && e.classList.contains('is-on')).length, n);
+  const bignum = must(p.el.query(hasClass('detail__bignum')));
+  expect(bignum.textContent).toBe(String(n));
+  expect(p.el.queryAll((e) => e.classList.contains('detail__pip') && e.classList.contains('is-on')).length).toBe(n);
 });
 
 test('the panel reuses the S1 primitives (StatePill, LengthLanesBadge, EligibilityBadge)', () => {
@@ -70,17 +74,17 @@ test('the panel reuses the S1 primitives (StatePill, LengthLanesBadge, Eligibili
     timescale: ts,
     filter: { gender: 'female', age: 30 },
   });
-  assert.ok(p.el.query(hasClass('ui-statepill')));
-  assert.ok(p.el.query(hasClass('ui-lenlanes')));
-  assert.ok(p.el.query(hasClass('ui-eligbadge')));
+  expect(must(p.el.query(hasClass('ui-statepill')))).toBeTruthy();
+  expect(must(p.el.query(hasClass('ui-lenlanes')))).toBeTruthy();
+  expect(must(p.el.query(hasClass('ui-eligbadge')))).toBeTruthy();
 });
 
 test('(d) provenance is present, carrying the source', () => {
   const ts = newTs();
   const p = createDetailPanel(mount(), { detail: POOL, basin: BASIN, timescale: ts });
-  const prov = p.el.query(hasClass('ui-provstamp'));
-  assert.ok(prov);
-  assert.ok(prov.textContent.includes(POOL.provenance.source));
+  const prov = must(p.el.query(hasClass('ui-provstamp')));
+  expect(prov).toBeTruthy();
+  expect(prov.textContent.includes(String(POOL.provenance?.source))).toBeTruthy();
 });
 
 test('price shows "Not listed" when the facility has no price table', () => {
@@ -89,8 +93,8 @@ test('price shows "Not listed" when the facility has no price table', () => {
   const p = createDetailPanel(mount(), { detail: noPrice, basin: BASIN, timescale: ts });
   const priceRow = p.el
     .queryAll(hasClass('detail__fact'))
-    .find((r) => r.textContent.startsWith('Price'));
-  assert.ok(priceRow.textContent.includes('Not listed'));
+    .find((r: FakeElement) => r.textContent.startsWith('Price'));
+  expect(must(priceRow, 'Price row').textContent.includes('Not listed')).toBeTruthy();
 });
 
 test('busyness is always "Not available yet" (future, never faked)', () => {
@@ -98,8 +102,8 @@ test('busyness is always "Not available yet" (future, never faked)', () => {
   const p = createDetailPanel(mount(), { detail: POOL, basin: BASIN, timescale: ts });
   const row = p.el
     .queryAll(hasClass('detail__fact'))
-    .find((r) => r.textContent.startsWith('Busyness'));
-  assert.ok(row.textContent.includes('Not available yet'));
+    .find((r: FakeElement) => r.textContent.startsWith('Busyness'));
+  expect(must(row, 'Busyness row').textContent.includes('Not available yet')).toBeTruthy();
 });
 
 test('(c) a pool with NO lane plan still renders the full facts block, not a dead line (FIX 3)', () => {
@@ -114,20 +118,26 @@ test('(c) a pool with NO lane plan still renders the full facts block, not a dea
     distanceKm: 1.2,
   });
   // Facts + provenance are present (the panel is populated, never a bare message).
-  assert.ok(p.el.query(hasClass('ui-statepill')), 'StatePill present');
-  assert.ok(p.el.query(hasClass('ui-lenlanes')), 'length·lanes present');
-  assert.ok(p.el.query(hasClass('ui-eligbadge')), 'eligibility present');
-  assert.ok(p.el.query(hasClass('ui-provstamp')), 'provenance present');
+  expect(must(p.el.query(hasClass('ui-statepill')))).toBeTruthy();
+  expect(must(p.el.query(hasClass('ui-lenlanes')))).toBeTruthy();
+  expect(must(p.el.query(hasClass('ui-eligbadge')))).toBeTruthy();
+  expect(must(p.el.query(hasClass('ui-provstamp')))).toBeTruthy();
   const facts = p.el.queryAll(hasClass('detail__fact'));
-  assert.ok(facts.find((r) => r.textContent.startsWith('Distance')).textContent.includes('1.2 km'));
-  assert.ok(facts.find((r) => r.textContent.startsWith('Busyness')).textContent.includes('Not available yet'));
+  expect(
+    must(facts.find((r) => r.textContent.startsWith('Distance'))).textContent.includes('1.2 km'),
+  ).toBeTruthy();
+  expect(
+    must(facts.find((r) => r.textContent.startsWith('Busyness'))).textContent.includes(
+      'Not available yet',
+    ),
+  ).toBeTruthy();
   // The lane absence is a NOTE inside the populated panel — never the whole panel,
   // and there is NO Gantt to desync.
-  const pill = p.el.query(hasClass('ui-statepill'));
-  assert.ok(pill.textContent.includes('lane split not published'));
-  const note = p.el.query(hasClass('detail__note'));
-  assert.ok(note && note.textContent.toLowerCase().includes('no published lane plan'));
-  assert.equal(p.gantt, null);
+  const pill = must(p.el.query(hasClass('ui-statepill')));
+  expect(pill.textContent.includes('lane split not published')).toBeTruthy();
+  const note = must(p.el.query(hasClass('detail__note')));
+  expect(note && note.textContent.toLowerCase().includes('no published lane plan')).toBeTruthy();
+  expect(p.gantt).toBe(null);
 });
 
 test('closed / uncurated panels keep their honesty (FIX 3): closed reason kept, uncurated ≠ closed', () => {
@@ -139,9 +149,9 @@ test('closed / uncurated panels keep their honesty (FIX 3): closed reason kept, 
     state: 'closed',
     reason: 'Sommerpause',
   });
-  const closedPill = closed.el.query(hasClass('ui-statepill'));
-  assert.ok(closedPill.textContent.includes('Closed'));
-  assert.ok(closed.el.query(hasClass('detail__note')).textContent.includes('Sommerpause'));
+  const closedPill = must(closed.el.query(hasClass('ui-statepill')));
+  expect(closedPill.textContent.includes('Closed')).toBeTruthy();
+  expect(must(closed.el.query(hasClass('detail__note'))).textContent.includes('Sommerpause')).toBeTruthy();
 
   const uncurated = createDetailPanel(mount(), {
     detail: POOL,
@@ -149,13 +159,13 @@ test('closed / uncurated panels keep their honesty (FIX 3): closed reason kept, 
     timescale: ts,
     state: 'uncurated',
   });
-  const uncPill = uncurated.el.query(hasClass('ui-statepill'));
-  assert.ok(uncPill.textContent.toLowerCase().includes('hours not listed'));
-  assert.ok(uncurated.el.query(hasClass('detail__note')).textContent.toLowerCase().includes('not the same as closed'));
+  const uncPill = must(uncurated.el.query(hasClass('ui-statepill')));
+  expect(uncPill.textContent.toLowerCase().includes('hours not listed')).toBeTruthy();
+  expect(must(uncurated.el.query(hasClass('detail__note'))).textContent.toLowerCase().includes('not the same as closed')).toBeTruthy();
   // Both still carry facts + provenance (populated panels), and neither has a Gantt.
-  assert.ok(closed.el.query(hasClass('ui-provstamp')) && uncurated.el.query(hasClass('ui-provstamp')));
-  assert.equal(closed.gantt, null);
-  assert.equal(uncurated.gantt, null);
+  expect(must(closed.el.query(hasClass('ui-provstamp'))) && must(uncurated.el.query(hasClass('ui-provstamp')))).toBeTruthy();
+  expect(closed.gantt).toBe(null);
+  expect(uncurated.gantt).toBe(null);
 });
 
 // The Day→Pool continuity affordance: a header button that carries the selected pool
@@ -173,26 +183,26 @@ test('onOpenWeek renders a header button that invokes the callback', () => {
       opened += 1;
     },
   });
-  const head = p.el.query(hasClass('detail__head'));
-  const btn = head.query(hasClass('detail__weekbtn'));
-  assert.ok(btn, 'the week button is inside the panel header');
-  assert.equal(btn.tagName, 'BUTTON');
-  assert.ok(btn.textContent.toLowerCase().includes("week"));
+  const head = must(p.el.query(hasClass('detail__head')));
+  const btn = must(head.query(hasClass('detail__weekbtn')));
+  expect(btn).toBeTruthy();
+  expect(btn.tagName).toBe('BUTTON');
+  expect(btn.textContent.toLowerCase().includes("week")).toBeTruthy();
   btn.dispatch('click');
-  assert.equal(opened, 1);
+  expect(opened).toBe(1);
 });
 
 test('the week button is absent when no onOpenWeek callback is given', () => {
   const ts = newTs();
   const p = createDetailPanel(mount(), { detail: POOL, basin: BASIN, timescale: ts });
-  assert.equal(p.el.query(hasClass('detail__weekbtn')), null);
+  expect(p.el.query(hasClass('detail__weekbtn'))).toBe(null);
 });
 
 // --- S2: the SourceStrip is wired into the panel in every state ---
-const laneChips = (p) =>
+const laneChips = (p: { el: FakeElement }) =>
   p.el.queryAll((e) => e.classList.contains('ui-sourcestrip__chip--lane'));
-const officialChip = (p) =>
-  p.el.query((e) => e.classList.contains('ui-sourcestrip__chip--official'));
+const officialChip = (p: { el: FakeElement }) =>
+  must(p.el.query((e) => e.classList.contains('ui-sourcestrip__chip--official')));
 
 test('S2: no selected basin → Official-page chip + BOTH distinct lane-plan PDFs (all-basins branch)', () => {
   const ts = newTs();
@@ -204,14 +214,11 @@ test('S2: no selected basin → Official-page chip + BOTH distinct lane-plan PDF
     officialUrl: 'https://official.example/oerlikon',
   });
   const official = officialChip(p);
-  assert.ok(official, 'Official-page chip present');
-  assert.equal(official.getAttribute('href'), 'https://official.example/oerlikon');
+  expect(official).toBeTruthy();
+  expect(official.getAttribute('href')).toBe('https://official.example/oerlikon');
   const lanes = laneChips(p);
-  assert.equal(lanes.length, 2, "oerlikon's two distinct PDFs → two lane chips");
-  assert.deepEqual(
-    lanes.map((c) => c.getAttribute('href')).sort(),
-    POOL.basins.map((b) => b.lane_plan_url).sort(),
-  );
+  expect(lanes.length).toBe(2);
+  expect(lanes.map((c: FakeElement) => c.getAttribute('href')).sort()).toEqual((POOL.basins ?? []).map((b) => b.lane_plan_url).sort());
 });
 
 test('S2: WITH a selected basin → exactly that one basin lane-plan chip', () => {
@@ -223,9 +230,9 @@ test('S2: WITH a selected basin → exactly that one basin lane-plan chip', () =
     officialUrl: 'https://official.example/oerlikon',
   });
   const lanes = laneChips(p);
-  assert.equal(lanes.length, 1, 'only the selected basin contributes a lane chip');
-  const selected = POOL.basins.find((b) => b.basin_id === BASIN.id);
-  assert.equal(lanes[0].getAttribute('href'), selected.lane_plan_url);
+  expect(lanes.length).toBe(1);
+  const selected = (POOL.basins ?? []).find((b) => b.basin_id === BASIN.id);
+  expect(lanes[0].getAttribute('href')).toBe(must(selected, 'selected basin').lane_plan_url);
 });
 
 test('S2: uncurated panel (detail = {}) still shows the Official-page chip and nothing else', () => {
@@ -238,22 +245,22 @@ test('S2: uncurated panel (detail = {}) still shows the Official-page chip and n
     officialUrl: 'https://official.example/somepool',
   });
   const chips = p.el.queryAll((e) => e.classList.contains('ui-sourcestrip__chip'));
-  assert.equal(chips.length, 1);
-  assert.ok(chips[0].classList.contains('ui-sourcestrip__chip--official'));
-  assert.equal(chips[0].getAttribute('href'), 'https://official.example/somepool');
+  expect(chips.length).toBe(1);
+  expect(chips[0].classList.contains('ui-sourcestrip__chip--official')).toBeTruthy();
+  expect(chips[0].getAttribute('href')).toBe('https://official.example/somepool');
 });
 
 test('the panel embeds the LaneGantt on the SAME timescale instance (no desync possible)', () => {
   const ts = newTs();
   const p = createDetailPanel(mount(), { detail: POOL, basin: BASIN, timescale: ts });
-  assert.ok(p.gantt);
-  assert.equal(p.gantt.timescale, ts); // literally the same object
-  assert.ok(p.el.query(hasClass('gantt')));
+  expect(p.gantt).toBeTruthy();
+  expect(must(p.gantt).timescale).toBe(ts); // literally the same object
+  expect(must(p.el.query(hasClass('gantt')))).toBeTruthy();
 });
 
 // --- S4: the facility-level LIVE water temperature (Baditicker), rendered honestly ---
-const liveRow = (p) =>
-  p.el.queryAll(hasClass('detail__fact')).find((r) => r.textContent.startsWith('Live water'));
+const liveRow = (p: { el: FakeElement }) =>
+  p.el.queryAll(hasClass('detail__fact')).find((r: FakeElement) => r.textContent.startsWith('Live water'));
 
 test('S4: a live reading with a temp shows "23 °C · measured N min ago" (Heuried-shaped)', () => {
   const detail = {
@@ -270,12 +277,12 @@ test('S4: a live reading with a temp shows "23 °C · measured N min ago" (Heuri
     },
   };
   const p = createDetailPanel(mount(), { detail, basin: null, state: 'uncurated' });
-  const row = liveRow(p);
-  assert.ok(row, 'the Live water row is present');
-  assert.ok(row.textContent.includes('23 °C'));
-  assert.ok(row.textContent.includes('measured 7 min ago'), row.textContent);
+  const row = must(liveRow(p), 'Live water row');
+  expect(row).toBeTruthy();
+  expect(row.textContent.includes('23 °C')).toBeTruthy();
+  expect(row.textContent.includes('measured 7 min ago')).toBeTruthy();
   // a fresh reading is NOT marked stale.
-  assert.equal(p.el.query(hasClass('detail__live--stale')), null);
+  expect(p.el.query(hasClass('detail__live--stale'))).toBe(null);
 });
 
 test('S4: an empty feed cell reads "Not yet measured" (+ closed), never a number or 0', () => {
@@ -293,11 +300,11 @@ test('S4: an empty feed cell reads "Not yet measured" (+ closed), never a number
     },
   };
   const p = createDetailPanel(mount(), { detail, basin: null, state: 'uncurated' });
-  const row = liveRow(p);
-  assert.ok(row.textContent.includes('Not yet measured'), row.textContent);
-  assert.ok(row.textContent.includes('closed'));
-  assert.ok(!/°C/.test(row.textContent), 'no temperature number for an empty cell');
-  assert.ok(p.el.query(hasClass('detail__live--muted')));
+  const row = must(liveRow(p), 'Live water row');
+  expect(row.textContent.includes('Not yet measured')).toBeTruthy();
+  expect(row.textContent.includes('closed')).toBeTruthy();
+  expect(!/°C/.test(row.textContent)).toBeTruthy();
+  expect(must(p.el.query(hasClass('detail__live--muted')))).toBeTruthy();
 });
 
 test('S4: unavailable shows the reason and NEVER a stale number', () => {
@@ -315,10 +322,10 @@ test('S4: unavailable shows the reason and NEVER a stale number', () => {
     },
   };
   const p = createDetailPanel(mount(), { detail, basin: null, state: 'uncurated' });
-  const row = liveRow(p);
-  assert.ok(row.textContent.includes('no baditicker key'), row.textContent);
-  assert.ok(!/°C/.test(row.textContent), 'no number when unavailable');
-  assert.ok(p.el.query(hasClass('detail__live--muted')));
+  const row = must(liveRow(p), 'Live water row');
+  expect(row.textContent.includes('no baditicker key')).toBeTruthy();
+  expect(!/°C/.test(row.textContent)).toBeTruthy();
+  expect(must(p.el.query(hasClass('detail__live--muted')))).toBeTruthy();
 });
 
 test('S4: a stale reading (older than the freshness limit) is visibly marked', () => {
@@ -336,15 +343,15 @@ test('S4: a stale reading (older than the freshness limit) is visibly marked', (
     },
   };
   const p = createDetailPanel(mount(), { detail, basin: null, state: 'uncurated' });
-  const row = liveRow(p);
-  assert.ok(row.textContent.includes('22 °C'));
-  assert.ok(row.textContent.includes('measured 2 days ago'), row.textContent);
-  assert.ok(p.el.query(hasClass('detail__live--stale')), 'a stale reading is visibly marked');
+  const row = must(liveRow(p), 'Live water row');
+  expect(row.textContent.includes('22 °C')).toBeTruthy();
+  expect(row.textContent.includes('measured 2 days ago')).toBeTruthy();
+  expect(must(p.el.query(hasClass('detail__live--stale')))).toBeTruthy();
 });
 
 test('S4: no live_water_temp block → the Live water row is simply omitted', () => {
   const p = createDetailPanel(mount(), { detail: POOL, basin: BASIN, timescale: newTs() });
-  assert.equal(liveRow(p), undefined);
+  expect(liveRow(p)).toBe(undefined);
 });
 
 test('S1: a basin-less location-only detail (Heuried-shaped) renders without error', () => {
@@ -368,16 +375,16 @@ test('S1: a basin-less location-only detail (Heuried-shaped) renders without err
     officialUrl: 'https://official.example/heuried',
   });
   // Title reflects the pool; the facts block rendered.
-  assert.equal(p.el.query(hasClass('detail__title')).textContent, 'Freibad Heuried');
-  assert.ok(p.el.query(hasClass('detail__facts')));
+  expect(must(p.el.query(hasClass('detail__title'))).textContent).toBe('Freibad Heuried');
+  expect(must(p.el.query(hasClass('detail__facts')))).toBeTruthy();
   // No per-lane headline for a basin-less panel, and no Gantt was built.
-  assert.equal(p.el.query(hasClass('detail__headline')), null);
-  assert.equal(p.gantt, null);
+  expect(p.el.query(hasClass('detail__headline'))).toBe(null);
+  expect(p.gantt).toBe(null);
   // Water temp degrades honestly to "Not listed" (no basin to read a temperature from).
   const water = p.el.queryAll(hasClass('detail__factval')).map((e) => e.textContent);
-  assert.ok(water.some((t) => t.includes('Not listed')));
+  expect(water.some((t) => t.includes('Not listed'))).toBeTruthy();
   // The uncurated honesty note is present (location known, timetable not).
-  assert.ok(p.el.query((e) => e.classList.contains('detail__note--uncurated')));
+  expect(must(p.el.query((e) => e.classList.contains('detail__note--uncurated')))).toBeTruthy();
   // headlineAt is safe to call on a basin-less panel (returns the zero reading, no throw).
-  assert.deepEqual(p.headlineAt(600), { public: 0, total: 0 });
+  expect(p.headlineAt(600)).toEqual({ public: 0, total: 0 });
 });

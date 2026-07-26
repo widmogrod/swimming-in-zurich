@@ -8,30 +8,34 @@
 // Not a test file and imported by no test, so `node --test` never loads it (it is
 // a real-`document` module, like components/gallery.js).
 
-import { createBoard } from './board.js';
-import { createFilterState, merge } from '../filterstate.js';
+import { asEl } from '../domtypes.js';
+import { createBoard, type BoardData } from './board.js';
+import { createFilterState, merge, type FilterState } from '../filterstate.js';
 
-function readJSON(id) {
+function readJSON<T>(id: string): T | null {
   const el = document.getElementById(id);
   if (!el) return null;
   try {
-    return JSON.parse(el.textContent);
+    return JSON.parse(el.textContent ?? '') as T;
   } catch {
     return null;
   }
 }
 
-export function hydrateBoardPreview(root = document) {
-  const data = { day: readJSON('board-day-data'), week: readJSON('board-week-data') };
-  const boards = [];
+export function hydrateBoardPreview(root: ParentNode = document) {
+  const data: BoardData = {
+    day: readJSON('board-day-data') ?? undefined,
+    week: readJSON('board-week-data') ?? undefined,
+  };
+  const boards: ReturnType<typeof createBoard>[] = [];
 
   const dayMount = root.querySelector('#board-day');
   if (dayMount && data.day) {
-    boards.push(createBoard(dayMount, { data, filter: createFilterState({ mode: 'day' }) }));
+    boards.push(createBoard(asEl(dayMount), { data, filter: createFilterState({ mode: 'day' }) }));
   }
   const poolMount = root.querySelector('#board-pool');
   if (poolMount && data.week) {
-    boards.push(createBoard(poolMount, { data, filter: createFilterState({ mode: 'pool' }) }));
+    boards.push(createBoard(asEl(poolMount), { data, filter: createFilterState({ mode: 'pool' }) }));
   }
 
   // FilterState-driven demo: gender/age changes re-render every board's row badges.
@@ -39,8 +43,12 @@ export function hydrateBoardPreview(root = document) {
   const rerender = () => {
     const genderSel = root.querySelector('#board-gender');
     const ageInput = root.querySelector('#board-age');
-    const age = ageInput && ageInput.value !== '' ? Number(ageInput.value) : null;
-    filter = merge(filter, { gender: genderSel ? genderSel.value : '', age });
+    const ageEl = ageInput ? asEl(ageInput) : null;
+    const age = ageEl && ageEl.value !== '' ? Number(ageEl.value) : null;
+    filter = merge(filter, {
+      gender: (genderSel ? asEl(genderSel).value : '') as FilterState['gender'],
+      age,
+    });
     boards.forEach((b, i) => b.setFilter(merge(filter, { mode: i === 0 ? 'day' : 'pool' })));
   };
   root.querySelectorAll('#board-gender, #board-age').forEach((el) => {

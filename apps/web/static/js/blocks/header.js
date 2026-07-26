@@ -34,11 +34,13 @@ export function applyTheme(root, theme) {
 
 /**
  * createIdentityHeader(el, opts) — mount the header into `el`.
- * @param {object} opts.props `{ title, dateLabel, theme }`.
+ * @param {{title?: string, dateLabel?: string, theme?: string}} opts.props
  * @param {object} [opts.root] the element to stamp `[data-theme]` on (default: the
  *   document's documentElement).
  * @param {function} [opts.onThemeChange] called with the new theme after a toggle.
- * @returns {{el, setDateLabel, theme, toggle}}
+ * @returns {{el: import('../domtypes.js').El, toggle: import('../domtypes.js').El,
+ *            copy: import('../domtypes.js').El, setDateLabel(text: string): void,
+ *            readonly theme: string}}
  */
 export function createIdentityHeader(el, opts = {}) {
   const doc = el.ownerDocument || globalThis.document;

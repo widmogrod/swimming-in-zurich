@@ -11,6 +11,11 @@
 
 import { filterOptions } from './keynav.js';
 
+/**
+ * @param {import('../domtypes.js').El} el
+ * @param {{props?: Record<string, unknown>, onChange?: (...args: any[]) => void}} [opts]
+ * @returns {{el: import('../domtypes.js').El, input: import('../domtypes.js').El, geoBtn: import('../domtypes.js').El, useLocation: unknown, isOpen(): boolean}}
+ */
 export function createPlaceTypeahead(el, { props = {}, onChange } = {}) {
   const doc = el.ownerDocument || globalThis.document;
   const presets = props.presets || [];

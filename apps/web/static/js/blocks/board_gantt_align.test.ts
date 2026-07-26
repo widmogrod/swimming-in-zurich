@@ -1,3 +1,4 @@
+import { expect, test } from 'vitest';
 // board_gantt_align.test.js — the crown-jewel anti-desync contract (plan Risk #3),
 // tested DIRECTLY at S5 (not just transitively via each renderer's own cursor test).
 //
@@ -8,30 +9,31 @@
 // falsifiability test proves it is NOT a tautology: hand each its OWN scale and the
 // equality breaks — exactly the regression the shared timescale forbids.
 
-import test from 'node:test';
-import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
 import { mount } from '../components/_fakedom.js';
 import { makeTimescale } from '../timescale.js';
-import { basinFromPanel } from './cursor.js';
+import { basinFromPanel, type LanePanel } from './cursor.js';
 import { createBoard, BOARD_DAY0, BOARD_DAY1, BOARD_PLOT } from './board.js';
 import { createGantt } from './gantt.js';
+import type { BoardAnswer, Timescale } from './board.js';
+import type { El } from '../domtypes.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const FIXTURES = join(HERE, '..', '..', '..', 'tests', 'fixtures');
-const load = (name) => JSON.parse(readFileSync(join(FIXTURES, name), 'utf-8'));
+const load = <T,>(name: string): T =>
+  JSON.parse(readFileSync(join(FIXTURES, name), 'utf-8')) as T;
 
-const DAY = load('swim_day.json');
-const POOL = load('pool_oerlikon.json');
-const BASIN = basinFromPanel(POOL.lane_panels[0]);
+const DAY = load<BoardAnswer>('swim_day.json');
+const POOL = load<{ lane_panels: unknown[] }>('pool_oerlikon.json');
+const BASIN = basinFromPanel(POOL.lane_panels[0] as LanePanel);
 
 // Sampled cursor minutes across the whole board window (06:00 … 22:00).
 const SAMPLES = [360, 450, 540, 600, 690, 780, 870, 960, 1080, 1200, 1320];
 
-function buildBoard(el, ts) {
+function buildBoard(el: El, ts: Timescale) {
   return createBoard(el, {
     data: { day: DAY },
     filter: { mode: 'day', gender: '', age: null },
@@ -47,9 +49,9 @@ test('board cursor-x EQUALS gantt cursor-x for every sampled minute (SAME inject
   const gantt = createGantt(mount(), { basin: BASIN, timescale: ts });
   for (const T of SAMPLES) {
     // Both go through the ONE mapping — equal by construction, asserted directly.
-    assert.equal(board.cursorX(T), gantt.cursorPlotX(T), `board/gantt cursor-x disagree at ${T}`);
+    expect(board.cursorX(T)).toBe(gantt.cursorPlotX(T));
     // And both equal the shared timescale's own X (no renderer re-derives it).
-    assert.equal(board.cursorX(T), ts.X(T));
+    expect(board.cursorX(T)).toBe(ts.X(T));
   }
 });
 
@@ -64,7 +66,7 @@ test('falsifiable: give each renderer its OWN scale and the equality BREAKS (non
     if (T === BOARD_DAY0 * 60) continue; // both map the left edge to 0 — skip the trivial tie
     if (board.cursorX(T) !== gantt.cursorPlotX(T)) anyDiverged = true;
   }
-  assert.ok(anyDiverged, 'a Gantt with its own scale MUST desync from the board — the guard is real');
+  expect(anyDiverged).toBeTruthy();
   // Spot-check the divergence explicitly at 10:00.
-  assert.notEqual(board.cursorX(600), gantt.cursorPlotX(600));
+  expect(board.cursorX(600)).not.toBe(gantt.cursorPlotX(600));
 });

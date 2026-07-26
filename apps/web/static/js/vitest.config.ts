@@ -21,8 +21,27 @@ export default defineConfig({
       exclude: [
         "**/*.test.ts",
         "**/*.config.ts",
+        "**/*.d.ts",
         "node_modules/**",
         "coverage/**",
+        // --- BROWSER ENTRYPOINTS -------------------------------------------------
+        // These four modules are wiring, not logic: they read the real `document`,
+        // call fetch/history, and only ever run inside a browser. There is nothing
+        // to unit-test that is not either (a) already extracted into appdata.ts and
+        // tested there, or (b) a DOM/network side effect.
+        //
+        // The same judgement `apps/web/main.py` makes with `# pragma: no cover` on
+        // `_build_static_assets`. Every module holding a RULE stays measured — the
+        // pure transforms behind app.ts live in appdata.ts precisely so they are.
+        //
+        // The two `*_preview` files and `gallery` are additionally dev-only surfaces
+        // (SWIMZH_DEV_UI), 404 in production.
+        //
+        // Narrow this list, never widen it: a new rule belongs in a measured module.
+        "app.ts",
+        "components/gallery.ts",
+        "blocks/board_preview.ts",
+        "blocks/detail_preview.ts",
       ],
     },
   },

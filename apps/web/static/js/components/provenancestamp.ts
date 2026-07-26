@@ -2,8 +2,21 @@
 // curated ("Official schedule") vs illustrative ("read from the pool's website"),
 // with the source and the last-checked date. role=note.
 
-export function createProvenanceStamp(el, { props = {} } = {}) {
-  const doc = el.ownerDocument || globalThis.document;
+import { formatDate } from '../datefmt.js';
+import { asDoc, type El } from '../domtypes.js';
+import { locale } from '../i18n.js';
+
+export interface ProvenanceProps {
+  curated?: boolean;
+  source?: string;
+  valid_as_of?: string;
+}
+
+export function createProvenanceStamp<T extends El>(
+  el: T,
+  { props = {} }: { props?: ProvenanceProps } = {},
+): { el: T } {
+  const doc = el.ownerDocument || asDoc(globalThis.document);
   const curated = !!props.curated;
   el.classList.add('ui-provstamp', curated ? 'is-curated' : 'is-illustrative');
   el.setAttribute('role', 'note');
@@ -19,7 +32,10 @@ export function createProvenanceStamp(el, { props = {} } = {}) {
     ? 'Official schedule'
     : "Illustrative — read from the pool's website";
   const src = props.source ? ` · ${props.source}` : '';
-  const when = props.valid_as_of ? ` · last checked ${props.valid_as_of}` : '';
+  // A raw ISO date was shown here; render it in the viewer's locale.
+  const when = props.valid_as_of
+    ? ` · last checked ${formatDate(props.valid_as_of, locale())}`
+    : '';
   text.textContent = `${trust}${src}${when}`;
 
   el.appendChild(icon);

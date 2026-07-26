@@ -17,12 +17,84 @@ import { createEligibilityBadge } from '../components/eligibilitybadge.js';
 import { createProvenanceStamp } from '../components/provenancestamp.js';
 import { createSourceStrip } from '../components/sourcestrip.js';
 import { eligForAccess, dayEligibility } from '../eligibility.js';
-import { publicAt, peakPublic, hhmmToMin, minToHhmm } from './cursor.js';
+import { formatCelsius, formatDate, formatKm } from '../datefmt.js';
+import { asDoc, type Doc, type El } from '../domtypes.js';
+import type { Gantt, GanttTimescale } from './gantt.js';
+import { locale } from '../i18n.js';
+import {
+  publicAt,
+  peakPublic,
+  hhmmToMin,
+  minToHhmm,
+  type Basin,
+} from './cursor.js';
 import { createGantt } from './gantt.js';
+
+
+// ---- Local structural types (the urlstate.ts convention) ---------------------------
+
+/** A basin's lane plan as the panel/Gantt consume it — the SAME shape cursor.js
+ *  produces, re-exported so callers have one name for one type. */
+export type BasinPlan = Basin;
+
+/** A `/pools/{id}` BasinOut — the physical facts row. */
+export interface BasinOut {
+  name?: string;
+  length_m?: number | null;
+  lanes?: number | null;
+  measured_temp_c?: number | null;
+  nominal_temp_c?: number | null;
+  [k: string]: unknown;
+}
+
+/** The facility-level Baditicker live water temperature block. */
+export interface LiveWaterTemp {
+  available?: boolean;
+  reason?: string | null;
+  celsius?: number | null;
+  is_open?: boolean | null;
+  age_min?: number | null;
+  [k: string]: unknown;
+}
+
+/** A `/pools/{id}` FacilityDetailOut, read structurally. */
+export interface FacilityDetail {
+  facility_name?: string;
+  basins?: BasinOut[];
+  prices?: { entries?: { display?: string }[]; source_url?: string | null } | null;
+  provenance?: {
+    curated?: boolean;
+    source?: string;
+    valid_as_of?: string | null;
+  } | null;
+  live_water_temp?: LiveWaterTemp;
+  [k: string]: unknown;
+}
+
+export interface PanelFilter {
+  gender?: string;
+  age?: number | null;
+}
+
+export interface DetailPanelOpts {
+  officialUrl?: string | null;
+  detail?: FacilityDetail;
+  basin?: BasinPlan | null;
+  filter?: PanelFilter;
+  timescale?: unknown;
+  state?: string;
+  basinName?: string | null;
+  reason?: string | null;
+  cursorMin?: number | null;
+  distanceKm?: number | null;
+  accessTypes?: string[];
+  onOpenWeek?: (() => void) | null;
+  [k: string]: unknown;
+}
 
 // The public open/close span of a basin's day: earliest public start → latest
 // public end across all lanes, in minutes-of-day. null when nothing is ever public.
-function publicSpan(basin) {
+function publicSpan(basin: BasinPlan): { lo: number; hi: number } | null {
   let lo = Infinity;
   let hi = -Infinity;
   for (const strip of basin.strips) {
@@ -36,8 +108,8 @@ function publicSpan(basin) {
 }
 
 // Distinct access classes appearing in the basin's lane plan (drives eligibility).
-function accessTypes(basin) {
-  const set = new Set();
+function accessTypes(basin: BasinPlan): string[] {
+  const set = new Set<string>();
   for (const strip of basin.strips) {
     for (const seg of strip.segments) set.add(seg.access);
   }
@@ -47,11 +119,11 @@ function accessTypes(basin) {
 // Pick the physical-facts basin (length / lanes / temp) from a `/pools/{id}` detail
 // when there is NO lane plan to derive it from: match the clicked option's basin name,
 // else the first basin. null when the facility publishes no basins at all.
-function pickBasinOut(detail, name) {
-  const basins = (detail && detail.basins) || [];
+function pickBasinOut(detail: FacilityDetail | null, name?: string | null): BasinOut | null {
+  const basins: BasinOut[] = (detail && detail.basins) || [];
   if (basins.length === 0) return null;
   if (name != null) {
-    const match = basins.find((b) => b.name === name);
+    const match = basins.find((b: BasinOut) => b.name === name);
     if (match) return match;
   }
   return basins[0];
@@ -68,7 +140,7 @@ const NOTE_COPY = {
     'We have this pool’s location but no session timetable yet. Unknown is not the same as closed — it may well be open.',
 };
 
-function factRow(doc, label, valueNode) {
+function factRow(doc: Doc, label: string, valueNode: El | string): El {
   const row = doc.createElement('div');
   row.className = 'detail__fact';
   const key = doc.createElement('span');
@@ -87,20 +159,20 @@ function factRow(doc, label, valueNode) {
   return row;
 }
 
-function tempText(basinOut) {
+function tempText(basinOut: BasinOut | null) {
   if (!basinOut) return { text: 'Not listed', note: 'Water temperature not published' };
   if (basinOut.measured_temp_c != null) {
-    return { text: `${basinOut.measured_temp_c} °C`, note: 'measured' };
+    return { text: formatCelsius(basinOut.measured_temp_c, locale()), note: 'measured' };
   }
   if (basinOut.nominal_temp_c != null) {
-    return { text: `${basinOut.nominal_temp_c} °C`, note: 'nominal (design)' };
+    return { text: formatCelsius(basinOut.nominal_temp_c, locale()), note: 'nominal (design)' };
   }
   return { text: 'Not listed', note: 'Water temperature not published' };
 }
 
 // Human-readable "how long ago" from the API's whole-minute age. min → h → days, so a fresh
 // reading reads "3 min ago" and a stale one "2 days ago" (the freshness the API already derived).
-function humanizeAge(ageMin) {
+function humanizeAge(ageMin: number | null | undefined): string {
   if (ageMin == null) return '';
   if (ageMin < 60) return `${ageMin} min`;
   if (ageMin < 60 * 24) return `${Math.round(ageMin / 60)} h`;
@@ -114,7 +186,7 @@ function humanizeAge(ageMin) {
 //   * a live reading with a temp   → "23 °C" + "· measured N min ago" (muted+stale when old).
 //   * a live reading, empty cell   → "Not yet measured" (+ open/closed) — a live answer, not 0.
 //   * unavailable (no key / error) → the reason, muted, and NEVER a number.
-function liveTempText(lwt) {
+function liveTempText(lwt: LiveWaterTemp | null | undefined) {
   if (!lwt) return null;
   if (!lwt.available) {
     return { text: lwt.reason || 'Not available', note: '', muted: true, stale: false };
@@ -147,41 +219,20 @@ function liveTempText(lwt) {
  *   button in the header that invokes it (Day → Pool continuity for the selected pool).
  * @returns {{el, headlineAt, setCursor, gantt, cursorMin}}
  */
-export function createDetailPanel(el, opts = {}) {
-  const doc = el.ownerDocument || globalThis.document;
-  const detail = opts.detail || {};
-  const basin = opts.basin || null;
-  const filter = opts.filter || { gender: '', age: null };
-  const ts = opts.timescale;
 
-  // The panel ALWAYS renders facts (plan FIX 3). The lane part degrades honestly:
-  //   'lanes'         → a real per-basin lane plan (headline + Gantt).
-  //   'lanes-unknown' → curated hours, no per-lane split published.
-  //   'closed'        → shut for a stated reason.
-  //   'uncurated'     → location only, no timetable yet.
-  const panelState = opts.state || (basin ? 'lanes' : 'lanes-unknown');
-  const basinOut = basin
-    ? (detail.basins || []).find((b) => b.basin_id === basin.id) || null
-    : pickBasinOut(detail, opts.basinName);
-  const reason = opts.reason || null;
-
-  let cursorMin = null;
-  if (basin) {
-    cursorMin =
-      opts.cursorMin != null
-        ? opts.cursorMin
-        : basin.best_public
-          ? hhmmToMin(basin.best_public.start)
-          : null;
-    if (cursorMin == null && ts) cursorMin = Math.round((ts.lo + ts.hi) / 2);
-  }
-
-  const subName = basin ? basin.name || '' : basinOut ? basinOut.name || '' : '';
-
-  el.classList.add('detail');
-  el.setAttribute('role', 'region');
-  el.setAttribute('aria-label', `${detail.facility_name || 'Pool'} — ${subName}`.trim());
-
+/**
+ * The panel header: facility + basin name, and the Day→Pool "see this pool's week"
+ * affordance. Split out of createDetailPanel so that function stays a readable assembly
+ * of sections rather than one very long builder (it was the CRAP gate's worst offender).
+ */
+function buildHeader(
+  doc: Doc,
+  detail: FacilityDetail,
+  subName: string,
+  panelState: string,
+  reason: string | null,
+  onOpenWeek: (() => void) | null,
+): El {
   // --- header: facility + basin name, plus the "see this pool's week" affordance ---
   const head = doc.createElement('div');
   head.className = 'detail__head';
@@ -189,7 +240,7 @@ export function createDetailPanel(el, opts = {}) {
   headText.className = 'detail__headtext';
   const title = doc.createElement('h3');
   title.className = 'detail__title';
-  title.textContent = detail.facility_name || 'Pool';
+  title.textContent = detail.facility_name ?? 'Pool';
   const sub = doc.createElement('div');
   sub.className = 'detail__sub';
   sub.textContent = subName;
@@ -200,57 +251,44 @@ export function createDetailPanel(el, opts = {}) {
   // from Day view into Pool view. Present for EVERY selected pool (plannable AND
   // unplannable: an unplannable pool opens an honest, closed/uncurated week — the
   // button is never disabled). Token-styled, keyboard-accessible.
-  if (opts.onOpenWeek) {
+  if (onOpenWeek) {
     const weekBtn = doc.createElement('button');
     weekBtn.type = 'button';
     weekBtn.className = 'detail__weekbtn';
     weekBtn.textContent = "See this pool's week →";
-    weekBtn.addEventListener('click', () => opts.onOpenWeek());
+    weekBtn.addEventListener('click', () => onOpenWeek());
     head.appendChild(weekBtn);
   }
-  el.appendChild(head);
+  return head;
+}
 
-  // --- headline: PUBLIC LANES AT CURSOR (not peak) + pips + peak note. ONLY for a
-  // real lane plan — the other states have no per-lane number to show honestly. ---
-  const peak = basin ? peakPublic(basin) : 0;
-  let bignum = null;
-  let bigunit = null;
-  const pipEls = [];
-  let headline = null;
-  if (panelState === 'lanes') {
-    headline = doc.createElement('div');
-    headline.className = 'detail__headline';
-    bignum = doc.createElement('span');
-    bignum.className = 'detail__bignum tnum';
-    bigunit = doc.createElement('span');
-    bigunit.className = 'detail__bigunit';
-    const pips = doc.createElement('span');
-    pips.className = 'detail__pips';
-    pips.setAttribute('aria-hidden', 'true');
-    for (let i = 0; i < basin.lane_count; i += 1) {
-      const pip = doc.createElement('span');
-      pip.className = 'detail__pip';
-      pips.appendChild(pip);
-      pipEls.push(pip);
-    }
-    const peaknote = doc.createElement('span');
-    peaknote.className = 'detail__peaknote';
-    peaknote.textContent = `peak ${peak} of ${basin.lane_count}`;
-    headline.appendChild(bignum);
-    headline.appendChild(bigunit);
-    headline.appendChild(pips);
-    headline.appendChild(peaknote);
-    el.appendChild(headline);
-  }
 
-  // --- facts (all S1 primitives + honest text) ---
+/**
+ * The facts block: status pill, basin badge, distance, price, water temperature, live
+ * temperature, eligibility, busyness and freshness.
+ *
+ * Extracted from createDetailPanel because it carried most of that function's branching
+ * (every row degrades honestly on its own, so each is a conditional). Keeping it inline
+ * made createDetailPanel the CRAP gate's worst offender at CC=69 — a score no amount of
+ * test coverage could bring under the threshold, since the complexity term dominates.
+ */
+function buildFacts(
+  doc: Doc,
+  detail: FacilityDetail,
+  basin: BasinPlan | null,
+  basinOut: BasinOut | null,
+  panelState: string,
+  reason: string | null,
+  filter: PanelFilter,
+  opts: DetailPanelOpts,
+): El {
   const facts = doc.createElement('div');
   facts.className = 'detail__facts';
 
   // status → StatePill (the branch drives its state; plan FIX 3).
   const pillHost = doc.createElement('span');
   if (panelState === 'lanes') {
-    const span = publicSpan(basin);
+    const span = basin ? publicSpan(basin) : null;
     if (span) {
       createStatePill(pillHost, {
         props: { state: 'open', label: `Open · ${minToHhmm(span.lo)}–${minToHhmm(span.hi)}` },
@@ -281,8 +319,10 @@ export function createDetailPanel(el, opts = {}) {
   facts.appendChild(factRow(doc, 'Basin', lenHost));
 
   // distance
+  // formatKm, not `.toFixed(1) + ' km'`: de/fr/it/pl use a comma decimal separator, and
+  // CLDR supplies the unit form (so there is no plural entry in the catalog to get wrong).
   const dist =
-    opts.distanceKm != null ? `${Number(opts.distanceKm).toFixed(1)} km` : 'Not shown';
+    opts.distanceKm != null ? formatKm(Number(opts.distanceKm), locale()) : 'Not shown';
   facts.appendChild(factRow(doc, 'Distance', dist));
 
   // price ("Not listed" when null)
@@ -290,7 +330,7 @@ export function createDetailPanel(el, opts = {}) {
     detail.prices && detail.prices.entries && detail.prices.entries.length > 0
       ? detail.prices.entries[0].display
       : 'Not listed';
-  facts.appendChild(factRow(doc, 'Price', priceDisplay));
+  facts.appendChild(factRow(doc, 'Price', priceDisplay ?? 'Not listed'));
 
   // water temp (nominal / measured + honesty note)
   const t = tempText(basinOut);
@@ -340,21 +380,40 @@ export function createDetailPanel(el, opts = {}) {
   facts.appendChild(factRow(doc, 'Busyness', 'Not available yet'));
 
   // freshness
+  // A raw ISO date was shown to the user here; render it in the viewer's locale.
   const freshness = detail.provenance && detail.provenance.valid_as_of
-    ? `Checked ${detail.provenance.valid_as_of}`
+    ? `Checked ${formatDate(detail.provenance.valid_as_of, locale())}`
     : 'Not dated';
   facts.appendChild(factRow(doc, 'Freshness', freshness));
 
-  el.appendChild(facts);
+  return facts;
+}
 
+
+/**
+ * The provenance stamp + the "verify at the source" strip, shown in EVERY panel state
+ * (an uncurated pool still gets its official-page link). Extracted alongside buildFacts
+ * to keep createDetailPanel an assembly of named sections.
+ */
+function buildProvenance(
+  doc: Doc,
+  detail: FacilityDetail,
+  basin: BasinPlan | null,
+  basinOut: BasinOut | null,
+  opts: DetailPanelOpts,
+): El[] {
   // --- provenance stamp ---
   const provHost = doc.createElement('div');
   provHost.className = 'detail__prov';
   const prov = detail.provenance || {};
   createProvenanceStamp(provHost, {
-    props: { curated: !!prov.curated, source: prov.source, valid_as_of: prov.valid_as_of },
+    props: {
+      curated: !!prov.curated,
+      source: prov.source,
+      valid_as_of: prov.valid_as_of ?? undefined,
+    },
   });
-  el.appendChild(provHost);
+
 
   // --- Sources strip ("verify at the source"), in EVERY panel state ---
   // Official page comes from the listing URL threaded by app.js (reaches uncurated
@@ -375,48 +434,178 @@ export function createDetailPanel(el, opts = {}) {
       pricesUrl: (detail.prices && detail.prices.source_url) || null,
     },
   });
-  el.appendChild(sourcesHost);
+
+  return [provHost, sourcesHost];
+}
+
+
+/** The headline nodes for a real lane plan: the big number, its unit, one pip per lane
+ *  and the peak note. `null` for every degraded state — those have no per-lane number to
+ *  show honestly, so the panel simply omits the headline rather than inventing one. */
+interface Headline {
+  el: El;
+  bignum: El;
+  bigunit: El;
+  pips: El[];
+}
+
+function buildHeadline(
+  doc: Doc,
+  basin: BasinPlan | null,
+  peak: number,
+): Headline | null {
+  if (!basin) return null;
+  const el = doc.createElement('div');
+  el.className = 'detail__headline';
+  const bignum = doc.createElement('span');
+  bignum.className = 'detail__bignum tnum';
+  const bigunit = doc.createElement('span');
+  bigunit.className = 'detail__bigunit';
+  const pipHost = doc.createElement('span');
+  pipHost.className = 'detail__pips';
+  pipHost.setAttribute('aria-hidden', 'true');
+  const pips: El[] = [];
+  for (let i = 0; i < Number(basin.lane_count ?? 0); i += 1) {
+    const pip = doc.createElement('span');
+    pip.className = 'detail__pip';
+    pipHost.appendChild(pip);
+    pips.push(pip);
+  }
+  const peaknote = doc.createElement('span');
+  peaknote.className = 'detail__peaknote';
+  peaknote.textContent = `peak ${peak} of ${basin.lane_count ?? 0}`;
+  el.appendChild(bignum);
+  el.appendChild(bigunit);
+  el.appendChild(pipHost);
+  el.appendChild(peaknote);
+  return { el, bignum, bigunit, pips };
+}
+
+/** The honest "why is this panel thin" note for a non-lanes state. `null` for a real
+ *  lane plan, which needs no explanation. Never replaces the panel — it sits inside a
+ *  fully-populated one (plan FIX 3). */
+function buildDegradationNote(
+  doc: Doc,
+  panelState: string,
+  reason: string | null,
+): El | null {
+  if (panelState === 'lanes') return null;
+  const note = doc.createElement('div');
+  note.className = `detail__note detail__note--${panelState}`;
+  note.textContent =
+    panelState === 'closed' && reason
+      ? `Closed — ${reason}. ${NOTE_COPY.closed}`
+      : (NOTE_COPY as Record<string, string>)[panelState] || '';
+  return note;
+}
+
+/** The physical-facts basin: the one matching the opened lane plan, else the one named
+ *  by the clicked option, else the facility's first. */
+function resolveBasinOut(
+  detail: FacilityDetail,
+  basin: BasinPlan | null,
+  basinName: string | null | undefined,
+): BasinOut | null {
+  if (!basin) return pickBasinOut(detail, basinName);
+  return (detail.basins || []).find((b) => b.basin_id === basin.id) || null;
+}
+
+/** Where the shared cursor starts: an explicit position, else the basin's best-public
+ *  window, else the middle of the visible day. `null` when there is no lane plan to
+ *  put a cursor on at all. */
+function resolveCursorMin(
+  basin: BasinPlan | null,
+  explicit: number | null | undefined,
+  ts: GanttTimescale | undefined,
+): number | null {
+  if (!basin) return null;
+  if (explicit != null) return explicit;
+  if (basin.best_public) return hhmmToMin(basin.best_public.start);
+  return ts ? Math.round((ts.lo + ts.hi) / 2) : null;
+}
+
+export function createDetailPanel<T extends El>(el: T, opts: DetailPanelOpts = {}) {
+  const doc = el.ownerDocument || asDoc(globalThis.document);
+  const detail = opts.detail || {};
+  const basin = opts.basin || null;
+  const filter = opts.filter || { gender: '', age: null };
+  const ts = opts.timescale as GanttTimescale | undefined;
+
+  // The panel ALWAYS renders facts (plan FIX 3). The lane part degrades honestly:
+  //   'lanes'         → a real per-basin lane plan (headline + Gantt).
+  //   'lanes-unknown' → curated hours, no per-lane split published.
+  //   'closed'        → shut for a stated reason.
+  //   'uncurated'     → location only, no timetable yet.
+  const panelState = opts.state || (basin ? 'lanes' : 'lanes-unknown');
+  const basinOut = resolveBasinOut(detail, basin, opts.basinName);
+  const reason = opts.reason || null;
+  let cursorMin: number | null = resolveCursorMin(basin, opts.cursorMin, ts);
+  const subName = (basin ? basin.name : basinOut?.name) || '';
+
+  el.classList.add('detail');
+  el.setAttribute('role', 'region');
+  el.setAttribute('aria-label', `${detail.facility_name || 'Pool'} — ${subName}`.trim());
+
+  el.appendChild(
+    buildHeader(doc, detail, subName, panelState, reason, opts.onOpenWeek ?? null),
+  );
+
+  // --- headline: PUBLIC LANES AT CURSOR (not peak) + pips + peak note. ONLY for a
+  // real lane plan — the other states have no per-lane number to show honestly. ---
+  const peak = basin ? peakPublic(basin) : 0;
+  const headline = panelState === 'lanes' ? buildHeadline(doc, basin, peak) : null;
+  if (headline) el.appendChild(headline.el);
+
+  el.appendChild(
+    buildFacts(doc, detail, basin, basinOut, panelState, reason, filter, opts),
+  );
+
+  for (const node of buildProvenance(doc, detail, basin, basinOut, opts)) {
+    el.appendChild(node);
+  }
 
   // --- the LaneGantt, on the SHARED timescale — ONLY when there is a real lane plan.
-  let gantt = null;
+  let gantt: Gantt | null = null;
   if (ts && basin) {
     const ganttHost = doc.createElement('div');
     ganttHost.className = 'detail__gantt';
     el.appendChild(ganttHost);
-    gantt = createGantt(ganttHost, { basin, timescale: ts, cursorMin });
+    gantt = createGantt(ganttHost, {
+      basin,
+      timescale: ts,
+      cursorMin: cursorMin ?? undefined,
+    });
   }
 
   // Honest degradation NOTE for a non-lanes panel (never the whole panel; plan FIX 3).
-  if (panelState !== 'lanes') {
-    const note = doc.createElement('div');
-    note.className = `detail__note detail__note--${panelState}`;
-    note.textContent =
-      panelState === 'closed' && reason
-        ? `Closed — ${reason}. ${NOTE_COPY.closed}`
-        : NOTE_COPY[panelState] || '';
-    el.appendChild(note);
-  }
+  const note = buildDegradationNote(doc, panelState, reason);
+  if (note) el.appendChild(note);
 
   // headlineAt(min) → { public, total } — the SAME publicAt the Gantt readout uses.
-  const headlineAt = (min) =>
-    basin ? publicAt(basin, min) : { public: 0, total: 0 };
+  const headlineAt = (min: number) =>
+    basin
+      ? publicAt(basin, min)
+      : { public: 0, total: 0 };
 
   function paintHeadline() {
-    if (panelState !== 'lanes') return; // no per-lane headline for the degraded states
-    const { public: n, total: m } = headlineAt(cursorMin);
-    bignum.textContent = String(n);
-    bigunit.textContent = `of ${m} lanes public · ${minToHhmm(cursorMin)}`;
-    pipEls.forEach((pip, i) => {
+    // No per-lane headline for the degraded states — and in 'lanes' the headline nodes
+    // and cursor were all created above, so they are non-null here.
+    if (!headline) return;
+    const at = cursorMin ?? 0;
+    const { public: n, total: m } = headlineAt(at);
+    headline.bignum.textContent = String(n);
+    headline.bigunit.textContent = `of ${m} lanes public · ${minToHhmm(at)}`;
+    headline.pips.forEach((pip, i) => {
       pip.classList.toggle('is-on', i < n);
     });
-    headline.setAttribute(
+    headline.el.setAttribute(
       'aria-label',
-      `${n} of ${m} lanes public at ${minToHhmm(cursorMin)} (peak ${peak})`,
+      `${n} of ${m} lanes public at ${minToHhmm(at)} (peak ${peak})`,
     );
   }
   paintHeadline();
 
-  function setCursor(min) {
+  function setCursor(min: number) {
     cursorMin = min;
     paintHeadline();
     if (gantt) gantt.setCursor(min);

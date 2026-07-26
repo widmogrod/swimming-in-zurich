@@ -1,17 +1,16 @@
-import test from 'node:test';
-import assert from 'node:assert/strict';
+import { expect, test } from 'vitest';
 
 import { mount } from './_fakedom.js';
 import { createDateStepper, formatLabel, shiftDate } from './datestepper.js';
 
 test('formatLabel renders an absolute "Dow D Mon" label', () => {
-  assert.equal(formatLabel('2026-07-23'), 'Thu 23 Jul');
-  assert.equal(formatLabel('2026-01-01'), 'Thu 1 Jan');
+  expect(formatLabel('2026-07-23')).toBe('Thu 23 Jul');
+  expect(formatLabel('2026-01-01')).toBe('Thu 1 Jan');
 });
 
 test('shiftDate crosses month boundaries', () => {
-  assert.equal(shiftDate('2026-07-31', 1), '2026-08-01');
-  assert.equal(shiftDate('2026-08-01', -1), '2026-07-31');
+  expect(shiftDate('2026-07-31', 1)).toBe('2026-08-01');
+  expect(shiftDate('2026-08-01', -1)).toBe('2026-07-31');
 });
 
 test('DateStepper labels its nav buttons and shows the Today tag on today', () => {
@@ -19,38 +18,38 @@ test('DateStepper labels its nav buttons and shows the Today tag on today', () =
   createDateStepper(el, {
     props: { value: '2026-07-23', today: '2026-07-23', min: '2026-07-01', max: '2026-08-31' },
   });
-  assert.equal(el.getAttribute('role'), 'group');
+  expect(el.getAttribute('role')).toBe('group');
   const [prev, label, todaytag, next] = el.children;
-  assert.equal(prev.getAttribute('aria-label'), 'Previous day');
-  assert.equal(next.getAttribute('aria-label'), 'Next day');
-  assert.equal(label.textContent, 'Thu 23 Jul');
-  assert.equal(todaytag.getAttribute('aria-hidden'), 'false');
+  expect(prev.getAttribute('aria-label')).toBe('Previous day');
+  expect(next.getAttribute('aria-label')).toBe('Next day');
+  expect(label.textContent).toBe('Thu 23 Jul');
+  expect(todaytag.getAttribute('aria-hidden')).toBe('false');
 });
 
 test('DateStepper steps forward and fires onChange with the new ISO date', () => {
   const el = mount();
-  const seen = [];
+  const seen: string[] = [];
   createDateStepper(el, {
     props: { value: '2026-07-23', today: '2026-07-23', min: '2026-07-01', max: '2026-08-31' },
     onChange: (v) => seen.push(v),
   });
   const [, label, todaytag, next] = el.children;
   next.click();
-  assert.deepEqual(seen, ['2026-07-24']);
-  assert.equal(label.textContent, 'Fri 24 Jul');
-  assert.equal(todaytag.getAttribute('aria-hidden'), 'true'); // no longer today
+  expect(seen).toEqual(['2026-07-24']);
+  expect(label.textContent).toBe('Fri 24 Jul');
+  expect(todaytag.getAttribute('aria-hidden')).toBe('true'); // no longer today
 });
 
 test('DateStepper disables prev at the min bound and refuses to step past it', () => {
   const el = mount();
-  const seen = [];
+  const seen: string[] = [];
   createDateStepper(el, {
     props: { value: '2026-07-23', min: '2026-07-23', max: '2026-08-31' },
     onChange: (v) => seen.push(v),
   });
   const [prev] = el.children;
-  assert.equal(prev.getAttribute('aria-disabled'), 'true');
-  assert.equal(prev.disabled, true);
+  expect(prev.getAttribute('aria-disabled')).toBe('true');
+  expect(prev.disabled).toBe(true);
   prev.click();
-  assert.deepEqual(seen, []);
+  expect(seen).toEqual([]);
 });

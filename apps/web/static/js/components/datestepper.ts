@@ -3,35 +3,40 @@
 // labels and disable (aria-disabled) at the bounds. A `today` match shows the
 // TODAY tag. Absolute dates only — never "in 2 days".
 
-const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-const MONTHS = [
-  'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-  'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
-];
+// The hardcoded DAYS/MONTHS tables that used to live here are gone. Weekday and month
+// names come from `Intl` per locale: Polish takes a GENITIVE month (`23 lipca`, never
+// `23 lipiec`) and lowercases both, which no lookup table can express.
+import { formatDay, shiftIso } from '../datefmt.js';
+import { asDoc, type El } from '../domtypes.js';
+import { locale } from '../i18n.js';
 
-// Parse an ISO date as UTC midnight, so arithmetic and toISOString() never drift
-// by a day in a positive-offset timezone (the label is date-only, not a moment).
-function parseUtc(iso) {
-  const [y, m, d] = String(iso).split('-').map(Number);
-  return new Date(Date.UTC(y, m - 1, d));
-}
-
-/** formatLabel('2026-07-23') → 'Thu 23 Jul'. Pure; unit-tested directly. */
-export function formatLabel(iso) {
-  const d = parseUtc(iso);
-  return `${DAYS[d.getUTCDay()]} ${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]}`;
+/** formatLabel('2026-07-23') → 'Thu, 23 Jul' in `en`. Locale-aware; pure. */
+export function formatLabel(iso: string): string {
+  return formatDay(iso, locale());
 }
 
 /** shiftDate('2026-07-23', 1) → '2026-07-24'. Pure; unit-tested directly. */
-export function shiftDate(iso, days) {
-  const d = parseUtc(iso);
-  d.setUTCDate(d.getUTCDate() + days);
-  return d.toISOString().slice(0, 10);
+export const shiftDate = shiftIso;
+
+export interface DateStepperProps {
+  value?: string;
+  min?: string | null;
+  max?: string | null;
+  today?: string | null;
+  label?: string;
 }
 
-export function createDateStepper(el, { props = {}, onChange } = {}) {
-  const doc = el.ownerDocument || globalThis.document;
-  let value = props.value;
+export interface DateStepperOpts {
+  props?: DateStepperProps;
+  onChange?: (iso: string) => void;
+}
+
+export function createDateStepper<T extends El>(
+  el: T,
+  { props = {}, onChange }: DateStepperOpts = {},
+): { el: T; readonly value: string } {
+  const doc = el.ownerDocument || asDoc(globalThis.document);
+  let value = props.value ?? '';
   const min = props.min || null;
   const max = props.max || null;
   const today = props.today || null;
@@ -74,7 +79,7 @@ export function createDateStepper(el, { props = {}, onChange } = {}) {
     todaytag.setAttribute('aria-hidden', String(!isToday));
   }
 
-  function step(days, guard) {
+  function step(days: number, guard: () => boolean) {
     if (guard()) return;
     value = shiftDate(value, days);
     render();

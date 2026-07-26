@@ -13,115 +13,87 @@
 // insight, state selection, filterstate, timescale, cursor, board row derivation)
 // are unit-tested in isolation. No colour, no hex lives here.
 
-import { createIdentityHeader, applyTheme } from './blocks/header.js';
-import { createFilterToolbar, DEFAULT_AGE_CHIPS } from './blocks/toolbar.js';
-import { createInsightBar } from './blocks/insightbar.js';
-import { createBoard, BOARD_DAY0, BOARD_DAY1, BOARD_PLOT } from './blocks/board.js';
-import { createDetailPanel } from './blocks/detailpanel.js';
-import { createBoardLegend } from './blocks/legend.js';
-import { createStateBlocks, emptyState } from './blocks/stateblocks.js';
-import { createFilterState, merge } from './filterstate.js';
-import { makeTimescale } from './timescale.js';
-import { basinFromPanel, panelForBasin } from './blocks/cursor.js';
-import { formatLabel } from './components/datestepper.js';
-import { fetchDay, fetchWeek, fetchPoolDetail, isoDate, weekDates } from './api.js';
-import { toSearch, fromSearch } from './urlstate.js';
+import {
+  fetchDay,
+  fetchPoolDetail,
+  fetchWeek,
+  isoDate,
+  weekDates,
+} from "./api.js";
+import {
+  applyLap,
+  applyLapWeek,
+  classifyPools,
+  focusWeekOnPool,
+  isStructuralUrlChange,
+  type PoolMeta,
+  type PoolOption,
+} from "./appdata.js";
+import {
+  BOARD_DAY0,
+  BOARD_DAY1,
+  BOARD_PLOT,
+  createBoard,
+} from "./blocks/board.js";
+import {
+  basinFromPanel,
+  panelForBasin,
+  type LanePanel,
+} from "./blocks/cursor.js";
+import {
+  createDetailPanel,
+  type DetailPanelOpts,
+  type FacilityDetail,
+} from "./blocks/detailpanel.js";
+import { applyTheme, createIdentityHeader } from "./blocks/header.js";
+import { createInsightBar } from "./blocks/insightbar.js";
+import { createBoardLegend } from "./blocks/legend.js";
+import { createStateBlocks, emptyState } from "./blocks/stateblocks.js";
+import { createFilterToolbar, DEFAULT_AGE_CHIPS } from "./blocks/toolbar.js";
+import { formatLabel } from "./components/datestepper.js";
+import { asEl, type El } from "./domtypes.js";
+import { createFilterState, merge, type FilterState } from "./filterstate.js";
+import { makeTimescale } from "./timescale.js";
+import { fromSearch, toSearch, type UrlFilterState } from "./urlstate.js";
 
 // The age value⇆token vocabulary the URL uses, derived from the toolbar's own chips so
 // the URL scheme and the UI never drift. `''` (Any age) has no token — it is the omitted
 // default. e.g. { value: 8, token: 'child' } … { value: 70, token: 'senior' }.
-const AGE_TOKENS = DEFAULT_AGE_CHIPS.filter((c) => c.value !== '').map((c) => ({
+const AGE_TOKENS = DEFAULT_AGE_CHIPS.filter((c) => c.value !== "").map((c) => ({
   value: Number(c.value),
   token: c.label.toLowerCase(),
 }));
 
 const PLACE_PRESETS = [
-  { label: 'Zürich HB (main station)', lat: 47.3779, lon: 8.5403 },
-  { label: 'Bellevue', lat: 47.3671, lon: 8.5451 },
-  { label: 'Zürichhorn', lat: 47.3606, lon: 8.551 },
+  { label: "Zürich HB (main station)", lat: 47.3779, lon: 8.5403 },
+  { label: "Bellevue", lat: 47.3671, lon: 8.5451 },
+  { label: "Zürichhorn", lat: 47.3606, lon: 8.551 },
 ];
 
-// Lap-friendly access types: real lane-swim + public swim (both are lap-swimmable in
-// a pool). The "Lap lanes only" toggle filters the fetched options to these client-side
-// — there is no `/swim` lap param, so the board itself does the filtering (plan item 6).
-const LAP_FRIENDLY = new Set(['LaneSwim', 'PublicSwim']);
+// ---- Local structural types (the urlstate.ts convention) ---------------------------
 
-const $ = (id) => document.getElementById(id);
+/** A `/pools` PoolOut row, read structurally. */
+
+const $ = (id: string): El | null => {
+  const node = document.getElementById(id);
+  return node ? asEl(node) : null;
+};
+
+/** A mount point the shell guarantees (ui/router.py renders every id). Missing one is a
+ *  programming error, not a runtime condition, so fail loudly rather than render half an app. */
+const mustEl = (id: string): El => {
+  const el = $(id);
+  if (!el) throw new Error(`app: missing mount #${id}`);
+  return el;
+};
+
+/** Real `document.createElement` yields an HTMLElement; narrow it into the structural
+ *  `El` world once, here, exactly as domtypes.asEl documents. */
+const newEl = (tag: string): El => asEl(document.createElement(tag));
 
 // Focus a whole day window on ONE shared timescale — the board ribbons AND the
 // panel Gantt both draw through it, so a click at T lands on the same x in both.
 const TIMESCALE = makeTimescale(BOARD_DAY0, BOARD_DAY1, BOARD_PLOT);
-
-// Keep only the selected pool's options/statuses in a Pool-mode week, so the board
-// shows that one pool across seven days (not every nearby pool). When the pool is
-// unplannable (no options — only a closed/uncurated status), this leaves the honest
-// ghost/closed rows and NO fabricated ribbons (plan item 4).
-function focusWeekOnPool(week, poolLabel) {
-  if (!poolLabel) return week;
-  return {
-    facility: poolLabel,
-    days: week.days.map((d) => ({
-      ...d,
-      answer: {
-        ...d.answer,
-        options: d.answer.options.filter((o) => o.facility === poolLabel),
-        statuses: d.answer.statuses.filter((s) => s.facility === poolLabel),
-      },
-    })),
-  };
-}
-
-// Filter a `/swim` answer's options to the lap-friendly access types (no-op unless
-// the toggle is on). A day left with no lap-friendly session shows as an empty row —
-// an honest "no lap swim here" — rather than inventing a lane session.
-function applyLap(answer, lapOnly) {
-  if (!lapOnly || !answer) return answer;
-  return { ...answer, options: (answer.options || []).filter((o) => LAP_FRIENDLY.has(o.access)) };
-}
-
-function applyLapWeek(week, lapOnly) {
-  if (!lapOnly) return week;
-  return { ...week, days: week.days.map((d) => ({ ...d, answer: applyLap(d.answer, lapOnly) })) };
-}
-
-// Classify the poolsMeta (/pools) against a day's `/swim` answer into the pool-picker
-// options, HONESTLY (plan item 4): a pool with sessions is PLANNABLE (listed first,
-// no badge, carrying its distance), a genuinely closed pool is 'closed', and a pool
-// with no curated timetable is 'no timetable yet' (NEVER "closed" — unknown ≠ closed).
-function classifyPools(poolsMeta, dayAnswer) {
-  const dist = new Map(); // facility name → nearest distance_km
-  for (const o of dayAnswer.options || []) {
-    const cur = dist.get(o.facility);
-    if (o.distance_km != null && (cur == null || o.distance_km < cur)) dist.set(o.facility, o.distance_km);
-    else if (!dist.has(o.facility)) dist.set(o.facility, o.distance_km);
-  }
-  const closed = new Set(
-    (dayAnswer.statuses || []).filter((s) => s.status === 'closed').map((s) => s.facility),
-  );
-  const plannableNames = new Set(dist.keys());
-
-  const rank = (p) => (plannableNames.has(p.name) ? 0 : closed.has(p.name) ? 1 : 2);
-  const items = poolsMeta.map((p) => {
-    const state = plannableNames.has(p.name) ? 'plannable' : closed.has(p.name) ? 'closed' : 'unknown';
-    return {
-      value: p.pool_id,
-      label: p.name,
-      state,
-      distanceKm: dist.has(p.name) ? dist.get(p.name) : null,
-      // Combobox badges: plannable → none; closed → 'closed'; unknown → 'no timetable yet'.
-      ...(state === 'closed' ? { closed: true } : {}),
-      ...(state === 'unknown' ? { note: 'no timetable yet' } : {}),
-    };
-  });
-  items.sort((a, b) => {
-    const ra = rank({ name: a.label });
-    const rb = rank({ name: b.label });
-    if (ra !== rb) return ra - rb;
-    if (ra === 0) return (a.distanceKm ?? 1e9) - (b.distanceKm ?? 1e9); // plannable: nearest first
-    return a.label.localeCompare(b.label);
-  });
-  return items;
-}
 
 async function main() {
   const root = document.documentElement;
@@ -132,7 +104,11 @@ async function main() {
   // deliberately NEVER encoded (a client-side choice), so it lives only in the seed.
   const urlCtx = { today, ageTokens: AGE_TOKENS };
   const makeSeed = () =>
-    createFilterState({ mode: 'day', date: today, place: { ...PLACE_PRESETS[0] } });
+    createFilterState({
+      mode: "day",
+      date: today,
+      place: { ...PLACE_PRESETS[0] },
+    });
 
   // Hydrate: the URL patch wins OVER the default seed, so a shared link restores the
   // exact pool + filters + view. A URL `pool=` beats the nearest-plannable auto-select
@@ -143,9 +119,9 @@ async function main() {
   // Backfill a URL-restored pool's display name from the classified /pools list (matched
   // by id). An unknown/old slug has no match → drop to null: graceful fallback to the
   // auto-select / plain view, never a crash. A no-op unless a pool id is set without a name.
-  function backfillPoolName(f) {
+  function backfillPoolName(f: FilterState): FilterState {
     if (!f.selectedPool || !f.selectedPool.id || f.selectedPool.name) return f;
-    const match = poolOptions.find((o) => o.value === f.selectedPool.id);
+    const match = poolOptions.find((o) => o.value === f.selectedPool?.id);
     return merge(f, {
       selectedPool: match ? { id: match.value, name: match.label } : null,
     });
@@ -156,50 +132,46 @@ async function main() {
   // POOL changed vs the current URL (so Back steps between pools/views); replaceState for
   // plain filter toggles (no history spam). Guard: if the computed search already equals
   // location.search, do nothing — a no-op that also breaks any popstate feedback loop.
-  function syncUrl(next) {
-    const search = toSearch(next, urlCtx);
+  function syncUrl(next: FilterState) {
+    const search = toSearch(next as unknown as UrlFilterState, urlCtx);
     if (search === location.search) return;
     const prev = fromSearch(location.search, urlCtx);
-    const prevPool = prev.selectedPool?.id ?? null;
-    const nextPool = next.selectedPool?.id ?? null;
-    const prevView = prev.mode === 'pool' ? 'pool' : 'day';
-    const nextView = next.mode === 'pool' ? 'pool' : 'day';
-    const structural = prevView !== nextView || prevPool !== nextPool;
+    const structural = isStructuralUrlChange(prev, next);
     const url = `${location.pathname}${search}`;
-    if (structural) history.pushState(null, '', url);
-    else history.replaceState(null, '', url);
+    if (structural) history.pushState(null, "", url);
+    else history.replaceState(null, "", url);
   }
 
   // --- header ---
-  const header = createIdentityHeader($('app-header'), {
-    props: { dateLabel: formatLabel(today), theme: 'auto' },
+  const header = createIdentityHeader(mustEl("app-header"), {
+    props: { dateLabel: formatLabel(today), theme: "auto" },
     root,
-    onThemeChange: (t) => applyTheme(root, t),
+    onThemeChange: (t: string) => applyTheme(root, t),
   });
 
   // --- insight + legend ---
-  const insight = createInsightBar($('app-insight'), {});
-  createBoardLegend($('app-legend'));
+  const insight = createInsightBar(mustEl("app-insight"), {});
+  createBoardLegend($("app-legend"));
 
   // --- board + panel hosts (rebuilt per render) ---
-  const boardHost = $('app-board');
-  const panelHost = $('app-panel');
-  let board = null;
-  let cursorLines = [];
-  let poolOptions = []; // classified pool-picker options (nearest plannable first)
-  let defaultPool = null; // { value, label } — the nearest plannable pool
-  const poolIdByName = new Map(); // facility name → pool_id (to open closed/uncurated rows)
-  const poolUrlByName = new Map(); // facility name → official-page URL (PoolOut.url, all 57 pools)
+  const boardHost = mustEl("app-board");
+  const panelHost = mustEl("app-panel");
+  let board: ReturnType<typeof createBoard> | null = null;
+  let cursorLines: El[] = [];
+  let poolOptions: PoolOption[] = []; // classified pool-picker options (nearest plannable first)
+  let defaultPool: PoolOption | null = null; // the nearest plannable pool
+  const poolIdByName = new Map<string, string>(); // facility name → pool_id
+  const poolUrlByName = new Map<string, string>(); // facility name → official-page URL
 
   // The persisted shared cursor (minutes-of-day) + the pool it belongs to. It survives
   // re-renders so a mode-only switch (Day↔Pool on the SAME pool) KEEPS the cursor for
   // continuity; changing the pool (a new combobox pick or a Day row click on a different
   // pool) RESETS it to that pool's best-public (plan item 8).
-  let cursorMin = null;
-  let cursorPoolId = null;
+  let cursorMin: number | null = null;
+  let cursorPoolId: string | null = null;
 
   function headerLabel() {
-    if (filter.mode === 'pool') {
+    if (filter.mode === "pool") {
       const [monIso] = weekDates(filter.date || today);
       return `Week of ${formatLabel(monIso)}`;
     }
@@ -210,35 +182,38 @@ async function main() {
   // TIMESCALE.X(min)); it spans every row and moves in lock-step with the panel.
   function seedCursors() {
     cursorLines = [];
-    boardHost.querySelectorAll('.board__track').forEach((track) => {
-      track.style.position = 'relative';
-      const line = document.createElement('div');
-      line.className = 'gantt__cursor';
-      line.style.left = '0px';
+    for (const track of boardHost.querySelectorAll?.(".board__track") ?? []) {
+      track.style.position = "relative";
+      const line = newEl("div");
+      line.className = "gantt__cursor";
+      line.style.left = "0px";
       track.appendChild(line);
       cursorLines.push(line);
-    });
+    }
   }
-  function moveCursors(min) {
+  function moveCursors(min: number) {
     for (const line of cursorLines) line.style.left = `${TIMESCALE.X(min)}px`;
   }
 
-  let panel = null;
+  let panel: ReturnType<typeof createDetailPanel> | null = null;
   // The panel-rail helper shown until a pool is opened — never a blank rail (plan FIX 4).
   function renderPanelHelper() {
-    panelHost.textContent = '';
+    panelHost.textContent = "";
     panel = null;
-    const msg = document.createElement('p');
-    msg.className = 'app__panelempty';
-    msg.textContent = 'Click any pool to see its hours, price and lane plan.';
+    const msg = newEl("p");
+    msg.className = "app__panelempty";
+    msg.textContent = "Click any pool to see its hours, price and lane plan.";
     panelHost.appendChild(msg);
   }
 
   // The DetailPanel ALWAYS opens (plan FIX 3): a plannable pool resolves to its OWN
   // basin's lane plan (board readout == panel headline); a pool with hours but no lane
   // split degrades to 'lanes-unknown'; a closed / uncurated pool opens in that state.
-  function openPanel(detail, opts = {}) {
-    panelHost.textContent = '';
+  function openPanel(
+    detail: FacilityDetail | null,
+    opts: DetailPanelOpts = {},
+  ) {
+    panelHost.textContent = "";
     panel = createDetailPanel(panelHost, {
       detail: detail || {},
       basin: opts.basin || null,
@@ -246,16 +221,16 @@ async function main() {
       filter,
       cursorMin: opts.cursorMin != null ? opts.cursorMin : null,
       distanceKm: opts.distanceKm != null ? opts.distanceKm : null,
-      basinName: opts.basinName || null,
-      state: opts.state || null,
-      reason: opts.reason || null,
+      basinName: opts.basinName ?? undefined,
+      state: opts.state ?? undefined,
+      reason: opts.reason ?? null,
       accessTypes: opts.accessTypes || [],
       officialUrl: opts.officialUrl || null,
       // The single Day→Pool continuity affordance: open Pool view on the SAME pool.
       // `selectedPool` is left untouched (it is already the clicked pool), so the week
       // renders for it — plannable or honestly closed/uncurated (plan item 3).
       onOpenWeek: () => {
-        filter = merge(filter, { mode: 'pool' });
+        filter = merge(filter, { mode: "pool" });
         buildToolbar(); // rebuild so VIEW shows Pool + the date stepper swaps to the pool picker + week stepper
         render();
         syncUrl(filter); // Day→Pool on the same pool is a VIEW change → pushState (Back returns)
@@ -270,12 +245,12 @@ async function main() {
     }
   }
 
-  function setCursor(min) {
+  function setCursor(min: number) {
     moveCursors(min);
     if (panel) panel.setCursor(min);
   }
-  function minFromEvent(canvas, ev) {
-    const rect = canvas.getBoundingClientRect();
+  function minFromEvent(canvas: El, ev: MouseEvent): number {
+    const rect = (canvas as unknown as HTMLElement).getBoundingClientRect();
     const x = Math.max(0, Math.min(TIMESCALE.PLOT, ev.clientX - rect.left));
     return TIMESCALE.inverse(x);
   }
@@ -284,34 +259,44 @@ async function main() {
   // resolves to the SAME basin's /pools/{id} lane plan (or degrades to lanes-unknown
   // when no split is published); a closed / uncurated row opens in its own state,
   // fetching the facility facts by name→id so the panel still carries facts + prov.
-  async function onRowClick(rowIndex, min, opts = {}) {
+  async function onRowClick(
+    rowIndex: number,
+    min: number | null,
+    opts: { fromUser?: boolean } = {},
+  ) {
     // A real user click mirrors the chosen pool into the URL (so it's shareable/linkable);
     // the load-time auto-open passes { fromUser: false } so a bare default link stays bare.
     const fromUser = opts.fromUser !== false;
+    if (!board) return;
     const row = board.rows[rowIndex];
     if (!row) return;
     if (row.options.length > 0) {
       const opt = row.options[0];
       // Persist the selection into the SHARED filter BEFORE opening the panel, so it
       // survives re-renders and carries into Pool view (plan item 2).
-      const poolId = opt.facility_id;
+      const poolId = String(opt.facility_id);
       filter = merge(filter, { selectedPool: { id: poolId, name: row.label } });
       // Cursor: an explicit canvas click (min != null) places the cursor; otherwise a
       // pool change resets to best-public (cursorMin=null → the panel picks it) while a
       // same-pool open keeps the persisted cursor for continuity (plan item 8).
-      let openAt = min;
+      let openAt: number | null = min;
       if (min == null) openAt = cursorPoolId === poolId ? cursorMin : null;
       cursorPoolId = poolId;
       const detail = await fetchPoolDetail(poolId, filter.date || today);
-      const lanePanels = (detail && detail.lane_panels) || [];
-      const lp = panelForBasin(lanePanels, opt.basin);
+      const lanePanels = (detail?.lane_panels as LanePanel[]) ?? [];
+      const lp = panelForBasin(
+        lanePanels,
+        opt.basin ? String(opt.basin) : null,
+      );
       const basin = lp ? basinFromPanel(lp) : null;
-      const accessTypes = [...new Set(row.options.map((o) => o.access))];
+      const accessTypes = [
+        ...new Set(row.options.map((o) => String(o.access))),
+      ];
       openPanel(detail, {
         basin,
         cursorMin: openAt,
-        distanceKm: opt.distance_km,
-        basinName: opt.basin,
+        distanceKm: opt.distance_km ?? null,
+        basinName: opt.basin ? String(opt.basin) : null,
         accessTypes,
         officialUrl: poolUrlByName.get(row.label) || null,
       });
@@ -322,12 +307,17 @@ async function main() {
     // The selection still persists (an unplannable pool is a legitimate choice — it
     // opens an honest closed/uncurated week in Pool view; plan items 2 + 5).
     const id = poolIdByName.get(row.label);
-    filter = merge(filter, { selectedPool: { id: id ?? null, name: row.label } });
+    filter = merge(filter, {
+      selectedPool: { id: id ?? null, name: row.label },
+    });
     cursorPoolId = id ?? null;
     cursorMin = null;
-    const closed = row.statuses.find((s) => s.status === 'closed');
-    const state = closed ? 'closed' : 'uncurated';
-    const st = closed || row.statuses.find((s) => s.status === 'uncurated') || row.statuses[0];
+    const closed = row.statuses.find((s) => s.status === "closed");
+    const state = closed ? "closed" : "uncurated";
+    const st =
+      closed ||
+      row.statuses.find((s) => s.status === "uncurated") ||
+      row.statuses[0];
     const detail = id ? await fetchPoolDetail(id, filter.date || today) : null;
     openPanel(detail, {
       state,
@@ -340,17 +330,28 @@ async function main() {
 
   function wireBoardCursor() {
     seedCursors();
-    const canvases = [...boardHost.querySelectorAll('.board__canvas')];
+    const canvases = [
+      ...(boardHost.querySelectorAll?.(".board__canvas") ?? []),
+    ];
     canvases.forEach((canvas, i) => {
-      canvas.style.cursor = 'crosshair';
-      canvas.addEventListener('mousemove', (ev) => setCursor(minFromEvent(canvas, ev)));
-      canvas.addEventListener('click', (ev) => onRowClick(i, minFromEvent(canvas, ev)));
+      canvas.style.cursor = "crosshair";
+      canvas.addEventListener("mousemove", (ev) =>
+        setCursor(minFromEvent(canvas, ev as unknown as MouseEvent)),
+      );
+      canvas.addEventListener(
+        "click",
+        (ev) =>
+          void onRowClick(i, minFromEvent(canvas, ev as unknown as MouseEvent)),
+      );
     });
     // EVERY row label opens the panel too (plan FIX 2) — Day mode included. A label
     // click opens on the row's best cursor (min=null → the panel picks best_public).
-    const labels = [...boardHost.querySelectorAll('.board__labelsbody .board__rowlabel')];
+    const labels = [
+      ...(boardHost.querySelectorAll?.(".board__labelsbody .board__rowlabel") ??
+        []),
+    ];
     labels.forEach((label, i) => {
-      label.addEventListener('click', () => onRowClick(i, null));
+      label.addEventListener("click", () => void onRowClick(i, null));
     });
   }
 
@@ -363,7 +364,9 @@ async function main() {
   async function autoOpenSelectedOrNearest() {
     if (!board) return;
     if (filter.selectedPool && filter.selectedPool.name) {
-      const sel = board.rows.findIndex((r) => r.label === filter.selectedPool.name);
+      const sel = board.rows.findIndex(
+        (r) => r.label === filter.selectedPool?.name,
+      );
       if (sel >= 0) {
         await onRowClick(sel, null, { fromUser: false });
         return;
@@ -379,31 +382,42 @@ async function main() {
     // Tear down the previous board FIRST so its shared RAF loop stops — otherwise every
     // filter change would leave an orphaned loop redrawing detached canvases forever.
     if (board) board.destroy();
-    boardHost.textContent = '';
+    boardHost.textContent = "";
     let data;
     let answerForEmpty; // the /swim answer the no-pools empty state is judged against
-    if (filter.mode === 'pool') {
+    if (filter.mode === "pool") {
       const week = await fetchWeek(filter, filter.date || today);
-      const focused = focusWeekOnPool(week, filter.selectedPool?.name ?? week.facility);
+      const focused = focusWeekOnPool(
+        week,
+        filter.selectedPool?.name ?? week.facility,
+      );
       data = { week: applyLapWeek(focused, filter.lapOnly) };
       answerForEmpty = {
         options: data.week.days.flatMap((d) => d.answer.options),
         statuses: data.week.days.flatMap((d) => d.answer.statuses),
       };
     } else {
-      const day = applyLap(await fetchDay(filter, filter.date || today), filter.lapOnly);
+      const day = applyLap(
+        await fetchDay(filter, filter.date || today),
+        filter.lapOnly,
+      );
       data = { day };
       answerForEmpty = day;
     }
-    board = createBoard(boardHost, { data, filter, timescale: TIMESCALE, today });
+    board = createBoard(boardHost, {
+      data,
+      filter,
+      timescale: TIMESCALE,
+      today,
+    });
     insight.update(data, filter);
     wireBoardCursor();
     // A SINGLE board-level empty state, shown ONLY when the answer has neither options
     // nor statuses (plan FIX 1). Closed/uncurated pools read on their own rows above —
     // there is no duplicate below-board section anymore.
     if (emptyState(answerForEmpty)) {
-      const emptyHost = document.createElement('div');
-      emptyHost.className = 'app__boardempty';
+      const emptyHost = newEl("div");
+      emptyHost.className = "app__boardempty";
       createStateBlocks(emptyHost, { answer: answerForEmpty });
       boardHost.appendChild(emptyHost);
     }
@@ -415,20 +429,25 @@ async function main() {
   // Rebuild the toolbar with the current classified pool list (called after /pools +
   // the first day answer resolve, so the pool picker is honest from the first open).
   function buildToolbar() {
-    $('app-toolbar').textContent = '';
-    createFilterToolbar($('app-toolbar'), {
+    const toolbarHost = mustEl("app-toolbar");
+    toolbarHost.textContent = "";
+    createFilterToolbar(toolbarHost, {
       props: {
         filter,
         places: PLACE_PRESETS,
         pools: poolOptions,
-        dateBounds: { today, min: today, max: isoDate(addDays(new Date(), 60)) },
+        dateBounds: {
+          today,
+          min: today,
+          max: isoDate(addDays(new Date(), 60)),
+        },
       },
       onChange: (next) => {
         // Entering Pool mode with NO pool selected yet → seed the nearest plannable pool
         // so the combobox + board open on a real, named pool (plan item 5). A non-null
         // selectedPool is NEVER overridden — an already-chosen (even unplannable) pool is
         // kept and its week renders honestly.
-        if (next.mode === 'pool' && !next.selectedPool && defaultPool) {
+        if (next.mode === "pool" && !next.selectedPool && defaultPool) {
           filter = merge(next, {
             selectedPool: { id: defaultPool.value, name: defaultPool.label },
           });
@@ -454,14 +473,16 @@ async function main() {
   // Back/forward: re-parse the URL, rebuild the filter over a FRESH seed, backfill the
   // pool label, and repaint. We NEVER call syncUrl here (popstate READS the URL, it does
   // not write it) — that, plus the string-compare guard in syncUrl, prevents a loop.
-  window.addEventListener('popstate', async () => {
-    filter = backfillPoolName(merge(makeSeed(), fromSearch(location.search, urlCtx)));
+  window.addEventListener("popstate", async () => {
+    filter = backfillPoolName(
+      merge(makeSeed(), fromSearch(location.search, urlCtx)),
+    );
     buildToolbar();
     await render();
   });
 
   // --- helpers scoped to main ---
-  function addDays(date, days) {
+  function addDays(date: string | Date, days: number): Date {
     const d = new Date(date);
     d.setDate(d.getDate() + days);
     return d;
@@ -469,12 +490,12 @@ async function main() {
   async function hydratePoolPicker() {
     try {
       const [poolsRes, dayAnswer] = await Promise.all([
-        fetch('/pools'),
+        fetch("/pools"),
         fetchDay(filter, filter.date || today),
       ]);
       if (!poolsRes.ok) return;
-      const body = await poolsRes.json();
-      const poolsMeta = body.pools || [];
+      const body = (await poolsRes.json()) as { pools?: PoolMeta[] };
+      const poolsMeta = body.pools ?? [];
       // name → id, so a closed / uncurated board row (which carries only a facility
       // NAME, no option) can still resolve its /pools/{id} facts for the panel.
       poolIdByName.clear();
@@ -484,20 +505,20 @@ async function main() {
         // PoolOut.url is the catalog official page, non-null on all 57 pools — the
         // ONLY official-page source that also reaches uncurated pools (their
         // /pools/{id} detail 404s), so it is threaded into the panel frontend-side.
-        poolUrlByName.set(p.name, p.url || null);
+        if (p.url) poolUrlByName.set(p.name, String(p.url));
       }
       poolOptions = classifyPools(poolsMeta, dayAnswer);
       // A URL-restored pool arrives as { id, name:null } — resolve its display name now
       // (or drop an unknown/old slug to null; the pool_alias crosswalk resolves renames
       // server-side, so a live slug still matches here).
       filter = backfillPoolName(filter);
-      const nearestPlannable = poolOptions.find((p) => p.state === 'plannable');
+      const nearestPlannable = poolOptions.find((p) => p.state === "plannable");
       if (nearestPlannable) {
         // The nearest plannable pool — the default seeded into `selectedPool` when the
         // user first enters Pool mode without a choice (see buildToolbar onChange). We do
         // NOT pre-write it here: Day mode's first paint auto-opens (and thus selects) the
         // nearest pool on its own, and a non-null selectedPool must never be overridden.
-        defaultPool = { value: nearestPlannable.value, label: nearestPlannable.label };
+        defaultPool = nearestPlannable;
       }
       buildToolbar();
     } catch {

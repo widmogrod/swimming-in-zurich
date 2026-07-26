@@ -8,6 +8,11 @@ import { listboxIndex, filterOptions } from './keynav.js';
 
 let _seq = 0;
 
+/**
+ * @param {import('../domtypes.js').El} el
+ * @param {{props?: Record<string, unknown>, onChange?: (...args: any[]) => void}} [opts]
+ * @returns {{el: import('../domtypes.js').El, input: import('../domtypes.js').El, list: import('../domtypes.js').El, readonly value: string, open(): void, close(): void, state(): {open: boolean, active: number, filtered: unknown[]}}}
+ */
 export function createCombobox(el, { props = {}, onChange } = {}) {
   const doc = el.ownerDocument || globalThis.document;
   const allOptions = props.options || [];

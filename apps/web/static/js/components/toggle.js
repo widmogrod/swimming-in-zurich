@@ -3,6 +3,11 @@
 // stays keyboard- and screen-reader-native; a disabled toggle exposes
 // aria-disabled + its reason as title/aria-description and refuses change.
 
+/**
+ * @param {import('../domtypes.js').El} el
+ * @param {{props?: Record<string, unknown>, onChange?: (...args: any[]) => void}} [opts]
+ * @returns {{el: import('../domtypes.js').El, input: import('../domtypes.js').El, readonly checked: boolean}}
+ */
 export function createToggle(el, { props = {}, onChange } = {}) {
   const doc = el.ownerDocument || globalThis.document;
   const disabled = !!props.disabled;
