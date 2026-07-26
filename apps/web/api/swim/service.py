@@ -71,6 +71,8 @@ def _option_out(option: SwimOption) -> OptionOut:
         access=type(option.session.access).__name__,
         eligible=option.eligibility.allowed,
         reason=option.eligibility.reason,
+        reason_code=option.eligibility.code.value,
+        reason_params=dict(option.eligibility.params),
         price=option.price.display if option.price is not None else None,
         distance_km=round(option.distance_km, 2) if option.distance_km is not None else None,
         open_now=option.open_at_query_time,
@@ -109,7 +111,13 @@ def build_answer(
     return AnswerOut(
         options=[_option_out(o) for o in options],
         statuses=[
-            StatusOut(facility=s.facility_name, status=s.status, detail=s.detail)
+            StatusOut(
+                facility=s.facility_name,
+                status=s.status,
+                detail=s.detail,
+                detail_code=s.code.value,
+                detail_params=dict(s.params),
+            )
             for s in result.statuses
         ],
         warnings=list(result.warnings),

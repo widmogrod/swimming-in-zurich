@@ -7,7 +7,9 @@ are auditable rather than hidden inside a boolean.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from collections.abc import Mapping
+from dataclasses import dataclass, field
+from enum import StrEnum
 from typing import assert_never
 
 from swimzh.domain.person import Gender, Person
@@ -161,11 +163,50 @@ REPRESENTATIVE_ACCESS: tuple[SessionAccess, ...] = (
 ACCESS_TYPES: tuple[AccessInfo, ...] = tuple(access_info(a) for a in REPRESENTATIVE_ACCESS)
 
 
+class ReasonCode(StrEnum):
+    """The message identity of an eligibility outcome — the i18n key space.
+
+    Distinct from `rule`, which names the ACCESS TYPE and is therefore too coarse to key a
+    message on: a women-only session yields four different sentences (welcome / excluded /
+    confirm with the venue / tell us your gender) that all share `rule="women-only"`.
+    Keying on `rule` would silently render "you're welcome" for "you're not".
+
+    Every arm of `eligibility()` returns exactly one of these, and
+    `tests/domain/test_eligibility.py` asserts the enum is fully reachable — a code nobody
+    produces is dead, and an outcome without one cannot exist because the compiler-checked
+    `assert_never` below covers every access type.
+    """
+
+    PUBLIC = "public"
+    LANE_SWIM = "lane_swim"
+    FAMILY = "family"
+
+    WOMEN_ONLY_WELCOME = "women_only_welcome"
+    WOMEN_ONLY_EXCLUDED = "women_only_excluded"
+    WOMEN_ONLY_CONFIRM = "women_only_confirm"
+    WOMEN_ONLY_NEEDS_GENDER = "women_only_needs_gender"
+
+    SENIORS_ONLY_WELCOME = "seniors_only_welcome"
+    SENIORS_ONLY_TOO_YOUNG = "seniors_only_too_young"
+    SENIORS_ONLY_NEEDS_AGE = "seniors_only_needs_age"
+
+    ADULTS_ONLY_WELCOME = "adults_only_welcome"
+    ADULTS_ONLY_TOO_YOUNG = "adults_only_too_young"
+    ADULTS_ONLY_NEEDS_AGE = "adults_only_needs_age"
+
+    SCHOOL_RESERVED = "school_reserved"
+    CLUB_RESERVED = "club_reserved"
+
+
 @dataclass(frozen=True, slots=True)
 class EligibilityResult:
     allowed: bool
     rule: str
     reason: str
+    #: The message key + its interpolation values. `reason` is the English rendering of
+    #: exactly this; it stays on the wire until S5 so nothing breaks mid-migration.
+    code: ReasonCode = ReasonCode.PUBLIC
+    params: Mapping[str, str | int] = field(default_factory=dict)
 
 
 def eligibility(person: Person, access: SessionAccess) -> EligibilityResult:
@@ -176,21 +217,36 @@ def eligibility(person: Person, access: SessionAccess) -> EligibilityResult:
     """
     match access:
         case PublicSwim():
-            return EligibilityResult(True, "public", "public swimming — open to all")
+            return EligibilityResult(
+                True, "public", "public swimming — open to all", ReasonCode.PUBLIC
+            )
         case LaneSwim():
-            return EligibilityResult(True, "lane-swim", "lane swimming — open to all")
+            return EligibilityResult(
+                True, "lane-swim", "lane swimming — open to all", ReasonCode.LANE_SWIM
+            )
         case FamilyTime():
-            return EligibilityResult(True, "family", "family session — open to all")
+            return EligibilityResult(
+                True, "family", "family session — open to all", ReasonCode.FAMILY
+            )
         case WomenOnly():
             return _women_only(person)
         case SeniorsOnly(min_age):
             return _seniors_only(person, min_age)
         case SchoolReserved():
-            return EligibilityResult(False, "school-reserved", "reserved for schools — not public")
+            return EligibilityResult(
+                False,
+                "school-reserved",
+                "reserved for schools — not public",
+                ReasonCode.SCHOOL_RESERVED,
+            )
         case ClubReserved(club):
             who = f" ({club})" if club else ""
             return EligibilityResult(
-                False, "club-reserved", f"reserved for a club{who} — not public"
+                False,
+                "club-reserved",
+                f"reserved for a club{who} — not public",
+                ReasonCode.CLUB_RESERVED,
+                {"club": club} if club else {},
             )
         case AdultsOnly(min_age):
             return _adults_only(person, min_age)
@@ -202,16 +258,26 @@ def _women_only(person: Person) -> EligibilityResult:
     rule = "women-only"
     match person.gender:
         case Gender.FEMALE:
-            return EligibilityResult(True, rule, "women-only session")
+            return EligibilityResult(
+                True, rule, "women-only session", ReasonCode.WOMEN_ONLY_WELCOME
+            )
         case Gender.MALE:
-            return EligibilityResult(False, rule, "women-only session")
+            return EligibilityResult(
+                False, rule, "women-only session", ReasonCode.WOMEN_ONLY_EXCLUDED
+            )
         case Gender.DIVERSE:
             return EligibilityResult(
-                False, rule, "women-only session — please confirm admission with the venue"
+                False,
+                rule,
+                "women-only session — please confirm admission with the venue",
+                ReasonCode.WOMEN_ONLY_CONFIRM,
             )
         case None:
             return EligibilityResult(
-                False, rule, "women-only session — specify gender to determine eligibility"
+                False,
+                rule,
+                "women-only session — specify gender to determine eligibility",
+                ReasonCode.WOMEN_ONLY_NEEDS_GENDER,
             )
 
 
@@ -222,10 +288,24 @@ def _adults_only(person: Person, min_age: int) -> EligibilityResult:
             False,
             rule,
             f"adults-only session (age {min_age}+) — specify age to determine eligibility",
+            ReasonCode.ADULTS_ONLY_NEEDS_AGE,
+            {"min_age": min_age},
         )
     if person.age >= min_age:
-        return EligibilityResult(True, rule, f"adults-only session (age {min_age}+)")
-    return EligibilityResult(False, rule, f"adults-only session — requires age {min_age}+")
+        return EligibilityResult(
+            True,
+            rule,
+            f"adults-only session (age {min_age}+)",
+            ReasonCode.ADULTS_ONLY_WELCOME,
+            {"min_age": min_age},
+        )
+    return EligibilityResult(
+        False,
+        rule,
+        f"adults-only session — requires age {min_age}+",
+        ReasonCode.ADULTS_ONLY_TOO_YOUNG,
+        {"min_age": min_age},
+    )
 
 
 def _seniors_only(person: Person, min_age: int) -> EligibilityResult:
@@ -235,7 +315,21 @@ def _seniors_only(person: Person, min_age: int) -> EligibilityResult:
             False,
             rule,
             f"seniors-only session (age {min_age}+) — specify age to determine eligibility",
+            ReasonCode.SENIORS_ONLY_NEEDS_AGE,
+            {"min_age": min_age},
         )
     if person.age >= min_age:
-        return EligibilityResult(True, rule, f"seniors-only session (age {min_age}+)")
-    return EligibilityResult(False, rule, f"seniors-only session — requires age {min_age}+")
+        return EligibilityResult(
+            True,
+            rule,
+            f"seniors-only session (age {min_age}+)",
+            ReasonCode.SENIORS_ONLY_WELCOME,
+            {"min_age": min_age},
+        )
+    return EligibilityResult(
+        False,
+        rule,
+        f"seniors-only session — requires age {min_age}+",
+        ReasonCode.SENIORS_ONLY_TOO_YOUNG,
+        {"min_age": min_age},
+    )

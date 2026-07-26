@@ -102,3 +102,88 @@ def test_future_year_surfaces_calendar_warning() -> None:
         )
     assert response.status_code == 200
     assert any("calendar data not available" in w for w in response.json()["warnings"])
+
+
+# --- S2: machine-readable codes on the wire (additive; prose stays until S5) --------------
+
+
+def _women_only_option(client: TestClient, gender: str) -> dict[str, object]:
+    """The City women-only session as seen by `gender`, with eligibility annotated."""
+    response = client.get(
+        "/swim",
+        params={"at": MONDAY_EVENING, "gender": gender, "age": 34, "eligible_only": "false"},
+    )
+    assert response.status_code == 200
+    options: list[dict[str, object]] = response.json()["options"]
+    women = [o for o in options if o["access"] == "WomenOnly"]
+    assert women, f"no WomenOnly option for gender={gender}"
+    return women[0]
+
+
+def test_options_carry_a_reason_code_beside_the_prose() -> None:
+    """S2 is ADDITIVE — both fields ship, so the UI keeps working untouched."""
+    with TestClient(app) as client:
+        option = _women_only_option(client, "female")
+    assert option["reason_code"] == "women_only_welcome"
+    assert option["reason"]  # the English rendering still ships
+
+
+def test_the_reason_code_discriminates_what_rule_could_not() -> None:
+    """The whole point of S2: female and male see the SAME access type and the same
+    `rule`, but opposite outcomes. A client keying on the access type alone would render
+    "you're welcome" to someone who is excluded."""
+    with TestClient(app) as client:
+        welcome = _women_only_option(client, "female")
+        excluded = _women_only_option(client, "male")
+    assert welcome["access"] == excluded["access"] == "WomenOnly"
+    assert welcome["reason_code"] == "women_only_welcome"
+    assert excluded["reason_code"] == "women_only_excluded"
+    assert welcome["eligible"] is True
+    assert excluded["eligible"] is False
+
+
+def test_reason_params_carry_interpolation_values_not_baked_prose() -> None:
+    """Any code whose sentence mentions a number/name must ship that value separately, or
+    a translation cannot place it. Params are always present (possibly empty)."""
+    with TestClient(app) as client:
+        response = client.get("/swim", params={"at": MONDAY_EVENING, "eligible_only": "false"})
+    for option in response.json()["options"]:
+        assert isinstance(option["reason_params"], dict)
+        if option["reason_code"].startswith(("seniors_only", "adults_only")):
+            assert "min_age" in option["reason_params"]
+
+
+def test_statuses_carry_a_detail_code_that_names_the_mixed_language_field() -> None:
+    """`detail` today is English in one branch and German in the other. The code says
+    which sentence it is; the German reason travels as a param until S4 maps it."""
+    with TestClient(app) as client:
+        response = client.get("/swim", params={"at": MONDAY_EVENING, "eligible_only": "false"})
+    statuses = response.json()["statuses"]
+    assert statuses, "expected at least one closed/uncurated facility"
+    for status in statuses:
+        assert status["detail_code"] in {"closed_reason", "uncurated"}
+        if status["detail_code"] == "closed_reason":
+            # the curated (German) text is data, not copy — it rides as a param
+            assert status["detail_params"]["reason"] == status["detail"]
+        else:
+            assert status["detail_params"] == {}
+
+
+def test_access_types_key_is_sufficient_to_render_without_server_prose() -> None:
+    """S2 asserts `/access-types` needs no new field: `key` already identifies each type,
+    so the client can render label+description from its own catalog. The prose here is
+    what S5 removes."""
+    with TestClient(app) as client:
+        types = client.get("/access-types").json()["types"]
+    keys = [t["key"] for t in types]
+    assert len(keys) == len(set(keys)), "keys must be unique to be a message id"
+    assert set(keys) == {
+        "public",
+        "lane-swim",
+        "family",
+        "women-only",
+        "seniors-only",
+        "school-reserved",
+        "club-reserved",
+        "adults-only",
+    }

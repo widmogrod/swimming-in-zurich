@@ -14,9 +14,11 @@ It deliberately distinguishes three outcomes so an empty answer is never ambiguo
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from decimal import Decimal
+from enum import StrEnum
 from typing import Protocol, assert_never
 from zoneinfo import ZoneInfo
 
@@ -241,6 +243,20 @@ class SwimOption:
     lane_timeline: LaneAvailabilityTimeline | None = None
 
 
+class StatusCode(StrEnum):
+    """The message identity of a no-options status — the i18n key space for `detail`.
+
+    `status` says WHICH BUCKET ("closed" / "uncurated"); the code says which SENTENCE.
+    `CLOSED_REASON` is deliberately a passthrough: the reason is still curated German free
+    text (`"Sommerpause"`) travelling as a param, because mapping that text to a closed code
+    set is S4's job — the ETL owns it, not the query layer. Recording it as a distinct code
+    now means S4 replaces a known shape rather than discovering one.
+    """
+
+    CLOSED_REASON = "closed_reason"
+    UNCURATED = "uncurated"
+
+
 @dataclass(frozen=True, slots=True)
 class FacilityStatus:
     """Why a facility produced no options: closed that day, or not yet curated."""
@@ -249,6 +265,10 @@ class FacilityStatus:
     facility_name: str
     status: str  # "closed" | "uncurated"
     detail: str
+    #: The message key + its interpolation values. `detail` is the current rendering of
+    #: exactly this; it stays on the wire until S5.
+    code: StatusCode = StatusCode.UNCURATED
+    params: Mapping[str, str] = field(default_factory=dict)
 
 
 @dataclass(frozen=True, slots=True)
@@ -403,6 +423,8 @@ def find_swim_options(
                     facility_name=facility.identity.name,
                     status="closed",
                     detail=facility_closed_reason,
+                    code=StatusCode.CLOSED_REASON,
+                    params={"reason": facility_closed_reason},
                 )
             )
 
@@ -535,6 +557,7 @@ def _uncurated_statuses(
             facility_name=row.entry.name,
             status="uncurated",
             detail="schedule not yet curated",
+            code=StatusCode.UNCURATED,
         )
         for row in roster
         if row.entry.pool_id not in scheduled_ids

@@ -46,7 +46,13 @@ class OptionOut(BaseModel):
     end: str
     access: str
     eligible: bool
-    reason: str
+    reason: str  # English prose; retired in S5 once the client renders `reason_code`
+    # --- i18n (S2, additive) ---------------------------------------------------------
+    # The message key for `reason` + its interpolation values, so a client can render the
+    # outcome in the viewer's language instead of printing the server's English. The `rule`
+    # field is NOT sufficient for this: four women-only outcomes share one rule.
+    reason_code: str
+    reason_params: dict[str, str | int] = {}
     price: str | None
     distance_km: float | None
     open_now: bool
@@ -63,7 +69,13 @@ class OptionOut(BaseModel):
 class StatusOut(BaseModel):
     facility: str
     status: str  # "closed" | "uncurated"
-    detail: str
+    detail: str  # current rendering; retired in S5 once the client renders `detail_code`
+    # --- i18n (S2, additive) ---------------------------------------------------------
+    # `detail` today mixes languages: English "schedule not yet curated" in one branch and
+    # curated German ("Sommerpause") in the other. The code names which sentence it is; the
+    # German text travels as a param until S4 maps it to a closed code set.
+    detail_code: str
+    detail_params: dict[str, str] = {}
 
 
 class NoticeOut(BaseModel):
