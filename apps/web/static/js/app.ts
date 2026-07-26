@@ -96,7 +96,7 @@ const newEl = (tag: string): El => asEl(document.createElement(tag));
 const TIMESCALE = makeTimescale(BOARD_DAY0, BOARD_DAY1, BOARD_PLOT);
 
 async function main() {
-  const root = document.documentElement;
+  const root = asEl(document.documentElement);
 
   // --- initial FilterState: absolute today (UTC), first place preset, Day mode ---
   const today = isoDate(new Date());
@@ -151,7 +151,7 @@ async function main() {
 
   // --- insight + legend ---
   const insight = createInsightBar(mustEl("app-insight"), {});
-  createBoardLegend($("app-legend"));
+  createBoardLegend(mustEl("app-legend"));
 
   // --- board + panel hosts (rebuilt per render) ---
   const boardHost = mustEl("app-board");

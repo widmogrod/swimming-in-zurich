@@ -2,8 +2,19 @@
 // known (honest degrade, never a faked N). With no length at all the badge
 // degrades to a plain "Teaching pool" label rather than fabricating a size.
 
-export function createLengthLanesBadge(el, { props = {} } = {}) {
-  const doc = el.ownerDocument || globalThis.document;
+import { asDoc, type El } from '../domtypes.js';
+
+export interface LengthLanesProps {
+  length_m?: number | null;
+  lanes?: number | null;
+  [k: string]: unknown;
+}
+
+export function createLengthLanesBadge<T extends El>(
+  el: T,
+  { props = {} }: { props?: LengthLanesProps } = {},
+): { el: T } {
+  const doc = el.ownerDocument || asDoc(globalThis.document);
   el.classList.add('ui-lenlanes');
   el.setAttribute('role', 'group');
 
@@ -14,7 +25,7 @@ export function createLengthLanesBadge(el, { props = {} } = {}) {
     el.classList.add('is-degraded');
     const degrade = doc.createElement('span');
     degrade.classList.add('ui-lenlanes__degrade');
-    degrade.textContent = props.degradeLabel || 'Teaching pool';
+    degrade.textContent = String(props.degradeLabel ?? 'Teaching pool');
     el.setAttribute('aria-label', degrade.textContent);
     el.appendChild(degrade);
     return { el };

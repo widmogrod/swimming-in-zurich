@@ -11,15 +11,29 @@
 // No colour, no hex — each state's tint is a token applied via its modifier class.
 
 // The three state keys. Exported so callers name them, never string-drift.
+import { asDoc, type Doc, type El } from '../domtypes.js';
+
 export const STATE_CLOSED = 'closed';
 export const STATE_UNLISTED = 'hours-not-listed';
 export const STATE_NONE = 'no-pools';
+
+/** A `/swim` status row, read structurally. */
+export interface StatusLike {
+  facility?: string;
+  status?: string;
+  detail?: string | null;
+}
+
+export interface AnswerLike {
+  options?: unknown[];
+  statuses?: StatusLike[];
+}
 
 // The plain-language copy for each state (kept honest: unknown ≠ closed).
 const COPY = {
   [STATE_CLOSED]: {
     title: 'Closed',
-    body: (detail) => (detail ? `Closed — ${detail}` : 'Closed for now.'),
+    body: (detail?: string | null) => (detail ? `Closed — ${detail}` : 'Closed for now.'),
   },
   [STATE_UNLISTED]: {
     title: 'Hours not listed yet',
@@ -37,7 +51,9 @@ const COPY = {
  * Maps a `/swim` StatusOut to its terminal-state key; anything unknown → null.
  * @param {{status:string}} status a StatusOut (`{ facility, status, detail }`).
  */
-export function stateForStatus(status) {
+export function stateForStatus(
+  status: StatusLike | null | undefined,
+): string | null {
   if (!status) return null;
   if (status.status === 'closed') return STATE_CLOSED;
   if (status.status === 'uncurated') return STATE_UNLISTED;
@@ -49,7 +65,7 @@ export function stateForStatus(status) {
  * NOR statuses (a truly empty result), else null. A result WITH statuses is not
  * "no pools" — those pools render as their own closed/unlisted blocks.
  */
-export function emptyState(answer) {
+export function emptyState(answer: AnswerLike | null | undefined): string | null {
   const opts = (answer && answer.options) || [];
   const st = (answer && answer.statuses) || [];
   return opts.length === 0 && st.length === 0 ? STATE_NONE : null;
@@ -58,8 +74,12 @@ export function emptyState(answer) {
 // One state card: a heading + a plain body, tagged with its state modifier class
 // (`.stateblock--closed` / `--hours-not-listed` / `--no-pools`) so each reads
 // distinctly. `facility` is prepended to the heading when present.
-function stateCard(doc, key, { facility, detail } = {}) {
-  const copy = COPY[key];
+function stateCard(
+  doc: Doc,
+  key: string,
+  { facility, detail }: { facility?: string; detail?: string | null } = {},
+): El {
+  const copy = (COPY as Record<string, (typeof COPY)[typeof STATE_CLOSED]>)[key];
   const card = doc.createElement('div');
   card.className = `stateblock stateblock--${key}`;
   card.setAttribute('role', 'note');
@@ -79,7 +99,7 @@ function stateCard(doc, key, { facility, detail } = {}) {
 
 // One compact note summarising the N uncurated pools, instead of N identical cards.
 // The pools themselves are named on the board above; this states the honesty fact once.
-function unlistedSummaryCard(doc, count) {
+function unlistedSummaryCard(doc: Doc, count: number): El {
   const card = doc.createElement('div');
   card.className = `stateblock stateblock--${STATE_UNLISTED}`;
   card.setAttribute('role', 'note');
@@ -102,13 +122,16 @@ function unlistedSummaryCard(doc, count) {
  * rendered (for tests / callers). `update(answer)` re-renders.
  * @param {object} opts.answer a `/swim` AnswerOut.
  */
-export function createStateBlocks(el, opts = {}) {
-  const doc = el.ownerDocument || globalThis.document;
+export function createStateBlocks<T extends El>(
+  el: T,
+  opts: { answer?: AnswerLike } = {},
+) {
+  const doc = el.ownerDocument || asDoc(globalThis.document);
   el.classList.add('stateblocks');
 
-  function update(answer) {
+  function update(answer: AnswerLike) {
     el.textContent = '';
-    const rendered = [];
+    const rendered: string[] = [];
     const none = emptyState(answer);
     if (none) {
       el.appendChild(stateCard(doc, none));
@@ -126,7 +149,9 @@ export function createStateBlocks(el, opts = {}) {
     // Hours-not-listed: collapse the (many, identical) uncurated pools into ONE count note.
     // They are already listed BY NAME on the board above as dotted "hours not listed" rows;
     // repeating the same paragraph 50+ times here is noise, not honesty.
-    const unlisted = statuses.filter((s) => stateForStatus(s) === STATE_UNLISTED).length;
+    const unlisted = statuses.filter(
+      (s: StatusLike) => stateForStatus(s) === STATE_UNLISTED,
+    ).length;
     if (unlisted) {
       el.appendChild(unlistedSummaryCard(doc, unlisted));
       rendered.push(STATE_UNLISTED);

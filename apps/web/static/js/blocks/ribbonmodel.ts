@@ -23,14 +23,48 @@ export const ACCESS_FAMILY = Object.freeze({
   ClubReserved: 'club',
 });
 
+/** A `/swim` option as the ribbon model reads it. */
+export interface RibbonOption {
+  access?: string;
+  start?: string;
+  end?: string;
+  facility?: string;
+  basin?: string;
+  lane_timeline?: { segments?: RibbonTimelineSegment[] } | null;
+  [k: string]: unknown;
+}
+
+export interface RibbonTimelineSegment {
+  start: string;
+  end: string;
+  lane_count: number;
+  public_lanes: number;
+  [k: string]: unknown;
+}
+
+export interface RibbonStatus {
+  facility?: string;
+  status?: string;
+  detail?: string | null;
+}
+
+/** One drawable band on a board row. */
+export interface Ribbon {
+  kind: string;
+  variant?: string;
+  family?: string;
+  style?: string;
+  [k: string]: unknown;
+}
+
 /** access class name → colour-family key ('other' for an unknown type). */
-export function accessFamily(access) {
-  return ACCESS_FAMILY[access] || 'other';
+export function accessFamily(access: string): string {
+  return (ACCESS_FAMILY as Record<string, string>)[access] || 'other';
 }
 
 // Public fraction of a lane-timeline segment: how much of the ribbon is open to you.
 // Explicit 0 when the basin has no lanes recorded (avoid NaN → the ribbon pinches shut).
-function publicFraction(seg) {
+function publicFraction(seg: RibbonTimelineSegment): number {
   return seg.lane_count > 0 ? seg.public_lanes / seg.lane_count : 0;
 }
 
@@ -42,8 +76,8 @@ function publicFraction(seg) {
  *   - without `lane_timeline` → a "lane split not published" ribbon (`sheath:false`).
  * The colour `family` is set in both cases.
  */
-export function optionRibbon(option) {
-  const family = accessFamily(option.access);
+export function optionRibbon(option: RibbonOption): Ribbon {
+  const family = accessFamily(option.access ?? '');
   const base = {
     kind: 'option',
     family,
@@ -64,10 +98,10 @@ export function optionRibbon(option) {
         start: seg.start,
         end: seg.end,
         thickness: publicFraction(seg),
-        pinched: seg.reserved_lanes > 0,
+        pinched: Number(seg.reserved_lanes) > 0,
         lane_count: seg.lane_count,
         public_lanes: seg.public_lanes,
-        reserved_lanes: seg.reserved_lanes,
+        reserved_lanes: Number(seg.reserved_lanes),
         partial: seg.partial,
       })),
     };
@@ -87,7 +121,7 @@ export function optionRibbon(option) {
  *   - status === 'uncurated' → a DOTTED ghost ribbon (unknown ≠ closed).
  * Any other status label falls back to the ghost/unknown ribbon (never to closed).
  */
-export function statusRibbon(status) {
+export function statusRibbon(status: RibbonStatus): Ribbon {
   const base = { kind: 'status', facility: status.facility, detail: status.detail };
   if (status.status === 'closed') {
     return { ...base, variant: 'closed', style: 'dashed', family: 'closed' };
@@ -100,7 +134,10 @@ export function statusRibbon(status) {
  * closed/ghost states) then the option ribbons on top. `row` is
  * `{ options: OptionOut[], statuses: StatusOut[] }`.
  */
-export function ribbonsFor(row) {
+export function ribbonsFor(row: {
+  options?: RibbonOption[];
+  statuses?: RibbonStatus[];
+}): Ribbon[] {
   const statuses = (row.statuses || []).map(statusRibbon);
   const options = (row.options || []).map(optionRibbon);
   return [...statuses, ...options];

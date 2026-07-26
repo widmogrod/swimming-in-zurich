@@ -14,12 +14,12 @@
 // a class in blocks.css, so this file carries no raw hex. Positions are px numbers
 // derived from the timescale only.
 
-import { cursorX, hhmmToMin, minToHhmm, publicAt } from './cursor.js';
+import { asDoc, type El } from '../domtypes.js';
+import { cursorX, hhmmToMin, minToHhmm, publicAt, type Basin } from './cursor.js';
 
 // The left label gutter (GL): lane names sit here; the plot starts at GL. A segment
 // at minute `min` is drawn at `GL + timescale.X(min)`; the cursor at the same x.
 export const GANTT_LABEL_W = 120;
-const LANE_H = 22; // per-lane row height (CSS px)
 
 /**
  * createGantt(el, opts) — mount a LaneGantt into `el`.
@@ -30,8 +30,26 @@ const LANE_H = 22; // per-lane row height (CSS px)
  * @param {number} [opts.cursorMin] initial cursor minutes-of-day (default: best-public start).
  * @returns {{el, timescale, cursorPlotX, trackX, readoutAt, setCursor, cursorMin}}
  */
-export function createGantt(el, opts = {}) {
-  const doc = el.ownerDocument || globalThis.document;
+export interface GanttTimescale {
+  X(min: number): number;
+  inverse(x: number): number;
+  DAY0: number;
+  DAY1: number;
+  PLOT: number;
+  lo: number;
+  hi: number;
+  span: number;
+}
+
+export interface GanttOpts {
+  basin: Basin;
+  /** REQUIRED — the Gantt refuses to re-derive its own scale (it throws without one). */
+  timescale: GanttTimescale;
+  cursorMin?: number;
+}
+
+export function createGantt<T extends El>(el: T, opts: GanttOpts) {
+  const doc = el.ownerDocument || asDoc(globalThis.document);
   const ts = opts.timescale;
   if (!ts || typeof ts.X !== 'function') {
     // The single hardest correctness property (Risk #3): a Gantt with its OWN scale
@@ -42,9 +60,9 @@ export function createGantt(el, opts = {}) {
   const GL = GANTT_LABEL_W;
 
   // cursor-x, plot-relative (matches the board, which also draws at timescale.X).
-  const cursorPlotX = (min) => cursorX(ts, min);
+  const cursorPlotX = (min: number) => cursorX(ts, min);
   // absolute x within the gantt track (gutter + plot).
-  const trackX = (min) => GL + cursorPlotX(min);
+  const trackX = (min: number) => GL + cursorPlotX(min);
 
   let cursorMin =
     opts.cursorMin != null
@@ -136,7 +154,7 @@ export function createGantt(el, opts = {}) {
   track.appendChild(cursor);
 
   // readoutAt(min) → { public, total } at `min` — the SAME publicAt the panel uses.
-  const readoutAt = (min) => publicAt(basin, min);
+  const readoutAt = (min: number) => publicAt(basin, min);
 
   function paintCursor() {
     cursor.style.left = `${trackX(cursorMin)}px`;
@@ -145,7 +163,7 @@ export function createGantt(el, opts = {}) {
   }
   paintCursor();
 
-  function setCursor(min) {
+  function setCursor(min: number) {
     cursorMin = min;
     paintCursor();
   }

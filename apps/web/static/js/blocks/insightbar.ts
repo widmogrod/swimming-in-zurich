@@ -11,10 +11,69 @@
 // The computation is PURE (`computeInsight`) so it unit-tests headless; the thin
 // `createInsightBar` only writes the derived text into the DOM. No colour, no hex.
 
+import { asDoc, type El } from '../domtypes.js';
+
+/** The slice of a `/swim` option the insight summary reads. */
+export interface InsightOption {
+  facility?: string;
+  lane_timeline?: { segments?: InsightSegment[] } | null;
+  [k: string]: unknown;
+}
+
+export interface InsightSegment {
+  start: string;
+  end: string;
+  lane_count: number;
+  public_lanes: number;
+  [k: string]: unknown;
+}
+
+export interface InsightStatus {
+  status?: string;
+  detail?: string | null;
+}
+
+export interface InsightAnswer {
+  options?: InsightOption[];
+  statuses?: InsightStatus[];
+}
+
+export interface InsightWeek {
+  facility?: string | null;
+  days?: { answer?: InsightAnswer }[];
+}
+
+/** The best public-lane window across a set of options. */
+export interface BestWindow {
+  facility: string | undefined;
+  public_lanes: number;
+  lane_count: number;
+  start: string;
+  end: string;
+}
+
+/** The computed summary. `text` is the rendered sentence; every other field is the DATA
+ *  behind it — which is what lets S3 key a message and pass params instead of shipping a
+ *  concatenated English string. */
+export interface Insight {
+  mode: string;
+  text: string;
+  best: BestWindow | null;
+  poolsCount?: number;
+  closed?: number;
+  unlisted?: number;
+  openDays?: number;
+}
+
+export interface InsightData {
+  day?: InsightAnswer;
+  week?: InsightWeek;
+}
+
 // The best public-lane window across a set of `/swim` options: the lane_timeline
 // segment with the MOST public lanes (ties broken by earliest start), tagged with
 // its facility. null when no option publishes a lane split.
-function bestWindow(options) {
+function bestWindow(options: InsightOption[] | undefined) {
   let best = null;
   for (const o of options || []) {
     const tl = o.lane_timeline;
@@ -40,13 +99,13 @@ function bestWindow(options) {
 }
 
 // Distinct facility names that produced at least one session (curated hours).
-function facilitiesWithHours(options) {
+function facilitiesWithHours(options: InsightOption[] | undefined): number {
   return new Set((options || []).map((o) => o.facility)).size;
 }
 
 // The honest coverage split from the answer's statuses: how many nearby pools are
 // closed (with reason) vs merely hours-not-listed (unknown ≠ closed).
-function honestyCounts(answer) {
+function honestyCounts(answer: InsightAnswer | undefined) {
   const statuses = (answer && answer.statuses) || [];
   let closed = 0;
   let unlisted = 0;
@@ -57,7 +116,7 @@ function honestyCounts(answer) {
   return { closed, unlisted };
 }
 
-function dayInsight(answer) {
+function dayInsight(answer: InsightAnswer | undefined): Insight {
   const options = (answer && answer.options) || [];
   const n = facilitiesWithHours(options);
   const noun = n === 1 ? 'pool' : 'pools';
@@ -79,10 +138,10 @@ function dayInsight(answer) {
   return { mode: 'day', poolsCount: n, best, closed, unlisted, text };
 }
 
-function poolInsight(week) {
+function poolInsight(week: InsightWeek | undefined): Insight {
   const days = (week && week.days) || [];
-  const openDays = days.filter((d) => d.answer && d.answer.options.length > 0).length;
-  const allOptions = days.flatMap((d) => (d.answer && d.answer.options) || []);
+  const openDays = days.filter((d) => (d.answer?.options ?? []).length > 0).length;
+  const allOptions: InsightOption[] = days.flatMap((d) => d.answer?.options ?? []);
   const best = bestWindow(allOptions);
   const facility = week && week.facility ? week.facility : 'this pool';
   const text = best
@@ -99,7 +158,10 @@ function poolInsight(week) {
  * @param {object} data `{ day: AnswerOut, week: {facility, days:[{answer}]} }`.
  * @param {object} filter FilterState (its `mode` selects Day vs Pool).
  */
-export function computeInsight(data, filter) {
+export function computeInsight(
+  data: InsightData | undefined,
+  filter: { mode?: string } | undefined,
+): Insight {
   if (filter && filter.mode === 'pool') return poolInsight(data && data.week);
   return dayInsight(data && data.day);
 }
@@ -108,8 +170,11 @@ export function computeInsight(data, filter) {
  * createInsightBar(el, opts) — mount the InsightBar into `el` and paint the
  * current summary. Call `update(data, filter)` on every refetch.
  */
-export function createInsightBar(el, opts = {}) {
-  const doc = el.ownerDocument || globalThis.document;
+export function createInsightBar<T extends El>(
+  el: T,
+  opts: { data?: InsightData; filter?: { mode?: string } } = {},
+) {
+  const doc = el.ownerDocument || asDoc(globalThis.document);
   el.classList.add('insight');
   el.setAttribute('role', 'status');
   el.setAttribute('aria-live', 'polite');
@@ -118,7 +183,7 @@ export function createInsightBar(el, opts = {}) {
   line.className = 'insight__line';
   el.appendChild(line);
 
-  function update(data, filter) {
+  function update(data?: InsightData, filter?: { mode?: string }) {
     const insight = computeInsight(data || {}, filter || { mode: 'day' });
     line.textContent = insight.text;
     return insight;

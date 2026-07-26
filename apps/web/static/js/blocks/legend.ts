@@ -8,6 +8,7 @@
 // swatch/badge hues are tokens applied via `.fam-*` and the eligibility badge
 // classes — no colour, no hex lives here.
 
+import { asDoc, type Doc, type El } from '../domtypes.js';
 import { createEligibilityBadge } from '../components/eligibilitybadge.js';
 import { ELIG_IN, ELIG_CHK, ELIG_NO } from '../eligibility.js';
 
@@ -56,7 +57,7 @@ export function legendModel() {
   };
 }
 
-function swatchRow(doc, swatchClass, label) {
+function swatchRow(doc: Doc, swatchClass: string, label: string): El {
   const row = doc.createElement('div');
   row.className = 'legend__row';
   const sw = doc.createElement('span');
@@ -70,7 +71,7 @@ function swatchRow(doc, swatchClass, label) {
   return row;
 }
 
-function group(doc, title) {
+function group(doc: Doc, title: string): El {
   const g = doc.createElement('div');
   g.className = 'legend__group';
   const h = doc.createElement('div');
@@ -84,8 +85,8 @@ function group(doc, title) {
  * createBoardLegend(el, opts) — render the legend into `el` from `legendModel()`.
  * @returns {{el}}
  */
-export function createBoardLegend(el) {
-  const doc = el.ownerDocument || globalThis.document;
+export function createBoardLegend<T extends El>(el: T): { el: T } {
+  const doc = el.ownerDocument || asDoc(globalThis.document);
   const model = legendModel();
   el.classList.add('legend');
   el.setAttribute('role', 'region');

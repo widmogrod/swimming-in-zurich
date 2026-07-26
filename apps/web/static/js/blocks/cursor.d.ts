@@ -24,7 +24,7 @@ export interface Basin {
   name: string;
   lane_count: number;
   strips: LaneStrip[];
-  best_public: { start: string; end: string } | null;
+  best_public: { start: string; end: string; public_lanes?: number } | null;
   weekday: number;
 }
 
@@ -34,7 +34,7 @@ export interface LanePanel {
   basin_name: string;
   panel: {
     day_view: { lane_count: number; strips?: LaneStrip[]; weekday: number };
-    best_public?: { start: string; end: string } | null;
+    best_public?: { start: string; end: string; public_lanes?: number } | null;
   };
   [k: string]: unknown;
 }

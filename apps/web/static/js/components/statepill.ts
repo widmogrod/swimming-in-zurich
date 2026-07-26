@@ -1,6 +1,8 @@
 // StatePill — one of the FOUR never-merged availability states, as a coloured
 // dot + a word (never opacity-only, never colour-only). role=status.
 
+import { asDoc, type El } from '../domtypes.js';
+
 const STATES = {
   open: { label: 'Open', cls: 'is-open' },
   'opens-later': { label: 'Opens later', cls: 'is-later' },
@@ -8,9 +10,20 @@ const STATES = {
   unknown: { label: 'Hours not listed', cls: 'is-unknown' },
 };
 
-export function createStatePill(el, { props = {} } = {}) {
-  const doc = el.ownerDocument || globalThis.document;
-  const state = STATES[props.state] || STATES.unknown;
+export interface StatePillProps {
+  state?: string;
+  label?: string;
+  [k: string]: unknown;
+}
+
+export function createStatePill<T extends El>(
+  el: T,
+  { props = {} }: { props?: StatePillProps } = {},
+): { el: T } {
+  const doc = el.ownerDocument || asDoc(globalThis.document);
+  const state =
+    (STATES as Record<string, (typeof STATES)['unknown']>)[props.state ?? ''] ??
+    STATES.unknown;
   el.classList.add('ui-statepill', state.cls);
   el.setAttribute('role', 'status');
 

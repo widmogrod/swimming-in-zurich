@@ -9,14 +9,19 @@
 // to unit-test headless; the toggle button's ARIA is asserted on the fake DOM. No
 // colour, no hex — the header borrows tokens through its blocks.css classes.
 
+import { asDoc, type El } from '../domtypes.js';
+
+/** The three theme choices, in cycle order. 'auto' defers to the OS/media query. */
+export type Theme = 'auto' | 'light' | 'dark';
+
 // The three theme choices, in cycle order. 'auto' defers to the OS/media query.
-export const THEMES = ['auto', 'light', 'dark'];
+export const THEMES: readonly Theme[] = ['auto', 'light', 'dark'];
 const THEME_LABEL = { auto: 'Auto', light: 'Light', dark: 'Dark' };
 const THEME_ICON = { auto: '◐', light: '☀', dark: '☾' };
 
 /** nextTheme(current) → the next theme in the auto→light→dark→auto cycle. Pure. */
-export function nextTheme(current) {
-  const i = THEMES.indexOf(current);
+export function nextTheme(current: string): Theme {
+  const i = THEMES.indexOf(current as Theme);
   return THEMES[(i + 1) % THEMES.length];
 }
 
@@ -26,7 +31,7 @@ export function nextTheme(current) {
  * 'light'/'dark' set it explicitly (overriding the media query both ways, per the
  * tokens.css contract). Pure w.r.t. everything but `root.dataset`.
  */
-export function applyTheme(root, theme) {
+export function applyTheme(root: El, theme: string): void {
   if (!root || !root.dataset) return;
   if (theme === 'auto') delete root.dataset.theme;
   else root.dataset.theme = theme;
@@ -42,10 +47,22 @@ export function applyTheme(root, theme) {
  *            copy: import('../domtypes.js').El, setDateLabel(text: string): void,
  *            readonly theme: string}}
  */
-export function createIdentityHeader(el, opts = {}) {
-  const doc = el.ownerDocument || globalThis.document;
+export interface HeaderProps {
+  title?: string;
+  dateLabel?: string;
+  theme?: Theme;
+}
+
+export interface HeaderOpts {
+  props?: HeaderProps;
+  root?: El;
+  onThemeChange?: (theme: Theme) => void;
+}
+
+export function createIdentityHeader<T extends El>(el: T, opts: HeaderOpts = {}) {
+  const doc = el.ownerDocument || asDoc(globalThis.document);
   const props = opts.props || {};
-  const root = opts.root || (doc.documentElement != null ? doc.documentElement : null);
+  const root = opts.root ?? doc.documentElement ?? null;
   let theme = props.theme && THEMES.includes(props.theme) ? props.theme : 'auto';
 
   el.classList.add('apphdr');
@@ -86,7 +103,7 @@ export function createIdentityHeader(el, opts = {}) {
   copy.appendChild(copyIcon);
   copy.appendChild(copyLabel);
 
-  let copyTimer = null;
+  let copyTimer: ReturnType<typeof setTimeout> | null = null;
   function flashCopied() {
     copyLabel.textContent = 'Copied';
     if (copyTimer) clearTimeout(copyTimer);
@@ -115,7 +132,7 @@ export function createIdentityHeader(el, opts = {}) {
 
   toggle.addEventListener('click', () => {
     theme = nextTheme(theme);
-    applyTheme(root, theme);
+    if (root) applyTheme(root, theme);
     renderToggle();
     if (opts.onThemeChange) opts.onThemeChange(theme);
   });
@@ -125,13 +142,13 @@ export function createIdentityHeader(el, opts = {}) {
   el.appendChild(copy);
   el.appendChild(toggle);
   renderToggle();
-  applyTheme(root, theme);
+  if (root) applyTheme(root, theme);
 
   return {
     el,
     toggle,
     copy,
-    setDateLabel(text) {
+    setDateLabel(text: string) {
       datebox.textContent = text || '';
     },
     get theme() {

@@ -19,7 +19,7 @@ import { createSourceStrip } from '../components/sourcestrip.js';
 import { eligForAccess, dayEligibility } from '../eligibility.js';
 import { formatCelsius, formatDate, formatKm } from '../datefmt.js';
 import { asDoc, type Doc, type El } from '../domtypes.js';
-import type { Gantt, GanttTimescale } from './gantt.js';
+import { type GanttTimescale } from './gantt.js';
 import { locale } from '../i18n.js';
 import {
   publicAt,
@@ -29,6 +29,8 @@ import {
   type Basin,
 } from './cursor.js';
 import { createGantt } from './gantt.js';
+
+type Gantt = ReturnType<typeof createGantt>;
 
 
 // ---- Local structural types (the urlstate.ts convention) ---------------------------
@@ -420,11 +422,13 @@ function buildProvenance(
   // pools whose /pools/{id} 404s). Lane-plan URLs are the SELECTED basin's PDF when a
   // basin is opened, else EVERY basin's PDF (a basin-less mount shows them all). Prices
   // is the price table's source URL. The strip itself dedups + omits missing sources.
-  const lanePlanUrls = basin
-    ? basinOut && basinOut.lane_plan_url
-      ? [basinOut.lane_plan_url]
+  const lanePlanUrls: (string | null | undefined)[] = basin
+    ? basinOut?.lane_plan_url
+      ? [String(basinOut.lane_plan_url)]
       : []
-    : (detail.basins || []).map((b) => b.lane_plan_url).filter((u) => u);
+    : (detail.basins || [])
+        .map((b) => b.lane_plan_url as string | null | undefined)
+        .filter((u) => u);
   const sourcesHost = doc.createElement('div');
   sourcesHost.className = 'detail__sources';
   createSourceStrip(sourcesHost, {

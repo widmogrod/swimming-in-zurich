@@ -64,6 +64,9 @@ export interface El {
 
 export interface Doc {
   createElement(tag: string): El;
+  /** Present on a real document, absent from FakeDocument — the header stamps
+   *  `[data-theme]` on it when no explicit root is supplied. */
+  documentElement?: El | null;
   activeElement?: El | null;
   defaultView?: WindowLike | null;
 }

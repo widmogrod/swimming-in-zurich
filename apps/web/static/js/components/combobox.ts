@@ -4,24 +4,41 @@
 // active option, Enter to commit, Esc to close. Options may carry `closed: true`
 // (renders a closed badge). Empty filter shows an explicit "no matches" row.
 
+import { asDoc, type El } from '../domtypes.js';
 import { listboxIndex, filterOptions } from './keynav.js';
 
 let _seq = 0;
 
-/**
- * @param {import('../domtypes.js').El} el
- * @param {{props?: Record<string, unknown>, onChange?: (...args: any[]) => void}} [opts]
- * @returns {{el: import('../domtypes.js').El, input: import('../domtypes.js').El, list: import('../domtypes.js').El, readonly value: string, open(): void, close(): void, state(): {open: boolean, active: number, filtered: unknown[]}}}
- */
-export function createCombobox(el, { props = {}, onChange } = {}) {
-  const doc = el.ownerDocument || globalThis.document;
+export interface ComboOption {
+  value: string;
+  label: string;
+  closed?: boolean;
+  note?: string;
+  [k: string]: unknown;
+}
+
+export interface ComboboxProps {
+  options?: ComboOption[];
+  value?: string | null;
+  disabled?: boolean;
+  label?: string;
+  placeholder?: string;
+  emptyText?: string;
+  filterFn?: (option: ComboOption, query: string) => boolean;
+}
+
+export function createCombobox<T extends El>(
+  el: T,
+  { props = {}, onChange }: { props?: ComboboxProps; onChange?: (value: string) => void } = {},
+) {
+  const doc = el.ownerDocument || asDoc(globalThis.document);
   const allOptions = props.options || [];
   const disabled = !!props.disabled;
   let value = props.value != null ? props.value : null;
   let open = false;
   let active = -1;
   let filtered = allOptions.slice();
-  let optionEls = [];
+  let optionEls: El[] = [];
 
   const listId = `ui-combo-${(_seq += 1)}`;
 
@@ -101,7 +118,7 @@ export function createCombobox(el, { props = {}, onChange } = {}) {
     updateActiveDescendant();
   }
 
-  function setOpen(v) {
+  function setOpen(v: boolean) {
     open = !!v && !disabled;
     el.classList.toggle('is-open', open);
     input.setAttribute('aria-expanded', String(open));
@@ -112,7 +129,7 @@ export function createCombobox(el, { props = {}, onChange } = {}) {
     }
   }
 
-  function commit(o) {
+  function commit(o: ComboOption) {
     value = o.value;
     input.value = o.label;
     filtered = allOptions.slice();
@@ -131,7 +148,7 @@ export function createCombobox(el, { props = {}, onChange } = {}) {
   });
 
   input.addEventListener('input', () => {
-    filtered = filterOptions(allOptions, input.value, props.filterFn);
+    filtered = filterOptions(allOptions, input.value ?? '', props.filterFn);
     active = -1;
     renderList();
     setOpen(true);
@@ -150,7 +167,7 @@ export function createCombobox(el, { props = {}, onChange } = {}) {
       }
       return;
     }
-    const ni = listboxIndex(active, filtered.length, e.key);
+    const ni = listboxIndex(active, filtered.length, e.key ?? '');
     if (ni === null) return;
     e.preventDefault();
     if (!open) setOpen(true);

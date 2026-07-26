@@ -9,15 +9,47 @@
 // `geolocation` is injectable (props.geolocation) so the fallback path is
 // unit-testable without a browser; it defaults to navigator.geolocation.
 
+import { asDoc, type El } from '../domtypes.js';
 import { filterOptions } from './keynav.js';
 
-/**
- * @param {import('../domtypes.js').El} el
- * @param {{props?: Record<string, unknown>, onChange?: (...args: any[]) => void}} [opts]
- * @returns {{el: import('../domtypes.js').El, input: import('../domtypes.js').El, geoBtn: import('../domtypes.js').El, useLocation: unknown, isOpen(): boolean}}
- */
-export function createPlaceTypeahead(el, { props = {}, onChange } = {}) {
-  const doc = el.ownerDocument || globalThis.document;
+export interface GeoPosition {
+  coords: { latitude: number; longitude: number };
+}
+
+export interface Place {
+  label: string;
+  lat: number;
+  lon: number;
+  /** How the place was chosen: a preset, the browser geolocation, or a fallback after
+   *  geolocation was denied/unavailable. Surfaced so the UI never implies a precision it
+   *  does not have. */
+  source?: string;
+  /** Why a fallback was used (geolocation denied/unavailable) — never invented. */
+  reason?: string;
+}
+
+export interface PlaceTypeaheadProps {
+  presets?: Place[];
+  disabled?: boolean;
+  geolocation?: {
+    getCurrentPosition(ok: (p: GeoPosition) => void, err: (e?: unknown) => void): void;
+  } | null;
+  fallback?: Place | null;
+  label?: string;
+  placeholder?: string;
+  geoLabel?: string;
+  hereLabel?: string;
+  filterFn?: (option: Place, query: string) => boolean;
+}
+
+export function createPlaceTypeahead<T extends El>(
+  el: T,
+  {
+    props = {},
+    onChange,
+  }: { props?: PlaceTypeaheadProps; onChange?: (place: Place) => void } = {},
+) {
+  const doc = el.ownerDocument || asDoc(globalThis.document);
   const presets = props.presets || [];
   const disabled = !!props.disabled;
   const geolocation =
@@ -56,7 +88,7 @@ export function createPlaceTypeahead(el, { props = {}, onChange } = {}) {
   const list = doc.createElement('ul');
   list.setAttribute('role', 'listbox');
 
-  function setOpen(v) {
+  function setOpen(v: boolean) {
     open = !!v && !disabled;
     input.setAttribute('aria-expanded', String(open));
     list.style.display = open ? '' : 'none';
@@ -79,7 +111,7 @@ export function createPlaceTypeahead(el, { props = {}, onChange } = {}) {
     });
   }
 
-  function choosePreset(p) {
+  function choosePreset(p: Place) {
     input.value = p.label;
     setOpen(false);
     if (onChange) {
@@ -87,7 +119,7 @@ export function createPlaceTypeahead(el, { props = {}, onChange } = {}) {
     }
   }
 
-  function fallbackTo(reason) {
+  function fallbackTo(reason: string) {
     setOpen(false);
     if (fallback && onChange) {
       onChange({

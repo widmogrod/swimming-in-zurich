@@ -3,15 +3,27 @@
 // colour from ✕ (they are never merged). role=img with the reason as the label /
 // title. `variant: 'tag'` renders the filled board-row pill.
 
+import { asDoc, type El } from '../domtypes.js';
+
 const ELIG = {
   in: { word: "You're in", cls: 'is-in', mark: '✓' },
   chk: { word: 'Check', cls: 'is-chk', mark: '?' },
   no: { word: 'Not for you', cls: 'is-no', mark: '✕' },
 };
 
-export function createEligibilityBadge(el, { props = {} } = {}) {
-  const doc = el.ownerDocument || globalThis.document;
-  const e = ELIG[props.state] || ELIG.chk;
+export interface EligibilityBadgeProps {
+  state?: string;
+  reason?: string;
+  variant?: string;
+  [k: string]: unknown;
+}
+
+export function createEligibilityBadge<T extends El>(
+  el: T,
+  { props = {} }: { props?: EligibilityBadgeProps } = {},
+): { el: T } {
+  const doc = el.ownerDocument || asDoc(globalThis.document);
+  const e = (ELIG as Record<string, (typeof ELIG)['chk']>)[props.state ?? ''] ?? ELIG.chk;
   el.classList.add('ui-eligbadge', e.cls);
   if (props.variant === 'tag') el.classList.add('ui-eligbadge--tag');
 

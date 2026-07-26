@@ -15,11 +15,12 @@
 // A COMPONENT (peer of provenancestamp.js): currentColor icons via iconSvg, no raw
 // hue (every colour is a token via a class in components.css).
 
+import { asDoc, type El } from '../domtypes.js';
 import { iconSvg } from './iconset.js';
 
 // hostname for the aria-label; falls back to the raw URL if it can't be parsed
 // (we still never fabricate — an unparseable URL is named verbatim).
-function hostOf(url) {
+function hostOf(url: string): string {
   try {
     return new URL(url).hostname;
   } catch {
@@ -27,8 +28,25 @@ function hostOf(url) {
   }
 }
 
-export function createSourceStrip(el, { props = {} } = {}) {
-  const doc = el.ownerDocument || globalThis.document;
+interface ChipSpec {
+  kind: string;
+  label: string;
+  icon: string;
+  pdf?: boolean;
+}
+
+export interface SourceStripProps {
+  officialUrl?: string | null;
+  lanePlanUrls?: (string | null | undefined)[];
+  pricesUrl?: string | null;
+  [k: string]: unknown;
+}
+
+export function createSourceStrip<T extends El>(
+  el: T,
+  { props = {} }: { props?: SourceStripProps } = {},
+): { el: T } {
+  const doc = el.ownerDocument || asDoc(globalThis.document);
   el.classList.add('ui-sourcestrip');
 
   const officialUrl = props.officialUrl || null;
@@ -37,9 +55,9 @@ export function createSourceStrip(el, { props = {} } = {}) {
 
   // Build the candidate list in priority order, deduping by exact URL string across
   // kinds (first wins). `pdf` marks a lane-plan chip.
-  const seen = new Set();
-  const chips = [];
-  const consider = (url, spec) => {
+  const seen = new Set<string>();
+  const chips: (ChipSpec & { url: string })[] = [];
+  const consider = (url: string | null | undefined, spec: ChipSpec) => {
     if (url == null || url === '') return;
     if (seen.has(url)) return;
     seen.add(url);

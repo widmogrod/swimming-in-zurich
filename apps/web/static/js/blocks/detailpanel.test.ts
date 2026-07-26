@@ -12,7 +12,7 @@ import { createGantt } from './gantt.js';
 import { createDetailPanel } from './detailpanel.js';
 import type { FacilityDetail } from './detailpanel.js';
 import type { LanePanel } from './cursor.js';
-import { must } from '../testutil.js';
+import { fake, must } from '../testutil.js';
 
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -61,9 +61,9 @@ test('(b) the headline is CURSOR-driven, not PEAK-driven (the bug the prototype 
   expect(n).toBe(publicAt(BASIN, T).public);
   expect(n).not.toBe(peak); // a peak-driven headline would (wrongly) show `peak` here
   // the rendered headline number reflects the cursor, and the pip count matches it
-  const bignum = must(p.el.query(hasClass('detail__bignum')));
+  const bignum = must(fake(p.el).query(hasClass('detail__bignum')));
   expect(bignum.textContent).toBe(String(n));
-  expect(p.el.queryAll((e) => e.classList.contains('detail__pip') && e.classList.contains('is-on')).length).toBe(n);
+  expect(fake(p.el).queryAll((e) => e.classList.contains('detail__pip') && e.classList.contains('is-on')).length).toBe(n);
 });
 
 test('the panel reuses the S1 primitives (StatePill, LengthLanesBadge, EligibilityBadge)', () => {
@@ -74,15 +74,15 @@ test('the panel reuses the S1 primitives (StatePill, LengthLanesBadge, Eligibili
     timescale: ts,
     filter: { gender: 'female', age: 30 },
   });
-  expect(must(p.el.query(hasClass('ui-statepill')))).toBeTruthy();
-  expect(must(p.el.query(hasClass('ui-lenlanes')))).toBeTruthy();
-  expect(must(p.el.query(hasClass('ui-eligbadge')))).toBeTruthy();
+  expect(must(fake(p.el).query(hasClass('ui-statepill')))).toBeTruthy();
+  expect(must(fake(p.el).query(hasClass('ui-lenlanes')))).toBeTruthy();
+  expect(must(fake(p.el).query(hasClass('ui-eligbadge')))).toBeTruthy();
 });
 
 test('(d) provenance is present, carrying the source', () => {
   const ts = newTs();
   const p = createDetailPanel(mount(), { detail: POOL, basin: BASIN, timescale: ts });
-  const prov = must(p.el.query(hasClass('ui-provstamp')));
+  const prov = must(fake(p.el).query(hasClass('ui-provstamp')));
   expect(prov).toBeTruthy();
   expect(prov.textContent.includes(String(POOL.provenance?.source))).toBeTruthy();
 });
@@ -118,11 +118,11 @@ test('(c) a pool with NO lane plan still renders the full facts block, not a dea
     distanceKm: 1.2,
   });
   // Facts + provenance are present (the panel is populated, never a bare message).
-  expect(must(p.el.query(hasClass('ui-statepill')))).toBeTruthy();
-  expect(must(p.el.query(hasClass('ui-lenlanes')))).toBeTruthy();
-  expect(must(p.el.query(hasClass('ui-eligbadge')))).toBeTruthy();
-  expect(must(p.el.query(hasClass('ui-provstamp')))).toBeTruthy();
-  const facts = p.el.queryAll(hasClass('detail__fact'));
+  expect(must(fake(p.el).query(hasClass('ui-statepill')))).toBeTruthy();
+  expect(must(fake(p.el).query(hasClass('ui-lenlanes')))).toBeTruthy();
+  expect(must(fake(p.el).query(hasClass('ui-eligbadge')))).toBeTruthy();
+  expect(must(fake(p.el).query(hasClass('ui-provstamp')))).toBeTruthy();
+  const facts = fake(p.el).queryAll(hasClass('detail__fact'));
   expect(
     must(facts.find((r) => r.textContent.startsWith('Distance'))).textContent.includes('1.2 km'),
   ).toBeTruthy();
@@ -133,9 +133,9 @@ test('(c) a pool with NO lane plan still renders the full facts block, not a dea
   ).toBeTruthy();
   // The lane absence is a NOTE inside the populated panel — never the whole panel,
   // and there is NO Gantt to desync.
-  const pill = must(p.el.query(hasClass('ui-statepill')));
+  const pill = must(fake(p.el).query(hasClass('ui-statepill')));
   expect(pill.textContent.includes('lane split not published')).toBeTruthy();
-  const note = must(p.el.query(hasClass('detail__note')));
+  const note = must(fake(p.el).query(hasClass('detail__note')));
   expect(note && note.textContent.toLowerCase().includes('no published lane plan')).toBeTruthy();
   expect(p.gantt).toBe(null);
 });
@@ -149,9 +149,9 @@ test('closed / uncurated panels keep their honesty (FIX 3): closed reason kept, 
     state: 'closed',
     reason: 'Sommerpause',
   });
-  const closedPill = must(closed.el.query(hasClass('ui-statepill')));
+  const closedPill = must(fake(closed.el).query(hasClass('ui-statepill')));
   expect(closedPill.textContent.includes('Closed')).toBeTruthy();
-  expect(must(closed.el.query(hasClass('detail__note'))).textContent.includes('Sommerpause')).toBeTruthy();
+  expect(must(fake(closed.el).query(hasClass('detail__note'))).textContent.includes('Sommerpause')).toBeTruthy();
 
   const uncurated = createDetailPanel(mount(), {
     detail: POOL,
@@ -159,11 +159,11 @@ test('closed / uncurated panels keep their honesty (FIX 3): closed reason kept, 
     timescale: ts,
     state: 'uncurated',
   });
-  const uncPill = must(uncurated.el.query(hasClass('ui-statepill')));
+  const uncPill = must(fake(uncurated.el).query(hasClass('ui-statepill')));
   expect(uncPill.textContent.toLowerCase().includes('hours not listed')).toBeTruthy();
-  expect(must(uncurated.el.query(hasClass('detail__note'))).textContent.toLowerCase().includes('not the same as closed')).toBeTruthy();
+  expect(must(fake(uncurated.el).query(hasClass('detail__note'))).textContent.toLowerCase().includes('not the same as closed')).toBeTruthy();
   // Both still carry facts + provenance (populated panels), and neither has a Gantt.
-  expect(must(closed.el.query(hasClass('ui-provstamp'))) && must(uncurated.el.query(hasClass('ui-provstamp')))).toBeTruthy();
+  expect(must(fake(closed.el).query(hasClass('ui-provstamp'))) && must(fake(uncurated.el).query(hasClass('ui-provstamp')))).toBeTruthy();
   expect(closed.gantt).toBe(null);
   expect(uncurated.gantt).toBe(null);
 });
@@ -183,7 +183,7 @@ test('onOpenWeek renders a header button that invokes the callback', () => {
       opened += 1;
     },
   });
-  const head = must(p.el.query(hasClass('detail__head')));
+  const head = must(fake(p.el).query(hasClass('detail__head')));
   const btn = must(head.query(hasClass('detail__weekbtn')));
   expect(btn).toBeTruthy();
   expect(btn.tagName).toBe('BUTTON');
@@ -195,14 +195,14 @@ test('onOpenWeek renders a header button that invokes the callback', () => {
 test('the week button is absent when no onOpenWeek callback is given', () => {
   const ts = newTs();
   const p = createDetailPanel(mount(), { detail: POOL, basin: BASIN, timescale: ts });
-  expect(p.el.query(hasClass('detail__weekbtn'))).toBe(null);
+  expect(fake(p.el).query(hasClass('detail__weekbtn'))).toBe(null);
 });
 
 // --- S2: the SourceStrip is wired into the panel in every state ---
 const laneChips = (p: { el: FakeElement }) =>
-  p.el.queryAll((e) => e.classList.contains('ui-sourcestrip__chip--lane'));
+  fake(p.el).queryAll((e) => e.classList.contains('ui-sourcestrip__chip--lane'));
 const officialChip = (p: { el: FakeElement }) =>
-  must(p.el.query((e) => e.classList.contains('ui-sourcestrip__chip--official')));
+  must(fake(p.el).query((e) => e.classList.contains('ui-sourcestrip__chip--official')));
 
 test('S2: no selected basin → Official-page chip + BOTH distinct lane-plan PDFs (all-basins branch)', () => {
   const ts = newTs();
@@ -244,7 +244,7 @@ test('S2: uncurated panel (detail = {}) still shows the Official-page chip and n
     state: 'uncurated',
     officialUrl: 'https://official.example/somepool',
   });
-  const chips = p.el.queryAll((e) => e.classList.contains('ui-sourcestrip__chip'));
+  const chips = fake(p.el).queryAll((e) => e.classList.contains('ui-sourcestrip__chip'));
   expect(chips.length).toBe(1);
   expect(chips[0].classList.contains('ui-sourcestrip__chip--official')).toBeTruthy();
   expect(chips[0].getAttribute('href')).toBe('https://official.example/somepool');
@@ -255,12 +255,12 @@ test('the panel embeds the LaneGantt on the SAME timescale instance (no desync p
   const p = createDetailPanel(mount(), { detail: POOL, basin: BASIN, timescale: ts });
   expect(p.gantt).toBeTruthy();
   expect(must(p.gantt).timescale).toBe(ts); // literally the same object
-  expect(must(p.el.query(hasClass('gantt')))).toBeTruthy();
+  expect(must(fake(p.el).query(hasClass('gantt')))).toBeTruthy();
 });
 
 // --- S4: the facility-level LIVE water temperature (Baditicker), rendered honestly ---
 const liveRow = (p: { el: FakeElement }) =>
-  p.el.queryAll(hasClass('detail__fact')).find((r: FakeElement) => r.textContent.startsWith('Live water'));
+  fake(p.el).queryAll(hasClass('detail__fact')).find((r: FakeElement) => r.textContent.startsWith('Live water'));
 
 test('S4: a live reading with a temp shows "23 °C · measured N min ago" (Heuried-shaped)', () => {
   const detail = {
@@ -282,7 +282,7 @@ test('S4: a live reading with a temp shows "23 °C · measured N min ago" (Heuri
   expect(row.textContent.includes('23 °C')).toBeTruthy();
   expect(row.textContent.includes('measured 7 min ago')).toBeTruthy();
   // a fresh reading is NOT marked stale.
-  expect(p.el.query(hasClass('detail__live--stale'))).toBe(null);
+  expect(fake(p.el).query(hasClass('detail__live--stale'))).toBe(null);
 });
 
 test('S4: an empty feed cell reads "Not yet measured" (+ closed), never a number or 0', () => {
@@ -304,7 +304,7 @@ test('S4: an empty feed cell reads "Not yet measured" (+ closed), never a number
   expect(row.textContent.includes('Not yet measured')).toBeTruthy();
   expect(row.textContent.includes('closed')).toBeTruthy();
   expect(!/°C/.test(row.textContent)).toBeTruthy();
-  expect(must(p.el.query(hasClass('detail__live--muted')))).toBeTruthy();
+  expect(must(fake(p.el).query(hasClass('detail__live--muted')))).toBeTruthy();
 });
 
 test('S4: unavailable shows the reason and NEVER a stale number', () => {
@@ -325,7 +325,7 @@ test('S4: unavailable shows the reason and NEVER a stale number', () => {
   const row = must(liveRow(p), 'Live water row');
   expect(row.textContent.includes('no baditicker key')).toBeTruthy();
   expect(!/°C/.test(row.textContent)).toBeTruthy();
-  expect(must(p.el.query(hasClass('detail__live--muted')))).toBeTruthy();
+  expect(must(fake(p.el).query(hasClass('detail__live--muted')))).toBeTruthy();
 });
 
 test('S4: a stale reading (older than the freshness limit) is visibly marked', () => {
@@ -346,7 +346,7 @@ test('S4: a stale reading (older than the freshness limit) is visibly marked', (
   const row = must(liveRow(p), 'Live water row');
   expect(row.textContent.includes('22 °C')).toBeTruthy();
   expect(row.textContent.includes('measured 2 days ago')).toBeTruthy();
-  expect(must(p.el.query(hasClass('detail__live--stale')))).toBeTruthy();
+  expect(must(fake(p.el).query(hasClass('detail__live--stale')))).toBeTruthy();
 });
 
 test('S4: no live_water_temp block → the Live water row is simply omitted', () => {
@@ -375,16 +375,16 @@ test('S1: a basin-less location-only detail (Heuried-shaped) renders without err
     officialUrl: 'https://official.example/heuried',
   });
   // Title reflects the pool; the facts block rendered.
-  expect(must(p.el.query(hasClass('detail__title'))).textContent).toBe('Freibad Heuried');
-  expect(must(p.el.query(hasClass('detail__facts')))).toBeTruthy();
+  expect(must(fake(p.el).query(hasClass('detail__title'))).textContent).toBe('Freibad Heuried');
+  expect(must(fake(p.el).query(hasClass('detail__facts')))).toBeTruthy();
   // No per-lane headline for a basin-less panel, and no Gantt was built.
-  expect(p.el.query(hasClass('detail__headline'))).toBe(null);
+  expect(fake(p.el).query(hasClass('detail__headline'))).toBe(null);
   expect(p.gantt).toBe(null);
   // Water temp degrades honestly to "Not listed" (no basin to read a temperature from).
-  const water = p.el.queryAll(hasClass('detail__factval')).map((e) => e.textContent);
+  const water = fake(p.el).queryAll(hasClass('detail__factval')).map((e) => e.textContent);
   expect(water.some((t) => t.includes('Not listed'))).toBeTruthy();
   // The uncurated honesty note is present (location known, timetable not).
-  expect(must(p.el.query((e) => e.classList.contains('detail__note--uncurated')))).toBeTruthy();
+  expect(must(fake(p.el).query((e) => e.classList.contains('detail__note--uncurated')))).toBeTruthy();
   // headlineAt is safe to call on a basin-less panel (returns the zero reading, no throw).
   expect(p.headlineAt(600)).toEqual({ public: 0, total: 0 });
 });

@@ -24,7 +24,7 @@ def _get(path: str) -> str:
 def test_served_legend_keeps_the_three_terminal_states_distinct() -> None:
     """The served BoardLegend keys the three never-merged terminal states as three
     distinct rows — open / closed-with-reason / hours-not-listed — never collapsed."""
-    legend = _get("/static/js/blocks/legend.js")
+    legend = _get("/static/js/blocks/legend.ts")
     assert "Open (public lanes)" in legend
     assert "Closed — with reason" in legend
     assert "Hours not listed yet" in legend
@@ -36,7 +36,7 @@ def test_served_legend_keeps_the_three_terminal_states_distinct() -> None:
 def test_served_legend_keeps_check_distinct_from_not_for_you() -> None:
     """Eligibility ? (chk) is never merged with ✕ (no): the served legend key carries
     BOTH 'Check with the venue' and 'Not for you' as separate rows."""
-    legend = _get("/static/js/blocks/legend.js")
+    legend = _get("/static/js/blocks/legend.ts")
     assert "Check with the venue" in legend  # ? (chk)
     assert "Not for you" in legend  # ✕ (no)
 
@@ -45,7 +45,7 @@ def test_served_legend_honesty_note_disclaims_busyness() -> None:
     """The honesty note states thickness is the real public-lane split, NOT busyness,
     and that busyness has no source yet — so the legend can't imply a data source that
     does not exist."""
-    legend = _get("/static/js/blocks/legend.js")
+    legend = _get("/static/js/blocks/legend.ts")
     assert "not busyness" in legend
     assert "no source yet" in legend
 
@@ -62,7 +62,7 @@ def test_served_ribbonmodel_keeps_unknown_distinct_from_closed() -> None:
     """The served ribbon model renders a closed status as a DASHED ribbon and an
     uncurated status as a DOTTED ghost with the 'unknown' family — never merged into
     'closed'."""
-    model = _get("/static/js/blocks/ribbonmodel.js")
+    model = _get("/static/js/blocks/ribbonmodel.ts")
     assert "'dashed'" in model  # closed
     assert "'dotted'" in model  # uncurated ghost
     assert "family: 'closed'" in model
