@@ -26,7 +26,7 @@ import { cursorX as sharedCursorX, hhmmToMin } from './cursor.js';
 import { createEligibilityBadge } from '../components/eligibilitybadge.js';
 import { dayParts } from '../datefmt.js';
 import { asDoc, type Doc, type El, type WindowLike } from '../domtypes.js';
-import { locale } from '../i18n.js';
+import { locale, t } from '../i18n.js';
 
 
 // ---- Local structural types (the urlstate.ts convention) ---------------------------
@@ -207,15 +207,26 @@ export function rowStatus(row: {
  *  Returns null for an open row (its ribbons say everything). Pure, exported for tests. */
 export function rowStatusLine(row: {
   options?: unknown[];
-  statuses?: { status: string; detail?: string | null }[];
+  statuses?: {
+    status: string;
+    detail?: string | null;
+    detail_code?: string;
+    detail_params?: Record<string, string>;
+  }[];
 }) {
   if ((row.options || []).length > 0) return null;
   const closed = (row.statuses || []).find((s) => s.status === 'closed');
   if (closed) {
-    return { kind: 'closed', text: closed.detail ? `Closed · ${closed.detail}` : 'Closed' };
+    // Rendered from the S2 code, not the server's `detail` prose. The curated reason is
+    // DATA (still German until S4), so it is interpolated rather than translated.
+    const reason = closed.detail_params?.reason ?? closed.detail;
+    return {
+      kind: 'closed',
+      text: reason ? t('status.closed_reason', { reason }) : t('status.closed'),
+    };
   }
   if ((row.statuses || []).some((s) => s.status === 'uncurated')) {
-    return { kind: 'unknown', text: 'Hours not listed' };
+    return { kind: 'unknown', text: t('status.uncurated') };
   }
   return null;
 }

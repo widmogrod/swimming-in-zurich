@@ -9,39 +9,44 @@
 // classes — no colour, no hex lives here.
 
 import { asDoc, type Doc, type El } from '../domtypes.js';
+import { t } from '../i18n.js';
 import { createEligibilityBadge } from '../components/eligibilitybadge.js';
 import { ELIG_IN, ELIG_CHK, ELIG_NO } from '../eligibility.js';
 
 // The honesty note is a constant so a test can pin it (the invariant can't be
 // silently reworded to imply a busyness source that does not exist).
-export const HONESTY_NOTE =
-  'Ribbon thickness is today’s real public-lane split — not busyness, which has no source yet.';
+/** The honesty note. Now a CATALOG lookup, but still exported as a constant so the
+ *  invariant test can pin it: it must never be reworded to imply a busyness source that
+ *  does not exist. */
+export const HONESTY_NOTE = t('legend.honestyNote');
 
 // The eight access families (each maps to a `.fam-*` colour token) + their words.
+// Key-only: the label is resolved from the catalog at render, so the legend is
+// translatable without the model changing shape (legend.test asserts on KEYS).
 const FAMILIES = [
-  { family: 'public', label: 'Public swim' },
-  { family: 'lane', label: 'Lane swim' },
-  { family: 'family', label: 'Family time' },
-  { family: 'women', label: 'Women only' },
-  { family: 'seniors', label: 'Seniors only' },
-  { family: 'adults', label: 'Adults only' },
-  { family: 'school', label: 'School reserved' },
-  { family: 'club', label: 'Club reserved' },
+  { family: 'public', label: t('access.public') },
+  { family: 'lane', label: t('access.lane') },
+  { family: 'family', label: t('access.family') },
+  { family: 'women', label: t('access.women') },
+  { family: 'seniors', label: t('access.seniors') },
+  { family: 'adults', label: t('access.adults') },
+  { family: 'school', label: t('access.school') },
+  { family: 'club', label: t('access.club') },
 ];
 
 // The three terminal states, each its own swatch class (never merged).
 const STATES = [
-  { key: 'open', label: 'Open (public lanes)' },
-  { key: 'closed', label: 'Closed — with reason' },
-  { key: 'unknown', label: 'Hours not listed yet' },
+  { key: 'open', label: t('legend.state.open') },
+  { key: 'closed', label: t('legend.state.closed') },
+  { key: 'unknown', label: t('legend.state.unknown') },
 ];
 
 // The eligibility key — ? is DISTINCT from ✕ (never merged), and colours are the
 // muted badge tokens (never alarm red).
 const ELIGIBILITY = [
-  { state: ELIG_IN, label: 'You’re in' },
-  { state: ELIG_CHK, label: 'Check with the venue' },
-  { state: ELIG_NO, label: 'Not for you' },
+  { state: ELIG_IN, label: t('elig.in') },
+  { state: ELIG_CHK, label: t('elig.chk') },
+  { state: ELIG_NO, label: t('elig.no') },
 ];
 
 /**
@@ -90,22 +95,22 @@ export function createBoardLegend<T extends El>(el: T): { el: T } {
   const model = legendModel();
   el.classList.add('legend');
   el.setAttribute('role', 'region');
-  el.setAttribute('aria-label', 'Board legend');
+  el.setAttribute('aria-label', t('legend.label'));
 
   // Access families.
-  const fams = group(doc, 'Session type');
+  const fams = group(doc, t('legend.group.sessionType'));
   for (const f of model.families) fams.appendChild(swatchRow(doc, `fam-${f.family}`, f.label));
   el.appendChild(fams);
 
   // The three terminal states.
-  const states = group(doc, 'Availability');
+  const states = group(doc, t('legend.group.availability'));
   for (const s of model.states) {
     states.appendChild(swatchRow(doc, `legend__state legend__state--${s.key}`, s.label));
   }
   el.appendChild(states);
 
   // Eligibility key — reuse the EligibilityBadge primitive so the key can't drift.
-  const elig = group(doc, 'For you');
+  const elig = group(doc, t('legend.group.forYou'));
   for (const e of model.eligibility) {
     const row = doc.createElement('div');
     row.className = 'legend__row';

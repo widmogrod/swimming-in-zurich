@@ -12,6 +12,7 @@
 // `createInsightBar` only writes the derived text into the DOM. No colour, no hex.
 
 import { asDoc, type El } from '../domtypes.js';
+import { t } from '../i18n.js';
 
 /** The slice of a `/swim` option the insight summary reads. */
 export interface InsightOption {
@@ -116,26 +117,46 @@ function honestyCounts(answer: InsightAnswer | undefined) {
   return { closed, unlisted };
 }
 
+/** Join independent clauses for display. NOT sentence assembly: each clause is a whole
+ *  translatable message, and ' · ' is punctuation between list items, never grammar. */
+function clauses(...parts: (string | null)[]): string {
+  return parts.filter((p): p is string => !!p).join(' · ');
+}
+
 function dayInsight(answer: InsightAnswer | undefined): Insight {
   const options = (answer && answer.options) || [];
   const n = facilitiesWithHours(options);
-  const noun = n === 1 ? 'pool' : 'pools';
-  const lead = `${n} ${noun} with curated hours nearby`;
   const best = bestWindow(options);
-  const base = best
-    ? `${lead} · best public window ${best.public_lanes}/${best.lane_count} at ` +
-      `${best.facility} ${best.start}–${best.end}`
-    : n > 0
-      ? `${lead} · lane split not published yet`
-      : 'No pools with curated hours for this day nearby';
-  // One calm line: append the honest closed / hours-not-listed coverage split so the
-  // insight states WHY the other nearby pools aren't plannable (plan FIX 5).
   const { closed, unlisted } = honestyCounts(answer);
-  const text =
-    closed || unlisted
-      ? `${base} · ${closed} closed, ${unlisted} hours-not-listed nearby`
-      : base;
-  return { mode: 'day', poolsCount: n, best, closed, unlisted, text };
+
+  // Clause 1: how many pools we can actually plan with (or an honest "none").
+  const lead = n > 0 ? t('insight.day.pools', { count: n }) : t('insight.day.none');
+  // Clause 2: the best window, or why there isn't one. Absent entirely when we have
+  // no plannable pools — there is nothing to qualify.
+  const window =
+    n === 0
+      ? null
+      : best
+        ? t('insight.bestWindow', {
+            public: best.public_lanes,
+            total: best.lane_count,
+            facility: best.facility ?? '',
+            start: best.start,
+            end: best.end,
+          })
+        : t('insight.noSplit');
+  // Clause 3: the honest coverage split, so the line states WHY the other nearby pools
+  // aren't plannable (plan FIX 5).
+  const coverage = closed || unlisted ? t('insight.coverage', { closed, unlisted }) : null;
+
+  return {
+    mode: 'day',
+    poolsCount: n,
+    best,
+    closed,
+    unlisted,
+    text: clauses(lead, window, coverage),
+  };
 }
 
 function poolInsight(week: InsightWeek | undefined): Insight {
@@ -143,14 +164,22 @@ function poolInsight(week: InsightWeek | undefined): Insight {
   const openDays = days.filter((d) => (d.answer?.options ?? []).length > 0).length;
   const allOptions: InsightOption[] = days.flatMap((d) => d.answer?.options ?? []);
   const best = bestWindow(allOptions);
-  const facility = week && week.facility ? week.facility : 'this pool';
-  const text = best
-    ? `Reliable public lanes at ${facility}: up to ${best.public_lanes} of ` +
-      `${best.lane_count} around ${best.start} · open ${openDays} of 7 days this week`
-    : openDays > 0
-      ? `${facility}: open ${openDays} of 7 days this week · lane split not published yet`
-      : `${facility}: no public sessions found this week`;
-  return { mode: 'pool', openDays, best, text };
+  const facility = week && week.facility ? week.facility : t('insight.pool.thisPool');
+
+  if (!best && openDays === 0) {
+    return { mode: 'pool', openDays, best, text: t('insight.pool.none', { facility }) };
+  }
+  const lead = best
+    ? t('insight.pool.reliable', {
+        facility,
+        public: best.public_lanes,
+        total: best.lane_count,
+        start: best.start,
+      })
+    : null;
+  const daysClause = t('insight.pool.openDays', { count: openDays });
+  const split = best ? null : t('insight.noSplit');
+  return { mode: 'pool', openDays, best, text: clauses(lead, daysClause, split) };
 }
 
 /**

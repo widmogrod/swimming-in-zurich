@@ -12,6 +12,7 @@
 
 // The three state keys. Exported so callers name them, never string-drift.
 import { asDoc, type Doc, type El } from '../domtypes.js';
+import { t } from '../i18n.js';
 
 export const STATE_CLOSED = 'closed';
 export const STATE_UNLISTED = 'hours-not-listed';
@@ -32,13 +33,13 @@ export interface AnswerLike {
 // The plain-language copy for each state (kept honest: unknown ≠ closed).
 const COPY = {
   [STATE_CLOSED]: {
-    title: 'Closed',
-    body: (detail?: string | null) => (detail ? `Closed — ${detail}` : 'Closed for now.'),
+    title: t('state.closed.title'),
+    body: (detail?: string | null) =>
+      detail ? t('state.closed.body', { detail }) : t('state.closed.bodyNoReason'),
   },
   [STATE_UNLISTED]: {
-    title: 'Hours not listed yet',
-    body: () =>
-      'We don’t have this pool’s timetable yet — it may well be open. This is not the same as closed.',
+    title: t('state.unlisted.title'),
+    body: () => t('state.unlisted.body'),
   },
   [STATE_NONE]: {
     title: 'No pools nearby',
@@ -105,7 +106,7 @@ function unlistedSummaryCard(doc: Doc, count: number): El {
   card.setAttribute('role', 'note');
   const head = doc.createElement('div');
   head.className = 'stateblock__title';
-  head.textContent = `${count} more pool${count === 1 ? '' : 's'} nearby — hours not listed yet`;
+  head.textContent = t('state.unlisted.summary', { count });
   const body = doc.createElement('p');
   body.className = 'stateblock__body';
   body.textContent =
