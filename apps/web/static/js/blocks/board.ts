@@ -630,7 +630,7 @@ export function createBoard<T extends El>(el: T, opts: BoardOpts = {}) {
       ];
       return basins.length ? `${name} · ${basins.join(' / ')}` : name;
     }
-    return 'Nearest first';
+    return t('board.nearestFirst');
   }
 
   function buildRows() {

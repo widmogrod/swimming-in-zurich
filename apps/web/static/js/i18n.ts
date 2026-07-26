@@ -8,7 +8,11 @@
 // `Intl.PluralRules` for CLDR categories, `Intl.*Format` (in datefmt.ts) for dates,
 // numbers and units. What is left is key lookup, plural selection and interpolation.
 
+import { de } from "./locales/de.js";
 import { en } from "./locales/en.js";
+import { fr } from "./locales/fr.js";
+import { it } from "./locales/it.js";
+import { pl } from "./locales/pl.js";
 import {
   DEFAULT_LOCALE,
   isLocale,
@@ -52,13 +56,40 @@ export type MessageParams = Record<string, string | number>;
 type RuntimeEntry = string | Partial<Record<Intl.LDMLPluralRule, string>>;
 type RuntimeCatalog = { readonly [K in MessageKey]: RuntimeEntry };
 
-// Only `en` exists in S1; S6 adds de/fr/it/pl. Lookup always falls back to `en`, so a
-// key absent from a partial catalog degrades to English rather than to a raw key.
-const CATALOGS: Partial<Record<Locale, RuntimeCatalog>> = { en };
+// Every locale's catalogue. Lookup still falls back to `en`, so a key absent from a
+// partial catalogue degrades to English rather than to a raw key.
+const CATALOGS: Partial<Record<Locale, RuntimeCatalog>> = {
+  de,
+  en,
+  fr,
+  it,
+  pl,
+};
 
-let active: Locale = DEFAULT_LOCALE;
+/**
+ * The locales a USER may be offered.
+ *
+ * `pl` is complete and type-checked but NOT here: it has not been reviewed by a native
+ * speaker, and the plan makes that a release gate ("Polish cannot be broken" §7). Gating
+ * the switcher on this list rather than on catalogue presence is deliberate — it makes
+ * "translated" and "shippable" different states, so an unreviewed locale cannot be
+ * reached by clicking, only by setting the cookie by hand.
+ *
+ * Move `pl` here when a native speaker has signed off.
+ */
+export const OFFERED_LOCALES: readonly Locale[] = ["en", "de", "fr", "it"];
 
 export const LOCALE_COOKIE = "swimzh_locale";
+
+// Resolved AT MODULE SCOPE, deliberately.
+//
+// Many blocks build their label tables at module scope (`const FAMILIES = [{ label:
+// t('access.public') }, …]`), which freezes those strings when the module is imported.
+// ES modules evaluate dependencies BEFORE importers, and every one of those modules
+// imports this file — so setting the locale here means it is already correct by the time
+// any of them evaluates. Setting it in `app.ts`'s main() would be far too late: the
+// tables would already hold English.
+let active: Locale = resolveLocaleFromBrowser();
 
 /**
  * The locale currently in effect. Read this rather than the cookie: `resolveLocale` is

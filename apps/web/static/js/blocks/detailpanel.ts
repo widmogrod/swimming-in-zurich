@@ -194,7 +194,12 @@ function liveTempText(lwt: LiveWaterTemp | null | undefined) {
     return { text: lwt.reason || t('detail.notAvailable'), note: '', muted: true, stale: false };
   }
   if (lwt.celsius == null) {
-    const openNote = lwt.is_open === true ? 'open' : lwt.is_open === false ? 'closed' : '';
+    const openNote =
+      lwt.is_open === true
+        ? t('detail.liveOpen')
+        : lwt.is_open === false
+          ? t('detail.liveClosed')
+          : '';
     return { text: t('detail.notYetMeasured'), note: openNote, muted: true, stale: false };
   }
   const age = humanizeAge(lwt.age_min);

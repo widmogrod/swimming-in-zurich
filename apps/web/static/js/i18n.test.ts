@@ -44,11 +44,15 @@ test("locale defaults to en and setLocale moves it", () => {
   expect(locale()).toBe("pl");
 });
 
-test("a locale with no catalog yet still resolves messages via the en fallback", () => {
-  // S1 ships only locales/en.ts; de/fr/it/pl arrive in S6. Until then a locale must
-  // degrade to English rather than to a blank or a raw key.
+test("every locale renders its OWN copy, not the English fallback", () => {
+  setLocale("de");
+  expect(t("common.today")).toBe("Heute");
   setLocale("pl");
-  expect(t("common.today")).toBe("Today");
+  expect(t("common.today")).toBe("Dzisiaj");
+  setLocale("fr");
+  expect(t("common.today")).toBe("Aujourd’hui");
+  setLocale("it");
+  expect(t("common.today")).toBe("Oggi");
 });
 
 // ---- resolveLocale: the single seam --------------------------------------------------
