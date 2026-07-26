@@ -96,6 +96,23 @@ export const en = {
   "status.closed_reason": "Closed · {reason}",
   "status.uncurated": "Hours not listed",
 
+  // --- Closure codes (S4) -----------------------------------------------------------
+  //
+  // The curated German is now CLASSIFIED at build time, so these are translatable words
+  // rather than passthrough prose. `closure.unmapped` is the fail-safe: a phrase the
+  // builder could not classify rides through verbatim, so the label stays TRUE rather
+  // than going blank — and `swimzh build` reported it on stderr.
+  "closure.seasonal_break": "Summer break",
+  "closure.seasonal_break_maintenance": "Summer break / maintenance",
+  "closure.maintenance": "Maintenance",
+  "closure.operational_break": "Company holidays",
+  "closure.christmas_eve": "Christmas Eve",
+  "closure.public_holiday": "Public holiday",
+  "closure.public_holiday_named": "{holiday}",
+  "closure.no_sessions": "No sessions scheduled",
+  "closure.special": "Closed",
+  "closure.unmapped": "{text}",
+
   "elig.in": "You’re in",
   "elig.chk": "Check with the venue",
   "elig.no": "Not for you",

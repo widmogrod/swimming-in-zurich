@@ -75,6 +75,10 @@ class StatusOut(BaseModel):
     # curated German ("Sommerpause") in the other. The code names which sentence it is; the
     # German text travels as a param until S4 maps it to a closed code set.
     detail_code: str
+    # S4: WHICH closure, from the classified code set — `null` for uncurated. The client
+    # renders this; `closure_code == "unmapped"` means we could not classify the curated
+    # phrase, and `detail_params.text` carries it verbatim so the UI stays truthful.
+    closure_code: str | None = None
     detail_params: dict[str, str] = {}
 
 

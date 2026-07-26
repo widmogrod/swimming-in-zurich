@@ -47,6 +47,8 @@ export interface RibbonStatus {
   facility?: string;
   status?: string;
   detail?: string | null;
+  closure_code?: string | null;
+  detail_params?: Record<string, string>;
 }
 
 /** One drawable band on a board row. */
@@ -123,7 +125,16 @@ export function optionRibbon(option: RibbonOption): Ribbon {
  * Any other status label falls back to the ghost/unknown ribbon (never to closed).
  */
 export function statusRibbon(status: RibbonStatus): Ribbon {
-  const base = { kind: 'status', facility: status.facility, detail: status.detail };
+  // Carry the S4 closure code alongside the prose so the CANVAS ribbon and the label
+  // column render the same fact the same way — they used to diverge (label translated,
+  // ribbon still German), which is worse than either alone.
+  const base = {
+    kind: 'status',
+    facility: status.facility,
+    detail: status.detail,
+    closure_code: status.closure_code,
+    detail_params: status.detail_params,
+  };
   if (status.status === 'closed') {
     return { ...base, variant: 'closed', style: 'dashed', family: 'closed' };
   }

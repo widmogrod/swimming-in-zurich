@@ -26,7 +26,7 @@ import { cursorX as sharedCursorX, hhmmToMin } from './cursor.js';
 import { createEligibilityBadge } from '../components/eligibilitybadge.js';
 import { dayParts } from '../datefmt.js';
 import { asDoc, type Doc, type El, type WindowLike } from '../domtypes.js';
-import { locale, t } from '../i18n.js';
+import { locale, t, type MessageKey } from '../i18n.js';
 
 
 // ---- Local structural types (the urlstate.ts convention) ---------------------------
@@ -205,21 +205,38 @@ export function rowStatus(row: {
 /** A non-open row's compact status line for the label AND the canvas (plan FIX 1):
  *  closed → `Closed · <detail>` (keeps its reason), uncurated → `Hours not listed`.
  *  Returns null for an open row (its ribbons say everything). Pure, exported for tests. */
+/** The human label for a closed status, from its S4 closure code.
+ *
+ * Falls back to the server's prose only when no code is present at all (an older payload)
+ * — never invents a reason, and never blanks one we were given. */
+export function closureLabel(status: {
+  detail?: string | null;
+  closure_code?: string | null;
+  detail_params?: Record<string, string>;
+}): string {
+  const code = status.closure_code;
+  if (!code) return status.detail ?? '';
+  const key = `closure.${code}` as MessageKey;
+  return t(key, status.detail_params ?? {});
+}
+
 export function rowStatusLine(row: {
   options?: unknown[];
   statuses?: {
     status: string;
     detail?: string | null;
     detail_code?: string;
+    closure_code?: string | null;
     detail_params?: Record<string, string>;
   }[];
 }) {
   if ((row.options || []).length > 0) return null;
   const closed = (row.statuses || []).find((s) => s.status === 'closed');
   if (closed) {
-    // Rendered from the S2 code, not the server's `detail` prose. The curated reason is
-    // DATA (still German until S4), so it is interpolated rather than translated.
-    const reason = closed.detail_params?.reason ?? closed.detail;
+    // S4: rendered from the CLASSIFIED closure code. `unmapped` still interpolates the
+    // curated German verbatim — an unrecognised phrase must read as the truth, not as a
+    // blank (the builder has already reported it on stderr).
+    const reason = closureLabel(closed);
     return {
       kind: 'closed',
       text: reason ? t('status.closed_reason', { reason }) : t('status.closed'),
@@ -359,7 +376,16 @@ function drawStatusRibbon(
     ctx.font = '600 12px system-ui, sans-serif';
     ctx.textBaseline = 'middle';
     ctx.textAlign = 'left';
-    ctx.fillText(r.detail ? `Closed · ${r.detail}` : 'Closed', x0 + 10, mid);
+    const reason = closureLabel({
+      detail: r.detail,
+      closure_code: r.closure_code as string | null | undefined,
+      detail_params: r.detail_params as Record<string, string> | undefined,
+    });
+    ctx.fillText(
+      reason ? t('status.closed_reason', { reason }) : t('status.closed'),
+      x0 + 10,
+      mid,
+    );
   } else {
     const x0 = ts.X(7 * 60);
     const x1 = ts.X(21 * 60);
@@ -377,7 +403,7 @@ function drawStatusRibbon(
     ctx.font = '500 11.5px system-ui, sans-serif';
     ctx.textBaseline = 'middle';
     ctx.textAlign = 'center';
-    ctx.fillText('Hours not listed', (x0 + x1) / 2, mid);
+    ctx.fillText(t('status.uncurated'), (x0 + x1) / 2, mid);
     ctx.textAlign = 'left';
   }
   ctx.restore();

@@ -8,11 +8,13 @@ These types describe that; `resolver.resolve` composes them for a concrete date.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from datetime import date, time
 from enum import Enum, IntEnum
 
 from swimzh.domain.access import SessionAccess
+from swimzh.domain.closure import ClosureCode
 
 
 class Weekday(IntEnum):
@@ -92,6 +94,10 @@ class ScheduleException:
     date: date
     closed: bool = False
     reason: str = ""
+    #: The classified reason (S4). `reason` is the curated German it was derived from;
+    #: it stays until S5 so nothing breaks mid-migration.
+    code: ClosureCode = ClosureCode.SPECIAL
+    params: Mapping[str, str] = field(default_factory=dict)
     sessions: tuple[ResolvedSession, ...] = field(default_factory=tuple)
 
 
@@ -102,6 +108,9 @@ class ClosureRange:
     start: date
     end: date  # inclusive
     reason: str = ""
+    #: The classified reason (S4) — see ScheduleException.code.
+    code: ClosureCode = ClosureCode.SPECIAL
+    params: Mapping[str, str] = field(default_factory=dict)
 
     def contains(self, d: date) -> bool:
         return self.start <= d <= self.end
@@ -119,6 +128,10 @@ class ClosedDay:
     """The facility/basin is closed on this day, with a human-readable reason."""
 
     reason: str
+    #: The machine identity of that reason + its interpolation values. `reason` is the
+    #: English/German rendering of exactly this; it is retired in S5.
+    code: ClosureCode = ClosureCode.SPECIAL
+    params: Mapping[str, str] = field(default_factory=dict)
 
 
 type DaySchedule = OpenDay | ClosedDay

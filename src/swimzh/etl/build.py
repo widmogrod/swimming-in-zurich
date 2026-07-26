@@ -11,12 +11,15 @@ this produces.
 
 from __future__ import annotations
 
+import sys
+from collections.abc import Sequence
 from pathlib import Path
 
 from swimzh.build.seed import build_spine
 from swimzh.core.errors import ParseError, ProviderError, SchemaMismatch
 from swimzh.core.result import Err, Ok, Result
 from swimzh.domain.catalog import PoolCatalogEntry
+from swimzh.domain.closure import is_unmapped
 from swimzh.domain.models import Facility, PoolId
 from swimzh.providers.curated import load_dataset
 from swimzh.storage import catalog_json, codec
@@ -59,7 +62,34 @@ def build_store(data_dir: Path, db_path: str | Path) -> Result[GoldRepository, P
     # never by `write_pools`.
     write_schedules(conn, _keyed_schedules(spine))
     write_calendar(conn, dataset.calendar)
+
+    # Report unclassified curated closure prose (S4). Not an error: the store is complete
+    # and the UI degrades honestly — but a new phrase must not pass unnoticed.
+    for pool, phrase in unmapped_closures(dataset.facilities):
+        print(f"unmapped closure reason: {pool}: {phrase!r}", file=sys.stderr)
+
     return Ok(GoldRepository(conn))
+
+
+def unmapped_closures(facilities: Sequence[Facility]) -> tuple[tuple[str, str], ...]:
+    """Curated closure phrases the classifier did not recognise, as `(pool, phrase)`.
+
+    The audit the plan requires: a NEW German phrase upstream must surface as a build-time
+    line, never as a silently blank label. `classify_closure` already fails safe (the text
+    rides through as `params.text`, so the UI stays truthful); this is what makes the gap
+    VISIBLE, in the same spirit as `scrape-lanes`' unbound/unavailable report.
+    """
+    found: list[tuple[str, str]] = []
+    for facility in facilities:
+        name = facility.identity.name
+        for closure in facility.closures:
+            if is_unmapped(closure.code):
+                found.append((name, closure.reason))
+        for basin in facility.basins:
+            for exception in basin.exceptions:
+                if is_unmapped(exception.code):
+                    found.append((name, exception.reason))
+    return tuple(found)
 
 
 def _keyed_schedules(spine: PoolSpine) -> tuple[tuple[PoolId, Facility], ...]:

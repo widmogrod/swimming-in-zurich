@@ -17,6 +17,7 @@ from __future__ import annotations
 from datetime import date
 
 from swimzh.domain.calendar import DayContext, ZurichCalendar
+from swimzh.domain.closure import ClosureCode
 from swimzh.domain.models import Basin, Facility
 from swimzh.domain.schedule import (
     ClosedDay,
@@ -71,13 +72,18 @@ def resolve_hours(
     for closure in facility.closures:
         if closure.contains(d):
             reason = closure.reason or "closed (maintenance)"
-            return ClosedDay(reason=reason)
+            return ClosedDay(reason=reason, code=closure.code, params=dict(closure.params))
 
     # 2. A one-off exception for this exact date overrides the recurring pattern.
     exception = _find_exception(exceptions, d)
     if exception is not None:
         if exception.closed:
-            return ClosedDay(reason=exception.reason or "closed (special)")
+            # The code was settled at build time (boundary/mapping); carry it through.
+            return ClosedDay(
+                reason=exception.reason or "closed (special)",
+                code=exception.code,
+                params=dict(exception.params),
+            )
         return OpenDay(sessions=exception.sessions)
 
     ctx = calendar.context(d)
@@ -87,8 +93,15 @@ def resolve_hours(
     if ctx.is_public_holiday:
         match facility.public_holiday_policy:
             case HolidayPolicy.CLOSED:
-                name = ctx.holiday_name or "public holiday"
-                return ClosedDay(reason=f"closed ({name})")
+                # The holiday NAME is data, not copy: it travels as a param so a
+                # translated sentence can place it (and an untranslatable one — see
+                # Berchtoldstag — can be shown verbatim without breaking the sentence).
+                name = ctx.holiday_name or ""
+                return ClosedDay(
+                    reason=f"closed ({name or 'public holiday'})",
+                    code=ClosureCode.PUBLIC_HOLIDAY,
+                    params={"holiday": name} if name else {},
+                )
             case HolidayPolicy.SUNDAY_SCHEDULE:
                 effective_weekday = Weekday.SUNDAY
             case HolidayPolicy.NORMAL:
@@ -97,7 +110,7 @@ def resolve_hours(
     # 4. Recurring rules for the effective weekday and calendar scope.
     sessions = _sessions_for_weekday(rules, effective_weekday, ctx)
     if not sessions:
-        return ClosedDay(reason="no sessions scheduled")
+        return ClosedDay(reason="no sessions scheduled", code=ClosureCode.NO_SESSIONS)
     return OpenDay(sessions=sessions)
 
 

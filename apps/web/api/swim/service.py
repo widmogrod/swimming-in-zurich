@@ -116,6 +116,7 @@ def build_answer(
                 status=s.status,
                 detail=s.detail,
                 detail_code=s.code.value,
+                closure_code=s.closure.value if s.closure else None,
                 detail_params=dict(s.params),
             )
             for s in result.statuses

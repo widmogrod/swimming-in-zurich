@@ -11,7 +11,12 @@
 
 import { expect, test } from "vitest";
 import { FakeDocument, type FakeElement } from "../components/_fakedom.js";
-import { createBoard, type BoardAnswer, type BoardWeek } from "./board.js";
+import {
+  createBoard,
+  rowStatusLine,
+  type BoardAnswer,
+  type BoardWeek,
+} from "./board.js";
 import type { El } from "../domtypes.js";
 
 interface Call {
@@ -160,4 +165,28 @@ test("the axis paints its hour ticks as text", () => {
   const calls: Call[] = [];
   mountBoard(calls, { day: answer([laneOption]) });
   expect(calls.some((c) => c.op === "fillText")).toBe(true);
+});
+
+test('the canvas ribbon and the label column render a closure the SAME way', () => {
+  // They diverged once: the label column was translated to "Summer break" while the
+  // ribbon still painted the curated German "Sommerpause" on the same row. Both now read
+  // the S4 closure code, so this pins that they cannot drift apart again.
+  const status = {
+    facility: 'Shut',
+    status: 'closed',
+    detail: 'Sommerpause',
+    closure_code: 'seasonal_break',
+    detail_params: {},
+  };
+  const label = rowStatusLine({ options: [], statuses: [status] });
+
+  const calls: Call[] = [];
+  mountBoard(calls, { day: answer([], [status]) });
+  const painted = calls
+    .filter((c) => c.op === 'fillText')
+    .map((c) => String(c.args[0]))
+    .filter((s) => s.startsWith('Closed'));
+
+  expect(label?.text).toBe('Closed · Summer break');
+  expect(painted).toContain(label?.text);
 });

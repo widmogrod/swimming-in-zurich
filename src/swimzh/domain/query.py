@@ -27,6 +27,7 @@ from swimzh.core.result import Err, Ok, Result
 from swimzh.domain.access import EligibilityResult, eligibility
 from swimzh.domain.calendar import ZurichCalendar
 from swimzh.domain.catalog import RosterEntry
+from swimzh.domain.closure import ClosureCode
 from swimzh.domain.geo import GeoPoint, haversine_km
 from swimzh.domain.lane_plan import (
     LaneAvailability,
@@ -268,6 +269,8 @@ class FacilityStatus:
     #: The message key + its interpolation values. `detail` is the current rendering of
     #: exactly this; it stays on the wire until S5.
     code: StatusCode = StatusCode.UNCURATED
+    #: For a closure, WHICH closure (S4). None for `uncurated`.
+    closure: ClosureCode | None = None
     params: Mapping[str, str] = field(default_factory=dict)
 
 
@@ -355,6 +358,7 @@ def find_swim_options(
         if occupancy is not None and want_occupancy:
             live = _read_occupancy(occupancy, facility.identity, now)
         facility_closed_reason: str | None = None
+        facility_closed: ClosedDay | None = None
         produced = False
 
         for basin in facility.basins:
@@ -369,6 +373,7 @@ def find_swim_options(
             match schedule:
                 case ClosedDay(reason):
                     facility_closed_reason = reason
+                    facility_closed = schedule
                 case OpenDay(sessions):
                     for session in sessions:
                         produced = True
@@ -423,8 +428,12 @@ def find_swim_options(
                     facility_name=facility.identity.name,
                     status="closed",
                     detail=facility_closed_reason,
+                    # S4: the classified code from the resolver, not a prose passthrough.
+                    # `UNMAPPED` still carries the original German in `params.text`, so an
+                    # unrecognised phrase degrades to the truth rather than to a blank.
                     code=StatusCode.CLOSED_REASON,
-                    params={"reason": facility_closed_reason},
+                    closure=facility_closed.code if facility_closed else None,
+                    params=dict(facility_closed.params) if facility_closed else {},
                 )
             )
 

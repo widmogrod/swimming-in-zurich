@@ -224,3 +224,49 @@ test('setFilter re-renders the board for the new mode', () => {
   expect(board.rows.length).toBe(weekRows(WEEK).length);
   expect(el.queryAll(hasClass('board__canvas')).length).toBe(weekRows(WEEK).length);
 });
+
+// --- S4: closure codes ---------------------------------------------------------------
+
+test('a classified closure renders its translated word, not the curated German', () => {
+  const line = rowStatusLine({
+    options: [],
+    statuses: [
+      {
+        status: 'closed',
+        detail: 'Sommerpause',
+        detail_code: 'closed_reason',
+        closure_code: 'seasonal_break',
+        detail_params: {},
+      },
+    ],
+  });
+  expect(line).toEqual({ kind: 'closed', text: 'Closed · Summer break' });
+});
+
+test('an UNMAPPED closure still reads as the truth, never as a blank', () => {
+  // The fail-safe: `swimzh build` could not classify this phrase (and said so on stderr),
+  // so the German rides through verbatim. Showing nothing would be a worse answer than
+  // showing a word the reader may not know.
+  const line = rowStatusLine({
+    options: [],
+    statuses: [
+      {
+        status: 'closed',
+        detail: 'Wasserschaden',
+        detail_code: 'closed_reason',
+        closure_code: 'unmapped',
+        detail_params: { text: 'Wasserschaden' },
+      },
+    ],
+  });
+  expect(line).toEqual({ kind: 'closed', text: 'Closed · Wasserschaden' });
+});
+
+test('a payload with no closure code at all degrades to the server prose', () => {
+  // Older/other payloads: fall back rather than blank. Never invent a reason.
+  const line = rowStatusLine({
+    options: [],
+    statuses: [{ status: 'closed', detail: 'Sommerpause' }],
+  });
+  expect(line).toEqual({ kind: 'closed', text: 'Closed · Sommerpause' });
+});
