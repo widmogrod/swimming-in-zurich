@@ -1,6 +1,6 @@
 ---
 type: plan
-status: in-progress
+status: done
 created: 2026-07-25
 feature: pool-detail-and-live-water-temp
 branch: plan/pool-detail-and-live-water-temp

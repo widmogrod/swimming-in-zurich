@@ -1,8 +1,8 @@
 ---
 type: concept
 name: water-temperature-provider
-status: planned
-updated: 2026-07-25
+status: implemented
+updated: 2026-07-26
 links: ["[[2026-07-25-water-temperature-provider-plan]]", "[[data-layer-architecture]]", "[[fastapi-service-integration]]", "[[basin]]"]
 ---
 
