@@ -8,6 +8,7 @@
 import { createSegmentedControl } from './segmentedcontrol.js';
 import { createChipGroup } from './chipgroup.js';
 import { createCombobox } from './combobox.js';
+import { createSelect } from './select.js';
 import { createPlaceTypeahead } from './placetypeahead.js';
 import { createToggle } from './toggle.js';
 import { createDateStepper } from './datestepper.js';
@@ -31,6 +32,11 @@ const POOLS = [
   { value: 'oerlikon', label: 'Hallenbad Oerlikon' },
   { value: 'city', label: 'Hallenbad City' },
   { value: 'bungert', label: 'Hallenbad Bungertwies', closed: true },
+];
+const LOCALES = [
+  { value: 'en', label: 'English' },
+  { value: 'de', label: 'Deutsch' },
+  { value: 'fr', label: 'Français' },
 ];
 const PLACES = [
   { value: 'hb', label: 'Zürich HB', lat: 47.3779, lon: 8.5403 },
@@ -68,6 +74,18 @@ export const REGISTRY = {
       options: state === 'empty' ? [] : POOLS,
       value: state === 'selected' ? 'oerlikon' : null,
       emptyText: 'No pools match',
+      disabled: state === 'disabled',
+    }),
+  },
+  select: {
+    create: createSelect,
+    interactive: true,
+    props: (state: string) => ({
+      label: 'Language',
+      icon: 'globe',
+      variant: state === 'pill' ? 'pill' : 'field',
+      options: LOCALES,
+      value: 'de',
       disabled: state === 'disabled',
     }),
   },

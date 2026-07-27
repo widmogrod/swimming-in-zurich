@@ -21,7 +21,10 @@
 .ui-datestepper__nav:focus-visible,
 .ui-toggle input:focus-visible,
 .ui-sourcestrip__chip:focus-visible,
-.ui-combo__opt.is-active {
+.ui-combo__opt.is-active,
+/* Select focuses its inner <select>, but the chrome lives on the wrapper, so the
+   ring must too — otherwise keyboard focus reads differently from every neighbour. */
+.ui-select:focus-within {
   outline: none;
   box-shadow: var(--focus-ring);
 }
@@ -99,6 +102,71 @@
   background: var(--accent);
   color: var(--surface);
   border-color: transparent;
+}
+
+/* --- Select (.ui-select) — the one dropdown skin ------------------------- */
+/* Chrome on the WRAPPER, flat control inside: see components/select.ts for why.
+   `field` (default) matches the toolbar inputs; `--pill` matches the header
+   controls. The caret is ours (currentColor), so it follows the theme. */
+.ui-select {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s2);
+  height: var(--ctl-h);
+  /* room on the right for the caret drawn by ::after */
+  padding: 0 calc(var(--s3) + var(--s3)) 0 var(--s3);
+  background: var(--surface-2);
+  color: var(--ink);
+  border: 1px solid var(--hair);
+  border-radius: var(--r-sm);
+  font-family: var(--f);
+  font-size: var(--fs-body);
+  cursor: pointer;
+}
+.ui-select:hover {
+  border-color: var(--accent);
+  color: var(--accent-ink);
+}
+.ui-select__icon {
+  display: inline-flex;
+  align-items: center;
+  color: var(--muted);
+}
+.ui-select:hover .ui-select__icon {
+  color: inherit;
+}
+.ui-select::after {
+  content: "▾";
+  position: absolute;
+  right: var(--s3);
+  font-size: var(--fs-caption);
+  opacity: .7;
+  pointer-events: none;
+}
+/* The native control is stripped flat: a <select> ignores `background` on macOS
+   unless `appearance` is reset, which is what otherwise rendered it as a light
+   box against dark chrome. Its own outline is suppressed — the wrapper rings. */
+.ui-select__control {
+  appearance: none;
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: inherit;
+}
+.ui-select__control:focus {
+  outline: none;
+}
+/* Pill variant — the header control family (theme toggle, copy link). */
+.ui-select--pill {
+  border-radius: var(--r-pill);
+  background: var(--surface);
+  gap: var(--s1);
+  font-size: var(--fs-caption);
 }
 
 /* --- Combobox (.ui-combo) ------------------------------------------------ */

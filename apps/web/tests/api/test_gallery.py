@@ -96,6 +96,10 @@ def test_gallery_renders_every_primitive_in_every_state_in_both_themes(
     # Total mounts == (sum of states) × themes — no state silently dropped.
     total_states = sum(len(states) for _n, _t, states in _COMPONENTS)
     assert page.count('class="gallery-item"') == total_states * len(_THEMES)
+    # …and each item carries exactly one hydration target, separate from its caption:
+    # the factories stamp a root class on whatever element they are handed, so mounting
+    # onto the captioned item makes a sized primitive swallow its own label.
+    assert page.count('class="gallery-item__mount"') == total_states * len(_THEMES)
 
 
 def test_gallery_links_static_design_system_assets(

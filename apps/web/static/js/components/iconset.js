@@ -11,6 +11,12 @@ const PATHS = {
   person: '<circle cx="12" cy="7" r="3"/><path d="M5 21v-2a5 5 0 0 1 14 0v2"/>',
   lock: '<rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/>',
   'water-drop': '<path d="M12 3c3 4 5 6.5 5 9.5a5 5 0 0 1-10 0C7 9.5 9 7 12 3z"/>',
+  // Language affordance: a wire globe (meridian + equator). A line glyph, NOT the 🌐
+  // emoji — an emoji is rendered in the font's own colours and would be the one
+  // full-colour mark in an ink-and-accent header.
+  globe:
+    '<circle cx="12" cy="12" r="9"/><path d="M3 12h18"/>' +
+    '<path d="M12 3c3.4 3 3.4 15 0 18c-3.4-3-3.4-15 0-18z"/>',
   // Outbound-link affordances (plan: source-links). external-link = a box with an
   // arrow leaving it; doc = a page with a folded corner (the PDF/document glyph).
   'external-link':

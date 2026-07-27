@@ -18,6 +18,7 @@ import {
   t,
 } from '../i18n.js';
 import { isLocale } from '../plurals.js';
+import { createSelect } from '../components/select.js';
 
 /** The three theme choices, in cycle order. 'auto' defers to the OS/media query. */
 export type Theme = 'auto' | 'light' | 'dark';
@@ -147,36 +148,26 @@ export function createIdentityHeader<T extends El>(el: T, opts: HeaderOpts = {})
 
   // --- language switcher ---
   //
-  // A native <select>: five options is too many for a segmented control, and the platform
+  // The `pill` Select: five options is too many for a segmented control, and the native
   // control brings keyboard navigation, screen-reader semantics and mobile pickers for
   // free. The option LABELS are endonyms (Deutsch, Polski) — see LOCALE_NAMES.
-  // Structured like its neighbours — a glyph plus a label inside one pill — so the three
-  // header controls read as one family. The <select> keeps native semantics (keyboard,
-  // screen reader, mobile picker) but is stripped of its OS chrome in CSS; the PILL lives
-  // on the wrapper, because a bare styled <select> cannot hold a leading glyph.
+  // The chrome is the shared `.ui-select` primitive rather than header-local CSS, so it
+  // stays in step with the rest of the system by construction.
   const langWrap = doc.createElement('span');
   langWrap.className = 'apphdr__lang';
-  const langIcon = doc.createElement('span');
-  langIcon.className = 'apphdr__langicon';
-  langIcon.setAttribute('aria-hidden', 'true');
-  langIcon.textContent = '🌐';
-  const lang = doc.createElement('select');
-  lang.className = 'apphdr__langselect';
-  lang.setAttribute('aria-label', t('header.language'));
-  for (const code of OFFERED_LOCALES) {
-    const option = doc.createElement('option');
-    option.value = code;
-    option.textContent = LOCALE_NAMES[code];
-    if (code === locale()) option.setAttribute('selected', 'selected');
-    lang.appendChild(option);
-  }
-  lang.value = locale();
-  lang.addEventListener('change', () => {
-    const next = lang.value;
-    if (isLocale(next) && next !== locale()) chooseLocale(next);
+  const langSelect = createSelect(langWrap, {
+    props: {
+      variant: 'pill',
+      icon: 'globe',
+      label: t('header.language'),
+      value: locale(),
+      options: OFFERED_LOCALES.map((code) => ({ value: code, label: LOCALE_NAMES[code] })),
+    },
+    onChange: (next) => {
+      if (isLocale(next) && next !== locale()) chooseLocale(next);
+    },
   });
-  langWrap.appendChild(langIcon);
-  langWrap.appendChild(lang);
+  const lang = langSelect.control;
 
   el.appendChild(brand);
   el.appendChild(datebox);

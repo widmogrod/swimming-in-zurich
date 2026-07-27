@@ -675,8 +675,7 @@ body {
   color: var(--ink-2);
 }
 .apphdr__theme,
-.apphdr__copy,
-.apphdr__lang {
+.apphdr__copy {
   height: var(--ctl-h);
   padding: 0 var(--s3);
   border: 1px solid var(--hair);
@@ -698,48 +697,9 @@ body {
   border-color: var(--accent);
   color: var(--accent-ink);
 }
-/* Language switcher: the PILL lives on the WRAPPER (like .apphdr__copy: glyph + label),
-   and the <select> inside is stripped of its OS chrome. A bare <select> ignores
-   `background` on macOS unless `appearance` is reset — which is why it otherwise rendered
-   as a light box against the dark controls. The caret is ours, so it inherits
-   `currentColor` and follows the theme instead of the platform. */
-.apphdr__lang {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  gap: var(--s1);
-  padding-right: calc(var(--s3) + var(--s2));
-}
-.apphdr__lang::after {
-  content: "▾";
-  position: absolute;
-  right: var(--s2);
-  font-size: var(--fs-caption);
-  opacity: 0.7;
-  pointer-events: none;
-}
-.apphdr__langselect {
-  appearance: none;
-  border: 0;
-  padding: 0;
-  background: transparent;
-  color: inherit;
-  font: inherit;
-  cursor: pointer;
-}
-.apphdr__langselect:focus {
-  outline: none;
-}
-.apphdr__lang:hover {
-  border-color: var(--accent);
-  color: var(--accent-ink);
-}
-/* The PILL carries the focus ring, so keyboard focus reads the same as on the two
-   buttons beside it (the inner select's own outline is suppressed above). */
-.apphdr__lang:focus-within {
-  border-color: var(--accent);
-  box-shadow: var(--focus-ring);
-}
+/* Language switcher: no chrome of its own. It is the shared `.ui-select--pill`
+   primitive (components.css) — border, caret, hover and focus ring all come from
+   there, which is what keeps it in the same family as the two buttons beside it. */
 .apphdr__theme:focus-visible,
 .apphdr__copy:focus-visible {
   outline: none;

@@ -27,6 +27,7 @@ _COMPONENTS: list[tuple[str, str, list[str]]] = [
     ("segmented-control", "SegmentedControl", ["default", "selected", "disabled"]),
     ("chip-group", "ChipGroup", ["default", "selected", "disabled"]),
     ("combobox", "Combobox", ["default", "selected", "empty", "disabled"]),
+    ("select", "Select", ["default", "pill", "disabled"]),
     ("place-typeahead", "PlaceTypeahead", ["default", "empty", "disabled"]),
     ("toggle", "Toggle", ["default", "selected", "disabled"]),
     ("date-stepper", "DateStepper", ["default", "disabled"]),
@@ -43,7 +44,12 @@ _THEMES = ("light", "dark")
 def _mount(name: str, state: str) -> str:
     return (
         f'<div class="gallery-item" data-component="{name}" data-state="{state}">'
-        f'<span class="gallery-item__tag">{state}</span></div>'
+        f'<span class="gallery-item__tag">{state}</span>'
+        # The hydration target is a CHILD, never the captioned item itself: a factory
+        # stamps its root class on whatever element it is handed, and a primitive whose
+        # root is a sized box (.ui-seg, .ui-select) would otherwise swallow its own
+        # caption and clip its contents.
+        f'<div class="gallery-item__mount"></div></div>'
     )
 
 

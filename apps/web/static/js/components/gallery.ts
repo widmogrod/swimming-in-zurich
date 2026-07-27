@@ -14,15 +14,20 @@ type RegistryEntry = (typeof REGISTRY)[keyof typeof REGISTRY];
 export function hydrateGallery(root: ParentNode = document): void {
   const mounts = root.querySelectorAll('.gallery-item[data-component]');
   mounts.forEach((mount) => {
-    const el = asEl(mount);
-    const name = el.dataset.component;
-    const state = el.dataset.state || 'default';
+    const item = asEl(mount);
+    const name = item.dataset.component;
+    const state = item.dataset.state || 'default';
     const entry = name
       ? (REGISTRY as Record<string, RegistryEntry | undefined>)[name]
       : undefined;
     if (!entry) return;
+    // Hydrate the dedicated mount child, not the item — see the gallery router: the item
+    // also carries the state caption, and a factory stamps its root class on whatever it
+    // is handed.
+    const target = mount.querySelector('.gallery-item__mount');
+    if (!target) return;
     const props = entry.props ? entry.props(state) : {};
-    entry.create(el, { props, onChange: () => {} });
+    entry.create(asEl(target), { props, onChange: () => {} });
   });
 }
 
