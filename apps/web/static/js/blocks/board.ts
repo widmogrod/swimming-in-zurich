@@ -22,11 +22,19 @@
 import { makeTimescale } from '../timescale.js';
 import { eligForAccess, dayEligibility } from '../eligibility.js';
 import { ribbonsFor } from './ribbonmodel.js';
+import {
+  asCanvas,
+  closureLabel,
+  drawRibbons,
+  type CanvasEl,
+  type Palette,
+  type Timescale,
+} from './ribbonrender.js';
 import { cursorX as sharedCursorX, hhmmToMin } from './cursor.js';
 import { createEligibilityBadge } from '../components/eligibilitybadge.js';
 import { dayParts } from '../datefmt.js';
 import { asDoc, type Doc, type El, type WindowLike } from '../domtypes.js';
-import { locale, t, type MessageKey } from '../i18n.js';
+import { locale, t } from '../i18n.js';
 
 
 // ---- Local structural types (the urlstate.ts convention) ---------------------------
@@ -78,8 +86,12 @@ export interface BoardFilter {
   selectedPool?: { id?: string | null; name?: string | null } | null;
 }
 
-/** The runtime-resolved colour table (probed from the CSS `.fam-*` classes). */
-export type Palette = Record<string, string>;
+/** The runtime-resolved colour table, and the canvas/timescale surfaces, now live with
+ *  the shared renderer. Re-exported here so existing importers keep working. */
+export type { Palette, Timescale, CanvasEl } from './ribbonrender.js';
+// closureLabel moved to ribbonrender.ts with its only caller (drawStatusRibbon);
+// re-exported so existing importers (stateblocks.ts) are unaffected.
+export { closureLabel } from './ribbonrender.js';
 
 /** A ribbon from ribbonmodel.js, read structurally. */
 export interface RibbonSegment {
@@ -103,34 +115,6 @@ export interface Ribbon {
   end?: string;
   segments?: RibbonSegment[];
   [k: string]: unknown;
-}
-
-/** The shared timescale (timescale.js) — the ONE X(min) mapping the Gantt also uses. */
-export interface Timescale {
-  X(min: number): number;
-  inverse(x: number): number;
-  DAY0: number;
-  DAY1: number;
-  PLOT: number;
-  lo: number;
-  hi: number;
-  span: number;
-}
-
-/** The 2D context surface the renderer uses (null headless). */
-type Ctx2D = CanvasRenderingContext2D;
-
-/** A canvas node — real or the headless stand-in whose getContext returns null. */
-export interface CanvasEl extends El {
-  width: number;
-  height: number;
-  getContext?(id: string): Ctx2D | null;
-}
-
-/** `doc.createElement('canvas')` yields a structural `El`; this is the one documented
- *  narrowing to the canvas surface (the headless fake has no getContext, hence optional). */
-function asCanvas(el: El): CanvasEl {
-  return el as CanvasEl;
 }
 
 // Default board window [06:00, 22:00] across a 900px plot. The plot width is the
@@ -209,24 +193,6 @@ export function rowStatus(row: {
  *
  * Falls back to the server's prose only when no code is present at all (an older payload)
  * — never invents a reason, and never blanks one we were given. */
-export function closureLabel(status: {
-  detail?: string | null;
-  closure_code?: string | null;
-  detail_params?: Record<string, string>;
-}): string {
-  const code = status.closure_code;
-  if (!code) return status.detail ?? '';
-  const params = status.detail_params ?? {};
-  // A public holiday names ITSELF: render the holiday, not the generic word. An
-  // unrecognised or untranslatable one (Berchtoldstag) falls back to the German name,
-  // which is still true — never a blank.
-  if (code === 'public_holiday' && params.holiday) {
-    const hk = `holiday.${params.holiday_code ?? 'unknown'}` as MessageKey;
-    return t(hk, params);
-  }
-  const key = `closure.${code}` as MessageKey;
-  return t(key, params);
-}
 
 export function rowStatusLine(row: {
   options?: unknown[];
@@ -310,13 +276,9 @@ function resolvePalette(doc: Doc, host: El): Palette | null {
 
 // ---- Canvas rendering -----------------------------------------------------------
 
-function setDashes(ctx: Ctx2D, style: string): void {
-  if (style === 'dashed') ctx.setLineDash([9, 6]);
-  else if (style === 'dotted') ctx.setLineDash([2, 5]);
-  else ctx.setLineDash([]);
-}
-
-// Draw one row's ribbons. `phase` animates the waterline (0 when frozen).
+// Draw one row's ribbons. The ribbon painting itself lives in ribbonrender.ts (shared
+// with the phone day tail); what stays here is board-specific chrome: the row hairline
+// and the ROW_H box. `phase` animates the waterline (0 when frozen).
 function drawRow(
   canvas: CanvasEl,
   ribbons: Ribbon[],
@@ -340,179 +302,7 @@ function drawRow(
   ctx.lineTo(w, 0.5);
   ctx.stroke();
   ctx.restore();
-  const mid = h / 2;
-
-  for (const r of ribbons) {
-    if (r.kind === 'status') {
-      drawStatusRibbon(ctx, r, ts, pal, mid, h);
-    } else if (r.variant === 'lanes') {
-      drawLaneRibbon(ctx, r, ts, pal, mid, h, phase);
-    } else {
-      drawUnpublishedRibbon(ctx, r, ts, pal, mid, h);
-    }
-  }
-}
-
-// Paint the row's terminal state ON the plot (plan FIX 1), the way the prototype's
-// drawClosed/drawGhost do — so state reads without a legend. Closed → a dashed rule +
-// dot + "Closed · <detail>" (its reason kept); uncurated → a dotted envelope +
-// "Hours not listed". The text is a token colour (pal.*), never a raw hex.
-function drawStatusRibbon(
-  ctx: Ctx2D,
-  r: Ribbon,
-  ts: Timescale,
-  pal: Palette,
-  mid: number,
-  h: number,
-) {
-  ctx.save();
-  if (r.variant === 'closed') {
-    const x0 = 8;
-    ctx.strokeStyle = pal.closed;
-    ctx.lineWidth = 1.5;
-    ctx.globalAlpha = 0.8;
-    setDashes(ctx, 'dashed');
-    ctx.beginPath();
-    ctx.moveTo(x0, mid);
-    ctx.lineTo(ts.PLOT - 8, mid);
-    ctx.stroke();
-    setDashes(ctx, 'solid');
-    ctx.globalAlpha = 1;
-    ctx.beginPath();
-    ctx.arc(x0, mid, 3.5, 0, Math.PI * 2);
-    ctx.fillStyle = pal.closed;
-    ctx.fill();
-    ctx.font = '600 12px system-ui, sans-serif';
-    ctx.textBaseline = 'middle';
-    ctx.textAlign = 'left';
-    const reason = closureLabel({
-      detail: r.detail,
-      closure_code: r.closure_code as string | null | undefined,
-      detail_params: r.detail_params as Record<string, string> | undefined,
-    });
-    ctx.fillText(
-      reason ? t('status.closed_reason', { reason }) : t('status.closed'),
-      x0 + 10,
-      mid,
-    );
-  } else {
-    const x0 = ts.X(7 * 60);
-    const x1 = ts.X(21 * 60);
-    const hh = Math.min(11, h * 0.26);
-    ctx.strokeStyle = pal.unknown;
-    ctx.lineWidth = 1.4;
-    ctx.globalAlpha = 0.85;
-    setDashes(ctx, 'dotted');
-    ctx.beginPath();
-    ctx.rect(x0, mid - hh, x1 - x0, hh * 2);
-    ctx.stroke();
-    setDashes(ctx, 'solid');
-    ctx.globalAlpha = 1;
-    ctx.fillStyle = pal.muted || pal.unknown;
-    ctx.font = '500 11.5px system-ui, sans-serif';
-    ctx.textBaseline = 'middle';
-    ctx.textAlign = 'center';
-    ctx.fillText(t('status.uncurated'), (x0 + x1) / 2, mid);
-    ctx.textAlign = 'left';
-  }
-  ctx.restore();
-}
-
-// A published-hours-but-NO-lane-split ribbon (plan item 5): a faint capacity sheath
-// with a HATCHED (dotted-outline + diagonal hatch) fill so it reads clearly as
-// "open, lane split not published" — never as a solid public block.
-function drawUnpublishedRibbon(
-  ctx: Ctx2D,
-  r: Ribbon,
-  ts: Timescale,
-  pal: Palette,
-  mid: number,
-  h: number,
-) {
-  const x0 = ts.X(hhmmToMin(r.start ?? ''));
-  const x1 = ts.X(hhmmToMin(r.end ?? ''));
-  const wSeg = Math.max(1, x1 - x0);
-  const top = mid - h * 0.24;
-  const height = h * 0.48;
-  const col = (r.family ? pal[r.family] : undefined) || pal.other;
-  ctx.save();
-  // faint capacity sheath
-  ctx.fillStyle = pal.sheath;
-  ctx.globalAlpha = 0.4;
-  ctx.fillRect(x0, top, wSeg, height);
-  // diagonal hatch in the family colour (clipped to the sheath box)
-  ctx.globalAlpha = 0.45;
-  ctx.beginPath();
-  ctx.rect(x0, top, wSeg, height);
-  ctx.clip();
-  ctx.strokeStyle = col;
-  ctx.lineWidth = 1;
-  ctx.setLineDash([]);
-  for (let x = x0 - height; x < x1 + height; x += 6) {
-    ctx.beginPath();
-    ctx.moveTo(x, top + height);
-    ctx.lineTo(x + height, top);
-    ctx.stroke();
-  }
-  ctx.restore();
-  // dotted outline
-  ctx.save();
-  ctx.strokeStyle = col;
-  ctx.globalAlpha = 0.85;
-  ctx.lineWidth = 1.1;
-  setDashes(ctx, 'dotted');
-  ctx.strokeRect(x0, top, wSeg, height);
-  ctx.restore();
-}
-
-function drawLaneRibbon(
-  ctx: Ctx2D,
-  r: Ribbon,
-  ts: Timescale,
-  pal: Palette,
-  mid: number,
-  h: number,
-  phase: number,
-) {
-  const col = (r.family ? pal[r.family] : undefined) || pal.other;
-  const maxHalf = h * 0.4; // full capacity half-height
-  for (const seg of r.segments ?? []) {
-    const x0 = ts.X(hhmmToMin(seg.start));
-    const x1 = ts.X(hhmmToMin(seg.end));
-    const wSeg = Math.max(1, x1 - x0);
-    // Capacity sheath: the full-capacity envelope, faint.
-    if (r.sheath) {
-      ctx.save();
-      ctx.fillStyle = pal.sheath;
-      ctx.globalAlpha = 0.35;
-      ctx.fillRect(x0, mid - maxHalf, wSeg, maxHalf * 2);
-      ctx.restore();
-    }
-    // Public ribbon: thickness = public fraction; pinched (thinner) where reserved.
-    const half = Math.max(1, maxHalf * Number(seg.thickness) * (seg.pinched ? 0.72 : 1));
-    ctx.save();
-    ctx.fillStyle = col;
-    ctx.globalAlpha = 0.85;
-    ctx.beginPath();
-    const steps = 8;
-    // top edge (with a small sinusoidal waterline animated by `phase`)
-    for (let i = 0; i <= steps; i += 1) {
-      const x = x0 + (wSeg * i) / steps;
-      const wave = Math.sin(phase + (x / 40)) * 1.4;
-      const y = mid - half + wave;
-      if (i === 0) ctx.moveTo(x, y);
-      else ctx.lineTo(x, y);
-    }
-    // bottom edge back
-    for (let i = steps; i >= 0; i -= 1) {
-      const x = x0 + (wSeg * i) / steps;
-      const wave = Math.sin(phase + (x / 40)) * 1.4;
-      ctx.lineTo(x, mid + half - wave);
-    }
-    ctx.closePath();
-    ctx.fill();
-    ctx.restore();
-  }
+  drawRibbons(ctx, ribbons, ts, pal, h / 2, h, phase);
 }
 
 function drawAxis(canvas: CanvasEl, ts: Timescale, pal: Palette | null) {
