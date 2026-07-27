@@ -282,4 +282,38 @@ export const en = {
   "prov.official": "Official schedule",
   "prov.illustrative": "Illustrative — read from the pool’s website",
   "prov.lastChecked": " · last checked {date}",
+
+  // --- Phone pool list (variant E) --------------------------------------------------
+  //
+  // The tier headings are the phone list's promise that its ranking is not arbitrary:
+  // a surprising #1 is defensible once the group it sits in is named.
+  "mobile.tier.now": "Swim now",
+  "mobile.tier.soon": "Later today",
+  "mobile.tier.unknown": "Hours not listed",
+  "mobile.tier.closed": "Closed",
+
+  // Verdict heads. "Partly reserved" exists so a session holding lanes back is never
+  // announced as "Open now" — that would promise water that may not be there.
+  "mobile.verdict.openNow": "Open now",
+  "mobile.verdict.partlyReserved": "Partly reserved",
+  "mobile.verdict.notYoursUntil": "Not yours until {hhmm}",
+  "mobile.verdict.opensAt": "Opens {hhmm}",
+  "mobile.verdict.doneForToday": "Done for today",
+  "mobile.verdict.closedAllDay": "Closed all day",
+  "mobile.verdict.hoursUnknown": "Hours not listed",
+  // Trailing clauses — whole units, joined to the head by ' · ' as a visual list.
+  "mobile.verdict.untilTime": "until {hhmm}",
+  "mobile.lanesUntil": "{public} of {total} lanes public until {hhmm}",
+
+  "mobile.openToYou": {
+    one: "{count} open to you now",
+    other: "{count} open to you now",
+  },
+  "mobile.openToYouOn": {
+    one: "{count} open to you on {day}",
+    other: "{count} open to you on {day}",
+  },
+  "mobile.filters": "Filters",
+  "mobile.today": "Today",
+  "mobile.lanePlan": "Lane plan",
 } as const;

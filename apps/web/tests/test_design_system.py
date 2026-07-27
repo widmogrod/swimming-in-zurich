@@ -66,32 +66,71 @@ def test_board_grid_guarantees_overflow_containment() -> None:
     assert "[canvas] 1fr" not in normalized, "a bare 1fr canvas column would overflow the page"
 
 
-def test_detail_panel_bottom_sheet_responsive_contract() -> None:
-    """The DetailPanel is a sticky side panel ≥1060px and a slide-up bottom SHEET
-    below it (transform + a dimming backdrop), with both motions frozen under
-    prefers-reduced-motion. There is no layout engine in the gate, so — mirroring the
-    S2 board overflow-contract — assert the CSS PROPERTIES that guarantee the sheet
-    behaviour are declared:
+def _declarations_only(css: str) -> str:
+    """CSS with `/* ... */` comments removed, so a grep-gate reads declarations only."""
+    return re.sub(r"/\*.*?\*/", "", css, flags=re.S)
 
-      * a `@media (max-width: 1060px)` block exists;
-      * inside it the sheet slides via `transform: translateY(100%)` (closed) and the
-        `.is-open` state resets it to `translateY(0)`;
-      * a `.detail__backdrop` dims the page (`position: fixed`);
-      * a `@media (prefers-reduced-motion: reduce)` block freezes the transition.
 
-    The true visual/browser check is the human review at the S3 pause; this is the
-    mechanical proxy that the sheet contract has not regressed in CSS.
+def test_phone_surface_replaces_the_panel_and_no_dead_sheet_remains() -> None:
+    """Below the breakpoint the phone shows the ranked pool list; there is NO bottom sheet.
+
+    This replaces a test that asserted the sheet's CSS *existed* — and passed for the
+    whole time the sheet was unopenable, because nothing in the codebase ever added
+    `.is-open` and no `.detail__backdrop` element was ever created. Asserting that CSS is
+    declared proves nothing about whether any code drives it, which is precisely how a
+    completely broken phone panel shipped behind a green gate.
+
+    So this asserts the opposite contract, which cannot rot the same way: the sheet's
+    machinery must be ABSENT. If someone re-introduces a translateY sheet, they must also
+    make it open — and this test forces that conversation instead of rubber-stamping it.
+    """
+    # Strip comments first: the removal is DOCUMENTED in a comment that names the very
+    # machinery being asserted absent, and a guard that cannot tell prose from a
+    # declaration would fire on its own explanation.
+    blocks = _declarations_only((_STATIC / "blocks.css").read_text(encoding="utf-8"))
+    normalized = re.sub(r"\s+", " ", blocks)
+
+    assert "@media (min-width: 960px)" in normalized, "the side panel needs a >=960px branch"
+    assert "@media (max-width: 959px)" in normalized, "the phone surface needs its branch"
+
+    # The dead sheet must stay dead: no off-screen parked panel, no is-open toggle it
+    # depends on, no backdrop element that nothing creates.
+    assert "translateY(100%)" not in normalized, (
+        "a parked-off-screen sheet is back; if it is real, something must add .is-open"
+    )
+    assert ".detail.is-open" not in normalized, "the sheet's open state is back"
+    assert ".detail__backdrop" not in normalized, "the never-created backdrop is back"
+
+    # The phone surface is what replaces it, and it hides the two-column split.
+    assert ".app__phone" in normalized, "the phone surface must be styled"
+    assert ".plist__card" in normalized, "the ranked pool list must be styled"
+
+
+def test_phone_surface_pins_exactly_one_bar() -> None:
+    """Only the filter summary is sticky in the phone bar.
+
+    Two `position: sticky` bars at `top: 0` stack, and the taller one paints over the
+    other — during the prototype the day strip hid the filter row outright. The summary
+    wins the pin because it is the state the reader cannot afford to lose; the day strip
+    scrolls away and the chosen day still rides in the summary as a tag.
     """
     blocks = (_STATIC / "blocks.css").read_text(encoding="utf-8")
     normalized = re.sub(r"\s+", " ", blocks)
-    assert "@media (max-width: 1060px)" in normalized, "the sheet needs a <1060px breakpoint"
-    assert "@media (min-width: 1060px)" in normalized, "the side panel needs a >=1060px branch"
-    assert "transform: translateY(100%)" in normalized, "the closed sheet must be off-screen"
-    assert "transform: translateY(0)" in normalized, "the open sheet must slide into view"
-    assert ".detail__backdrop" in normalized, "the sheet needs a dimming backdrop"
-    assert "position: fixed" in normalized, "the sheet + backdrop must be fixed-positioned"
-    assert "@media (prefers-reduced-motion: reduce)" in normalized, (
-        "the slide + backdrop fade must be frozen under reduced motion"
+
+    # `position: sticky` is bounded by the element's PARENT, so pinning the summary alone
+    # did not work — it scrolled away the moment .pbar did. The BAR carries the pin,
+    # offset upward by exactly the strip's height so the strip scrolls out of view and the
+    # summary lands at top:0 and stays.
+    bar = normalized[normalized.index(".pbar {") :][:400]
+    assert "position: sticky" in bar, "the bar itself must carry the pin"
+    assert "--pbar-strip-h" in bar, "the upward offset must be the strip's own height"
+
+    summary = normalized[normalized.index(".pbar__summary {") :][:400]
+    assert "position: sticky" in summary, "the filter summary must be the pinned bar"
+
+    days = normalized[normalized.index(".pbar__days {") :][:400]
+    assert "position: sticky" not in days, (
+        "the day strip must NOT be sticky — two pinned bars at top:0 stack and one hides the other"
     )
 
 

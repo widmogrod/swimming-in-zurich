@@ -26,6 +26,7 @@ import {
   asCanvas,
   closureLabel,
   drawRibbons,
+  resolveFamilyPalette,
   type CanvasEl,
   type Palette,
   type Timescale,
@@ -33,7 +34,7 @@ import {
 import { cursorX as sharedCursorX, hhmmToMin } from './cursor.js';
 import { createEligibilityBadge } from '../components/eligibilitybadge.js';
 import { dayParts } from '../datefmt.js';
-import { asDoc, type Doc, type El, type WindowLike } from '../domtypes.js';
+import { asDoc, type El } from '../domtypes.js';
 import { locale, t } from '../i18n.js';
 
 
@@ -126,7 +127,6 @@ export const BOARD_PLOT = 900;
 const REDUCED_MOTION_QUERY = '(prefers-reduced-motion: reduce)';
 const ROW_H = 46; // row canvas height in CSS px (label cells match this exactly)
 const AXIS_H = 20; // axis header canvas + head-label height, matched for alignment
-const FAMILIES = ['public', 'lane', 'family', 'women', 'seniors', 'adults', 'school', 'club'];
 
 // "HH:MM" → minutes-of-day. Re-exported from the shared cursor leaf so the board,
 // the Gantt, and the panel all parse times through ONE function.
@@ -248,31 +248,6 @@ function weekdayDateLabel(row: BoardRow): string {
 
 // ---- Colour resolution (runtime, browser only) ----------------------------------
 
-// Resolve each family/semantic colour by probing a CSS `.fam-*` class and reading the
-// computed `color`. Keeps ALL colour in tokens.css; returns null headless (no browser).
-function resolvePalette(doc: Doc, host: El): Palette | null {
-  const view: WindowLike | null =
-    doc.defaultView || (typeof window !== 'undefined' ? (window as unknown as WindowLike) : null);
-  if (!view || typeof view.getComputedStyle !== 'function') return null;
-  const probe = doc.createElement('span');
-  probe.className = 'board__probe';
-  host.appendChild(probe);
-  const read = (cls: string): string => {
-    probe.className = `board__probe ${cls}`;
-    return view.getComputedStyle(probe).color;
-  };
-  const pal: Palette = {};
-  for (const f of FAMILIES) pal[f] = read(`fam-${f}`);
-  pal.other = read('fam-public');
-  pal.closed = read('fam-closed');
-  pal.unknown = read('fam-unknown');
-  pal.sheath = read('fam-sheath');
-  pal.axis = read('fam-axis');
-  pal.hair = read('fam-hair');
-  pal.muted = read('fam-muted');
-  host.removeChild?.(probe);
-  return pal;
-}
 
 // ---- Canvas rendering -----------------------------------------------------------
 
@@ -401,7 +376,7 @@ export function createBoard<T extends El>(el: T, opts: BoardOpts = {}) {
   trackBody.className = 'board__trackbody';
   track.appendChild(trackBody);
 
-  const pal = resolvePalette(doc, board);
+  const pal = resolveFamilyPalette(doc, board);
   // One entry per data row: { canvas, row, ribbons, animated }. `ribbons` is computed
   // ONCE here (not per frame); only the ~1–2 rows carrying a flowing lane ribbon are
   // redrawn in the RAF loop — the static ghost/closed/unpublished rows are painted once.

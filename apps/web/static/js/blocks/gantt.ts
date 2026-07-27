@@ -160,7 +160,9 @@ export function createGantt<T extends El>(el: T, opts: GanttOpts) {
   function paintCursor() {
     cursor.style.left = `${trackX(cursorMin)}px`;
     const { public: n, total: m } = readoutAt(cursorMin);
-    readout.textContent = `${minToHhmm(cursorMin)} · ${n} of ${m} lanes public`;
+    // Was a hardcoded English template — the `gantt.readout` key already existed in all
+    // five catalogues and simply was not used, so this line stayed English on a Polish page.
+    readout.textContent = t('gantt.readout', { hhmm: minToHhmm(cursorMin), public: n, total: m });
   }
   paintCursor();
 

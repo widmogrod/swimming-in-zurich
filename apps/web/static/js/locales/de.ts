@@ -241,4 +241,31 @@ export const de = {
   "prov.official": "Offizieller Zeitplan",
   "prov.illustrative": "Illustrativ — von der Website des Bads übernommen",
   "prov.lastChecked": " · zuletzt geprüft am {date}",
+
+  "mobile.tier.now": "Jetzt schwimmen",
+  "mobile.tier.soon": "Später heute",
+  "mobile.tier.unknown": "Keine Zeiten hinterlegt",
+  "mobile.tier.closed": "Geschlossen",
+
+  "mobile.verdict.openNow": "Jetzt offen",
+  "mobile.verdict.partlyReserved": "Teilweise reserviert",
+  "mobile.verdict.notYoursUntil": "Erst ab {hhmm} für dich",
+  "mobile.verdict.opensAt": "Öffnet {hhmm}",
+  "mobile.verdict.doneForToday": "Heute vorbei",
+  "mobile.verdict.closedAllDay": "Ganztags geschlossen",
+  "mobile.verdict.hoursUnknown": "Keine Zeiten hinterlegt",
+  "mobile.verdict.untilTime": "bis {hhmm}",
+  "mobile.lanesUntil": "{public} von {total} Bahnen öffentlich bis {hhmm}",
+
+  "mobile.openToYou": {
+    one: "{count} jetzt für dich offen",
+    other: "{count} jetzt für dich offen",
+  },
+  "mobile.openToYouOn": {
+    one: "{count} offen für dich am {day}",
+    other: "{count} offen für dich am {day}",
+  },
+  "mobile.filters": "Filter",
+  "mobile.today": "Heute",
+  "mobile.lanePlan": "Bahnenplan",
 } as const satisfies CatalogFor<"de">;

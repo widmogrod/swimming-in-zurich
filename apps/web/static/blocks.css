@@ -361,8 +361,8 @@ body {
 /* ---------------------------------------------------------------------------
    DetailPanel / BottomSheet (Part 3 §6) — S3.
 
-   ≥1060px: a sticky side panel. <1060px: a slide-up bottom sheet over a
-   backdrop. Both motions are frozen under prefers-reduced-motion. Layout ONLY.
+   ≥960px: a sticky side panel. Below that the phone surface replaces it entirely
+   (variant E's inline expansion), so there is no sheet and no backdrop. Layout ONLY.
    --------------------------------------------------------------------------- */
 
 .detail {
@@ -538,59 +538,28 @@ body {
 
 /* --- side panel vs bottom sheet ------------------------------------------- */
 
-/* ≥1060px: the panel is a sticky sidebar riding alongside the board. */
-@media (min-width: 1060px) {
+/* ≥960px: the panel is a sticky sidebar riding alongside the board. */
+@media (min-width: 960px) {
   .detail {
     position: sticky;
     top: var(--s4);
   }
-  .detail__backdrop {
-    display: none;                  /* no backdrop for the docked side panel */
-  }
 }
 
-/* <1060px: a slide-up bottom sheet over a dimming backdrop. */
-@media (max-width: 1060px) {
-  .detail__backdrop {
-    position: fixed;
-    inset: 0;
-    background: var(--track);
-    opacity: 0;
-    pointer-events: none;
-    transition: opacity var(--dur-sheet) var(--ease-sheet);
-    z-index: 40;
-  }
-  .detail {
-    position: fixed;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    max-height: 85vh;
-    overflow-y: auto;
-    border-radius: var(--r-lg) var(--r-lg) 0 0;
-    box-shadow: var(--shadow-lg);
-    transform: translateY(100%);
-    transition: transform var(--dur-sheet) var(--ease-sheet);
-    z-index: 41;
-  }
-  .detail.is-open {
-    transform: translateY(0);
-  }
-  .detail__backdrop.is-open {
-    opacity: 1;
-    pointer-events: auto;
-  }
-  /* The Gantt lane track gets its own horizontal scroll on the phone. */
+/* <960px: there is no sheet. The phone shows the ranked pool list (variant E) and the
+   DetailPanel is not built at all — see app.ts's `isPhone`.
+
+   What used to live here was a complete slide-up bottom sheet: `.detail` fixed at
+   `bottom:0` with `transform: translateY(100%)`, rising on `.is-open` over a
+   `.detail__backdrop`. Nothing in the codebase ever added `is-open`, and the backdrop
+   element was never created — so on a phone the panel sat parked one full height below
+   the fold with no mechanism that could bring it back, and tapping a pool appeared to do
+   nothing. Deleting it is the fix: the phone's detail is an inline expansion, so there is
+   no sheet to open, dismiss or trap focus in. */
+@media (max-width: 959px) {
+  /* The Gantt lane track keeps its own horizontal scroll on the phone. */
   .gantt__scroll {
     -webkit-overflow-scrolling: touch;
-  }
-}
-
-/* Reduced motion: freeze the slide + backdrop fade (no transform animation). */
-@media (prefers-reduced-motion: reduce) {
-  .detail,
-  .detail__backdrop {
-    transition: none;
   }
 }
 
@@ -599,7 +568,8 @@ body {
 
    Layout ONLY (colour via tokens). A single column stack of blocks; the board +
    panel become a two-column split on wide screens (the panel is a sticky side
-   rail ≥1060px, matching the DetailPanel's own responsive contract).
+   rail ≥960px, matching the DetailPanel's own responsive contract; below that the
+   phone surface replaces the whole two-column split).
    --------------------------------------------------------------------------- */
 .app {
   max-width: 1200px;
@@ -633,7 +603,7 @@ body {
 .app__boardempty {
   margin-top: var(--s3);
 }
-@media (min-width: 1060px) {
+@media (min-width: 960px) {
   .app__main {
     grid-template-columns: minmax(0, 1fr) 22rem;
   }
@@ -917,4 +887,226 @@ body {
 }
 .stateblock--no-pools {
   border-left-color: var(--hair-2);
+}
+
+/* ---------------------------------------------------------------------------
+   Phone surface (variant E) — the ranked pool list, its day tails, and the
+   context bar. Mounted only below --phone-max; the desktop board and its
+   sticky side panel are untouched above it.
+
+   Layout + tokens only. The tails' colour comes from the `.fam-*` probes the
+   shared renderer reads, exactly as the board's does.
+   --------------------------------------------------------------------------- */
+
+/* --- context bar: a day strip that scrolls away, over a PINNED summary ------
+   Only one thing is pinned. Two sticky bars at top:0 stack, and the taller one
+   paints over the other — the day strip hid the filter row outright. The
+   summary wins because it is the state you cannot afford to lose; the chosen
+   day still rides in the summary as a tag. */
+/* The BAR is the sticky element, offset upward by exactly the day strip's height, so the
+   strip scrolls out of view and the summary lands at top:0 and stays. Pinning the summary
+   alone does not work: `position: sticky` is bounded by its parent, so it scrolled away
+   the moment .pbar did — which is exactly what happened in the first build. */
+.pbar {
+  position: sticky;
+  top: calc(-1 * var(--pbar-strip-h));
+  z-index: 25;
+  background: var(--bg);
+  --pbar-strip-h: 60px;          /* 44px tap target + var(--s2) padding block */
+}
+
+.pbar__days {
+  display: flex;
+  min-height: var(--pbar-strip-h);
+  gap: var(--s1);
+  overflow-x: auto;
+  scrollbar-width: none;
+  padding: var(--s2) 0;
+}
+.pbar__days::-webkit-scrollbar { display: none; }
+.pbar__day {
+  flex: none;
+  min-width: 52px;
+  min-height: 44px;             /* the phone tap floor, not --ctl-h */
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  padding: var(--s1) var(--s2);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--r-md);
+  color: var(--muted);
+  font: inherit;
+  line-height: 1.1;
+  cursor: pointer;
+}
+.pbar__day:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.pbar__dow {
+  font-size: var(--fs-micro);
+  font-weight: var(--fw-caption);
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+.pbar__num { font-size: 16px; font-weight: var(--fw-caption); color: var(--ink-2); }
+.pbar__day.is-today .pbar__num { color: var(--accent-ink); }
+.pbar__day.is-sel {
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  border-color: var(--accent);
+}
+.pbar__day.is-sel .pbar__dow { color: var(--accent-ink); }
+.pbar__day.is-sel .pbar__num { color: var(--ink); }
+
+.pbar__summary {
+  position: sticky;
+  top: 0;
+  z-index: 25;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  min-height: 44px;
+  padding: var(--s2) var(--s3);
+  background: var(--surface-2);
+  border: 0;
+  border-block: 1px solid var(--hair);
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.pbar__summary:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.pbar__tags { display: flex; gap: var(--s1); overflow-x: auto; scrollbar-width: none; flex: 1; min-width: 0; }
+.pbar__tags::-webkit-scrollbar { display: none; }
+.pbar__tag {
+  flex: none;
+  font-size: var(--fs-caption);
+  font-weight: var(--fw-caption);
+  padding: 3px 9px;
+  border-radius: var(--r-pill);
+  background: var(--chip);
+  color: var(--chip-ink);
+  white-space: nowrap;
+}
+.pbar__tag--lead {
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+  color: var(--accent-ink);
+}
+.pbar__caret { flex: none; color: var(--muted); font-size: var(--fs-caption); }
+.pbar__caret::before { content: "\25BE"; }
+.pbar.is-filtersopen .pbar__caret { transform: rotate(180deg); }
+
+/* --- the ranked list ------------------------------------------------------- */
+.plist { display: flex; flex-direction: column; gap: var(--s2); }
+.plist__group {
+  position: sticky;
+  top: 44px;                     /* clears the pinned summary above */
+  z-index: 20;
+  display: flex;
+  align-items: baseline;
+  gap: var(--s2);
+  padding: var(--s3) var(--s1) var(--s2);
+  /* Opaque, not a fade: a sticky heading rides OVER the cards below it, and a gradient
+     let the card title bleed through it as it scrolled under. */
+  background: var(--bg);
+  font-size: var(--fs-micro);
+  font-weight: var(--fw-caption);
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.plist__group b { color: var(--ink-2); font-weight: var(--fw-caption); }
+
+.plist__card {
+  background: var(--surface);
+  border: 1px solid var(--hair);
+  border-radius: var(--r-md);
+  overflow: hidden;
+  content-visibility: auto;
+  contain-intrinsic-size: auto 150px;
+}
+.plist__card.is-muted { opacity: .72; }
+.plist__btn {
+  display: block;
+  width: 100%;
+  padding: var(--s3) var(--s3) var(--s2);
+  background: transparent;
+  border: 0;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.plist__btn:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.plist__head { display: flex; align-items: flex-start; gap: var(--s2); }
+.plist__text { min-width: 0; }
+.plist__name {
+  margin: 0;
+  font-size: 15px;
+  font-weight: var(--fw-caption);
+  line-height: 1.25;
+  color: var(--ink);
+}
+.plist__verdict { margin: 2px 0 0; font-size: var(--fs-body); color: var(--ink-2); }
+.plist__verdict b { color: var(--ink); }
+.plist__vtail { color: var(--muted); }
+.plist__meta {
+  margin: var(--s2) 0 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s1) var(--s3);
+  font-size: var(--fs-caption);
+  color: var(--muted);
+}
+.plist__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex: none;
+  margin-top: 6px;
+  background: var(--unknown);
+}
+.plist__dot.is-now { background: var(--accent); }
+.plist__dot.is-soon { background: var(--best); }
+.plist__dot.is-closed { background: var(--closed); }
+
+/* The day tail: laid out by CSS, painted by the SHARED renderer. Its height is
+   set inline from TAIL_H so the canvas box and the drawing agree exactly. */
+.plist__tail { padding: var(--s1) var(--s3) var(--s3); }
+.plist__tail canvas { display: block; width: 100%; }
+
+/* --- the responsive switch -------------------------------------------------
+   Below this width the phone surface is shown and the board + side panel are
+   not built at all (app.ts checks the same query, so nothing paints offscreen).
+   Above it, the phone surface is absent and the desktop board is unchanged. */
+.app__phone { display: none; }
+@media (max-width: 959px) {
+  .app__phone { display: block; }
+  .app__main { display: none; }
+}
+@media (min-width: 960px) {
+  .app__phone { display: none; }
+}
+
+/* The filter drawer: the desktop toolbar, disclosed. A plain show/hide rather than an
+   animated height — a `grid-template-rows` transition wedges at its start value in a
+   throttled frame, and a filter drawer that can never open is worse than an abrupt one. */
+.pbar__drawer { display: none; }
+.pbar.is-filtersopen .pbar__drawer { display: block; }
+.pbar__drawer .toolbar { border-radius: 0; border-inline: 0; }
+
+/* The expanded card body: the SAME DetailPanel the desktop rail mounts, inline. Hidden
+   until the card is open — no sheet to slide, nothing parked off-screen. */
+.plist__more { display: none; }
+.plist__card.is-open .plist__more { display: block; }
+/* createDetailPanel stamps `.detail` on the HOST it is given, so the card body itself
+   carries it — the override targets `.plist__more`, not a descendant. */
+.plist__more.detail {
+  border: 0;
+  border-top: 1px solid var(--hair-2);
+  border-radius: 0;
+  box-shadow: none;
+  position: static;
+  padding: var(--s3);
 }

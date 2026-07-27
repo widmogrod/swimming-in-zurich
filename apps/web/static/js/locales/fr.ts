@@ -228,4 +228,33 @@ export const fr = {
   "prov.official": "Horaire officiel",
   "prov.illustrative": "À titre indicatif — relevé sur le site de la piscine",
   "prov.lastChecked": " · dernière vérification le {date}",
+
+  "mobile.tier.now": "Nager maintenant",
+  "mobile.tier.soon": "Plus tard aujourd’hui",
+  "mobile.tier.unknown": "Horaires non publiés",
+  "mobile.tier.closed": "Fermé",
+
+  "mobile.verdict.openNow": "Ouvert maintenant",
+  "mobile.verdict.partlyReserved": "Partiellement réservé",
+  "mobile.verdict.notYoursUntil": "Pas pour vous avant {hhmm}",
+  "mobile.verdict.opensAt": "Ouvre à {hhmm}",
+  "mobile.verdict.doneForToday": "Terminé pour aujourd’hui",
+  "mobile.verdict.closedAllDay": "Fermé toute la journée",
+  "mobile.verdict.hoursUnknown": "Horaires non publiés",
+  "mobile.verdict.untilTime": "jusqu’à {hhmm}",
+  "mobile.lanesUntil": "{public} couloirs sur {total} publics jusqu’à {hhmm}",
+
+  "mobile.openToYou": {
+    one: "{count} ouvert pour vous maintenant",
+    many: "{count} ouverts pour vous maintenant",
+    other: "{count} ouverts pour vous maintenant",
+  },
+  "mobile.openToYouOn": {
+    one: "{count} ouvert pour vous {day}",
+    many: "{count} ouverts pour vous {day}",
+    other: "{count} ouverts pour vous {day}",
+  },
+  "mobile.filters": "Filtres",
+  "mobile.today": "Aujourd’hui",
+  "mobile.lanePlan": "Plan des couloirs",
 } as const satisfies CatalogFor<"fr">;

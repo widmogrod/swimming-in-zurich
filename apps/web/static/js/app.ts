@@ -35,6 +35,8 @@ import {
   BOARD_PLOT,
   closureLabel,
   createBoard,
+  dayRows,
+  type BoardAnswer,
 } from "./blocks/board.js";
 import {
   basinFromPanel,
@@ -49,6 +51,8 @@ import {
 import { applyTheme, createIdentityHeader } from "./blocks/header.js";
 import { createInsightBar } from "./blocks/insightbar.js";
 import { createBoardLegend } from "./blocks/legend.js";
+import { createPhoneBar } from "./blocks/phonebar.js";
+import { createPoolList } from "./blocks/poollist.js";
 import { createStateBlocks, emptyState } from "./blocks/stateblocks.js";
 import { createFilterToolbar, DEFAULT_AGE_CHIPS } from "./blocks/toolbar.js";
 import { formatLabel } from "./components/datestepper.js";
@@ -158,6 +162,20 @@ async function main() {
   // --- board + panel hosts (rebuilt per render) ---
   const boardHost = mustEl("app-board");
   const panelHost = mustEl("app-panel");
+  // The phone surface (variant E). CSS owns which of the two is visible; this flag keeps
+  // the hidden one from being BUILT, so no canvas paints offscreen and no rAF runs for a
+  // surface nobody can see. It is read once — a viewport that crosses the breakpoint mid
+  // session is a page reload away from correct, and that is the honest trade for not
+  // maintaining two live surfaces at once.
+  mustEl("app-phone"); // presence check: the shell must carry the phone surface
+  const phoneBarHost = mustEl("app-phonebar");
+  const poolListHost = mustEl("app-poollist");
+  const isPhone =
+    typeof globalThis.matchMedia === "function"
+      ? globalThis.matchMedia("(max-width: 959px)").matches
+      : false;
+  let poolList: ReturnType<typeof createPoolList> | null = null;
+  let phoneBar: ReturnType<typeof createPhoneBar> | null = null;
   let board: ReturnType<typeof createBoard> | null = null;
   let cursorLines: El[] = [];
   let poolOptions: PoolOption[] = []; // classified pool-picker options (nearest plannable first)
@@ -198,14 +216,18 @@ async function main() {
   }
 
   let panel: ReturnType<typeof createDetailPanel> | null = null;
+  // Where the DetailPanel mounts. The desktop rail by default; on the phone it is
+  // retargeted to the expanding card, so BOTH surfaces run the one panel implementation
+  // instead of the phone growing a second detail view that could disagree with it.
+  let panelTarget: El = panelHost;
   // The panel-rail helper shown until a pool is opened — never a blank rail (plan FIX 4).
   function renderPanelHelper() {
-    panelHost.textContent = "";
+    panelTarget.textContent = "";
     panel = null;
     const msg = newEl("p");
     msg.className = "app__panelempty";
     msg.textContent = t("detail.emptyPanel");
-    panelHost.appendChild(msg);
+    panelTarget.appendChild(msg);
   }
 
   // The DetailPanel ALWAYS opens (plan FIX 3): a plannable pool resolves to its OWN
@@ -215,8 +237,8 @@ async function main() {
     detail: FacilityDetail | null,
     opts: DetailPanelOpts = {},
   ) {
-    panelHost.textContent = "";
-    panel = createDetailPanel(panelHost, {
+    panelTarget.textContent = "";
+    panel = createDetailPanel(panelTarget, {
       detail: detail || {},
       basin: opts.basin || null,
       timescale: TIMESCALE,
@@ -269,8 +291,10 @@ async function main() {
     // A real user click mirrors the chosen pool into the URL (so it's shareable/linkable);
     // the load-time auto-open passes { fromUser: false } so a bare default link stays bare.
     const fromUser = opts.fromUser !== false;
-    if (!board) return;
-    const row = board.rows[rowIndex];
+    // The board owns the rows on desktop; on the phone there IS no board (only one
+    // surface is ever built), so the list's own rows answer instead. Same projection
+    // either way — `dayRows` — so the two cannot disagree about what a row is.
+    const row = board ? board.rows[rowIndex] : phoneRows[rowIndex];
     if (!row) return;
     if (row.options.length > 0) {
       const opt = row.options[0];
@@ -379,6 +403,75 @@ async function main() {
     await onRowClick(idx, null, { fromUser: false });
   }
 
+  // --- the phone surface ------------------------------------------------------------
+  //
+  // Only ONE of the two surfaces is ever built (see `isPhone`). The phone reuses the
+  // board's own row projection (`dayRows`) and ribbon model, so the two cannot disagree
+  // about what a pool's day looks like — the list is a different VIEW of the same answer,
+  // never a second derivation of it.
+
+  /** Minutes-of-day for the cursor, or null when the shown day is not today. "Now" is
+   *  only true of today; a future day must not be told it is happening. */
+  function phoneNowMin(): number | null {
+    if ((filter.date || today) !== today) return null;
+    const now = new Date();
+    return now.getHours() * 60 + now.getMinutes();
+  }
+
+  let phoneRows: ReturnType<typeof dayRows> = [];
+
+  function renderPhone(data: { day?: BoardAnswer } | { week: unknown }) {
+    const answer = "day" in data ? data.day : undefined;
+    if (!answer) return; // Pool (week) mode has no phone list yet — see the shipping note
+    const rows = dayRows(answer);
+    phoneRows = rows;
+    const nowMin = phoneNowMin();
+    if (!poolList) {
+      poolList = createPoolList(poolListHost, {
+        rows,
+        nowMin,
+        // Expanding a card mounts the SAME DetailPanel the desktop rail uses, into the
+        // card itself: facts, provenance and the per-lane Gantt — the desktop's other
+        // lane view, which is what the tail's thickness resolves into.
+        onOpen: (label, host) => {
+          panelTarget = host;
+          const index = phoneRows.findIndex((r) => r.label === label);
+          if (index >= 0) void onRowClick(index, null, { fromUser: true });
+        },
+        reducedMotion:
+          typeof globalThis.matchMedia === "function"
+            ? globalThis.matchMedia("(prefers-reduced-motion: reduce)").matches
+            : false,
+      });
+    } else {
+      poolList.setRows(rows, nowMin);
+    }
+    if (!phoneBar) {
+      phoneBar = createPhoneBar(phoneBarHost, {
+        props: {
+          date: filter.date || today,
+          today,
+          openToYou: poolList.countOpenToYou(),
+        },
+        onDate: (iso) => {
+          filter = merge(filter, { date: iso });
+          render();
+          syncUrl(filter);
+        },
+      });
+      // The desktop toolbar IS the phone's filter drawer — same controls, same state,
+      // just disclosed instead of always-on. Reparenting beats building a second filter
+      // UI that could disagree with the first.
+      phoneBar.drawer.appendChild(mustEl("app-toolbar"));
+      globalThis.addEventListener?.("scroll", () => phoneBar?.closeOnScroll(), {
+        passive: true,
+      });
+    } else {
+      phoneBar.setDate(filter.date || today);
+      phoneBar.setSummary({ openToYou: poolList.countOpenToYou() });
+    }
+  }
+
   async function render() {
     header.setDateLabel(headerLabel());
     // Tear down the previous board FIRST so its shared RAF loop stops — otherwise every
@@ -406,14 +499,18 @@ async function main() {
       data = { day };
       answerForEmpty = day;
     }
-    board = createBoard(boardHost, {
-      data,
-      filter,
-      timescale: TIMESCALE,
-      today,
-    });
+    if (isPhone) {
+      renderPhone(data);
+    } else {
+      board = createBoard(boardHost, {
+        data,
+        filter,
+        timescale: TIMESCALE,
+        today,
+      });
+      wireBoardCursor();
+    }
     insight.update(data, filter);
-    wireBoardCursor();
     // A SINGLE board-level empty state, shown ONLY when the answer has neither options
     // nor statuses (plan FIX 1). Closed/uncurated pools read on their own rows above —
     // there is no duplicate below-board section anymore.

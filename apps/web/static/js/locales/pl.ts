@@ -266,4 +266,35 @@ export const pl = {
   "prov.official": "Oficjalny harmonogram",
   "prov.illustrative": "Poglądowe — odczytane ze strony basenu",
   "prov.lastChecked": " · ostatnio sprawdzono {date}",
+
+  "mobile.tier.now": "Popływaj teraz",
+  "mobile.tier.soon": "Później dzisiaj",
+  "mobile.tier.unknown": "Godziny nieopublikowane",
+  "mobile.tier.closed": "Zamknięte",
+
+  "mobile.verdict.openNow": "Otwarte teraz",
+  "mobile.verdict.partlyReserved": "Częściowo zarezerwowane",
+  "mobile.verdict.notYoursUntil": "Nie dla ciebie do {hhmm}",
+  "mobile.verdict.opensAt": "Otwiera o {hhmm}",
+  "mobile.verdict.doneForToday": "Na dziś koniec",
+  "mobile.verdict.closedAllDay": "Zamknięte cały dzień",
+  "mobile.verdict.hoursUnknown": "Godziny nieopublikowane",
+  "mobile.verdict.untilTime": "do {hhmm}",
+  "mobile.lanesUntil": "{public} z {total} torów publicznych do {hhmm}",
+
+  "mobile.openToYou": {
+    one: "{count} otwarty teraz dla ciebie",
+    few: "{count} otwarte teraz dla ciebie",
+    many: "{count} otwartych teraz dla ciebie",
+    other: "{count} otwartego teraz dla ciebie",
+  },
+  "mobile.openToYouOn": {
+    one: "{count} otwarty dla ciebie w {day}",
+    few: "{count} otwarte dla ciebie w {day}",
+    many: "{count} otwartych dla ciebie w {day}",
+    other: "{count} otwartego dla ciebie w {day}",
+  },
+  "mobile.filters": "Filtry",
+  "mobile.today": "Dzisiaj",
+  "mobile.lanePlan": "Plan torów",
 } as const satisfies CatalogFor<"pl">;

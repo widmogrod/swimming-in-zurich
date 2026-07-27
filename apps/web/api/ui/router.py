@@ -47,6 +47,10 @@ _SHELL = """<!doctype html>
   <header id="app-header" class="apphdr"></header>
   <div id="app-toolbar" class="toolbar"></div>
   <div id="app-insight" class="insight"></div>
+  <div id="app-phone" class="app__phone">
+    <div id="app-phonebar" class="pbar"></div>
+    <div id="app-poollist"></div>
+  </div>
   <main class="app__main">
     <div id="app-board" class="app__board"></div>
     <aside id="app-panel" class="app__panel"></aside>

@@ -226,4 +226,33 @@ export const it = {
   "prov.official": "Orario ufficiale",
   "prov.illustrative": "Indicativo — rilevato dal sito della piscina",
   "prov.lastChecked": " · ultima verifica il {date}",
+
+  "mobile.tier.now": "Nuota adesso",
+  "mobile.tier.soon": "Più tardi oggi",
+  "mobile.tier.unknown": "Orari non pubblicati",
+  "mobile.tier.closed": "Chiuso",
+
+  "mobile.verdict.openNow": "Aperto adesso",
+  "mobile.verdict.partlyReserved": "Parzialmente riservato",
+  "mobile.verdict.notYoursUntil": "Non per te fino alle {hhmm}",
+  "mobile.verdict.opensAt": "Apre alle {hhmm}",
+  "mobile.verdict.doneForToday": "Per oggi è finita",
+  "mobile.verdict.closedAllDay": "Chiuso tutto il giorno",
+  "mobile.verdict.hoursUnknown": "Orari non pubblicati",
+  "mobile.verdict.untilTime": "fino alle {hhmm}",
+  "mobile.lanesUntil": "{public} corsie su {total} pubbliche fino alle {hhmm}",
+
+  "mobile.openToYou": {
+    one: "{count} aperto per te adesso",
+    many: "{count} aperti per te adesso",
+    other: "{count} aperti per te adesso",
+  },
+  "mobile.openToYouOn": {
+    one: "{count} aperti per te {day}",
+    many: "{count} aperti per te {day}",
+    other: "{count} aperti per te {day}",
+  },
+  "mobile.filters": "Filtri",
+  "mobile.today": "Oggi",
+  "mobile.lanePlan": "Piano delle corsie",
 } as const satisfies CatalogFor<"it">;

@@ -16,7 +16,7 @@
 
 import { hhmmToMin } from './cursor.js';
 import { t, type MessageKey } from '../i18n.js';
-import type { El } from '../domtypes.js';
+import type { Doc, El, WindowLike } from '../domtypes.js';
 /** A ribbon read STRUCTURALLY — only the fields the renderer paints. Deliberately
  *  looser than ribbonmodel's `Ribbon` so both it and board.ts's local row type satisfy
  *  it; the renderer must not care which producer built the spec. */
@@ -77,6 +77,40 @@ function setDashes(ctx: Ctx2D, style: string): void {
   if (style === 'dashed') ctx.setLineDash([9, 6]);
   else if (style === 'dotted') ctx.setLineDash([2, 5]);
   else ctx.setLineDash([]);
+}
+
+/** The access families whose colours the renderer resolves. */
+const FAMILIES = ['public', 'lane', 'family', 'women', 'seniors', 'adults', 'school', 'club'];
+
+/**
+ * resolveFamilyPalette(doc, host) — probe each `.fam-*` class for its computed colour,
+ * so canvas fills come from tokens.css and this file holds no hex.
+ *
+ * Shared by the board and the phone tail: both paint the same families, and resolving
+ * them from two separate lists is exactly how the surfaces would drift. Null headless.
+ */
+export function resolveFamilyPalette(doc: Doc, host: El): Palette | null {
+  const view: WindowLike | null =
+    doc.defaultView || (typeof window !== 'undefined' ? (window as unknown as WindowLike) : null);
+  if (!view || typeof view.getComputedStyle !== 'function') return null;
+  const probe = doc.createElement('span');
+  probe.className = 'board__probe';
+  host.appendChild(probe);
+  const read = (cls: string): string => {
+    probe.className = `board__probe ${cls}`;
+    return view.getComputedStyle(probe).color;
+  };
+  const pal: Palette = {};
+  for (const f of FAMILIES) pal[f] = read(`fam-${f}`);
+  pal.other = read('fam-public');
+  pal.closed = read('fam-closed');
+  pal.unknown = read('fam-unknown');
+  pal.sheath = read('fam-sheath');
+  pal.axis = read('fam-axis');
+  pal.hair = read('fam-hair');
+  pal.muted = read('fam-muted');
+  host.removeChild?.(probe);
+  return pal;
 }
 
 /**
