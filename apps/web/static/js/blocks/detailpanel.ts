@@ -219,8 +219,8 @@ function liveTempText(lwt: LiveWaterTemp | null | undefined) {
   }
   const age = humanizeAge(lwt.age_min);
   return {
-    text: `${lwt.celsius} °C`,
-    note: age ? `measured ${age} ago` : 'measured',
+    text: formatCelsius(lwt.celsius, locale()),
+    note: age ? t('detail.liveMeasuredAgo', { age }) : t('detail.tempMeasured'),
     muted: !!lwt.is_stale,
     stale: !!lwt.is_stale,
   };
@@ -313,7 +313,10 @@ function buildFacts(
     const span = basin ? publicSpan(basin) : null;
     if (span) {
       createStatePill(pillHost, {
-        props: { state: 'open', label: `Open · ${minToHhmm(span.lo)}–${minToHhmm(span.hi)}` },
+        props: {
+          state: 'open',
+          label: t('detail.openRange', { from: minToHhmm(span.lo), to: minToHhmm(span.hi) }),
+        },
       });
     } else {
       createStatePill(pillHost, { props: { state: 'unknown', label: t('detail.noPublicLanes') } });
@@ -324,7 +327,10 @@ function buildFacts(
     });
   } else if (panelState === 'closed') {
     createStatePill(pillHost, {
-      props: { state: 'closed', label: reason ? `Closed · ${reason}` : 'Closed' },
+      props: {
+        state: 'closed',
+        label: reason ? t('detail.closedReason', { reason }) : t('pill.closed'),
+      },
     });
   } else {
     createStatePill(pillHost, {
@@ -519,7 +525,7 @@ function buildDegradationNote(
   note.className = `detail__note detail__note--${panelState}`;
   note.textContent =
     panelState === 'closed' && reason
-      ? `Closed — ${reason}. ${NOTE_COPY.closed}`
+      ? t('detail.closedNote', { reason, note: NOTE_COPY.closed })
       : (NOTE_COPY as Record<string, string>)[panelState] || '';
   return note;
 }
@@ -585,7 +591,7 @@ export function createDetailPanel<T extends El>(el: T, opts: DetailPanelOpts = {
 
   el.classList.add('detail');
   el.setAttribute('role', 'region');
-  el.setAttribute('aria-label', `${detail.facility_name || 'Pool'} — ${subName}`.trim());
+  el.setAttribute('aria-label', `${detail.facility_name || t('detail.pool')} — ${subName}`.trim());
 
   el.appendChild(
     buildHeader(doc, detail, subName, panelState, reason, opts.onOpenWeek ?? null),

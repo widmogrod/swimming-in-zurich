@@ -239,6 +239,8 @@ export const pl = {
   "board.nearestFirst": "Najbliższe najpierw",
   "detail.waterNotPublished": "Temperatura wody nieopublikowana",
   "detail.tempMeasured": "zmierzona",
+  "detail.liveMeasuredAgo": "zmierzona {age} temu",
+  "detail.closedNote": "Zamknięte — {reason}. {note}",
   "detail.tempNominal": "nominalna (projektowa)",
   "detail.checked": "Sprawdzono {date}",
   "detail.weekButton": "Zobacz tydzień tego basenu →",

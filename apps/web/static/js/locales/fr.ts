@@ -202,6 +202,8 @@ export const fr = {
   "board.nearestFirst": "Les plus proches d’abord",
   "detail.waterNotPublished": "Température de l’eau non publiée",
   "detail.tempMeasured": "mesurée",
+  "detail.liveMeasuredAgo": "mesurée il y a {age}",
+  "detail.closedNote": "Fermé — {reason}. {note}",
   "detail.tempNominal": "nominale (conception)",
   "detail.checked": "Vérifié le {date}",
   "detail.weekButton": "Voir la semaine de cette piscine →",

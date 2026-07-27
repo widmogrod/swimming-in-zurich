@@ -279,7 +279,8 @@ test('S4: a live reading with a temp shows "23 °C · measured N min ago" (Heuri
   const p = createDetailPanel(mount(), { detail, basin: null, state: 'uncurated' });
   const row = must(liveRow(p), 'Live water row');
   expect(row).toBeTruthy();
-  expect(row.textContent.includes('23 °C')).toBeTruthy();
+  // `\s` tolerates the narrow no-break space Intl.NumberFormat (formatCelsius) puts before the unit.
+  expect(/23\s*°C/u.test(row.textContent)).toBeTruthy();
   expect(row.textContent.includes('measured 7 min ago')).toBeTruthy();
   // a fresh reading is NOT marked stale.
   expect(fake(p.el).query(hasClass('detail__live--stale'))).toBe(null);
@@ -348,7 +349,7 @@ test('S4: a stale reading (older than the freshness limit) is visibly marked', (
   };
   const p = createDetailPanel(mount(), { detail, basin: null, state: 'uncurated' });
   const row = must(liveRow(p), 'Live water row');
-  expect(row.textContent.includes('22 °C')).toBeTruthy();
+  expect(/22\s*°C/u.test(row.textContent)).toBeTruthy();
   expect(row.textContent.includes('measured 2 days ago')).toBeTruthy();
   expect(must(fake(p.el).query(hasClass('detail__live--stale')))).toBeTruthy();
 });

@@ -213,6 +213,8 @@ export const de = {
   "board.nearestFirst": "Nächste zuerst",
   "detail.waterNotPublished": "Wassertemperatur nicht veröffentlicht",
   "detail.tempMeasured": "gemessen",
+  "detail.liveMeasuredAgo": "vor {age} gemessen",
+  "detail.closedNote": "Geschlossen — {reason}. {note}",
   "detail.tempNominal": "nominal (Auslegung)",
   "detail.checked": "Geprüft am {date}",
   "detail.weekButton": "Woche dieses Bads ansehen →",

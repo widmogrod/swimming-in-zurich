@@ -255,6 +255,8 @@ export const en = {
   "board.nearestFirst": "Nearest first",
   "detail.waterNotPublished": "Water temperature not published",
   "detail.tempMeasured": "measured",
+  "detail.liveMeasuredAgo": "measured {age} ago",
+  "detail.closedNote": "Closed — {reason}. {note}",
   "detail.tempNominal": "nominal (design)",
   "detail.checked": "Checked {date}",
   "detail.weekButton": "See this pool’s week →",

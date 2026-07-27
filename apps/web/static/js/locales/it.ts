@@ -199,6 +199,8 @@ export const it = {
   "board.nearestFirst": "Prima le più vicine",
   "detail.waterNotPublished": "Temperatura dell’acqua non pubblicata",
   "detail.tempMeasured": "misurata",
+  "detail.liveMeasuredAgo": "misurata {age} fa",
+  "detail.closedNote": "Chiuso — {reason}. {note}",
   "detail.tempNominal": "nominale (di progetto)",
   "detail.checked": "Verificato il {date}",
   "detail.weekButton": "Vedi la settimana di questa piscina →",
