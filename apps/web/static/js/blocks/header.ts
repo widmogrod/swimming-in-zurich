@@ -10,7 +10,14 @@
 // colour, no hex — the header borrows tokens through its blocks.css classes.
 
 import { asDoc, type El } from '../domtypes.js';
-import { t } from '../i18n.js';
+import {
+  chooseLocale,
+  locale,
+  LOCALE_NAMES,
+  OFFERED_LOCALES,
+  t,
+} from '../i18n.js';
+import { isLocale } from '../plurals.js';
 
 /** The three theme choices, in cycle order. 'auto' defers to the OS/media query. */
 export type Theme = 'auto' | 'light' | 'dark';
@@ -138,8 +145,30 @@ export function createIdentityHeader<T extends El>(el: T, opts: HeaderOpts = {})
     if (opts.onThemeChange) opts.onThemeChange(theme);
   });
 
+  // --- language switcher ---
+  //
+  // A native <select>: five options is too many for a segmented control, and the platform
+  // control brings keyboard navigation, screen-reader semantics and mobile pickers for
+  // free. The option LABELS are endonyms (Deutsch, Polski) — see LOCALE_NAMES.
+  const lang = doc.createElement('select');
+  lang.className = 'apphdr__lang';
+  lang.setAttribute('aria-label', t('header.language'));
+  for (const code of OFFERED_LOCALES) {
+    const option = doc.createElement('option');
+    option.value = code;
+    option.textContent = LOCALE_NAMES[code];
+    if (code === locale()) option.setAttribute('selected', 'selected');
+    lang.appendChild(option);
+  }
+  lang.value = locale();
+  lang.addEventListener('change', () => {
+    const next = lang.value;
+    if (isLocale(next) && next !== locale()) chooseLocale(next);
+  });
+
   el.appendChild(brand);
   el.appendChild(datebox);
+  el.appendChild(lang);
   el.appendChild(copy);
   el.appendChild(toggle);
   renderToggle();
@@ -147,6 +176,7 @@ export function createIdentityHeader<T extends El>(el: T, opts: HeaderOpts = {})
 
   return {
     el,
+    lang,
     toggle,
     copy,
     setDateLabel(text: string) {

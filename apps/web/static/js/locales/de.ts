@@ -145,6 +145,7 @@ export const de = {
   "date.weekOf": "Woche vom {date}",
 
   "app.title": "Schwimmen in Zürich",
+  "header.language": "Sprache",
   "header.copyLink": "Link kopieren",
   "header.copied": "Kopiert",
   "header.copyAria": "Einen teilbaren Link zu dieser Ansicht kopieren",

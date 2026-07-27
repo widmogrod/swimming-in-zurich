@@ -3,6 +3,7 @@ import { expect, test } from 'vitest';
 import { nextTheme, applyTheme, createIdentityHeader, THEMES } from './header.js';
 import { mount } from '../components/_fakedom.js';
 import { fake, must } from '../testutil.js';
+import { LOCALE_NAMES, OFFERED_LOCALES, locale } from '../i18n.js';
 import type { FakeElement } from '../components/_fakedom.js';
 
 test('nextTheme cycles auto → light → dark → auto', () => {
@@ -119,5 +120,38 @@ test('the Copy-link handler does not throw when no clipboard is available', () =
       Object.defineProperty(globalThis, 'navigator', { value: savedNav, configurable: true });
     if (savedLoc !== undefined)
       Object.defineProperty(globalThis, 'location', { value: savedLoc, configurable: true });
+  }
+});
+
+// --- language switcher ------------------------------------------------------------
+
+test('the header offers every shipped locale, named in ITS OWN language', () => {
+  const el = mount();
+  const header = createIdentityHeader(el, { props: {}, root: mount() });
+  const options = fake(header.lang).children;
+  expect(options.map((o) => o.value)).toEqual([...OFFERED_LOCALES]);
+  // Endonyms, not translations: someone looking for Polish scans for "Polski", not
+  // "Polish". Translating these would defeat the menu's purpose.
+  expect(options.map((o) => o.textContent)).toEqual([
+    'English',
+    'Deutsch',
+    'Français',
+    'Italiano',
+    'Polski',
+  ]);
+});
+
+test('the switcher is labelled and preselects the active locale', () => {
+  const el = mount();
+  const header = createIdentityHeader(el, { props: {}, root: mount() });
+  expect(must(header.lang.getAttribute('aria-label'))).toBeTruthy();
+  expect(fake(header.lang).value).toBe(locale());
+});
+
+test('every offered locale has a catalogue AND an endonym', () => {
+  // The switcher must never list a locale it cannot render — that is the release gate
+  // made structural: a locale is offered only when it is complete.
+  for (const code of OFFERED_LOCALES) {
+    expect(LOCALE_NAMES[code], `${code} needs an endonym`).toBeTruthy();
   }
 });

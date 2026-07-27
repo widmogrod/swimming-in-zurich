@@ -136,6 +136,7 @@ export const it = {
   "date.nextWeek": "Settimana successiva",
   "date.weekOf": "Settimana del {date}",
   "app.title": "Nuotare a Zurigo",
+  "header.language": "Lingua",
   "header.copyLink": "Copia link",
   "header.copied": "Copiato",
   "header.copyAria": "Copia un link condivisibile a questa vista",

@@ -183,6 +183,7 @@ export const en = {
 
   // --- Header -----------------------------------------------------------------------
   "app.title": "Swimming in Zürich",
+  "header.language": "Language",
   "header.copyLink": "Copy link",
   "header.copied": "Copied",
   "header.copyAria": "Copy a shareable link to this view",

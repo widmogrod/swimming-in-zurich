@@ -171,6 +171,7 @@ export const pl = {
   "date.weekOf": "Tydzień od {date}",
 
   "app.title": "Pływanie w Zurychu",
+  "header.language": "Język",
   "header.copyLink": "Kopiuj link",
   "header.copied": "Skopiowano",
   "header.copyAria": "Skopiuj link do tego widoku",

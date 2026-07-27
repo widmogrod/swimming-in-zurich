@@ -75,3 +75,34 @@ def test_index_works_regardless_of_dev_ui_flag(monkeypatch: pytest.MonkeyPatch) 
     on = create_app()
     with TestClient(on) as client:
         assert client.get("/").status_code == 200
+
+
+def test_shell_language_follows_the_locale_cookie() -> None:
+    """`<html lang>` is not cosmetic: screen readers take their pronunciation from it, and
+    CSS `:lang()`/hyphenation key off it. Serving `lang="en"` to a Polish reader is a real
+    accessibility defect — and it is why the locale lives in a cookie, which the SERVER can
+    read, rather than localStorage, which it cannot."""
+    with TestClient(app) as client:
+        page = client.get("/", cookies={"swimzh_locale": "pl"}).text
+    assert '<html lang="pl">' in page
+    assert "<title>Pływanie w Zurychu</title>" in page
+
+
+def test_shell_falls_back_to_accept_language_then_english() -> None:
+    """A first visit has no cookie. `Accept-Language` is a HINT, so it selects the shell
+    text but never redirects — a language guess must not change a shared URL."""
+    with TestClient(app) as client:
+        german = client.get("/", headers={"Accept-Language": "de-CH,de;q=0.9"}).text
+        unknown = client.get("/", headers={"Accept-Language": "ja,ko;q=0.9"}).text
+    assert '<html lang="de-CH">' in german
+    assert "Schwimmen in Zürich" in german
+    assert '<html lang="en">' in unknown  # unsupported → English, not a guess
+
+
+def test_the_cookie_beats_accept_language() -> None:
+    """An explicit choice outranks a browser hint — the same precedence the client uses."""
+    with TestClient(app) as client:
+        page = client.get(
+            "/", cookies={"swimzh_locale": "it"}, headers={"Accept-Language": "de"}
+        ).text
+    assert '<html lang="it-CH">' in page

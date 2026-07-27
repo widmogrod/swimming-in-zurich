@@ -139,6 +139,7 @@ export const fr = {
   "date.nextWeek": "Semaine suivante",
   "date.weekOf": "Semaine du {date}",
   "app.title": "Nager à Zurich",
+  "header.language": "Langue",
   "header.copyLink": "Copier le lien",
   "header.copied": "Copié",
   "header.copyAria": "Copier un lien partageable vers cette vue",

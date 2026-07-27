@@ -175,7 +175,43 @@ export function enablePseudo(): void {
   CATALOGS[active] = pseudoCatalog(en);
 }
 
-export const OFFERED_LOCALES: readonly Locale[] = ["en", "de", "fr", "it"];
+export const OFFERED_LOCALES: readonly Locale[] = [
+  "en",
+  "de",
+  "fr",
+  "it",
+  "pl",
+];
+
+/**
+ * Each locale's name IN ITS OWN LANGUAGE (its endonym).
+ *
+ * Deliberately NOT catalogue entries: a language menu shows "Deutsch" to everyone, not
+ * "German" to an English reader and "Tedesco" to an Italian one. Someone looking for their
+ * own language scans for the word they would use — translating these would defeat the
+ * menu's entire purpose. They are invariant data, like a pool's name.
+ */
+export const LOCALE_NAMES: Record<Locale, string> = {
+  en: "English",
+  de: "Deutsch",
+  fr: "Français",
+  it: "Italiano",
+  pl: "Polski",
+};
+
+/**
+ * Persist the chosen locale and reload.
+ *
+ * The RELOAD is required, not laziness: `<html lang>` is server-rendered, and many blocks
+ * build their label tables at module scope (see `active` above), so re-translating the DOM
+ * in place would leave both stale. The cookie is written rather than localStorage because
+ * the server must be able to read it.
+ */
+export function chooseLocale(next: Locale): void {
+  const year = 60 * 60 * 24 * 365;
+  document.cookie = `${LOCALE_COOKIE}=${next}; path=/; max-age=${year}; samesite=lax`;
+  location.reload();
+}
 
 export const LOCALE_COOKIE = "swimzh_locale";
 
