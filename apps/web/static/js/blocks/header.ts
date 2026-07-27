@@ -150,8 +150,18 @@ export function createIdentityHeader<T extends El>(el: T, opts: HeaderOpts = {})
   // A native <select>: five options is too many for a segmented control, and the platform
   // control brings keyboard navigation, screen-reader semantics and mobile pickers for
   // free. The option LABELS are endonyms (Deutsch, Polski) — see LOCALE_NAMES.
+  // Structured like its neighbours — a glyph plus a label inside one pill — so the three
+  // header controls read as one family. The <select> keeps native semantics (keyboard,
+  // screen reader, mobile picker) but is stripped of its OS chrome in CSS; the PILL lives
+  // on the wrapper, because a bare styled <select> cannot hold a leading glyph.
+  const langWrap = doc.createElement('span');
+  langWrap.className = 'apphdr__lang';
+  const langIcon = doc.createElement('span');
+  langIcon.className = 'apphdr__langicon';
+  langIcon.setAttribute('aria-hidden', 'true');
+  langIcon.textContent = '🌐';
   const lang = doc.createElement('select');
-  lang.className = 'apphdr__lang';
+  lang.className = 'apphdr__langselect';
   lang.setAttribute('aria-label', t('header.language'));
   for (const code of OFFERED_LOCALES) {
     const option = doc.createElement('option');
@@ -165,10 +175,12 @@ export function createIdentityHeader<T extends El>(el: T, opts: HeaderOpts = {})
     const next = lang.value;
     if (isLocale(next) && next !== locale()) chooseLocale(next);
   });
+  langWrap.appendChild(langIcon);
+  langWrap.appendChild(lang);
 
   el.appendChild(brand);
   el.appendChild(datebox);
-  el.appendChild(lang);
+  el.appendChild(langWrap);
   el.appendChild(copy);
   el.appendChild(toggle);
   renderToggle();

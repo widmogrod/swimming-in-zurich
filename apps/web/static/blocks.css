@@ -698,19 +698,50 @@ body {
   border-color: var(--accent);
   color: var(--accent-ink);
 }
-/* Language switcher: a native <select> wearing the same pill as its neighbours. The
-   platform arrow is kept — it is the affordance that says "there are other choices",
-   and every locale's own name (Deutsch, Polski) reads at the same size. */
+/* Language switcher: the PILL lives on the WRAPPER (like .apphdr__copy: glyph + label),
+   and the <select> inside is stripped of its OS chrome. A bare <select> ignores
+   `background` on macOS unless `appearance` is reset — which is why it otherwise rendered
+   as a light box against the dark controls. The caret is ours, so it inherits
+   `currentColor` and follows the theme instead of the platform. */
 .apphdr__lang {
-  padding-right: var(--s2);
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s1);
+  padding-right: calc(var(--s3) + var(--s2));
+}
+.apphdr__lang::after {
+  content: "▾";
+  position: absolute;
+  right: var(--s2);
+  font-size: var(--fs-caption);
+  opacity: 0.7;
+  pointer-events: none;
+}
+.apphdr__langselect {
+  appearance: none;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+.apphdr__langselect:focus {
+  outline: none;
 }
 .apphdr__lang:hover {
   border-color: var(--accent);
   color: var(--accent-ink);
 }
+/* The PILL carries the focus ring, so keyboard focus reads the same as on the two
+   buttons beside it (the inner select's own outline is suppressed above). */
+.apphdr__lang:focus-within {
+  border-color: var(--accent);
+  box-shadow: var(--focus-ring);
+}
 .apphdr__theme:focus-visible,
-.apphdr__copy:focus-visible,
-.apphdr__lang:focus-visible {
+.apphdr__copy:focus-visible {
   outline: none;
   box-shadow: var(--focus-ring);
 }
