@@ -175,7 +175,7 @@ async function main() {
   function headerLabel() {
     if (filter.mode === "pool") {
       const [monIso] = weekDates(filter.date || today);
-      return `Week of ${formatLabel(monIso)}`;
+      return t("date.weekOf", { date: formatLabel(monIso) });
     }
     return formatLabel(filter.date || today);
   }

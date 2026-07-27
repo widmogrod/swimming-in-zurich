@@ -83,7 +83,7 @@ export function createSourceStrip<T extends El>(
     a.setAttribute('href', chip.url);
     a.setAttribute('target', '_blank');
     a.setAttribute('rel', 'noopener noreferrer');
-    const aName = chip.pdf ? `${chip.label} PDF` : chip.label;
+    const aName = chip.pdf ? t('sources.pdfLabel', { label: chip.label }) : chip.label;
     a.setAttribute('aria-label', `${aName} — opens ${hostOf(chip.url)} in a new tab`);
 
     const icon = doc.createElement('span');

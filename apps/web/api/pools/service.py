@@ -44,6 +44,7 @@ from swimzh.domain.query import (
     LiveTemp,
     TempResult,
     TempUnavailable,
+    TempUnavailableCode,
     read_temperature,
 )
 from swimzh.domain.schedule import ClosedDay, OpenDay, TimeRange
@@ -213,7 +214,10 @@ def resolve_live_water_temp(
     not configured) is a valid state — it becomes an explainable `TempUnavailable`, never an
     exception; otherwise the domain `read_temperature` keys by `identity.baditicker_poiid`."""
     if provider is None:
-        return TempUnavailable(reason="live temperature not configured")
+        return TempUnavailable(
+            reason="live temperature not configured",
+            code=TempUnavailableCode.NOT_CONFIGURED,
+        )
     return read_temperature(provider, identity, now)
 
 
@@ -231,7 +235,7 @@ def _live_water_temp_out(result: TempResult) -> LiveWaterTempOut:
                 source=reading.source,
                 reason=None,
             )
-        case TempUnavailable(reason):
+        case TempUnavailable(reason, code):
             return LiveWaterTempOut(
                 available=False,
                 celsius=None,
@@ -241,6 +245,7 @@ def _live_water_temp_out(result: TempResult) -> LiveWaterTempOut:
                 is_stale=None,
                 source=None,
                 reason=reason,
+                reason_code=code.value,
             )
 
 

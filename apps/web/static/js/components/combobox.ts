@@ -41,7 +41,8 @@ export function createCombobox<T extends El>(
   let filtered = allOptions.slice();
   let optionEls: El[] = [];
 
-  const listId = `ui-combo-${(_seq += 1)}`;
+  const // eslint-disable-next-line i18next/no-literal-string -- a generated element id, not copy
+listId = `ui-combo-${(_seq += 1)}`;
 
   el.classList.add('ui-combo');
 
@@ -80,7 +81,8 @@ export function createCombobox<T extends El>(
     list.textContent = ''; // clear (real + fake DOM)
     optionEls = filtered.map((o, i) => {
       const li = doc.createElement('li');
-      const optId = `${listId}-opt-${i}`;
+      // eslint-disable-next-line i18next/no-literal-string -- a generated element id, not copy
+    const optId = `${listId}-opt-${i}`;
       li.setAttribute('id', optId);
       li.id = optId;
       li.setAttribute('role', 'option');

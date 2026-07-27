@@ -160,7 +160,10 @@ class LiveWaterTempOut(BaseModel):
     is_open: bool | None  # feed open/closed at read time; None when unavailable
     is_stale: bool | None  # derived freshness (reading older than the staleness limit)
     source: str | None  # e.g. "baditicker"; None when unavailable
-    reason: str | None  # why unavailable; None when available
+    reason: str | None  # technical detail for operators; None when available
+    # The i18n key for `reason` — the UI renders this, never the raw text (which may be a
+    # provider diagnostic like "HTTP 503: …", useless to a reader in any language).
+    reason_code: str | None = None
 
 
 class FacilityDetailOut(BaseModel):

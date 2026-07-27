@@ -122,6 +122,7 @@ export function toSearch(
   ctx: UrlStateContext = {},
 ): string {
   const s = toParams(state, ctx).toString();
+  // eslint-disable-next-line i18next/no-literal-string -- a query string, not copy
   return s ? `?${s}` : "";
 }
 

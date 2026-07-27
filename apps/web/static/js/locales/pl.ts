@@ -139,6 +139,14 @@ export const pl = {
 
   "badge.teachingPool": "Basen do nauki pływania",
   "badge.metres": "{length} m",
+  "age.minutes": "{count} min",
+  "age.hours": "{count} godz.",
+  "age.days": {
+    one: "{count} dzień",
+    few: "{count} dni",
+    many: "{count} dni",
+    other: "{count} dnia",
+  },
   "badge.poolAria": "Basen {length}-metrowy, {lanes}",
 
   "sources.label": "Źródła",
@@ -146,6 +154,7 @@ export const pl = {
   "sources.lanePlan": "Plan torów",
   "sources.prices": "Cennik",
   "sources.pdf": "PDF",
+  "sources.pdfLabel": "{label} PDF",
   "sources.chipAria": "{name} — otwiera {host} w nowej karcie",
 
   "combo.noMatches": "Brak wyników",
@@ -221,6 +230,9 @@ export const pl = {
   "detail.notAvailable": "Niedostępne",
   "detail.notAvailableYet": "Jeszcze niedostępne",
   "detail.notYetMeasured": "Jeszcze niezmierzone",
+  "live.not_configured": "Nieskonfigurowane",
+  "live.provider_error": "Źródło niedostępne",
+  "live.no_key": "Niedostępne",
   "detail.liveOpen": "otwarte",
   "detail.liveClosed": "zamknięte",
   "board.nearestFirst": "Najbliższe najpierw",

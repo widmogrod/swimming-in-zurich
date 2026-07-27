@@ -2,6 +2,7 @@ import { afterEach, expect, test, vi } from "vitest";
 import {
   LOCALE_COOKIE,
   locale,
+  pseudo,
   resolveLocale,
   resolveLocaleFromBrowser,
   setLocale,
@@ -128,4 +129,30 @@ test("it falls back to navigator.languages when cookie and storage are empty", (
   vi.stubGlobal("localStorage", { getItem: () => null });
   vi.stubGlobal("navigator", { languages: ["pl-PL"] });
   expect(resolveLocaleFromBrowser()).toBe("pl");
+});
+
+// ---- pseudolocale ---------------------------------------------------------------------
+
+test("pseudo accents letters, pads for expansion, and BRACKETS the string", () => {
+  const out = pseudo("Closed");
+  expect(out).toMatch(/^⟦/);
+  expect(out).toMatch(/⟧$/);
+  expect(out).not.toContain("Closed"); // every letter is accented
+  expect(out.length).toBeGreaterThan("Closed".length);
+});
+
+test("pseudo leaves {placeholders} intact", () => {
+  // Accenting `{count}` would break interpolation and hide the very bug the pass exists
+  // to expose — a padded string with no number in it.
+  const out = pseudo("Closed · {reason} at {facility}");
+  expect(out).toContain("{reason}");
+  expect(out).toContain("{facility}");
+});
+
+test("pseudo padding is proportional, so long strings expand more", () => {
+  const short = pseudo("Open");
+  const long = pseudo("Hours not listed yet, may well be open");
+  expect(
+    long.length - "Hours not listed yet, may well be open".length,
+  ).toBeGreaterThan(short.length - "Open".length);
 });

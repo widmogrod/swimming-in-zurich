@@ -106,7 +106,8 @@ export function classifyPools(
     plannableNames.has(p.name) ? 0 : closed.has(p.name) ? 1 : 2;
   const items: PoolOption[] = poolsMeta.map((p) => {
     const state = plannableNames.has(p.name)
-      ? "plannable"
+      ? // eslint-disable-next-line i18next/no-literal-string -- state keys, not copy
+        "plannable"
       : closed.has(p.name)
         ? "closed"
         : "unknown";

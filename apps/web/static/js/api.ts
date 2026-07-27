@@ -113,14 +113,19 @@ export function swimParams(
 export function swimUrl(filter: SwimFilter, iso: string): string {
   const params = swimParams(filter, iso);
   const qs = Object.keys(params)
+    // eslint-disable-next-line i18next/no-literal-string -- query-string assembly, not copy
     .map((k) => `${encodeURIComponent(k)}=${encodeURIComponent(params[k])}`)
+    // eslint-disable-next-line i18next/no-literal-string -- query-string assembly, not copy
     .join("&");
+  // eslint-disable-next-line i18next/no-literal-string -- an API path, not copy
   return `/swim?${qs}`;
 }
 
 /** poolUrl(id, iso) → '/pools/{id}?at=…' (or no query when iso is absent). Pure. */
 export function poolUrl(id: string, iso?: string | null): string {
+  // eslint-disable-next-line i18next/no-literal-string -- an API path, not copy
   const base = `/pools/${encodeURIComponent(id)}`;
+  // eslint-disable-next-line i18next/no-literal-string -- an API path, not copy
   return iso ? `${base}?at=${encodeURIComponent(`${iso}${DAY_MOMENT}`)}` : base;
 }
 

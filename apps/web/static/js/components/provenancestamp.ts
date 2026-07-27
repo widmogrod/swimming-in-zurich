@@ -31,6 +31,7 @@ export function createProvenanceStamp<T extends El>(
   const trust = curated
     ? t('prov.official')
     : t('prov.illustrative');
+  // eslint-disable-next-line i18next/no-literal-string -- punctuation + a source name, not copy
   const src = props.source ? ` · ${props.source}` : '';
   // A raw ISO date was shown here; render it in the viewer's locale.
   const when = props.valid_as_of

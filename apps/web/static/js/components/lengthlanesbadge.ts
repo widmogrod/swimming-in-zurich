@@ -38,7 +38,7 @@ export function createLengthLanesBadge<T extends El>(
   el.appendChild(len);
 
   if (lanes != null) {
-    const laneWord = `${lanes} lane${lanes === 1 ? '' : 's'}`;
+    const laneWord = t('basin.laneCount', { count: lanes });
     const lanesEl = doc.createElement('span');
     lanesEl.classList.add('ui-lenlanes__lanes', 'tnum');
     lanesEl.textContent = laneWord;

@@ -44,6 +44,7 @@ from swimzh.domain.query import (
     SwimQuery,
     TempReading,
     TempUnavailable,
+    TempUnavailableCode,
     find_swim_options,
     read_temperature,
 )
@@ -406,7 +407,10 @@ def test_read_temperature_empty_cell_is_live_temp_with_none_celsius() -> None:
 def test_read_temperature_without_key_is_unavailable() -> None:
     provider = _FakeTemperatureProvider(Ok(_temp_reading(datetime.now(ZURICH))))
     result = read_temperature(provider, _keyed_identity(None), datetime.now(ZURICH))
-    assert result == TempUnavailable(reason="no baditicker key")
+    assert result == TempUnavailable(reason="no baditicker key", code=TempUnavailableCode.NO_KEY)
+    # The CODE is what the UI renders — "no baditicker key" is operator jargon, and the
+    # pseudolocale pass caught it being shown to users verbatim.
+    assert result.code is TempUnavailableCode.NO_KEY
     assert provider.calls == []  # never asked without a key
 
 

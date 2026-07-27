@@ -52,7 +52,10 @@ export interface BasinOut {
 /** The facility-level Baditicker live water temperature block. */
 export interface LiveWaterTemp {
   available?: boolean;
+  /** Operator-facing detail (may be a provider diagnostic). Never rendered. */
   reason?: string | null;
+  /** The i18n key for why it is unavailable — this is what the UI shows. */
+  reason_code?: string | null;
   celsius?: number | null;
   is_open?: boolean | null;
   age_min?: number | null;
@@ -176,10 +179,10 @@ function tempText(basinOut: BasinOut | null) {
 // reading reads "3 min ago" and a stale one "2 days ago" (the freshness the API already derived).
 function humanizeAge(ageMin: number | null | undefined): string {
   if (ageMin == null) return '';
-  if (ageMin < 60) return `${ageMin} min`;
-  if (ageMin < 60 * 24) return `${Math.round(ageMin / 60)} h`;
+  if (ageMin < 60) return t('age.minutes', { count: ageMin });
+  if (ageMin < 60 * 24) return t('age.hours', { count: Math.round(ageMin / 60) });
   const days = Math.round(ageMin / (60 * 24));
-  return `${days} ${days === 1 ? 'day' : 'days'}`;
+  return t('age.days', { count: days });
 }
 
 // The facility-level LIVE water temperature (Baditicker `live_water_temp`), rendered HONESTLY —
@@ -191,7 +194,19 @@ function humanizeAge(ageMin: number | null | undefined): string {
 function liveTempText(lwt: LiveWaterTemp | null | undefined) {
   if (!lwt) return null;
   if (!lwt.available) {
-    return { text: lwt.reason || t('detail.notAvailable'), note: '', muted: true, stale: false };
+    // Render the CODE, never `reason` — that may be "no baditicker key" or an HTTP
+    // diagnostic, which is jargon in every language. The pseudolocale pass caught the
+    // raw string reaching users.
+    const key = lwt.reason_code
+      ? // eslint-disable-next-line i18next/no-literal-string -- a message-key prefix, not copy
+        (`live.${lwt.reason_code}` as MessageKey)
+      : null;
+    return {
+      text: key ? t(key) : t('detail.notAvailable'),
+      note: '',
+      muted: true,
+      stale: false,
+    };
   }
   if (lwt.celsius == null) {
     const openNote =
@@ -378,6 +393,7 @@ function buildFacts(
   const at = basin ? accessTypes(basin) : opts.accessTypes || [];
   const eligState = at.length
     ? dayEligibility(at.map((a) => eligForAccess(a, filter.gender, filter.age)))
+    // eslint-disable-next-line i18next/no-literal-string -- an eligibility state key, not copy
     : 'chk';
   const eligHost = doc.createElement('span');
   createEligibilityBadge(eligHost, { props: { state: eligState } });

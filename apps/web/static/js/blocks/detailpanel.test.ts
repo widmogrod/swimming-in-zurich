@@ -319,11 +319,15 @@ test('S4: unavailable shows the reason and NEVER a stale number', () => {
       is_stale: null,
       source: null,
       reason: 'no baditicker key',
+      reason_code: 'no_key',
     },
   };
   const p = createDetailPanel(mount(), { detail, basin: null, state: 'uncurated' });
   const row = must(liveRow(p), 'Live water row');
-  expect(row.textContent.includes('no baditicker key')).toBeTruthy();
+  // The CODE is rendered, never the operator jargon. A pseudolocale pass caught the raw
+  // "no baditicker key" reaching users — untranslated AND meaningless to a reader.
+  expect(row.textContent).toContain('Not available');
+  expect(row.textContent).not.toContain('baditicker');
   expect(!/°C/.test(row.textContent)).toBeTruthy();
   expect(must(fake(p.el).query(hasClass('detail__live--muted')))).toBeTruthy();
 });

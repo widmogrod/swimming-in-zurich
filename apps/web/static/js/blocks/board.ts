@@ -276,6 +276,7 @@ function weekdayDateLabel(row: BoardRow): string {
   if (!row.date) return row.label;
   const { weekday, day, month } = dayParts(row.date, locale());
   if (!weekday || !day || !month) return row.label;
+  // eslint-disable-next-line i18next/no-literal-string -- punctuation between Intl-formatted parts, not copy
   return `${weekday} · ${day} ${month}`;
 }
 
@@ -624,11 +625,12 @@ export function createBoard<T extends El>(el: T, opts: BoardOpts = {}) {
   // name (+ its basin(s)), so the board itself surfaces WHICH pool it is (plan item 3).
   function headCaption(rows: BoardRow[]): string {
     if (filter.mode === 'pool') {
-      const name = filter.selectedPool?.name ? filter.selectedPool.name : (data.week && data.week.facility) || 'Pool';
+      const name = filter.selectedPool?.name ? filter.selectedPool.name : (data.week && data.week.facility) || t('detail.pool');
       const basins = [
         ...new Set(rows.flatMap((r) => r.options.map((o) => o.basin)).filter(Boolean)),
       ];
-      return basins.length ? `${name} · ${basins.join(' / ')}` : name;
+      // eslint-disable-next-line i18next/no-literal-string -- punctuation between proper nouns, not copy
+  return basins.length ? `${name} · ${basins.join(' / ')}` : name;
     }
     return t('board.nearestFirst');
   }

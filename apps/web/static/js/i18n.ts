@@ -77,6 +77,104 @@ const CATALOGS: Partial<Record<Locale, RuntimeCatalog>> = {
  *
  * Move `pl` here when a native speaker has signed off.
  */
+/**
+ * Turn the `en` catalogue into an accented, expanded PSEUDOLOCALE.
+ *
+ * This is the gate no static rule can provide. `no-literal-string` sees SOURCE literals;
+ * it cannot see a string that arrives from the API, is built by a template the rule was
+ * told to ignore, or lives in a `.js` module still outside the lint scope. Under pseudo,
+ * anything that renders WITHOUT accents was never routed through the catalogue.
+ *
+ * The ~40% padding is the second job: German and Polish run longer than English, and a
+ * label that only just fits in `en` will clip. Padding surfaces that before a translator
+ * does.
+ *
+ * Dev-only: enabled by `?pseudo=1`. Placeholders are left intact — accenting `{count}`
+ * would break interpolation and hide the very bug this is meant to expose.
+ */
+const ACCENTS: Record<string, string> = {
+  a: "á",
+  b: "ḃ",
+  c: "ç",
+  d: "ḋ",
+  e: "é",
+  f: "ḟ",
+  g: "ġ",
+  h: "ĥ",
+  i: "í",
+  j: "ĵ",
+  k: "ķ",
+  l: "ł",
+  m: "ṁ",
+  n: "ñ",
+  o: "ó",
+  p: "ṗ",
+  q: "q̈",
+  r: "ŕ",
+  s: "š",
+  t: "ţ",
+  u: "ú",
+  v: "ṽ",
+  w: "ŵ",
+  x: "ẋ",
+  y: "ý",
+  z: "ž",
+  A: "Á",
+  B: "Ḃ",
+  C: "Ç",
+  D: "Ḋ",
+  E: "É",
+  F: "Ḟ",
+  G: "Ġ",
+  H: "Ĥ",
+  I: "Í",
+  J: "Ĵ",
+  K: "Ķ",
+  L: "Ł",
+  M: "Ṁ",
+  N: "Ñ",
+  O: "Ó",
+  P: "Ṗ",
+  Q: "Q̈",
+  R: "Ŕ",
+  S: "Š",
+  T: "Ţ",
+  U: "Ú",
+  V: "Ṽ",
+  W: "Ŵ",
+  X: "Ẋ",
+  Y: "Ý",
+  Z: "Ž",
+};
+
+export function pseudo(text: string): string {
+  const accented = text.replace(
+    /(\{\w+\})|([A-Za-z])/g,
+    (_m, ph: string | undefined, ch: string | undefined) =>
+      ph ?? ACCENTS[ch as string] ?? (ch as string),
+  );
+  // eslint-disable-next-line i18next/no-literal-string -- pseudolocale scaffolding, not copy
+  return `⟦${accented}${"·".repeat(Math.ceil(text.length * 0.4))}⟧`;
+}
+
+function pseudoCatalog(source: RuntimeCatalog): RuntimeCatalog {
+  const out: Record<string, RuntimeEntry> = {};
+  for (const [key, entry] of Object.entries(source)) {
+    out[key] =
+      typeof entry === "string"
+        ? pseudo(entry)
+        : Object.fromEntries(
+            Object.entries(entry).map(([k, v]) => [k, pseudo(v as string)]),
+          );
+  }
+  return out as RuntimeCatalog;
+}
+
+/** Swap every message for its pseudolocalised form. Dev-only; irreversible for the page. */
+export function enablePseudo(): void {
+  CATALOGS[active] = pseudoCatalog(en);
+}
+
 export const OFFERED_LOCALES: readonly Locale[] = ["en", "de", "fr", "it"];
 
 export const LOCALE_COOKIE = "swimzh_locale";
@@ -90,6 +188,18 @@ export const LOCALE_COOKIE = "swimzh_locale";
 // any of them evaluates. Setting it in `app.ts`'s main() would be far too late: the
 // tables would already hold English.
 let active: Locale = resolveLocaleFromBrowser();
+
+// Applied AT MODULE SCOPE, for the same reason the locale is (see `active` above): the
+// blocks build their label tables when they are imported, and this module is imported
+// before all of them. Calling enablePseudo() from app.ts's main() left every module-scope
+// table in plain English — which the pseudo pass then dutifully reported as
+// "uncatalogued", a false alarm caused by the tool itself.
+if (
+  typeof location !== "undefined" &&
+  new URLSearchParams(location.search).has("pseudo")
+) {
+  enablePseudo();
+}
 
 /**
  * The locale currently in effect. Read this rather than the cookie: `resolveLocale` is

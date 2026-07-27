@@ -115,6 +115,12 @@ export const de = {
 
   "badge.teachingPool": "Lehrschwimmbecken",
   "badge.metres": "{length} m",
+  "age.minutes": "{count} Min.",
+  "age.hours": "{count} Std.",
+  "age.days": {
+    one: "{count} Tag",
+    other: "{count} Tage",
+  },
   "badge.poolAria": "{length}-Meter-Becken, {lanes}",
 
   "sources.label": "Quellen",
@@ -122,6 +128,7 @@ export const de = {
   "sources.lanePlan": "Belegungsplan",
   "sources.prices": "Preise",
   "sources.pdf": "PDF",
+  "sources.pdfLabel": "{label} PDF",
   "sources.chipAria": "{name} — öffnet {host} in einem neuen Tab",
 
   "combo.noMatches": "Keine Treffer",
@@ -197,6 +204,9 @@ export const de = {
   "detail.notAvailable": "Nicht verfügbar",
   "detail.notAvailableYet": "Noch nicht verfügbar",
   "detail.notYetMeasured": "Noch nicht gemessen",
+  "live.not_configured": "Nicht eingerichtet",
+  "live.provider_error": "Quelle nicht erreichbar",
+  "live.no_key": "Nicht verfügbar",
   "detail.liveOpen": "offen",
   "detail.liveClosed": "geschlossen",
   "board.nearestFirst": "Nächste zuerst",

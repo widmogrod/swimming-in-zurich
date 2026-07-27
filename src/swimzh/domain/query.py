@@ -169,13 +169,31 @@ class LiveTemp:
         return self.age > limit
 
 
+class TempUnavailableCode(StrEnum):
+    """Why a live temperature could not be resolved — the i18n key space for that answer.
+
+    The pseudolocale pass found this: `reason` was rendered verbatim, so a user saw the
+    literal string "no baditicker key". That is both untranslated AND jargon; a code lets
+    the UI say something a reader can act on while `reason` keeps the technical detail for
+    logs.
+    """
+
+    #: The facility has no Baditicker id — nothing to ask.
+    NO_KEY = "no_key"
+    #: The provider was asked and failed. `reason` carries `describe(error)` for operators.
+    PROVIDER_ERROR = "provider_error"
+    #: No provider is wired at all — a deployment state, not a failure.
+    NOT_CONFIGURED = "not_configured"
+
+
 @dataclass(frozen=True, slots=True)
 class TempUnavailable:
-    """Water temperature was requested but could not be resolved — with the reason, so an empty
-    answer is never ambiguous ("no baditicker key" | provider `describe()`). Reserved for the
+    """Water temperature was requested but could not be resolved — with a CODE for the UI and
+    a technical `reason` for operators, so an empty answer is never ambiguous. Reserved for the
     no-key and provider-error cases; an empty feed cell yields `LiveTemp(celsius=None)` instead."""
 
     reason: str
+    code: TempUnavailableCode = TempUnavailableCode.PROVIDER_ERROR
 
 
 type TempResult = LiveTemp | TempUnavailable
@@ -200,12 +218,12 @@ def read_temperature(
     `celsius`, which stays a `LiveTemp(celsius=None)`, never `TempUnavailable`. A provider `Err`
     becomes an explainable `TempUnavailable`, never an exception (errors-as-values)."""
     if identity.baditicker_poiid is None:
-        return TempUnavailable(reason="no baditicker key")
+        return TempUnavailable(reason="no baditicker key", code=TempUnavailableCode.NO_KEY)
     match provider.read(identity.baditicker_poiid):
         case Ok(reading):
             return LiveTemp(reading=reading, age=now - reading.measured_at)
         case Err(error):
-            return TempUnavailable(reason=describe(error))
+            return TempUnavailable(reason=describe(error), code=TempUnavailableCode.PROVIDER_ERROR)
         case _ as unreachable:
             assert_never(unreachable)
 

@@ -78,6 +78,7 @@ function dtf(
   locale: Locale,
   opts: Intl.DateTimeFormatOptions,
 ): Intl.DateTimeFormat {
+  // eslint-disable-next-line i18next/no-literal-string -- a memoisation cache key, not copy
   const key = `${locale}|${JSON.stringify(opts)}`;
   const cached = CACHE.get(key);
   if (cached) return cached;
@@ -145,6 +146,7 @@ export function formatDate(
 const NUM_CACHE = new Map<string, Intl.NumberFormat>();
 
 function nf(locale: Locale, opts: Intl.NumberFormatOptions): Intl.NumberFormat {
+  // eslint-disable-next-line i18next/no-literal-string -- a memoisation cache key, not copy
   const key = `${locale}|${JSON.stringify(opts)}`;
   const cached = NUM_CACHE.get(key);
   if (cached) return cached;

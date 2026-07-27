@@ -149,6 +149,12 @@ export const en = {
   // --- Badges -----------------------------------------------------------------------
   "badge.teachingPool": "Teaching pool",
   "badge.metres": "{length} m",
+  "age.minutes": "{count} min",
+  "age.hours": "{count} h",
+  "age.days": {
+    one: "{count} day",
+    other: "{count} days",
+  },
   "badge.poolAria": "{length} metre pool, {lanes}",
 
   // --- SourceStrip ------------------------------------------------------------------
@@ -157,6 +163,7 @@ export const en = {
   "sources.lanePlan": "Lane plan",
   "sources.prices": "Prices",
   "sources.pdf": "PDF",
+  "sources.pdfLabel": "{label} PDF",
   "sources.chipAria": "{name} — opens {host} in a new tab",
 
   // --- Combobox / PlaceTypeahead ----------------------------------------------------
@@ -239,6 +246,9 @@ export const en = {
   "detail.notAvailable": "Not available",
   "detail.notAvailableYet": "Not available yet",
   "detail.notYetMeasured": "Not yet measured",
+  "live.not_configured": "Not configured",
+  "live.provider_error": "Source unavailable",
+  "live.no_key": "Not available",
   "detail.liveOpen": "open",
   "detail.liveClosed": "closed",
   "board.nearestFirst": "Nearest first",
