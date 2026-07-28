@@ -154,6 +154,10 @@ builds", and the stale-store fetch-set invariant.
   identical); the abort message carries the typed `ProviderError`; the single-source-of-truth and
   fetch-set-derivation tests are updated to the new semantics; no code path exits 0 with a missing
   declared fact.
+- **Added by S2 (2026-07-29):** an authored `lane_plan_source.url` that its pool page **fails to
+  advertise** (so discovery never fetches it) is today a **silent drop** — no `LanePlanMiss`, no
+  `UnboundPlan`. S4 must make this a surfaced/aborting case (compute `authored − discovered` and
+  fail loud), since "no silent drop" is rule 4. Not just PDF-fetch failures.
 - **Depends on**: S2, S3.
 
 ### S5 — SOURCE every residual curated fact-class (per the S1 gap report; GO decision: no data loss)
@@ -197,6 +201,11 @@ builds", and the stale-store fetch-set invariant.
 - **Acceptance**: A clean build succeeds with `data/pools/` and `data/registry.yaml` **absent**;
   full QA chain green; a test asserts those paths are not referenced by `build`/`etl`; `CLAUDE.md`
   no longer describes curated YAML as a source of truth.
+- **Blocked-by (surfaced by S2, 2026-07-29):** the lane-plan **binding key** is irreducibly
+  per-basin and undiscoverable (discovery yields only pool+url; a single-basin PDF header can't
+  name its basin — `test_bungertwies_binds_by_url_despite_a_garbled_basin_hint`). So `data/pools/`
+  cannot be deleted until S5 supplies a **sourced per-basin url→basin binding** to replace the
+  authored `lane_plan_source`. Until then S6's "`data/pools/` absent" is unreachable for lane plans.
 - **Depends on**: S5.
 
 ## Ledger
@@ -207,6 +216,7 @@ Appended by /dev:implement after each slice — never rewritten. Newest row last
 |------|-------|--------|----------------------|-------------------|---------------|
 | 2026-07-28 | S1 | done | measurement-only harness; `schedule_scraper.py` NOT modified (spike invoked off production path); gap report + diff shipped as golden files under `tests/etl/fidelity/` not `docs/` | schedule fidelity measured for 1/7 pools (only `city` has a page fixture); 5/7 pools have NULL WFS prose | yes |
 | 2026-07-28 | S1 | re-measured | user chose "close fixture gap first": fetched real stadt-zuerich pages for all 7 curated pools → schedule fidelity now 7/7; fixed stale evidence prose in the generator | basin physicals still 2/7 (NULL WFS prose unchanged) | yes (GO/NO-GO) |
+| 2026-07-29 | S2 | done | fetch-set moved to discovery, but `lane_plan_source` RETAINED as the per-basin binding key (irreducibly per-basin; discovery knows only pool+url) — plan intent met, literal "remove" deferred to S6; `cli.py` touched (necessary wiring) | S6 cannot delete `lane_plan_source` from YAML without a per-basin binding replacement; an authored URL a page fails to advertise is currently a silent drop (→ S4 must surface/abort) | yes |
 
 ## Decisions & divergences
 
@@ -302,6 +312,28 @@ Appended by /dev:implement after each slice — never rewritten. Newest row last
   amended S5) and is expected to split into its own plan(s). Closures are already sourced, so they
   leave the residue. The only classes that may still end in a recorded *drop* are ones with a
   demonstrated failed extraction attempt (at most per-basin-split and holiday-policy).
+
+### S2 (implementation) — discovery hop
+
+- 2026-07-29 (S2, divergence #1 — reviewed, accepted): the fetch-set moved to discovered links
+  (`etl/lane_plans.py` `fetch_set()` projects `DiscoveredLink.url`; `declared_source_urls` deleted;
+  `cli.py scrape_lanes` drives off `discover_pages(...).links`), but `lane_plan_source` is
+  **retained as the per-basin URL→basin binding key** (`etl/silver.py build_url_bindings`). The
+  critic confirmed this satisfies the plan's Design intent ("fetch-set is the discovered links, not
+  hand-authored `lane_plan_source`") and that the binding is irreducibly per-basin — discovery
+  yields only pool+url and a single-basin PDF header cannot name its basin. The literal "remove
+  `lane_plan_source`" is therefore deferred to S6 and gated on S5 sourcing a per-basin binding.
+- 2026-07-29 (S2, finding — discovery is a superset): the city page advertises
+  `belegungsplaene/city-variobecken.pdf`, a real lane sheet **no basin authored** — surfaced as a
+  discovered link, never dropped. A candidate basin for S5 to source; any strict discovered==authored
+  assumption is wrong.
+- 2026-07-29 (S2, non-blocking → folded into S4/S6): (a) a non-advertised authored URL is currently
+  a silent drop → **S4 must surface/abort** (recorded in S4). (b) `data/pools/` can't be deleted
+  until S5 supplies a sourced per-basin binding → **recorded in S6 Blocked-by**. (c) `fetch_set`
+  dedupes by URL across pools, discarding the second pool's `pool_id` stamp — revisit if binding
+  ever becomes pool_id-load-bearing. Scope stayed clean (no roster/fail-fast/price work); the
+  "~57-page fetch" concern does not materialize (`load_all()` filters `facility_doc IS NOT NULL` →
+  only the curated ~7).
 
 ## Summary
 

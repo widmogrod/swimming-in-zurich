@@ -23,18 +23,20 @@ from swimzh.core.errors import describe
 from swimzh.core.http import HttpClient
 from swimzh.core.result import Err, Ok
 from swimzh.domain.lane_plan import LanePlan
-from swimzh.domain.models import LanePlanUnavailable
+from swimzh.domain.models import LanePlanUnavailable, PoolId
 from swimzh.etl.build import build_store
 from swimzh.etl.catalog import build_catalog
 from swimzh.etl.lane_plans import scrape_lane_plans
 from swimzh.etl.scrape import scrape_indoor_facilities
 from swimzh.etl.silver import LanePlanAttachment, attach_lane_plans
 from swimzh.providers import geo_sport
+from swimzh.providers.page_provider import discover_pages
 from swimzh.providers.price_scraper import scrape_prices
 from swimzh.storage import catalog_json
 from swimzh.storage.sqlite_repo import (
     GoldRepository,
     load_alias_rows,
+    load_roster,
     load_xref_rows,
     open_db,
     write_schedules,
@@ -172,12 +174,14 @@ def _report_lane_audit(attachment: LanePlanAttachment) -> tuple[int, int]:
 
 
 def scrape_lanes(*, db_path: Path, client: HttpClient, fetched_at: datetime) -> int:
-    """Fetch the Belegungsplan PDFs the loaded facilities DECLARE (`lane_plan_source`) and attach
-    the parsed plans onto the basin that owns each URL — a deterministic URL-keyed join. A source
-    that fails to fetch/parse is recorded as first-class `LanePlanUnavailable` state (never a
-    silent drop). Prints an honest operational audit to stderr: each `unbound` parsed section (a
-    URL/header no basin claims), each per-basin `unavailable` cause, and each `unmatched section`
-    (a declared token that matched no parsed header). Exit code."""
+    """Discover each pool page's Belegungsplan links, fetch those DISCOVERED PDFs, and attach the
+    parsed plans onto the basin that owns each URL — a deterministic URL-keyed join. The fetch-set
+    is a projection of the links `page_provider` discovers on the pool pages (not of any authored
+    `lane_plan_source` URL). A source that fails to fetch/parse is recorded as first-class
+    `LanePlanUnavailable` state (never a silent drop). Prints an honest operational audit to
+    stderr: each un-fetchable page, each `unbound` parsed section (a URL/header no basin claims),
+    each per-basin `unavailable` cause, and each `unmatched section` (a declared token that matched
+    no parsed header). Exit code."""
     if not db_path.exists():
         print(f"gold store not found at {db_path}; build it first", file=sys.stderr)
         return 1
@@ -187,9 +191,25 @@ def scrape_lanes(*, db_path: Path, client: HttpClient, fetched_at: datetime) -> 
         print(f"gold store {db_path} is empty; build it first", file=sys.stderr)
         return 1
 
-    report = scrape_lane_plans(client, facilities)
+    # The discovery hop: fetch each pool's official page and collect the Belegungsplan links it
+    # advertises, stamped with the owning PoolId. The pool page URL is the roster's `url`.
+    page_url = {entry.entry.pool_id: entry.entry.url for entry in load_roster(conn)}
+    pages: list[tuple[PoolId, str]] = []
+    for facility in facilities:
+        url = page_url.get(str(facility.identity.facility_id))
+        if url is not None:
+            pages.append((facility.identity.facility_id, url))
+    discovery = discover_pages(client, pages)
+    for page_miss in discovery.page_misses:
+        print(
+            f"page discovery failed ({page_miss.pool_id} <- {page_miss.page_url}): "
+            f"{describe(page_miss.cause)}",
+            file=sys.stderr,
+        )
+
+    report = scrape_lane_plans(client, discovery.links)
     if not report.plans and not report.misses:
-        print("no basin declares a lane_plan_source; nothing to scrape", file=sys.stderr)
+        print("no Belegungsplan links discovered; nothing to scrape", file=sys.stderr)
         return 1
 
     misses = {miss.source_url: miss.cause for miss in report.misses}

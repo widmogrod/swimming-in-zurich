@@ -395,14 +395,45 @@ def _pdf_client(handler: Callable[[httpx.Request], httpx.Response]) -> HttpClien
     return HttpClient(inner, source="belegungsplan", retry=RetryPolicy(max_attempts=1))
 
 
+# Each curated pool page (its roster `url` ends `<name>.html`) -> the saved page fixture whose
+# Belegungsplan links `scrape-lanes` now DISCOVERS before fetching the PDFs.
+_PAGE_BY_FILENAME: dict[str, str] = {
+    "city.html": "hallenbad_city.html",
+    "oerlikon.html": "hallenbad_oerlikon.html",
+    "bungertwies.html": "hallenbad_bungertwies.html",
+    "blaesi.html": "hallenbad_blaesi.html",
+    "leimbach.html": "hallenbad_leimbach.html",
+    "kaeferberg.html": "waermebad_kaeferberg.html",
+    "aemtler.html": "schulschwimmanlage_aemtler.html",
+}
+
+
+def _lane_client(pdf_handler: Callable[[httpx.Request], httpx.Response]) -> HttpClient:
+    """A client for the two-round `scrape-lanes` flow: a pool-page GET is served the matching HTML
+    fixture (so its Belegungsplan links are discovered), a `.pdf` GET is delegated to `pdf_handler`,
+    and any other roster page (a location-only pool) is served an empty page (no links)."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        url = str(request.url)
+        if url.endswith(".pdf"):
+            return pdf_handler(request)
+        fixture = _PAGE_BY_FILENAME.get(url.rsplit("/", 1)[-1])
+        if fixture is not None:
+            return httpx.Response(200, content=(_FIXTURES / fixture).read_bytes())
+        return httpx.Response(200, content=b"<html></html>")
+
+    return _pdf_client(handler)
+
+
 def test_scrape_lanes_attaches_plan_to_curated_basin(tmp_path: Path) -> None:
     # `scrape-lanes` reads the curated facilities (from `pool.facility_doc`), needs the offline
-    # `build` spine present, then writes the attached plan back through `write_schedules`.
+    # `build` spine present, discovers the pool page's Belegungsplan links, then writes the
+    # attached plan back through `write_schedules`.
     db = tmp_path / "gold.sqlite"
     assert build(db_path=db, data_dir=DATA_DIR) == 0
 
     body = FIXTURE_PDF.read_bytes()
-    client = _pdf_client(lambda _r: httpx.Response(200, content=body))
+    client = _lane_client(lambda _r: httpx.Response(200, content=body))
     code = scrape_lanes(db_path=db, client=client, fetched_at=FETCHED_AT)
     assert code == 0
 
@@ -424,7 +455,9 @@ def test_scrape_lanes_missing_db_is_error(tmp_path: Path) -> None:
 def test_scrape_lanes_reports_when_no_pdf_parses(tmp_path: Path) -> None:
     db = tmp_path / "gold.sqlite"
     assert build(db_path=db, data_dir=DATA_DIR) == 0  # spine present, so the 503 is the cause
-    client = _pdf_client(lambda _r: httpx.Response(503, text="down"))
+    # Pages discover their Belegungsplan links, but every PDF 503s -> all declared sources record
+    # LanePlanUnavailable, nothing attaches -> non-zero.
+    client = _lane_client(lambda _r: httpx.Response(503, text="down"))
     code = scrape_lanes(db_path=db, client=client, fetched_at=FETCHED_AT)
     assert code == 1
 
@@ -453,7 +486,7 @@ def test_scrape_lanes_prints_unbound_and_unavailable_audit(
             return httpx.Response(200, content=combined_pdf)
         return httpx.Response(503, text="down")
 
-    code = scrape_lanes(db_path=db, client=_pdf_client(handler), fetched_at=FETCHED_AT)
+    code = scrape_lanes(db_path=db, client=_lane_client(handler), fetched_at=FETCHED_AT)
     assert code == 0  # Sprungbecken attached, so the run succeeds
 
     err = capsys.readouterr().err
@@ -499,7 +532,7 @@ def test_scrape_lanes_prints_unmatched_section_audit(
             return httpx.Response(200, content=city_sheet)
         return httpx.Response(503, text="down")
 
-    code = scrape_lanes(db_path=db, client=_pdf_client(handler), fetched_at=FETCHED_AT)
+    code = scrape_lanes(db_path=db, client=_lane_client(handler), fetched_at=FETCHED_AT)
     assert code == 0  # City attached, so the run succeeds
 
     err = capsys.readouterr().err
@@ -606,7 +639,7 @@ def test_build_then_scrape_lanes_enriches(tmp_path: Path) -> None:
     assert build(db_path=db, data_dir=DATA_DIR) == 0
 
     body = FIXTURE_PDF.read_bytes()
-    client = _pdf_client(lambda _r: httpx.Response(200, content=body))
+    client = _lane_client(lambda _r: httpx.Response(200, content=body))
     code = scrape_lanes(db_path=db, client=client, fetched_at=FETCHED_AT)
     assert code == 0
 

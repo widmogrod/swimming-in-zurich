@@ -126,10 +126,16 @@ class Dimensions:
 
 @dataclass(frozen=True, slots=True)
 class LanePlanSource:
-    """Where a basin's lane document (its Belegungsplan PDF) lives — a FIRST-CLASS domain
-    attribute authored in ``data/pools/*.yaml``. Every declared source is a PDF we parse; there
-    is no ``format``/``label``/fallback. ``section`` is the bare basin token for a STACKED
-    multi-basin sheet (``None`` => the whole sheet is this one basin's plan)."""
+    """The deterministic BINDING KEY for a basin's lane document (its Belegungsplan PDF): the
+    ``url`` a parsed plan is joined back on, plus the ``section`` token that routes one sub-grid
+    of a STACKED multi-basin sheet (``None`` => the whole sheet is this one basin's plan). Every
+    source is a PDF we parse; there is no ``format``/``label``/fallback.
+
+    Since the discovery hop, this NO LONGER *drives extraction* — the fetch-set is a projection
+    of the links ``page_provider`` discovers on the pool page, not of this URL (see
+    ``etl/lane_plans.py``). It remains the join key because binding a plan back to a specific
+    *basin* is irreducibly per-basin: a single-basin sheet whose PDF header omits the basin word
+    (Bungertwies) can only bind by URL, so header/section routing cannot replace it."""
 
     url: str
     section: str | None = None
@@ -165,8 +171,9 @@ class Basin:
     measured_temp_c: Decimal | None = None
     diving_platforms_m: tuple[Decimal, ...] = ()  # e.g. (1, 3, 5) from "Sprungbecken 1/3/5m"
     physical_source: BasinSource = BasinSource.CURATED
-    # Curated INPUT: where this basin's lane document lives (drives extraction). Distinct from
-    # `lane_plan`, the extraction OUTCOME below.
+    # Deterministic BINDING KEY (url + optional stacked-sheet section) a discovered lane plan
+    # joins back on. NO LONGER the fetch-set driver — the fetch-set is a projection of the links
+    # `page_provider` discovers on the pool page. Distinct from `lane_plan`, the OUTCOME below.
     lane_plan_source: LanePlanSource | None = None
     # Extraction OUTCOME, first-class persisted state:
     #   None                -> nothing to extract (no source) OR scrape not yet run

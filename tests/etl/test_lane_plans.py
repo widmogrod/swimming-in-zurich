@@ -1,6 +1,7 @@
-"""Belegungsplan scrape stage: DOMAIN-DRIVEN, best-effort fetch/parse. The fetch-set is derived
-from the loaded facilities' `lane_plan_source` declarations (no hardcoded URL list); each parsed
-plan is stamped with its source URL and each failure recorded as a typed miss."""
+"""Belegungsplan scrape stage: DISCOVERY-DRIVEN, best-effort fetch/parse. The fetch-set is a
+projection of the links `page_provider` discovers on the pool pages (no hardcoded URL list, no
+`lane_plan_source` read); each parsed plan is stamped with its source URL and each failure
+recorded as a typed miss."""
 
 from __future__ import annotations
 
@@ -11,18 +12,9 @@ import httpx
 
 from swimzh.core.errors import HttpStatus
 from swimzh.core.http import HttpClient, RetryPolicy
-from swimzh.domain.models import (
-    Basin,
-    BasinId,
-    BasinKind,
-    Facility,
-    LanePlanSource,
-    PoolId,
-    PoolIdentity,
-    PoolKind,
-    Provenance,
-)
-from swimzh.etl.lane_plans import declared_source_urls, scrape_lane_plans
+from swimzh.domain.models import PoolId
+from swimzh.etl.lane_plans import fetch_set, scrape_lane_plans
+from swimzh.providers.page_provider import DiscoveredLink
 
 FIXTURES = Path(__file__).resolve().parents[1] / "providers" / "fixtures"
 CITY_BYTES = (FIXTURES / "city-schwimmerbecken.pdf").read_bytes()
@@ -36,40 +28,25 @@ def _client(handler: Callable[[httpx.Request], httpx.Response]) -> HttpClient:
     return HttpClient(inner, source="belegungsplan", retry=RetryPolicy(max_attempts=1))
 
 
-def _facility(pool_id: str, basins: tuple[Basin, ...]) -> Facility:
-    return Facility(
-        identity=PoolIdentity(facility_id=PoolId(pool_id), name=pool_id, kind=PoolKind.INDOOR),
-        address="",
-        provenance=Provenance(source="test", curated=True),
-        basins=basins,
+def _link(pool_id: str, url: str) -> DiscoveredLink:
+    return DiscoveredLink(pool_id=PoolId(pool_id), url=url)
+
+
+def test_fetch_set_is_the_projection_of_discovered_links() -> None:
+    # The fetch-set IS a projection of the discovered links — nothing hardcoded, nothing from
+    # `lane_plan_source`. Distinct URLs, first-seen order, deduped (two pools may advertise the
+    # same sheet).
+    links = (
+        _link("a", CITY_URL),
+        _link("b", LEIMBACH_URL),
+        _link("c", CITY_URL),
     )
+    assert fetch_set(links) == (CITY_URL, LEIMBACH_URL)
 
 
-def _basin(basin_id: str, url: str | None) -> Basin:
-    source = LanePlanSource(url=url) if url is not None else None
-    return Basin(
-        basin_id=BasinId(basin_id),
-        name=basin_id,
-        rules=(),
-        kind=BasinKind.LAP,
-        lane_plan_source=source,
-    )
-
-
-def test_declared_source_urls_derives_the_fetch_set_from_the_domain() -> None:
-    # The fetch-set IS a projection of the model — nothing hardcoded. Distinct URLs, first-seen
-    # order, deduped; a basin without a source contributes nothing.
-    facilities = (
-        _facility("a", (_basin("a-1", CITY_URL), _basin("a-2", None))),
-        _facility("b", (_basin("b-1", LEIMBACH_URL), _basin("b-2", CITY_URL))),
-    )
-    assert declared_source_urls(facilities) == (CITY_URL, LEIMBACH_URL)
-
-
-def test_scrape_parses_declared_source_and_stamps_its_url() -> None:
+def test_scrape_parses_discovered_source_and_stamps_its_url() -> None:
     client = _client(lambda _r: httpx.Response(200, content=CITY_BYTES))
-    facilities = (_facility("city", (_basin("city-50m", CITY_URL),)),)
-    report = scrape_lane_plans(client, facilities)
+    report = scrape_lane_plans(client, (_link("hallenbad-city", CITY_URL),))
     assert len(report.plans) == 1
     assert report.misses == ()
     parsed = report.plans[0]
@@ -86,11 +63,8 @@ def test_scrape_records_failed_fetch_as_a_typed_miss() -> None:
         return httpx.Response(503, text="down")
 
     client = _client(handler)
-    facilities = (
-        _facility("city", (_basin("city-50m", CITY_URL),)),
-        _facility("leimbach", (_basin("leimbach-25m", LEIMBACH_URL),)),
-    )
-    report = scrape_lane_plans(client, facilities)
+    links = (_link("city", CITY_URL), _link("leimbach", LEIMBACH_URL))
+    report = scrape_lane_plans(client, links)
     assert len(report.plans) == 1 and report.plans[0].source_url == CITY_URL
     assert len(report.misses) == 1
     miss = report.misses[0]
@@ -100,18 +74,18 @@ def test_scrape_records_failed_fetch_as_a_typed_miss() -> None:
     assert miss.cause.status == 503
 
 
-def test_scrape_of_no_declared_sources_is_empty() -> None:
+def test_scrape_of_no_discovered_links_is_empty() -> None:
     client = _client(lambda _r: httpx.Response(200, content=CITY_BYTES))
-    facilities = (_facility("x", (_basin("x-1", None),)),)
-    report = scrape_lane_plans(client, facilities)
+    report = scrape_lane_plans(client, ())
     assert report.plans == () and report.misses == ()
 
 
 def test_hardcoded_url_list_and_fuzzy_matcher_symbols_are_gone() -> None:
     # Acceptance guard: the hardcoded URL list and the fuzzy basin-hint matcher are DELETED —
-    # extraction is now a projection of the domain, reconciliation a URL-keyed join. Asserting on
-    # module attributes (not a text grep) so a docstring mention of the retired names cannot trip
-    # the guard, and a reintroduction of the symbol itself does.
+    # extraction is now a projection of the DISCOVERED links, reconciliation a URL-keyed join.
+    # Asserting on module attributes (not a text grep) so a docstring mention of the retired names
+    # cannot trip the guard, and a reintroduction of the symbol itself does. `declared_source_urls`
+    # (the old YAML-projection fetch-set) is likewise gone.
     import importlib
 
     lane_plans = importlib.import_module("swimzh.etl.lane_plans")
@@ -120,13 +94,14 @@ def test_hardcoded_url_list_and_fuzzy_matcher_symbols_are_gone() -> None:
 
     assert not hasattr(lane_plans, "CITY_BELEGUNGSPLAN_URLS")
     assert not hasattr(lane_plans, "PENDING_BELEGUNGSPLAENE")
+    assert not hasattr(lane_plans, "declared_source_urls")
     assert not hasattr(silver, "_basin_hint_index")
     assert not hasattr(reconcile, "BasinHint")
     assert not hasattr(reconcile, "build_basin_hint_index")
 
 
 def test_source_docstrings_do_not_carry_stale_reconciliation_claims() -> None:
-    # S3 doc-reversal guard: the module docstrings must not resurrect the retired framing where
+    # Doc-reversal guard: the module docstrings must not resurrect the retired framing where
     # `basin_hint` drove reconciliation / the URL->basin binding was "intentionally NOT made".
     # Binding is now a deterministic URL-keyed join in silver — asserted positively too.
     import importlib
