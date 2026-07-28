@@ -102,6 +102,17 @@ test('tierFor: open now vs later vs the two terminal states', () => {
   expect(tierFor(uncurated, M(10))).toBe('unknown');
 });
 
+test('a pool whose sessions have all ended is not filed under "later today"', () => {
+  // The original bug: tierFor said `soon` for any row with options and none current, so a
+  // finished pool rendered as "Later today / Done for today" — the heading contradicting
+  // the verdict directly beneath it. The tier and the verdict must agree.
+  expect(tierFor(city(), M(22))).toBe('closed');
+  expect(verdictFor(city(), M(22)).key).toBe('mobile.verdict.doneForToday');
+  // …and `soon` still means soon when something really is still to come.
+  expect(tierFor(city(), M(7))).toBe('soon');
+  expect(verdictFor(city(), M(7)).key).toBe('mobile.verdict.opensAt');
+});
+
 test('a pool with hours but NO lane split still ranks by its hours', () => {
   // It is open; we simply cannot say how many lanes are yours. Demoting it to `unknown`
   // would hide an open pool behind a data gap.

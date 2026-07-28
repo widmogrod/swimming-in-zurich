@@ -74,6 +74,7 @@ export default tseslint.config(
               // never copy. Excluded by CALL SITE so the rule keeps watching everything
               // else in the same file.
               "iconSvg$",
+              "field$", // a toolbar field's CSS modifier key — its CAPTION is the t() arg
               "(mustEl|newEl|asEl|asDoc)$", // DOM ids / tag names
               "setDashes$", // 'solid' | 'dashed' | 'dotted' — a line style
               "swatchRow$", // CSS class + an already-translated label

@@ -131,7 +131,11 @@ export function tierFor(row: RankRow, min: number): Tier {
     const terminal = terminalStatus(row);
     return terminal === 'closed' ? 'closed' : 'unknown';
   }
-  return optionAt(options, min) ? 'now' : 'soon';
+  if (optionAt(options, min)) return 'now';
+  // `soon` has to MEAN soon. A pool whose sessions have all ended has nothing left to
+  // wait for, and filing it under "Later today" produced a card that read
+  // "Later today / Done for today" — the heading contradicting the verdict beneath it.
+  return optionNext(options, min) ? 'soon' : 'closed';
 }
 
 /** The head of the verdict: the bolded claim. */

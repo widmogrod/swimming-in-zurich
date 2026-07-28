@@ -107,6 +107,7 @@ export function resolveFamilyPalette(doc: Doc, host: El): Palette | null {
   pal.unknown = read('fam-unknown');
   pal.sheath = read('fam-sheath');
   pal.axis = read('fam-axis');
+  pal.cursor = read('fam-cursor');
   pal.hair = read('fam-hair');
   pal.muted = read('fam-muted');
   host.removeChild?.(probe);

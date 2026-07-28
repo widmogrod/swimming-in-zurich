@@ -1110,3 +1110,15 @@ body {
   position: static;
   padding: var(--s3);
 }
+
+/* The phone drawer hides the two fields the phone owns by other means: the day strip IS
+   the date control, and Pool (week) mode has no phone surface yet — leaving its switch
+   reachable showed stale Day cards under a Pool heading. */
+.pbar__drawer .toolbar__field--view,
+.pbar__drawer .toolbar__field--context {
+  display: none;
+}
+
+/* The shared time cursor, as a probe class like the families — the phone tail draws its
+   own cursor and was falling back to the muted axis grey for want of this token. */
+.fam-cursor { color: var(--cursor); }

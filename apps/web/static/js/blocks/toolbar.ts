@@ -148,9 +148,12 @@ export const DEFAULT_AGE_CHIPS = [
 const BUSYNESS_REASON = t('toolbar.busynessReason');
 
 // A labelled field wrapper so controls read (and stack full-width on a phone).
-function field(doc: Doc, caption: string | null, control: El): El {
+function field(doc: Doc, caption: string | null, control: El, key?: string): El {
   const wrap = doc.createElement('div');
-  wrap.className = 'toolbar__field';
+  // The modifier lets a surface hide a field it owns by other means — the phone drawer
+  // hides `--view` and `--context` because the day strip IS the date control there, and
+  // two date controls over one FilterState is how the chosen day got silently reset.
+  wrap.className = key ? `toolbar__field toolbar__field--${key}` : 'toolbar__field';
   if (caption) {
     const cap = doc.createElement('span');
     cap.className = 'toolbar__caption';
@@ -302,13 +305,13 @@ export function createFilterToolbar<T extends El>(
 
   // Assemble the strip.
   renderContext();
-  el.appendChild(field(doc, t('toolbar.view'), mode.el));
-  el.appendChild(field(doc, null, contextSlot));
-  el.appendChild(field(doc, t('toolbar.near'), place.el));
-  el.appendChild(field(doc, t('toolbar.gender'), gender.el));
-  el.appendChild(field(doc, t('toolbar.age'), age.el));
-  el.appendChild(field(doc, null, lap.el));
-  el.appendChild(field(doc, null, busyness.el));
+  el.appendChild(field(doc, t('toolbar.view'), mode.el, 'view'));
+  el.appendChild(field(doc, null, contextSlot, 'context'));
+  el.appendChild(field(doc, t('toolbar.near'), place.el, 'near'));
+  el.appendChild(field(doc, t('toolbar.gender'), gender.el, 'gender'));
+  el.appendChild(field(doc, t('toolbar.age'), age.el, 'age'));
+  el.appendChild(field(doc, null, lap.el, 'lap'));
+  el.appendChild(field(doc, null, busyness.el, 'busyness'));
 
   return {
     el,

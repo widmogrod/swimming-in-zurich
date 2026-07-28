@@ -58,7 +58,7 @@ import { createFilterToolbar, DEFAULT_AGE_CHIPS } from "./blocks/toolbar.js";
 import { formatLabel } from "./components/datestepper.js";
 import { asEl, type El } from "./domtypes.js";
 import { createFilterState, merge, type FilterState } from "./filterstate.js";
-import { t } from "./i18n.js";
+import { t, type MessageKey } from "./i18n.js";
 import { makeTimescale } from "./timescale.js";
 import { fromSearch, toSearch, type UrlFilterState } from "./urlstate.js";
 
@@ -152,7 +152,11 @@ async function main() {
   const header = createIdentityHeader(mustEl("app-header"), {
     props: { dateLabel: formatLabel(today), theme: "auto" },
     root,
-    onThemeChange: (t: string) => applyTheme(root, t),
+    onThemeChange: (t: string) => {
+      applyTheme(root, t);
+      // The tails are canvas: the token change cannot reach pixels already drawn.
+      poolList?.repaint();
+    },
   });
 
   // --- insight + legend ---
@@ -420,6 +424,36 @@ async function main() {
 
   let phoneRows: ReturnType<typeof dayRows> = [];
 
+  // Rotating a phone changes the tail width; the canvas backing store does not follow on
+  // its own, so the ribbon would keep rendering at the old scale until the next filter
+  // change. Debounced to one repaint per settle.
+  let resizeTimer: ReturnType<typeof setTimeout> | null = null;
+  globalThis.addEventListener?.("resize", () => {
+    if (!poolList) return;
+    if (resizeTimer) clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(() => poolList?.repaint(), 120);
+  });
+
+  /** The chips after the lead count: the filter state you cannot see while the drawer is
+   *  shut. Without these the summary claimed a count with nothing to explain it. */
+  function phoneSummaryTags(): string[] {
+    const tags: string[] = [];
+    if (filter.gender) {
+      tags.push(t(`toolbar.gender.${filter.gender}` as MessageKey));
+    }
+    if (filter.age != null) {
+      // Reuse the toolbar's OWN chip labels rather than printing a raw age. The chips
+      // carry a representative age per band, so the summary must name the same band the
+      // reader picked — "Adult", not "34".
+      const chip = DEFAULT_AGE_CHIPS.find(
+        (c) => c.value === String(filter.age),
+      );
+      if (chip) tags.push(chip.label);
+    }
+    if (filter.lapOnly) tags.push(t("toolbar.lapOnly"));
+    return tags;
+  }
+
   function renderPhone(data: { day?: BoardAnswer } | { week: unknown }) {
     const answer = "day" in data ? data.day : undefined;
     if (!answer) return; // Pool (week) mode has no phone list yet — see the shipping note
@@ -455,6 +489,11 @@ async function main() {
         },
         onDate: (iso) => {
           filter = merge(filter, { date: iso });
+          // The toolbar holds a SNAPSHOT of the filter and emits a whole new state from
+          // it, so a date set outside the toolbar is resurrected by the next toolbar
+          // edit. Rebuilding re-seeds that snapshot; without it, picking a day and then
+          // touching any filter silently threw the day away.
+          buildToolbar();
           render();
           syncUrl(filter);
         },
@@ -468,7 +507,10 @@ async function main() {
       });
     } else {
       phoneBar.setDate(filter.date || today);
-      phoneBar.setSummary({ openToYou: poolList.countOpenToYou() });
+      phoneBar.setSummary({
+        openToYou: poolList.countOpenToYou(),
+        tags: phoneSummaryTags(),
+      });
     }
   }
 

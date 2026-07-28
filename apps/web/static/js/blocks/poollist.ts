@@ -209,6 +209,13 @@ export function createPoolList<T extends El>(el: T, opts: PoolListOpts = {}) {
     countOpenToYou(): number {
       return countOpenToYou(rankRows(rows, nowMin ?? 0));
     },
+    /** Drop the cached palette and repaint. A CSS variable cannot reach pixels that are
+     *  already rasterised, so a theme change leaves the tails in the OLD ramp until the
+     *  canvas is redrawn — proven by identical pixel data across a light→dark flip. */
+    repaint(): void {
+      pal = null;
+      paint(0);
+    },
     setRows(next: RankRow[], min: number | null): void {
       rows = next;
       nowMin = min;
