@@ -1,8 +1,11 @@
 ---
 type: plan
-status: approved         # draft -> approved -> in-progress -> done
+status: in-progress      # draft -> approved -> in-progress -> done
 created: 2026-07-28
 feature: website-sourced-providers
+branch: plan/website-sourced-providers
+worktree: .claude/worktrees/plan-website-sourced-providers
+base_branch: feat/new-ui
 gates:
   qa: full               # ruff, mypy, pytest+coverage, crap.py  (+ ts-qa if UI touched)
   review: adversarial    # dev:critic-reviewer must find no blocking issues per slice
