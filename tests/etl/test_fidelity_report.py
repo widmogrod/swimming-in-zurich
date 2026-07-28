@@ -34,15 +34,16 @@ _DATA = _REPO_ROOT / "data"
 _PAGE_FIXTURES = _REPO_ROOT / "tests" / "providers" / "fixtures"
 _GOLDEN = Path(__file__).resolve().parent / "fidelity"
 
-# The 7 currently-curated pools -> their saved page fixture (None = no fixture committed yet).
+# The 7 currently-curated pools -> their saved page fixture. All seven now have a real saved
+# stadt-zuerich.ch page (fetched 2026-07-28), so schedule fidelity is measured for every pool.
 _PAGE_FIXTURE_BY_POOL: dict[str, str | None] = {
-    "schulschwimmanlage-aemtler": None,
-    "hallenbad-blaesi": None,
-    "hallenbad-bungertwies": None,
+    "schulschwimmanlage-aemtler": "schulschwimmanlage_aemtler.html",
+    "hallenbad-blaesi": "hallenbad_blaesi.html",
+    "hallenbad-bungertwies": "hallenbad_bungertwies.html",
     "hallenbad-city": "hallenbad_city.html",
-    "waermebad-kaeferberg": None,
-    "hallenbad-leimbach": None,
-    "hallenbad-oerlikon": None,
+    "waermebad-kaeferberg": "waermebad_kaeferberg.html",
+    "hallenbad-leimbach": "hallenbad_leimbach.html",
+    "hallenbad-oerlikon": "hallenbad_oerlikon.html",
 }
 
 
@@ -108,9 +109,11 @@ def test_both_artifacts_are_deterministic() -> None:
 # --- the findings the human gate depends on ----------------------------------------------
 
 
-def test_city_is_the_only_measured_pool_the_rest_are_fixture_gaps() -> None:
+def test_all_seven_curated_pools_are_now_measured() -> None:
+    # Every curated pool now has a real saved page whose timetable parses, so none is an
+    # unmeasured fixture gap.
     measured = {m.pool_id for m in _build_measurements() if m.source_rules is not None}
-    assert measured == {"hallenbad-city"}
+    assert measured == set(_PAGE_FIXTURE_BY_POOL)
 
 
 def test_city_schedule_has_zero_overlap_with_illustrative_curated_data() -> None:
@@ -124,8 +127,13 @@ def test_city_schedule_has_zero_overlap_with_illustrative_curated_data() -> None
 
 
 def test_missing_fixture_pool_is_recorded_not_fabricated() -> None:
-    measurements = _build_measurements()
-    diff = next(diff_schedule(m) for m in measurements if m.pool_id == "hallenbad-oerlikon")
+    # A pool with no committed page (page_html=None) is an explicit unavailable gap with no
+    # fabricated rows — verified synthetically now that all seven real pools have fixtures.
+    oerlikon = _curated_by_id()["hallenbad-oerlikon"]
+    measurement = measure_pool(
+        pool_id="hallenbad-oerlikon", curated=oerlikon, wfs_prose=None, page_html=None
+    )
+    diff = diff_schedule(measurement)
     assert not diff.source_available
     assert diff.entries == ()
     assert diff.curated_rule_count > 0  # curated rules exist; they are simply not verifiable

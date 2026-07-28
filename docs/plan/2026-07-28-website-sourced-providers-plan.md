@@ -192,6 +192,7 @@ Appended by /dev:implement after each slice — never rewritten. Newest row last
 | date | slice | status | divergence from plan | tech debt created | human review? |
 |------|-------|--------|----------------------|-------------------|---------------|
 | 2026-07-28 | S1 | done | measurement-only harness; `schedule_scraper.py` NOT modified (spike invoked off production path); gap report + diff shipped as golden files under `tests/etl/fidelity/` not `docs/` | schedule fidelity measured for 1/7 pools (only `city` has a page fixture); 5/7 pools have NULL WFS prose | yes |
+| 2026-07-28 | S1 | re-measured | user chose "close fixture gap first": fetched real stadt-zuerich pages for all 7 curated pools → schedule fidelity now 7/7; fixed stale evidence prose in the generator | basin physicals still 2/7 (NULL WFS prose unchanged) | yes (GO/NO-GO) |
 
 ## Decisions & divergences
 
@@ -248,6 +249,35 @@ Appended by /dev:implement after each slice — never rewritten. Newest row last
   not-in-source verdicts should cite the scraper's **closed category vocabulary** as the structural
   reason rather than one fixture's observed kinds. Both are evidence-string polish on a spike whose
   output the human reads; deferred to the S1 gate review, not blocking.
+
+### S1 re-measurement (real fixtures, 7/7) — the GO/NO-GO evidence
+
+- 2026-07-28: on the user's "close fixture gap first" decision, fetched real stadt-zuerich.ch
+  pages for all 7 curated pools (all HTTP 200, all parse: aemtler 3, blaesi 5, bungertwies 3,
+  city 8, kaeferberg 6, leimbach 10, oerlikon 7 rules) and committed them under
+  `tests/providers/fixtures/`. Schedule fidelity is now measured **7/7** (was 1/7).
+- **`matched = 0` across all 7 pools — but the cause is instructive, not damning:**
+  - **3/7 pools (blaesi, leimbach, kaeferberg) have ZERO curated schedule rules** (the minimal
+    lane-plan-only YAMLs). The source is **purely additive** — it supplies 5 + 10 + 6 = 21 real
+    rules the app currently lacks entirely. Clear win for sourcing.
+  - **4/7 (bungertwies, city, oerlikon, aemtler) have illustrative curated schedules.** The
+    zero-match there is dominated by (a) the source's **coarse access vocabulary** folding
+    `LaneSwim`/`FamilyTime`/`AdultsOnly` → `PublicSwim`, and (b) different time-slot boundaries —
+    curated fiction vs. real hours, not a factual contradiction of two real sources.
+- **Positive: closures now sourced for 3 pools** (bungertwies `07-11..07-31`, city `07-04..08-07`,
+  oerlikon `08-02..08-23`) with exact dates via `parse_notices` → the S5 closure class routes to
+  `sourced-by-notice`, confirmed at scale.
+- **Confirmed `not-in-source` residue** (unchanged, now over 7 real pages): richer access
+  (`lane_swim`/`family`/`adults_only` — the scraper's category vocabulary is closed at
+  public/women/seniors/school and none of the 7 pages even emit seniors/school), basin-schedule
+  split, term/holiday scope, admission prices, holiday policy.
+- **Basin physicals still 2/7** — only city & bungertwies have WFS `infrastruktur` prose; the
+  other 5 are literal `"NULL"`, so `sourced-by-infrastruktur` for `kind`/dims/lanes holds for a
+  minority. Narrows the S5 seed further.
+- **Net GO/NO-GO read:** sourcing schedules is *good-to-better* (fills 3 empty pools, replaces
+  illustrative fiction) and closures are sourced; the real cost of full removal is concentrated in
+  four `not-in-source` classes (richer access, per-basin split, prices, holiday policy) + thin
+  basin-physical coverage. The decision reduces to: drop those four classes, or source/curate them.
 
 ## Summary
 

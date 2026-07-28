@@ -330,12 +330,14 @@ def _access_category_entry(ms: tuple[PoolMeasurement, ...]) -> GapEntry:
     source_kinds = _source_access_kinds(ms)
     curated_public = _curated_pools_declaring(ms, "PublicSwim")
     reproduced = source_kinds & {"PublicSwim", "WomenOnly", "SeniorsOnly", "SchoolReserved"}
+    measured = sum(1 for m in ms if m.source_rules is not None)
     return GapEntry(
         "access.category (public/women/seniors/school)",
         Sourcing.SOURCED_BY_SCHEDULE if reproduced else Sourcing.NOT_IN_SOURCE,
         f"source timetable emits access kinds {sorted(source_kinds)}; "
         f"reproduced categories {sorted(reproduced)}; "
-        f"(the scraper also maps Senioren/Schul, absent from the one available page fixture); "
+        f"(the scraper also maps Senioren/Schul, but neither appears in any of the "
+        f"{measured} measured pages); "
         f"curated pools declaring PublicSwim: {list(curated_public)}",
     )
 
