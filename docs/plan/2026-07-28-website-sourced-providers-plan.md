@@ -191,6 +191,7 @@ Appended by /dev:implement after each slice — never rewritten. Newest row last
 
 | date | slice | status | divergence from plan | tech debt created | human review? |
 |------|-------|--------|----------------------|-------------------|---------------|
+| 2026-07-28 | S1 | done | measurement-only harness; `schedule_scraper.py` NOT modified (spike invoked off production path); gap report + diff shipped as golden files under `tests/etl/fidelity/` not `docs/` | schedule fidelity measured for 1/7 pools (only `city` has a page fixture); 5/7 pools have NULL WFS prose | yes |
 
 ## Decisions & divergences
 
@@ -215,6 +216,38 @@ Appended by /dev:implement after each slice — never rewritten. Newest row last
   today (`etl/build.py:58`); S4 builds into a temp DB and atomically swaps, and "unchanged" is
   content/row equality, not a byte hash. Non-blocking critic notes on S2 dependency wording,
   discoverability risk, and the concept's stale "open decision" also applied.
+
+### S1 (implementation)
+
+- 2026-07-28 (S1, worktree-misrouting incident + remedy): the `slice-implementer` subagent wrote
+  its three deliverables into the **main checkout** (`feat/new-ui`), not the plan worktree — the
+  known hazard in memory `dev-implement-subagents-write-to-main-not-worktree`, which fired even
+  though the session launched from the main checkout (the subagent cwd was pinned to the session's
+  original launch dir, not the orchestrator's post-`EnterWorktree` cwd). The critic caught it as a
+  **blocking** finding (files absent from the plan branch, outside its QA gates). Remedy applied by
+  the orchestrator per the memory: patch-transferred the three files onto `plan/website-sourced-
+  providers`, scrubbed the main checkout back to clean, and re-ran the **full** QA chain in the
+  worktree (ruff/format/mypy clean; pytest 459 passed incl. 11 new; coverage 95.75%; crap OK).
+- 2026-07-28 (S1, divergence — schedule_scraper.py untouched): the spike measures via the existing
+  `parse_schedule`/`parse_notices` off their production path rather than extending them, honoring
+  "no production data path changes." The plan listed that touch as optional. No functionality lost.
+- 2026-07-28 (S1, findings for the GO/NO-GO gate): (a) only `hallenbad-city` has a saved page
+  fixture — schedule fidelity is measured for **1/7** pools; the other 6 are honest recorded gaps,
+  not fabricated. (b) City shows **zero** matched facility-level rules (its curated YAML is
+  explicitly illustrative fiction; the real page parses to 8 rules). (c) WFS `infrastruktur` prose
+  exists for only **2/7** pools (city, bungertwies); the other 5 are literal `"NULL"` — so
+  `kind`/dimensions/amenities are `sourced-by-infrastruktur` for a *minority*, narrowing the S5 seed
+  from the plan-critic round. (d) Even with prose, `kind` can mismatch (bungertwies parses `other`
+  vs curated `lap`). (e) **Positive:** closures ARE reproduced by `parse_notices` (exact city
+  range) → S5 closure class routes to `sourced-by-notice`, not dropped. (f) Residue confirmed
+  `not-in-source`: basin-schedule-split, `lane_swim`/`family`/`adults_only` access, prices,
+  `public_holiday_policy`.
+- 2026-07-28 (S1, critic non-blocking suggestions — accepted, deferred): the `_kind_entry`
+  "sourced" verdict is an `any_match` OR across prose pools (honest per-pool evidence is in the
+  string, but a reproduced/not-reproduced *tally* would prevent over-reading); the `access.*`
+  not-in-source verdicts should cite the scraper's **closed category vocabulary** as the structural
+  reason rather than one fixture's observed kinds. Both are evidence-string polish on a spike whose
+  output the human reads; deferred to the S1 gate review, not blocking.
 
 ## Summary
 
