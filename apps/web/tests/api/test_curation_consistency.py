@@ -24,9 +24,13 @@ from swimzh.core.result import Ok
 from swimzh.domain.models import reconstruct_pool_id
 from swimzh.etl.build import build_store
 from swimzh.providers.curated import load_dataset
+from swimzh.storage import catalog_json
 from swimzh.storage.sqlite_repo import GoldRepository, load_roster, open_db, write_schedules
 
 DATA_DIR = Path(__file__).resolve().parents[4] / "data"
+# Since S3 the roster is a `build_store` argument sourced from the WFS; the committed catalog.json
+# IS that WFS snapshot, so it is the recorded roster double here.
+_ROSTER = catalog_json.loads((DATA_DIR / "catalog.json").read_text(encoding="utf-8"))
 _SWIM = {"at": "2026-09-14T20:30", "gender": "female", "age": 34, "eligible_only": "false"}
 
 
@@ -50,7 +54,7 @@ def test_scraping_a_schedule_flips_curation_and_serves_it(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     db = tmp_path / "gold.sqlite"
-    assert isinstance(build_store(DATA_DIR, db), Ok)
+    assert isinstance(build_store(DATA_DIR, db, _ROSTER), Ok)
     altstetten = reconstruct_pool_id("hallenbad-altstetten")
 
     # Precondition — uncurated everywhere: roster flag False, `/swim` reports it `uncurated` (never

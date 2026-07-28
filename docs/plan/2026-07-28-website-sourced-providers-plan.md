@@ -217,6 +217,7 @@ Appended by /dev:implement after each slice — never rewritten. Newest row last
 | 2026-07-28 | S1 | done | measurement-only harness; `schedule_scraper.py` NOT modified (spike invoked off production path); gap report + diff shipped as golden files under `tests/etl/fidelity/` not `docs/` | schedule fidelity measured for 1/7 pools (only `city` has a page fixture); 5/7 pools have NULL WFS prose | yes |
 | 2026-07-28 | S1 | re-measured | user chose "close fixture gap first": fetched real stadt-zuerich pages for all 7 curated pools → schedule fidelity now 7/7; fixed stale evidence prose in the generator | basin physicals still 2/7 (NULL WFS prose unchanged) | yes (GO/NO-GO) |
 | 2026-07-29 | S2 | done | fetch-set moved to discovery, but `lane_plan_source` RETAINED as the per-basin binding key (irreducibly per-basin; discovery knows only pool+url) — plan intent met, literal "remove" deferred to S6; `cli.py` touched (necessary wiring) | S6 cannot delete `lane_plan_source` from YAML without a per-basin binding replacement; an authored URL a page fails to advertise is currently a silent drop (→ S4 must surface/abort) | yes |
+| 2026-07-29 | S3 | done | roster identity+geo now from live WFS (`etl/roster.py`); `registry.yaml` RETAINED, reduced to the crosswalk (xref keys/aliases/kaeferberg kind-override); WFS I/O at CLI composition root, `build_store` takes roster as data; `reconcile.py` untouched | golden test is a WFS parser round-trip (fixtures reshaped from `catalog.json`); only the INDOOR layer's real wire shape is pinned (by `test_geo_sport`) — a non-indoor WFS field rename is invisible until a live re-record | yes |
 
 ## Decisions & divergences
 
@@ -334,6 +335,27 @@ Appended by /dev:implement after each slice — never rewritten. Newest row last
   ever becomes pool_id-load-bearing. Scope stayed clean (no roster/fail-fast/price work); the
   "~57-page fetch" concern does not materialize (`load_all()` filters `facility_doc IS NOT NULL` →
   only the curated ~7).
+
+### S3 (implementation) — roster from live WFS
+
+- 2026-07-29 (S3): the **offline/no-network build guarantee is now reversed in production** —
+  `cli.build` fetches the roster from the live WFS via `etl/roster.py fetch_roster` and aborts
+  non-zero (before `open_db`, so nothing is written) if the WFS is unreachable. `build_store` reads
+  neither committed `catalog.json` nor `registry.yaml`-for-identity; it takes the roster as data
+  (WFS I/O kept at the CLI composition root — `build_store` stays pure). Approved by critic.
+- 2026-07-29 (S3, crosswalk retained — mirrors S2): `registry.yaml` is kept but reduced to the
+  irreducible crosswalk WFS cannot carry — `baditicker_poiid`, `geo_sport_id`, `crowdmonitor_keys`,
+  human `aliases`, and the kaeferberg `thermal` kind override. Physical thinning/deletion is S6.
+- 2026-07-29 (S3, fidelity caveat): the golden test (`test_roster_spine_matches_committed_catalog`)
+  pins a **WFS parser round-trip**, not live-WFS fidelity — its layer fixtures were reshaped from
+  `catalog.json` because the environment can't record a live cassette. Only the **indoor** layer's
+  real wire shape is pinned (by the pre-existing `test_geo_sport` cassette); the other 5 layers'
+  assumed shape is validated only against reshaped fixtures. Residual risk: a non-indoor WFS field
+  rename is invisible until a live re-record. Not blocking (catalog.json is a real WFS dump; real
+  DTO parse/slug/kind-mapping are exercised), but a live per-layer cassette is owed.
+- 2026-07-29 (S3, shrinks the crosswalk later): the real WFS payload carries `poi_id` (e.g.
+  `"hb001"`) which `build_catalog` currently discards — so `geo_sport_id` is **WFS-sourceable**, an
+  S5 candidate that would remove one field from the retained crosswalk.
 
 ## Summary
 

@@ -1,6 +1,6 @@
 """Command-line entry point.
 
-  swimzh build         --db gold.sqlite     # assemble the gold SQLite from committed inputs
+  swimzh build         --db gold.sqlite     # assemble the gold SQLite (roster LIVE from the WFS)
   swimzh build-catalog --out data/catalog.json  # full pool catalog from the WFS (committed)
   swimzh scrape-gold   --db gold.sqlite     # scrape real schedules onto a built store
   swimzh scrape-lanes  --db gold.sqlite     # attach per-basin Belegungsplan lane plans
@@ -27,6 +27,7 @@ from swimzh.domain.models import LanePlanUnavailable, PoolId
 from swimzh.etl.build import build_store
 from swimzh.etl.catalog import build_catalog
 from swimzh.etl.lane_plans import scrape_lane_plans
+from swimzh.etl.roster import fetch_roster
 from swimzh.etl.scrape import scrape_indoor_facilities
 from swimzh.etl.silver import LanePlanAttachment, attach_lane_plans
 from swimzh.providers import geo_sport
@@ -45,18 +46,26 @@ from swimzh.storage.sqlite_repo import (
 _ZURICH = ZoneInfo("Europe/Zurich")
 
 
-def build(*, db_path: Path, data_dir: Path) -> int:
-    """Assemble a complete, self-contained gold store from committed inputs, offline.
+def build(*, db_path: Path, data_dir: Path, client: HttpClient) -> int:
+    """Assemble a gold store: a LIVE-WFS-sourced roster + curated authoring from `data_dir`.
 
-    No network: curated facilities + calendar + the committed catalog are written into one
-    gold DB. Returns a process exit code."""
-    match build_store(data_dir, db_path):
-        case Ok(repo):
-            print(f"gold store built at {db_path} ({repo.count()} facilities)")
-            return 0
+    Since S3 the ~57-pool roster (identity + geo) comes from the WFS via `fetch_roster`, not a
+    committed `catalog.json`. An unreachable/failing WFS aborts the whole build non-zero at the
+    roster step — the LOCAL abort, BEFORE any DB is opened, so nothing is written (the general
+    atomic-swap abort is S4). Curated facilities + calendar + the registry crosswalk still come
+    from `data_dir`. Returns a process exit code."""
+    match fetch_roster(client):
         case Err(error):
-            print(f"build failed: {describe(error)}", file=sys.stderr)
+            print(f"build failed: WFS roster unavailable: {describe(error)}", file=sys.stderr)
             return 1
+        case Ok(roster):
+            match build_store(data_dir, db_path, roster):
+                case Ok(repo):
+                    print(f"gold store built at {db_path} ({repo.count()} facilities)")
+                    return 0
+                case Err(error):
+                    print(f"build failed: {describe(error)}", file=sys.stderr)
+                    return 1
 
 
 def build_catalog_file(*, out: Path, client: HttpClient, generated_at: datetime) -> int:
@@ -236,15 +245,20 @@ def scrape_lanes(*, db_path: Path, client: HttpClient, fetched_at: datetime) -> 
             assert_never(unreachable)
 
 
-def main(argv: list[str] | None = None) -> int:
+def main(argv: list[str] | None = None, *, client: HttpClient | None = None) -> int:
+    """Parse argv and dispatch. `client` is injectable so the WFS-sourced `build` (and the other
+    network commands) can be driven from recorded HTTP in tests; when None a live client is
+    created for the selected command."""
     parser = argparse.ArgumentParser(prog="swimzh")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
-    offline = subparsers.add_parser(
-        "build", help="assemble a complete gold store from committed inputs (offline)"
+    roster_build = subparsers.add_parser(
+        "build", help="assemble a gold store (pool roster sourced LIVE from the WFS)"
     )
-    offline.add_argument("--db", required=True, help="path to the gold SQLite file to write")
-    offline.add_argument("--data", default="data", help="curated data directory (default: data)")
+    roster_build.add_argument("--db", required=True, help="path to the gold SQLite file to write")
+    roster_build.add_argument(
+        "--data", default="data", help="curated data directory (default: data)"
+    )
 
     catalog = subparsers.add_parser("build-catalog", help="build the pool catalog from the WFS")
     catalog.add_argument("--out", default="data/catalog.json", help="catalog JSON to write")
@@ -261,10 +275,18 @@ def main(argv: list[str] | None = None) -> int:
     lanes.add_argument("--db", required=True, help="path to the existing gold SQLite file")
 
     args = parser.parse_args(argv)
+    now = datetime.now(_ZURICH)
 
-    # `build` is fully offline — no network client needed.
+    # `build` now sources its roster from the WFS, so it needs a network client too. Tests inject
+    # a recorded-HTTP client; live runs build one just-in-time.
     if args.command == "build":
-        return build(db_path=Path(args.db), data_dir=Path(args.data))
+        if client is None:  # pragma: no cover - live
+            import httpx  # pragma: no cover - live
+
+            with httpx.Client(timeout=30.0) as inner:  # pragma: no cover - live
+                client = HttpClient(inner, source="geo_sport", timeout_s=30.0)
+                return build(db_path=Path(args.db), data_dir=Path(args.data), client=client)
+        return build(db_path=Path(args.db), data_dir=Path(args.data), client=client)
 
     # The network wiring below is exercised live; the per-command functions are unit-tested
     # with an injected client.
@@ -273,7 +295,6 @@ def main(argv: list[str] | None = None) -> int:
     # follow_redirects: some pool pages (e.g. bad-altstetten.ch) redirect http→https.
     with httpx.Client(timeout=30.0, follow_redirects=True) as inner:  # pragma: no cover - live
         client = HttpClient(inner, source="geo_sport", timeout_s=30.0)
-        now = datetime.now(_ZURICH)
         if args.command == "scrape-gold":
             return scrape_gold(
                 db_path=Path(args.db),

@@ -18,9 +18,13 @@ from swimzh.domain.models import Basin, Facility
 from swimzh.domain.schedule import TimeRange, Weekday
 from swimzh.etl.build import build_store
 from swimzh.providers.curated import load_dataset
+from swimzh.storage import catalog_json
 from swimzh.storage.sqlite_repo import open_db, write_schedules
 
 DATA_DIR = Path(__file__).resolve().parents[4] / "data"
+# Since S3 the roster is a `build_store` argument sourced from the WFS; the committed catalog.json
+# IS that WFS snapshot, so it is the recorded roster double for these gold-backed app tests.
+_ROSTER = catalog_json.loads((DATA_DIR / "catalog.json").read_text(encoding="utf-8"))
 
 
 def _gold_db_with_lane_plan(tmp_path: Path) -> Path:
@@ -29,7 +33,7 @@ def _gold_db_with_lane_plan(tmp_path: Path) -> Path:
     dataset = load_dataset(DATA_DIR)
     assert isinstance(dataset, Ok)
     db = tmp_path / "gold.sqlite"
-    assert isinstance(build_store(DATA_DIR, db), Ok)
+    assert isinstance(build_store(DATA_DIR, db, _ROSTER), Ok)
     # Re-write City's `pool.facility_doc` (the flipped read path) with a lane-plan-attached copy
     # via the single write door; the other pools keep their build-stamped catalog geo.
     attached = _attach_lane_plan(dataset.value.facilities)
@@ -78,7 +82,7 @@ def _attach_lane_plan(facilities: tuple[Facility, ...]) -> tuple[Facility, ...]:
 
 def test_app_serves_from_gold_store(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     db = tmp_path / "gold.sqlite"
-    assert isinstance(build_store(DATA_DIR, db), Ok)
+    assert isinstance(build_store(DATA_DIR, db, _ROSTER), Ok)
 
     monkeypatch.setenv("SWIMZH_GOLD_DB", str(db))
     with TestClient(app) as client:

@@ -1,5 +1,10 @@
-"""Serialise the pool catalog to/from the committed `data/catalog.json` (generated from the
-WFS by `swimzh build-catalog`). A committed artifact so the app lists all pools offline."""
+"""Serialise the pool catalog to/from `data/catalog.json` (generated from the WFS by
+`swimzh build-catalog`).
+
+Since S3 the roster is sourced LIVE from the WFS by `etl.roster.fetch_roster`, so this codec is
+**no longer a build input**: `build_store` never reads `catalog.json`. It survives as the codec
+for the `build-catalog` reference dump and as the committed WFS *snapshot* the golden roster test
+compares against (`data/catalog.json` IS a WFS snapshot). S6 decides the file's fate."""
 
 from __future__ import annotations
 

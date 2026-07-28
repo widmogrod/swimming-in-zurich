@@ -59,7 +59,10 @@ def gold_conn(tmp_path_factory: pytest.TempPathFactory) -> sqlite3.Connection:
     # so the lossless-cutover invariant is proved off the DB-enforced identity spine the app
     # runs against — not off any in-memory registry accessor.
     db = tmp_path_factory.mktemp("gold") / "gold.sqlite"
-    result = build_store(DATA_DIR, db)
+    # Since S3 the roster is a `build_store` argument sourced from the WFS; the committed
+    # catalog.json IS that WFS snapshot, so it is the recorded roster double here.
+    roster = catalog_json.loads((DATA_DIR / "catalog.json").read_text(encoding="utf-8"))
+    result = build_store(DATA_DIR, db, roster)
     assert isinstance(result, Ok), result
     return open_db(db)
 

@@ -23,6 +23,9 @@ from swimzh.storage import catalog_json
 from swimzh.storage.sqlite_repo import GoldRepository, open_db
 
 DATA_DIR = Path(__file__).resolve().parents[2] / "data"
+# Since S3 the roster is a `build_store` argument sourced from the WFS. The committed
+# catalog.json IS that WFS snapshot, so it is the recorded roster double for these build tests.
+_ROSTER = catalog_json.loads((DATA_DIR / "catalog.json").read_text(encoding="utf-8"))
 
 # The curated pools whose YAML coords differ from the committed catalog (per B1's ledger:
 # bungertwies, oerlikon, city shift; aemtler is identical).
@@ -42,7 +45,7 @@ def _without_geo(f: Facility) -> Facility:
 
 def test_pool_facility_doc_read_matches_curated_dataset_modulo_geo(tmp_path: Path) -> None:
     db = tmp_path / "gold.sqlite"
-    assert isinstance(build_store(DATA_DIR, db), Ok)
+    assert isinstance(build_store(DATA_DIR, db, _ROSTER), Ok)
     conn = open_db(db)
 
     new_read = {str(f.identity.facility_id): f for f in GoldRepository(conn).load_all()}
@@ -92,7 +95,7 @@ def test_pool_facility_doc_read_matches_curated_dataset_modulo_geo(tmp_path: Pat
 
 def test_geo_divergence_is_by_design_catalog_over_yaml(tmp_path: Path) -> None:
     db = tmp_path / "gold.sqlite"
-    assert isinstance(build_store(DATA_DIR, db), Ok)
+    assert isinstance(build_store(DATA_DIR, db, _ROSTER), Ok)
     conn = open_db(db)
 
     new_read = {str(f.identity.facility_id): f for f in GoldRepository(conn).load_all()}
@@ -120,7 +123,7 @@ def test_geo_divergence_is_by_design_catalog_over_yaml(tmp_path: Path) -> None:
 
 def test_get_by_id_reads_pool_facility_doc(tmp_path: Path) -> None:
     db = tmp_path / "gold.sqlite"
-    assert isinstance(build_store(DATA_DIR, db), Ok)
+    assert isinstance(build_store(DATA_DIR, db, _ROSTER), Ok)
     repo = GoldRepository(open_db(db))
 
     city = repo.get(PoolId("hallenbad-city"))

@@ -1,0 +1,569 @@
+interactions:
+- request:
+    body: ''
+    headers:
+      host:
+      - www.ogd.stadt-zuerich.ch
+    method: GET
+    uri: https://www.ogd.stadt-zuerich.ch/wfs/geoportal/Sport?SERVICE=WFS&REQUEST=GetFeature&VERSION=1.1.0&TYPENAME=poi_hallenbad_view&OUTPUTFORMAT=application%2Fjson
+  response:
+    status:
+      code: 200
+      message: OK
+    headers:
+      content-type:
+      - application/json; charset=utf-8
+    body:
+      string: "{\n \"type\": \"FeatureCollection\",\n \"features\": [\n  {\n   \"\
+        type\": \"Feature\",\n   \"id\": \"poi_hallenbad_view.1\",\n   \"geometry\"\
+        : {\n    \"type\": \"Point\",\n    \"coordinates\": [\n     8.560139,\n  \
+        \   47.372039\n    ]\n   },\n   \"properties\": {\n    \"name\": \"Hallenbad\
+        \ Bungertwies\",\n    \"namenzus\": null,\n    \"strasse\": \"Hofstrasse 56,\
+        \ 8032 Zürich\",\n    \"hausnummer\": null,\n    \"plz\": null,\n    \"ort\"\
+        : null,\n    \"www\": \"https://www.stadt-zuerich.ch/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/hallenbaeder/bungertwies.html\"\
+        ,\n    \"tel\": \"+41 44 413 55 70\",\n    \"poi_id\": null,\n    \"kategorie\"\
+        : null,\n    \"infrastruktur\": \"25m Mehrzweckbecken mit Hubboden und Sprungbrett\
+        \ 1m, Sonnenterrasse\",\n    \"bemerkung\": null\n   }\n  },\n  {\n   \"type\"\
+        : \"Feature\",\n   \"id\": \"poi_hallenbad_view.2\",\n   \"geometry\": {\n\
+        \    \"type\": \"Point\",\n    \"coordinates\": [\n     8.532973,\n     47.372282\n\
+        \    ]\n   },\n   \"properties\": {\n    \"name\": \"Hallenbad City\",\n \
+        \   \"namenzus\": null,\n    \"strasse\": \"Sihlstrasse 71, 8001 Zürich\"\
+        ,\n    \"hausnummer\": null,\n    \"plz\": null,\n    \"ort\": null,\n   \
+        \ \"www\": \"https://www.stadt-zuerich.ch/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/hallenbaeder/city.html\"\
+        ,\n    \"tel\": \"+41 44 413 56 00\",\n    \"poi_id\": null,\n    \"kategorie\"\
+        : null,\n    \"infrastruktur\": \"Schwimmerbecken 50 x 15 m (6 Bahnen) 28°C,\
+        \ Nichtschwimmerbecken 10,5 x 7 m 30°C, Variobecken mit Hubboden 16,66 x 8\
+        \ m (4 Bahnen) 30°C, Turnhalle 44 x 12 m, trennbar in 2 gleiche Hälften, gemischte\
+        \ Sauna 8 - 22 Uhr, Eintritt Fr. 10.-\",\n    \"bemerkung\": null\n   }\n\
+        \  },\n  {\n   \"type\": \"Feature\",\n   \"id\": \"poi_hallenbad_view.3\"\
+        ,\n   \"geometry\": {\n    \"type\": \"Point\",\n    \"coordinates\": [\n\
+        \     8.501733,\n     47.401322\n    ]\n   },\n   \"properties\": {\n    \"\
+        name\": \"Hallenbad Bläsi\",\n    \"namenzus\": null,\n    \"strasse\": \"\
+        Limmattalstrasse 154, 8049 Zürich\",\n    \"hausnummer\": null,\n    \"plz\"\
+        : null,\n    \"ort\": null,\n    \"www\": \"https://www.stadt-zuerich.ch/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/hallenbaeder/blaesi.html\"\
+        ,\n    \"tel\": \"+41 44 413 55 80\",\n    \"poi_id\": null,\n    \"kategorie\"\
+        : null,\n    \"infrastruktur\": \"NULL\",\n    \"bemerkung\": null\n   }\n\
+        \  },\n  {\n   \"type\": \"Feature\",\n   \"id\": \"poi_hallenbad_view.4\"\
+        ,\n   \"geometry\": {\n    \"type\": \"Point\",\n    \"coordinates\": [\n\
+        \     8.513445,\n     47.326473\n    ]\n   },\n   \"properties\": {\n    \"\
+        name\": \"Hallenbad Leimbach\",\n    \"namenzus\": null,\n    \"strasse\"\
+        : \"Klebestrasse 3, 8041 Zürich\",\n    \"hausnummer\": null,\n    \"plz\"\
+        : null,\n    \"ort\": null,\n    \"www\": \"https://www.stadt-zuerich.ch/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/hallenbaeder/leimbach.html\"\
+        ,\n    \"tel\": \"+41 44 413 55 50\",\n    \"poi_id\": null,\n    \"kategorie\"\
+        : null,\n    \"infrastruktur\": \"NULL\",\n    \"bemerkung\": null\n   }\n\
+        \  },\n  {\n   \"type\": \"Feature\",\n   \"id\": \"poi_hallenbad_view.5\"\
+        ,\n   \"geometry\": {\n    \"type\": \"Point\",\n    \"coordinates\": [\n\
+        \     8.556733,\n     47.410437\n    ]\n   },\n   \"properties\": {\n    \"\
+        name\": \"Hallenbad Oerlikon\",\n    \"namenzus\": null,\n    \"strasse\"\
+        : \"Wallisellenstrasse 100, 8050 Zürich\",\n    \"hausnummer\": null,\n  \
+        \  \"plz\": null,\n    \"ort\": null,\n    \"www\": \"https://www.stadt-zuerich.ch/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/hallenbaeder/oerlikon.html\"\
+        ,\n    \"tel\": \"+41 44 413 55 00\",\n    \"poi_id\": null,\n    \"kategorie\"\
+        : null,\n    \"infrastruktur\": \"NULL\",\n    \"bemerkung\": null\n   }\n\
+        \  },\n  {\n   \"type\": \"Feature\",\n   \"id\": \"poi_hallenbad_view.6\"\
+        ,\n   \"geometry\": {\n    \"type\": \"Point\",\n    \"coordinates\": [\n\
+        \     8.479864,\n     47.38864\n    ]\n   },\n   \"properties\": {\n    \"\
+        name\": \"Hallenbad Altstetten\",\n    \"namenzus\": null,\n    \"strasse\"\
+        : \"Dachslernstrasse 35, 8048 Zürich\",\n    \"hausnummer\": null,\n    \"\
+        plz\": null,\n    \"ort\": null,\n    \"www\": \"http://www.bad-altstetten.ch\"\
+        ,\n    \"tel\": \"+41 44 431 77 44\",\n    \"poi_id\": null,\n    \"kategorie\"\
+        : null,\n    \"infrastruktur\": \"25 m Schwimmbecken, Wärme-Innenbad mit Sprudelliegen\
+        \ und Massagedüsen, Wärme-Aussenbad mit Sprudelliegen und Massagedüsen, Nichtschwimmerbecken,\
+        \ Sprungbecken 1/3/5m, Rutschbahn 110m, Gartensauna, Dampfbad, Aussenanlage\
+        \ mit ruhiger Liegewiese_\",\n    \"bemerkung\": null\n   }\n  },\n  {\n \
+        \  \"type\": \"Feature\",\n   \"id\": \"poi_hallenbad_view.7\",\n   \"geometry\"\
+        : {\n    \"type\": \"Point\",\n    \"coordinates\": [\n     8.518032,\n  \
+        \   47.399543\n    ]\n   },\n   \"properties\": {\n    \"name\": \"Wärmebad\
+        \ Käferberg\",\n    \"namenzus\": null,\n    \"strasse\": \"Emil-Klöti-Strasse\
+        \ 17, 8037 Zürich\",\n    \"hausnummer\": null,\n    \"plz\": null,\n    \"\
+        ort\": null,\n    \"www\": \"https://www.stadt-zuerich.ch/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/hallenbaeder/kaeferberg.html\"\
+        ,\n    \"tel\": \"+41 44 413 55 90\",\n    \"poi_id\": null,\n    \"kategorie\"\
+        : null,\n    \"infrastruktur\": \"NULL\",\n    \"bemerkung\": null\n   }\n\
+        \  }\n ]\n}"
+- request:
+    body: ''
+    headers:
+      host:
+      - www.ogd.stadt-zuerich.ch
+    method: GET
+    uri: https://www.ogd.stadt-zuerich.ch/wfs/geoportal/Sport?SERVICE=WFS&REQUEST=GetFeature&VERSION=1.1.0&TYPENAME=poi_freibad_view&OUTPUTFORMAT=application%2Fjson
+  response:
+    status:
+      code: 200
+      message: OK
+    headers:
+      content-type:
+      - application/json; charset=utf-8
+    body:
+      string: "{\n \"type\": \"FeatureCollection\",\n \"features\": [\n  {\n   \"\
+        type\": \"Feature\",\n   \"id\": \"poi_freibad_view.1\",\n   \"geometry\"\
+        : {\n    \"type\": \"Point\",\n    \"coordinates\": [\n     8.501339,\n  \
+        \   47.38025\n    ]\n   },\n   \"properties\": {\n    \"name\": \"Freibad\
+        \ Letzigraben\",\n    \"namenzus\": null,\n    \"strasse\": \"Edelweissstrasse\
+        \ 5, 8048 Zürich\",\n    \"hausnummer\": null,\n    \"plz\": null,\n    \"\
+        ort\": null,\n    \"www\": \"https://www.sportamt.ch/freibad-letzigraben\"\
+        ,\n    \"tel\": \"+41 44 413 57 00\",\n    \"poi_id\": null,\n    \"kategorie\"\
+        : null,\n    \"infrastruktur\": \"NULL\",\n    \"bemerkung\": null\n   }\n\
+        \  },\n  {\n   \"type\": \"Feature\",\n   \"id\": \"poi_freibad_view.2\",\n\
+        \   \"geometry\": {\n    \"type\": \"Point\",\n    \"coordinates\": [\n  \
+        \   8.473779,\n     47.409527\n    ]\n   },\n   \"properties\": {\n    \"\
+        name\": \"Freibad Zwischen den Hölzern\",\n    \"namenzus\": null,\n    \"\
+        strasse\": \"8102 Oberengstringen\",\n    \"hausnummer\": null,\n    \"plz\"\
+        : null,\n    \"ort\": null,\n    \"www\": \"https://www.sportamt.ch/freibad-zwischen-hoelzern\"\
+        ,\n    \"tel\": \"+41 44 413 57 70\",\n    \"poi_id\": null,\n    \"kategorie\"\
+        : null,\n    \"infrastruktur\": \"NULL\",\n    \"bemerkung\": null\n   }\n\
+        \  },\n  {\n   \"type\": \"Feature\",\n   \"id\": \"poi_freibad_view.3\",\n\
+        \   \"geometry\": {\n    \"type\": \"Point\",\n    \"coordinates\": [\n  \
+        \   8.571325,\n     47.408675\n    ]\n   },\n   \"properties\": {\n    \"\
+        name\": \"Freibad Auhof\",\n    \"namenzus\": null,\n    \"strasse\": \"Luegislandstrasse\
+        \ 160, 8051 Zürich\",\n    \"hausnummer\": null,\n    \"plz\": null,\n   \
+        \ \"ort\": null,\n    \"www\": \"https://www.sportamt.ch/freibad-auhof\",\n\
+        \    \"tel\": \"+41 44 413 57 40\",\n    \"poi_id\": null,\n    \"kategorie\"\
+        : null,\n    \"infrastruktur\": \"NULL\",\n    \"bemerkung\": null\n   }\n\
+        \  },\n  {\n   \"type\": \"Feature\",\n   \"id\": \"poi_freibad_view.4\",\n\
+        \   \"geometry\": {\n    \"type\": \"Point\",\n    \"coordinates\": [\n  \
+        \   8.539021,\n     47.405524\n    ]\n   },\n   \"properties\": {\n    \"\
+        name\": \"Freibad Allenmoos\",\n    \"namenzus\": null,\n    \"strasse\":\
+        \ \"Ringstrasse 79, 8057 Zürich\",\n    \"hausnummer\": null,\n    \"plz\"\
+        : null,\n    \"ort\": null,\n    \"www\": \"https://www.sportamt.ch/freibad-allenmoos\"\
+        ,\n    \"tel\": \"+41 44 413 57 30\",\n    \"poi_id\": null,\n    \"kategorie\"\
+        : null,\n    \"infrastruktur\": \"NULL\",\n    \"bemerkung\": null\n   }\n\
+        \  },\n  {\n   \"type\": \"Feature\",\n   \"id\": \"poi_freibad_view.5\",\n\
+        \   \"geometry\": {\n    \"type\": \"Point\",\n    \"coordinates\": [\n  \
+        \   8.576846,\n     47.375609\n    ]\n   },\n   \"properties\": {\n    \"\
+        name\": \"Freibad Dolder\",\n    \"namenzus\": null,\n    \"strasse\": \"\
+        Adlisbergstrasse 36, 8044 Zürich\",\n    \"hausnummer\": null,\n    \"plz\"\
+        : null,\n    \"ort\": null,\n    \"www\": \"https://www.doldersports.com/summer-front-page/\"\
+        ,\n    \"tel\": \"+41 44 267 70 80\",\n    \"poi_id\": null,\n    \"kategorie\"\
+        : null,\n    \"infrastruktur\": \"Parkplatz_Restaurant täglich geöffnet_grösste\
+        \ offene Kunsteisfläche Europas\",\n    \"bemerkung\": null\n   }\n  },\n\
+        \  {\n   \"type\": \"Feature\",\n   \"id\": \"poi_freibad_view.6\",\n   \"\
+        geometry\": {\n    \"type\": \"Point\",\n    \"coordinates\": [\n     8.505062,\n\
+        \     47.36711\n    ]\n   },\n   \"properties\": {\n    \"name\": \"Freibad\
+        \ Heuried\",\n    \"namenzus\": null,\n    \"strasse\": \"8055 Zürich\",\n\
+        \    \"hausnummer\": null,\n    \"plz\": null,\n    \"ort\": null,\n    \"\
+        www\": \"https://www.sportamt.ch/freibad-heuried\",\n    \"tel\": \"+41 44\
+        \ 413 95 30\",\n    \"poi_id\": null,\n    \"kategorie\": null,\n    \"infrastruktur\"\
+        : \"NULL\",\n    \"bemerkung\": null\n   }\n  },\n  {\n   \"type\": \"Feature\"\
+        ,\n   \"id\": \"poi_freibad_view.7\",\n   \"geometry\": {\n    \"type\": \"\
+        Point\",\n    \"coordinates\": [\n     8.548248,\n     47.423588\n    ]\n\
+        \   },\n   \"properties\": {\n    \"name\": \"Freibad Seebach\",\n    \"namenzus\"\
+        : null,\n    \"strasse\": \"Glatttalstrasse 43, 8052 Zürich\",\n    \"hausnummer\"\
+        : null,\n    \"plz\": null,\n    \"ort\": null,\n    \"www\": \"https://www.sportamt.ch/freibad-seebach\"\
+        ,\n    \"tel\": \"+41 44 413 57 50\",\n    \"poi_id\": null,\n    \"kategorie\"\
+        : null,\n    \"infrastruktur\": \"NULL\",\n    \"bemerkung\": null\n   }\n\
+        \  }\n ]\n}"
+- request:
+    body: ''
+    headers:
+      host:
+      - www.ogd.stadt-zuerich.ch
+    method: GET
+    uri: https://www.ogd.stadt-zuerich.ch/wfs/geoportal/Sport?SERVICE=WFS&REQUEST=GetFeature&VERSION=1.1.0&TYPENAME=poi_flussbad_view&OUTPUTFORMAT=application%2Fjson
+  response:
+    status:
+      code: 200
+      message: OK
+    headers:
+      content-type:
+      - application/json; charset=utf-8
+    body:
+      string: "{\n \"type\": \"FeatureCollection\",\n \"features\": [\n  {\n   \"\
+        type\": \"Feature\",\n   \"id\": \"poi_flussbad_view.1\",\n   \"geometry\"\
+        : {\n    \"type\": \"Point\",\n    \"coordinates\": [\n     8.529852,\n  \
+        \   47.389312\n    ]\n   },\n   \"properties\": {\n    \"name\": \"Flussbad\
+        \ Unterer Letten (Flussteil)\",\n    \"namenzus\": null,\n    \"strasse\"\
+        : \"Wasserwerkstrasse 131, 8037 Zürich\",\n    \"hausnummer\": null,\n   \
+        \ \"plz\": null,\n    \"ort\": null,\n    \"www\": \"https://www.sportamt.ch/flussbad-unterer-letten\"\
+        ,\n    \"tel\": \"+41 44 413 58 90\",\n    \"poi_id\": null,\n    \"kategorie\"\
+        : null,\n    \"infrastruktur\": \"NULL\",\n    \"bemerkung\": null\n   }\n\
+        \  },\n  {\n   \"type\": \"Feature\",\n   \"id\": \"poi_flussbad_view.2\"\
+        ,\n   \"geometry\": {\n    \"type\": \"Point\",\n    \"coordinates\": [\n\
+        \     8.489277,\n     47.399169\n    ]\n   },\n   \"properties\": {\n    \"\
+        name\": \"Flussbad Au-Höngg\",\n    \"namenzus\": null,\n    \"strasse\":\
+        \ \"Werdinsel 2, 8049 Zürich\",\n    \"hausnummer\": null,\n    \"plz\": null,\n\
+        \    \"ort\": null,\n    \"www\": \"https://www.sportamt.ch/flussbad-au-hoengg\"\
+        ,\n    \"tel\": \"+41 44 413 58 60\",\n    \"poi_id\": null,\n    \"kategorie\"\
+        : null,\n    \"infrastruktur\": \"NULL\",\n    \"bemerkung\": null\n   }\n\
+        \  },\n  {\n   \"type\": \"Feature\",\n   \"id\": \"poi_flussbad_view.3\"\
+        ,\n   \"geometry\": {\n    \"type\": \"Point\",\n    \"coordinates\": [\n\
+        \     8.529852,\n     47.389312\n    ]\n   },\n   \"properties\": {\n    \"\
+        name\": \"Flussbad Unterer Letten\",\n    \"namenzus\": null,\n    \"strasse\"\
+        : \"Wasserwerkstrasse 131, 8037 Zürich\",\n    \"hausnummer\": null,\n   \
+        \ \"plz\": null,\n    \"ort\": null,\n    \"www\": \"https://www.sportamt.ch/flussbad-unterer-letten\"\
+        ,\n    \"tel\": \"+41 44 413 58 90\",\n    \"poi_id\": null,\n    \"kategorie\"\
+        : null,\n    \"infrastruktur\": \"NULL\",\n    \"bemerkung\": null\n   }\n\
+        \  },\n  {\n   \"type\": \"Feature\",\n   \"id\": \"poi_flussbad_view.4\"\
+        ,\n   \"geometry\": {\n    \"type\": \"Point\",\n    \"coordinates\": [\n\
+        \     8.532594,\n     47.371269\n    ]\n   },\n   \"properties\": {\n    \"\
+        name\": \"Männerbad Schanzengraben\",\n    \"namenzus\": null,\n    \"strasse\"\
+        : \"8001 Zürich\",\n    \"hausnummer\": null,\n    \"plz\": null,\n    \"\
+        ort\": null,\n    \"www\": \"https://www.sportamt.ch/maennerbad\",\n    \"\
+        tel\": \"+41 44 211 95 94\",\n    \"poi_id\": null,\n    \"kategorie\": null,\n\
+        \    \"infrastruktur\": \"NULL\",\n    \"bemerkung\": null\n   }\n  },\n \
+        \ {\n   \"type\": \"Feature\",\n   \"id\": \"poi_flussbad_view.5\",\n   \"\
+        geometry\": {\n    \"type\": \"Point\",\n    \"coordinates\": [\n     8.534268,\n\
+        \     47.38569\n    ]\n   },\n   \"properties\": {\n    \"name\": \"Flussbad\
+        \ Oberer Letten\",\n    \"namenzus\": null,\n    \"strasse\": \"Lettensteg\
+        \ 10, 8037 Zürich\",\n    \"hausnummer\": null,\n    \"plz\": null,\n    \"\
+        ort\": null,\n    \"www\": \"https://www.sportamt.ch/flussbad-oberer-letten\"\
+        ,\n    \"tel\": \"+41 44 413 58 80\",\n    \"poi_id\": null,\n    \"kategorie\"\
+        : null,\n    \"infrastruktur\": \"NULL\",\n    \"bemerkung\": null\n   }\n\
+        \  },\n  {\n   \"type\": \"Feature\",\n   \"id\": \"poi_flussbad_view.6\"\
+        ,\n   \"geometry\": {\n    \"type\": \"Point\",\n    \"coordinates\": [\n\
+        \     8.54199,\n     47.368463\n    ]\n   },\n   \"properties\": {\n    \"\
+        name\": \"Frauenbad Stadthausquai\",\n    \"namenzus\": null,\n    \"strasse\"\
+        : \"Stadthausquai 12, 8001 Zürich\",\n    \"hausnummer\": null,\n    \"plz\"\
+        : null,\n    \"ort\": null,\n    \"www\": \"https://www.sportamt.ch/frauenbad\"\
+        ,\n    \"tel\": \"+41 44 413 58 70\",\n    \"poi_id\": null,\n    \"kategorie\"\
+        : null,\n    \"infrastruktur\": \"NULL\",\n    \"bemerkung\": null\n   }\n\
+        \  }\n ]\n}"
+- request:
+    body: ''
+    headers:
+      host:
+      - www.ogd.stadt-zuerich.ch
+    method: GET
+    uri: https://www.ogd.stadt-zuerich.ch/wfs/geoportal/Sport?SERVICE=WFS&REQUEST=GetFeature&VERSION=1.1.0&TYPENAME=poi_seebad_view&OUTPUTFORMAT=application%2Fjson
+  response:
+    status:
+      code: 200
+      message: OK
+    headers:
+      content-type:
+      - application/json; charset=utf-8
+    body:
+      string: "{\n \"type\": \"FeatureCollection\",\n \"features\": [\n  {\n   \"\
+        type\": \"Feature\",\n   \"id\": \"poi_seebad_view.1\",\n   \"geometry\":\
+        \ {\n    \"type\": \"Point\",\n    \"coordinates\": [\n     8.557555,\n  \
+        \   47.352401\n    ]\n   },\n   \"properties\": {\n    \"name\": \"Strandbad\
+        \ Tiefenbrunnen\",\n    \"namenzus\": null,\n    \"strasse\": \"Bellerivestrasse\
+        \ 200, 8008 Zürich\",\n    \"hausnummer\": null,\n    \"plz\": null,\n   \
+        \ \"ort\": null,\n    \"www\": \"https://www.sportamt.ch/strandbad-tiefenbrunnen\"\
+        ,\n    \"tel\": \"+41 44 413 58 00\",\n    \"poi_id\": null,\n    \"kategorie\"\
+        : null,\n    \"infrastruktur\": \"Nichtschwimmerbereich im See, Kinderplanschbecken,\
+        \ Sprungplattform 1/3/5 m, 3 Flosse, Super-See-Rutschbahn 62m, Volleyballnetz\"\
+        ,\n    \"bemerkung\": null\n   }\n  },\n  {\n   \"type\": \"Feature\",\n \
+        \  \"id\": \"poi_seebad_view.2\",\n   \"geometry\": {\n    \"type\": \"Point\"\
+        ,\n    \"coordinates\": [\n     8.493309,\n     47.430848\n    ]\n   },\n\
+        \   \"properties\": {\n    \"name\": \"Seebad Katzensee\",\n    \"namenzus\"\
+        : null,\n    \"strasse\": \"8046 Zürich\",\n    \"hausnummer\": null,\n  \
+        \  \"plz\": null,\n    \"ort\": null,\n    \"www\": \"http://www.sportamt.ch/seebad-katzensee\"\
+        ,\n    \"tel\": \"+41 44 371 08 90\",\n    \"poi_id\": null,\n    \"kategorie\"\
+        : null,\n    \"infrastruktur\": \"NULL\",\n    \"bemerkung\": null\n   }\n\
+        \  },\n  {\n   \"type\": \"Feature\",\n   \"id\": \"poi_seebad_view.3\",\n\
+        \   \"geometry\": {\n    \"type\": \"Point\",\n    \"coordinates\": [\n  \
+        \   8.53662,\n     47.361669\n    ]\n   },\n   \"properties\": {\n    \"name\"\
+        : \"Seebad Enge\",\n    \"namenzus\": null,\n    \"strasse\": \"Mythenquai\
+        \ 9, 8002 Zürich\",\n    \"hausnummer\": null,\n    \"plz\": null,\n    \"\
+        ort\": null,\n    \"www\": \"http://www.tonttu.ch/\",\n    \"tel\": \"+41\
+        \ 44 201 38 89\",\n    \"poi_id\": null,\n    \"kategorie\": null,\n    \"\
+        infrastruktur\": \"NULL\",\n    \"bemerkung\": null\n   }\n  },\n  {\n   \"\
+        type\": \"Feature\",\n   \"id\": \"poi_seebad_view.4\",\n   \"geometry\":\
+        \ {\n    \"type\": \"Point\",\n    \"coordinates\": [\n     8.537319,\n  \
+        \   47.340955\n    ]\n   },\n   \"properties\": {\n    \"name\": \"Strandbad\
+        \ Wollishofen\",\n    \"namenzus\": null,\n    \"strasse\": \"Seestrasse 451,\
+        \ 8038 Zürich\",\n    \"hausnummer\": null,\n    \"plz\": null,\n    \"ort\"\
+        : null,\n    \"www\": \"https://www.sportamt.ch/strandbad-wollishofen\",\n\
+        \    \"tel\": \"+41 44 413 58 10\",\n    \"poi_id\": null,\n    \"kategorie\"\
+        : null,\n    \"infrastruktur\": \"Nichtschwimmerbereich im See mit Blasio\
+        \ Spielgeräten, Sprungplattform 1/3m, 2 Flosse\",\n    \"bemerkung\": null\n\
+        \   }\n  },\n  {\n   \"type\": \"Feature\",\n   \"id\": \"poi_seebad_view.5\"\
+        ,\n   \"geometry\": {\n    \"type\": \"Point\",\n    \"coordinates\": [\n\
+        \     8.5472,\n     47.361784\n    ]\n   },\n   \"properties\": {\n    \"\
+        name\": \"Seebad Utoquai\",\n    \"namenzus\": null,\n    \"strasse\": \"\
+        Utoquai 50, 8008 Zürich\",\n    \"hausnummer\": null,\n    \"plz\": null,\n\
+        \    \"ort\": null,\n    \"www\": \"https://www.sportamt.ch/seebad-utoquai\"\
+        ,\n    \"tel\": \"+41 44 413 58 20\",\n    \"poi_id\": null,\n    \"kategorie\"\
+        : null,\n    \"infrastruktur\": \"NULL\",\n    \"bemerkung\": null\n   }\n\
+        \  },\n  {\n   \"type\": \"Feature\",\n   \"id\": \"poi_seebad_view.6\",\n\
+        \   \"geometry\": {\n    \"type\": \"Point\",\n    \"coordinates\": [\n  \
+        \   8.534629,\n     47.354951\n    ]\n   },\n   \"properties\": {\n    \"\
+        name\": \"Strandbad Mythenquai\",\n    \"namenzus\": null,\n    \"strasse\"\
+        : \"Mythenquai 95, 8002 Zürich\",\n    \"hausnummer\": null,\n    \"plz\"\
+        : null,\n    \"ort\": null,\n    \"www\": \"https://www.sportamt.ch/strandbad-mythenquai\"\
+        ,\n    \"tel\": \"+41 44 413 58 30\",\n    \"poi_id\": null,\n    \"kategorie\"\
+        : null,\n    \"infrastruktur\": \"Sandstrand, grosszügiger und moderner Kinderbereich\
+        \ mit Wasserspielen\",\n    \"bemerkung\": null\n   }\n  }\n ]\n}"
+- request:
+    body: ''
+    headers:
+      host:
+      - www.ogd.stadt-zuerich.ch
+    method: GET
+    uri: https://www.ogd.stadt-zuerich.ch/wfs/geoportal/Sport?SERVICE=WFS&REQUEST=GetFeature&VERSION=1.1.0&TYPENAME=poi_schulschwimmanlage_view&OUTPUTFORMAT=application%2Fjson
+  response:
+    status:
+      code: 200
+      message: OK
+    headers:
+      content-type:
+      - application/json; charset=utf-8
+    body:
+      string: "{\n \"type\": \"FeatureCollection\",\n \"features\": [\n  {\n   \"\
+        type\": \"Feature\",\n   \"id\": \"poi_schulschwimmanlage_view.1\",\n   \"\
+        geometry\": {\n    \"type\": \"Point\",\n    \"coordinates\": [\n     8.509988,\n\
+        \     47.382302\n    ]\n   },\n   \"properties\": {\n    \"name\": \"Schulschwimmanlage\
+        \ Hardau\",\n    \"namenzus\": null,\n    \"strasse\": \"8004 Zürich\",\n\
+        \    \"hausnummer\": null,\n    \"plz\": null,\n    \"ort\": null,\n    \"\
+        www\": \"https://www.stadt-zuerich.ch/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/hallenbaeder.html\"\
+        ,\n    \"tel\": \"+41 44 413 59 76\",\n    \"poi_id\": null,\n    \"kategorie\"\
+        : null,\n    \"infrastruktur\": \"NULL\",\n    \"bemerkung\": null\n   }\n\
+        \  },\n  {\n   \"type\": \"Feature\",\n   \"id\": \"poi_schulschwimmanlage_view.2\"\
+        ,\n   \"geometry\": {\n    \"type\": \"Point\",\n    \"coordinates\": [\n\
+        \     8.580703,\n     47.401711\n    ]\n   },\n   \"properties\": {\n    \"\
+        name\": \"Schulschwimmanlage Stettbach\",\n    \"namenzus\": null,\n    \"\
+        strasse\": \"8051 Zürich\",\n    \"hausnummer\": null,\n    \"plz\": null,\n\
+        \    \"ort\": null,\n    \"www\": \"https://www.stadt-zuerich.ch/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/hallenbaeder.html\"\
+        ,\n    \"tel\": \"+41 44 413 59 84\",\n    \"poi_id\": null,\n    \"kategorie\"\
+        : null,\n    \"infrastruktur\": \"NULL\",\n    \"bemerkung\": null\n   }\n\
+        \  },\n  {\n   \"type\": \"Feature\",\n   \"id\": \"poi_schulschwimmanlage_view.3\"\
+        ,\n   \"geometry\": {\n    \"type\": \"Point\",\n    \"coordinates\": [\n\
+        \     8.514245,\n     47.423271\n    ]\n   },\n   \"properties\": {\n    \"\
+        name\": \"Schulschwimmanlage Isengrind\",\n    \"namenzus\": null,\n    \"\
+        strasse\": \"8046 Zürich\",\n    \"hausnummer\": null,\n    \"plz\": null,\n\
+        \    \"ort\": null,\n    \"www\": \"https://www.stadt-zuerich.ch/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/hallenbaeder.html\"\
+        ,\n    \"tel\": \"+41 44 413 59 77\",\n    \"poi_id\": null,\n    \"kategorie\"\
+        : null,\n    \"infrastruktur\": \"NULL\",\n    \"bemerkung\": null\n   }\n\
+        \  },\n  {\n   \"type\": \"Feature\",\n   \"id\": \"poi_schulschwimmanlage_view.4\"\
+        ,\n   \"geometry\": {\n    \"type\": \"Point\",\n    \"coordinates\": [\n\
+        \     8.571182,\n     47.40945\n    ]\n   },\n   \"properties\": {\n    \"\
+        name\": \"Schulschwimmanlage Aubrücke\",\n    \"namenzus\": null,\n    \"\
+        strasse\": \"8051 Zürich\",\n    \"hausnummer\": null,\n    \"plz\": null,\n\
+        \    \"ort\": null,\n    \"www\": \"https://www.stadt-zuerich.ch/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/hallenbaeder.html\"\
+        ,\n    \"tel\": \"+41 44 413 59 72\",\n    \"poi_id\": null,\n    \"kategorie\"\
+        : null,\n    \"infrastruktur\": \"NULL\",\n    \"bemerkung\": null\n   }\n\
+        \  },\n  {\n   \"type\": \"Feature\",\n   \"id\": \"poi_schulschwimmanlage_view.5\"\
+        ,\n   \"geometry\": {\n    \"type\": \"Point\",\n    \"coordinates\": [\n\
+        \     8.533092,\n     47.389084\n    ]\n   },\n   \"properties\": {\n    \"\
+        name\": \"Schulschwimmanlage Letten\",\n    \"namenzus\": null,\n    \"strasse\"\
+        : \"8037 Zürich\",\n    \"hausnummer\": null,\n    \"plz\": null,\n    \"\
+        ort\": null,\n    \"www\": \"https://www.stadt-zuerich.ch/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/hallenbaeder.html\"\
+        ,\n    \"tel\": \"+41 44 413 59 79\",\n    \"poi_id\": null,\n    \"kategorie\"\
+        : null,\n    \"infrastruktur\": \"NULL\",\n    \"bemerkung\": null\n   }\n\
+        \  },\n  {\n   \"type\": \"Feature\",\n   \"id\": \"poi_schulschwimmanlage_view.6\"\
+        ,\n   \"geometry\": {\n    \"type\": \"Point\",\n    \"coordinates\": [\n\
+        \     8.512659,\n     47.374173\n    ]\n   },\n   \"properties\": {\n    \"\
+        name\": \"Schulschwimmanlage Aemtler\",\n    \"namenzus\": null,\n    \"strasse\"\
+        : \"8003 Zürich\",\n    \"hausnummer\": null,\n    \"plz\": null,\n    \"\
+        ort\": null,\n    \"www\": \"https://www.stadt-zuerich.ch/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/hallenbaeder/aemtler.html\"\
+        ,\n    \"tel\": \"+41 44 413 59 70\",\n    \"poi_id\": null,\n    \"kategorie\"\
+        : null,\n    \"infrastruktur\": \"NULL\",\n    \"bemerkung\": null\n   }\n\
+        \  },\n  {\n   \"type\": \"Feature\",\n   \"id\": \"poi_schulschwimmanlage_view.7\"\
+        ,\n   \"geometry\": {\n    \"type\": \"Point\",\n    \"coordinates\": [\n\
+        \     8.54499,\n     47.420507\n    ]\n   },\n   \"properties\": {\n    \"\
+        name\": \"Schulschwimmanlage Buhn\",\n    \"namenzus\": null,\n    \"strasse\"\
+        : \"Höhenring 38, 8052 Zürich\",\n    \"hausnummer\": null,\n    \"plz\":\
+        \ null,\n    \"ort\": null,\n    \"www\": \"https://www.stadt-zuerich.ch/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/hallenbaeder.html\"\
+        ,\n    \"tel\": \"+41 44 413 59 74\",\n    \"poi_id\": null,\n    \"kategorie\"\
+        : null,\n    \"infrastruktur\": \"NULL\",\n    \"bemerkung\": null\n   }\n\
+        \  },\n  {\n   \"type\": \"Feature\",\n   \"id\": \"poi_schulschwimmanlage_view.8\"\
+        ,\n   \"geometry\": {\n    \"type\": \"Point\",\n    \"coordinates\": [\n\
+        \     8.48958,\n     47.396405\n    ]\n   },\n   \"properties\": {\n    \"\
+        name\": \"Schulschwimmanlage Grünau\",\n    \"namenzus\": null,\n    \"strasse\"\
+        : \"Grünauring 28, 8064 Zürich\",\n    \"hausnummer\": null,\n    \"plz\"\
+        : null,\n    \"ort\": null,\n    \"www\": \"https://www.stadt-zuerich.ch/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/hallenbaeder.html\"\
+        ,\n    \"tel\": \"+41 44 413 59 75\",\n    \"poi_id\": null,\n    \"kategorie\"\
+        : null,\n    \"infrastruktur\": \"NULL\",\n    \"bemerkung\": null\n   }\n\
+        \  },\n  {\n   \"type\": \"Feature\",\n   \"id\": \"poi_schulschwimmanlage_view.9\"\
+        ,\n   \"geometry\": {\n    \"type\": \"Point\",\n    \"coordinates\": [\n\
+        \     8.499656,\n     47.40412\n    ]\n   },\n   \"properties\": {\n    \"\
+        name\": \"Schulschwimmanlage Vogtsrain\",\n    \"namenzus\": null,\n    \"\
+        strasse\": \"Ferdinand-Hodler-Strasse 23, 8049 Zürich\",\n    \"hausnummer\"\
+        : null,\n    \"plz\": null,\n    \"ort\": null,\n    \"www\": \"https://www.stadt-zuerich.ch/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/hallenbaeder.html\"\
+        ,\n    \"tel\": \"+41 44 413 59 86\",\n    \"poi_id\": null,\n    \"kategorie\"\
+        : null,\n    \"infrastruktur\": \"NULL\",\n    \"bemerkung\": null\n   }\n\
+        \  },\n  {\n   \"type\": \"Feature\",\n   \"id\": \"poi_schulschwimmanlage_view.10\"\
+        ,\n   \"geometry\": {\n    \"type\": \"Point\",\n    \"coordinates\": [\n\
+        \     8.492244,\n     47.372373\n    ]\n   },\n   \"properties\": {\n    \"\
+        name\": \"Schulschwimmanlage Altweg\",\n    \"namenzus\": null,\n    \"strasse\"\
+        : \"8047 Zürich\",\n    \"hausnummer\": null,\n    \"plz\": null,\n    \"\
+        ort\": null,\n    \"www\": \"https://www.stadt-zuerich.ch/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/hallenbaeder/altweg.html\"\
+        ,\n    \"tel\": \"+41 44 413 59 71\",\n    \"poi_id\": null,\n    \"kategorie\"\
+        : null,\n    \"infrastruktur\": \"NULL\",\n    \"bemerkung\": null\n   }\n\
+        \  },\n  {\n   \"type\": \"Feature\",\n   \"id\": \"poi_schulschwimmanlage_view.11\"\
+        ,\n   \"geometry\": {\n    \"type\": \"Point\",\n    \"coordinates\": [\n\
+        \     8.504726,\n     47.360214\n    ]\n   },\n   \"properties\": {\n    \"\
+        name\": \"Schulschwimmanlage Borrweg\",\n    \"namenzus\": null,\n    \"strasse\"\
+        : \"8055 Zürich\",\n    \"hausnummer\": null,\n    \"plz\": null,\n    \"\
+        ort\": null,\n    \"www\": \"https://www.stadt-zuerich.ch/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/hallenbaeder.html\"\
+        ,\n    \"tel\": \"+41 44 413 59 73\",\n    \"poi_id\": null,\n    \"kategorie\"\
+        : null,\n    \"infrastruktur\": \"NULL\",\n    \"bemerkung\": null\n   }\n\
+        \  },\n  {\n   \"type\": \"Feature\",\n   \"id\": \"poi_schulschwimmanlage_view.12\"\
+        ,\n   \"geometry\": {\n    \"type\": \"Point\",\n    \"coordinates\": [\n\
+        \     8.487568,\n     47.378991\n    ]\n   },\n   \"properties\": {\n    \"\
+        name\": \"Schulschwimmanlage Freilager\",\n    \"namenzus\": null,\n    \"\
+        strasse\": \"Flurstrasse 120, 8047 Zürich\",\n    \"hausnummer\": null,\n\
+        \    \"plz\": null,\n    \"ort\": null,\n    \"www\": \"https://www.stadt-zuerich.ch/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/hallenbaeder.html\"\
+        ,\n    \"tel\": \"+41 44 413 59 68\",\n    \"poi_id\": null,\n    \"kategorie\"\
+        : null,\n    \"infrastruktur\": \"NULL\",\n    \"bemerkung\": null\n   }\n\
+        \  },\n  {\n   \"type\": \"Feature\",\n   \"id\": \"poi_schulschwimmanlage_view.13\"\
+        ,\n   \"geometry\": {\n    \"type\": \"Point\",\n    \"coordinates\": [\n\
+        \     8.553911,\n     47.359192\n    ]\n   },\n   \"properties\": {\n    \"\
+        name\": \"Schulschwimmanlage Riesbach\",\n    \"namenzus\": null,\n    \"\
+        strasse\": \"Seefeldstrasse 93, 8008 Zürich\",\n    \"hausnummer\": null,\n\
+        \    \"plz\": null,\n    \"ort\": null,\n    \"www\": \"https://www.stadt-zuerich.ch/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/hallenbaeder.html\"\
+        ,\n    \"tel\": \"+41 44 413 59 82\",\n    \"poi_id\": null,\n    \"kategorie\"\
+        : null,\n    \"infrastruktur\": \"NULL\",\n    \"bemerkung\": null\n   }\n\
+        \  },\n  {\n   \"type\": \"Feature\",\n   \"id\": \"poi_schulschwimmanlage_view.14\"\
+        ,\n   \"geometry\": {\n    \"type\": \"Point\",\n    \"coordinates\": [\n\
+        \     8.528322,\n     47.411014\n    ]\n   },\n   \"properties\": {\n    \"\
+        name\": \"Schulschwimmanlage Kügeliloo\",\n    \"namenzus\": null,\n    \"\
+        strasse\": \"8050 Zürich\",\n    \"hausnummer\": null,\n    \"plz\": null,\n\
+        \    \"ort\": null,\n    \"www\": \"https://www.stadt-zuerich.ch/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/hallenbaeder.html\"\
+        ,\n    \"tel\": \"+41 44 413 59 78\",\n    \"poi_id\": null,\n    \"kategorie\"\
+        : null,\n    \"infrastruktur\": \"NULL\",\n    \"bemerkung\": null\n   }\n\
+        \  },\n  {\n   \"type\": \"Feature\",\n   \"id\": \"poi_schulschwimmanlage_view.15\"\
+        ,\n   \"geometry\": {\n    \"type\": \"Point\",\n    \"coordinates\": [\n\
+        \     8.535407,\n     47.419186\n    ]\n   },\n   \"properties\": {\n    \"\
+        name\": \"Schulschwimmanlage Staudenbühl\",\n    \"namenzus\": null,\n   \
+        \ \"strasse\": \"8052 Zürich\",\n    \"hausnummer\": null,\n    \"plz\": null,\n\
+        \    \"ort\": null,\n    \"www\": \"https://www.stadt-zuerich.ch/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/hallenbaeder.html\"\
+        ,\n    \"tel\": \"+41 44 413 59 83\",\n    \"poi_id\": null,\n    \"kategorie\"\
+        : null,\n    \"infrastruktur\": \"NULL\",\n    \"bemerkung\": null\n   }\n\
+        \  },\n  {\n   \"type\": \"Feature\",\n   \"id\": \"poi_schulschwimmanlage_view.16\"\
+        ,\n   \"geometry\": {\n    \"type\": \"Point\",\n    \"coordinates\": [\n\
+        \     8.542899,\n     47.388685\n    ]\n   },\n   \"properties\": {\n    \"\
+        name\": \"Schulschwimmanlage Riedtli\",\n    \"namenzus\": null,\n    \"strasse\"\
+        : \"8006 Zürich\",\n    \"hausnummer\": null,\n    \"plz\": null,\n    \"\
+        ort\": null,\n    \"www\": \"https://www.stadt-zuerich.ch/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/hallenbaeder/riedtli.html\"\
+        ,\n    \"tel\": \"+41 44 413 59 81\",\n    \"poi_id\": null,\n    \"kategorie\"\
+        : null,\n    \"infrastruktur\": \"NULL\",\n    \"bemerkung\": null\n   }\n\
+        \  },\n  {\n   \"type\": \"Feature\",\n   \"id\": \"poi_schulschwimmanlage_view.17\"\
+        ,\n   \"geometry\": {\n    \"type\": \"Point\",\n    \"coordinates\": [\n\
+        \     8.596346,\n     47.360726\n    ]\n   },\n   \"properties\": {\n    \"\
+        name\": \"Schulschwimmanlage Looren\",\n    \"namenzus\": null,\n    \"strasse\"\
+        : \"8053 Zürich\",\n    \"hausnummer\": null,\n    \"plz\": null,\n    \"\
+        ort\": null,\n    \"www\": \"https://www.stadt-zuerich.ch/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/hallenbaeder.html\"\
+        ,\n    \"tel\": \"+41 44 413 59 80\",\n    \"poi_id\": null,\n    \"kategorie\"\
+        : null,\n    \"infrastruktur\": \"NULL\",\n    \"bemerkung\": null\n   }\n\
+        \  },\n  {\n   \"type\": \"Feature\",\n   \"id\": \"poi_schulschwimmanlage_view.18\"\
+        ,\n   \"geometry\": {\n    \"type\": \"Point\",\n    \"coordinates\": [\n\
+        \     8.528065,\n     47.345945\n    ]\n   },\n   \"properties\": {\n    \"\
+        name\": \"Schulschwimmanlage Tannenrauch\",\n    \"namenzus\": null,\n   \
+        \ \"strasse\": \"8038 Zürich\",\n    \"hausnummer\": null,\n    \"plz\": null,\n\
+        \    \"ort\": null,\n    \"www\": \"https://www.stadt-zuerich.ch/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/hallenbaeder/tannenrauch.html\"\
+        ,\n    \"tel\": \"+41 44 413 59 85\",\n    \"poi_id\": null,\n    \"kategorie\"\
+        : null,\n    \"infrastruktur\": \"NULL\",\n    \"bemerkung\": null\n   }\n\
+        \  }\n ]\n}"
+- request:
+    body: ''
+    headers:
+      host:
+      - www.ogd.stadt-zuerich.ch
+    method: GET
+    uri: https://www.ogd.stadt-zuerich.ch/wfs/geoportal/Sport?SERVICE=WFS&REQUEST=GetFeature&VERSION=1.1.0&TYPENAME=poi_planschbecken_view&OUTPUTFORMAT=application%2Fjson
+  response:
+    status:
+      code: 200
+      message: OK
+    headers:
+      content-type:
+      - application/json; charset=utf-8
+    body:
+      string: "{\n \"type\": \"FeatureCollection\",\n \"features\": [\n  {\n   \"\
+        type\": \"Feature\",\n   \"id\": \"poi_planschbecken_view.1\",\n   \"geometry\"\
+        : {\n    \"type\": \"Point\",\n    \"coordinates\": [\n     8.512742,\n  \
+        \   47.388168\n    ]\n   },\n   \"properties\": {\n    \"name\": \"Planschbecken\
+        \ Pfingstweid\",\n    \"namenzus\": null,\n    \"strasse\": null,\n    \"\
+        hausnummer\": null,\n    \"plz\": null,\n    \"ort\": null,\n    \"www\":\
+        \ \"https://www.stadt-zuerich.ch/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/sommerbaeder/planschbecken.html\"\
+        ,\n    \"tel\": null,\n    \"poi_id\": null,\n    \"kategorie\": null,\n \
+        \   \"infrastruktur\": \"NULL\",\n    \"bemerkung\": null\n   }\n  },\n  {\n\
+        \   \"type\": \"Feature\",\n   \"id\": \"poi_planschbecken_view.2\",\n   \"\
+        geometry\": {\n    \"type\": \"Point\",\n    \"coordinates\": [\n     8.558334,\n\
+        \     47.381961\n    ]\n   },\n   \"properties\": {\n    \"name\": \"Planschbecken\
+        \ Schlössliareal\",\n    \"namenzus\": null,\n    \"strasse\": \"8044 Zürich\"\
+        ,\n    \"hausnummer\": null,\n    \"plz\": null,\n    \"ort\": null,\n   \
+        \ \"www\": \"https://www.stadt-zuerich.ch/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/sommerbaeder/planschbecken.html\"\
+        ,\n    \"tel\": null,\n    \"poi_id\": null,\n    \"kategorie\": null,\n \
+        \   \"infrastruktur\": \"NULL\",\n    \"bemerkung\": null\n   }\n  },\n  {\n\
+        \   \"type\": \"Feature\",\n   \"id\": \"poi_planschbecken_view.3\",\n   \"\
+        geometry\": {\n    \"type\": \"Point\",\n    \"coordinates\": [\n     8.523723,\n\
+        \     47.366729\n    ]\n   },\n   \"properties\": {\n    \"name\": \"Planschbecken\
+        \ Sihlhölzli\",\n    \"namenzus\": null,\n    \"strasse\": \"8003 Zürich\"\
+        ,\n    \"hausnummer\": null,\n    \"plz\": null,\n    \"ort\": null,\n   \
+        \ \"www\": \"https://www.stadt-zuerich.ch/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/sommerbaeder/planschbecken.html\"\
+        ,\n    \"tel\": null,\n    \"poi_id\": null,\n    \"kategorie\": null,\n \
+        \   \"infrastruktur\": \"NULL\",\n    \"bemerkung\": null\n   }\n  },\n  {\n\
+        \   \"type\": \"Feature\",\n   \"id\": \"poi_planschbecken_view.4\",\n   \"\
+        geometry\": {\n    \"type\": \"Point\",\n    \"coordinates\": [\n     8.541036,\n\
+        \     47.415166\n    ]\n   },\n   \"properties\": {\n    \"name\": \"Planschbecken\
+        \ Wahlenpark\",\n    \"namenzus\": null,\n    \"strasse\": \"8050 Zürich\"\
+        ,\n    \"hausnummer\": null,\n    \"plz\": null,\n    \"ort\": null,\n   \
+        \ \"www\": \"https://www.stadt-zuerich.ch/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/sommerbaeder/planschbecken.html\"\
+        ,\n    \"tel\": null,\n    \"poi_id\": null,\n    \"kategorie\": null,\n \
+        \   \"infrastruktur\": \"NULL\",\n    \"bemerkung\": null\n   }\n  },\n  {\n\
+        \   \"type\": \"Feature\",\n   \"id\": \"poi_planschbecken_view.5\",\n   \"\
+        geometry\": {\n    \"type\": \"Point\",\n    \"coordinates\": [\n     8.554476,\n\
+        \     47.365932\n    ]\n   },\n   \"properties\": {\n    \"name\": \"Planschbecken\
+        \ Artergut\",\n    \"namenzus\": null,\n    \"strasse\": \"8032 Zürich\",\n\
+        \    \"hausnummer\": null,\n    \"plz\": null,\n    \"ort\": null,\n    \"\
+        www\": \"https://www.stadt-zuerich.ch/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/sommerbaeder/planschbecken.html\"\
+        ,\n    \"tel\": null,\n    \"poi_id\": null,\n    \"kategorie\": null,\n \
+        \   \"infrastruktur\": \"NULL\",\n    \"bemerkung\": null\n   }\n  },\n  {\n\
+        \   \"type\": \"Feature\",\n   \"id\": \"poi_planschbecken_view.6\",\n   \"\
+        geometry\": {\n    \"type\": \"Point\",\n    \"coordinates\": [\n     8.486068,\n\
+        \     47.38083\n    ]\n   },\n   \"properties\": {\n    \"name\": \"Planschbecken\
+        \ Bachwiesen\",\n    \"namenzus\": null,\n    \"strasse\": \"8047 Zürich\"\
+        ,\n    \"hausnummer\": null,\n    \"plz\": null,\n    \"ort\": null,\n   \
+        \ \"www\": \"https://www.stadt-zuerich.ch/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/sommerbaeder/planschbecken.html\"\
+        ,\n    \"tel\": null,\n    \"poi_id\": null,\n    \"kategorie\": null,\n \
+        \   \"infrastruktur\": \"NULL\",\n    \"bemerkung\": null\n   }\n  },\n  {\n\
+        \   \"type\": \"Feature\",\n   \"id\": \"poi_planschbecken_view.7\",\n   \"\
+        geometry\": {\n    \"type\": \"Point\",\n    \"coordinates\": [\n     8.523426,\n\
+        \     47.378147\n    ]\n   },\n   \"properties\": {\n    \"name\": \"Planschbecken\
+        \ Bäckeranlage\",\n    \"namenzus\": null,\n    \"strasse\": \"8004 Zürich\"\
+        ,\n    \"hausnummer\": null,\n    \"plz\": null,\n    \"ort\": null,\n   \
+        \ \"www\": \"https://www.stadt-zuerich.ch/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/sommerbaeder/planschbecken.html\"\
+        ,\n    \"tel\": null,\n    \"poi_id\": null,\n    \"kategorie\": null,\n \
+        \   \"infrastruktur\": \"NULL\",\n    \"bemerkung\": null\n   }\n  },\n  {\n\
+        \   \"type\": \"Feature\",\n   \"id\": \"poi_planschbecken_view.8\",\n   \"\
+        geometry\": {\n    \"type\": \"Point\",\n    \"coordinates\": [\n     8.514024,\n\
+        \     47.378828\n    ]\n   },\n   \"properties\": {\n    \"name\": \"Planschbecken\
+        \ Bullingerhof\",\n    \"namenzus\": null,\n    \"strasse\": \"8004 Zürich\"\
+        ,\n    \"hausnummer\": null,\n    \"plz\": null,\n    \"ort\": null,\n   \
+        \ \"www\": \"https://www.stadt-zuerich.ch/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/sommerbaeder/planschbecken.html\"\
+        ,\n    \"tel\": null,\n    \"poi_id\": null,\n    \"kategorie\": null,\n \
+        \   \"infrastruktur\": \"NULL\",\n    \"bemerkung\": null\n   }\n  },\n  {\n\
+        \   \"type\": \"Feature\",\n   \"id\": \"poi_planschbecken_view.9\",\n   \"\
+        geometry\": {\n    \"type\": \"Point\",\n    \"coordinates\": [\n     8.512256,\n\
+        \     47.376542\n    ]\n   },\n   \"properties\": {\n    \"name\": \"Planschbecken\
+        \ Fritschiwiese\",\n    \"namenzus\": null,\n    \"strasse\": \"8003 Zürich\"\
+        ,\n    \"hausnummer\": null,\n    \"plz\": null,\n    \"ort\": null,\n   \
+        \ \"www\": \"https://www.stadt-zuerich.ch/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/sommerbaeder/planschbecken.html\"\
+        ,\n    \"tel\": null,\n    \"poi_id\": null,\n    \"kategorie\": null,\n \
+        \   \"infrastruktur\": \"NULL\",\n    \"bemerkung\": null\n   }\n  },\n  {\n\
+        \   \"type\": \"Feature\",\n   \"id\": \"poi_planschbecken_view.10\",\n  \
+        \ \"geometry\": {\n    \"type\": \"Point\",\n    \"coordinates\": [\n    \
+        \ 8.522791,\n     47.385979\n    ]\n   },\n   \"properties\": {\n    \"name\"\
+        : \"Planschbecken Josefswiese\",\n    \"namenzus\": null,\n    \"strasse\"\
+        : \"8005 Zürich\",\n    \"hausnummer\": null,\n    \"plz\": null,\n    \"\
+        ort\": null,\n    \"www\": \"https://www.stadt-zuerich.ch/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/sommerbaeder/planschbecken.html\"\
+        ,\n    \"tel\": null,\n    \"poi_id\": null,\n    \"kategorie\": null,\n \
+        \   \"infrastruktur\": \"NULL\",\n    \"bemerkung\": null\n   }\n  },\n  {\n\
+        \   \"type\": \"Feature\",\n   \"id\": \"poi_planschbecken_view.11\",\n  \
+        \ \"geometry\": {\n    \"type\": \"Point\",\n    \"coordinates\": [\n    \
+        \ 8.541704,\n     47.405823\n    ]\n   },\n   \"properties\": {\n    \"name\"\
+        : \"Planschbecken Föhrenwald\",\n    \"namenzus\": null,\n    \"strasse\"\
+        : \"8044 Zürich\",\n    \"hausnummer\": null,\n    \"plz\": null,\n    \"\
+        ort\": null,\n    \"www\": \"https://www.stadt-zuerich.ch/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/sommerbaeder/planschbecken.html\"\
+        ,\n    \"tel\": null,\n    \"poi_id\": null,\n    \"kategorie\": null,\n \
+        \   \"infrastruktur\": \"NULL\",\n    \"bemerkung\": null\n   }\n  },\n  {\n\
+        \   \"type\": \"Feature\",\n   \"id\": \"poi_planschbecken_view.12\",\n  \
+        \ \"geometry\": {\n    \"type\": \"Point\",\n    \"coordinates\": [\n    \
+        \ 8.505481,\n     47.360252\n    ]\n   },\n   \"properties\": {\n    \"name\"\
+        : \"Planschbecken Am Uetliberg\",\n    \"namenzus\": null,\n    \"strasse\"\
+        : \"8055 Zürich\",\n    \"hausnummer\": null,\n    \"plz\": null,\n    \"\
+        ort\": null,\n    \"www\": \"https://www.stadt-zuerich.ch/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/sommerbaeder/planschbecken.html\"\
+        ,\n    \"tel\": null,\n    \"poi_id\": null,\n    \"kategorie\": null,\n \
+        \   \"infrastruktur\": \"NULL\",\n    \"bemerkung\": null\n   }\n  },\n  {\n\
+        \   \"type\": \"Feature\",\n   \"id\": \"poi_planschbecken_view.13\",\n  \
+        \ \"geometry\": {\n    \"type\": \"Point\",\n    \"coordinates\": [\n    \
+        \ 8.521488,\n     47.410547\n    ]\n   },\n   \"properties\": {\n    \"name\"\
+        : \"Planschbecken Althoos\",\n    \"namenzus\": null,\n    \"strasse\": \"\
+        8046 Zürich\",\n    \"hausnummer\": null,\n    \"plz\": null,\n    \"ort\"\
+        : null,\n    \"www\": \"https://www.stadt-zuerich.ch/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/sommerbaeder/planschbecken.html\"\
+        ,\n    \"tel\": null,\n    \"poi_id\": null,\n    \"kategorie\": null,\n \
+        \   \"infrastruktur\": \"NULL\",\n    \"bemerkung\": null\n   }\n  }\n ]\n\
+        }"
+version: 1

@@ -1,4 +1,5 @@
-"""The CLI commands build an offline gold store and enrich it via scrape (MockTransport)."""
+"""The CLI commands build a gold store (roster sourced from the WFS via recorded HTTP) and
+enrich it via scrape (all HTTP through MockTransport / recorded snapshots — never live)."""
 
 from __future__ import annotations
 
@@ -32,6 +33,14 @@ from swimzh.storage.sqlite_repo import (
     open_db,
     write_schedules,
 )
+from tests.providers.wfs_snapshot import recorded_wfs_client, unreachable_wfs_client
+
+
+def _wfs_client() -> HttpClient:
+    """Since S3 `build` sources its ~57-pool roster from the WFS; these tests replay the committed
+    WFS snapshot (all pools) offline via MockTransport, so a `build(...)` reproduces the full spine
+    without touching the network."""
+    return recorded_wfs_client()
 
 
 def _facility_from_read_path(db: Path, facility_id: str) -> Facility:
@@ -129,7 +138,7 @@ def test_scrape_gold_composes_onto_built_store(tmp_path: Path) -> None:
     # scrape-gold now layers onto an already-built spine: it resolves the scraped WFS name to a
     # canonical id by lookup and composes, rather than minting a second (long-slug) row.
     db = tmp_path / "gold.sqlite"
-    assert build(db_path=db, data_dir=DATA_DIR) == 0
+    assert build(db_path=db, data_dir=DATA_DIR, client=_wfs_client()) == 0
 
     code = scrape_gold(
         db_path=db,
@@ -153,7 +162,7 @@ def test_scrape_gold_wires_scraped_only_pool_onto_read_path(tmp_path: Path) -> N
     # `pool.facility_doc`, the pool's blob stays NULL and `get` returns None — so this test goes
     # red on that mutation, closing the enrichment gap for good.
     db = tmp_path / "gold.sqlite"
-    assert build(db_path=db, data_dir=DATA_DIR) == 0
+    assert build(db_path=db, data_dir=DATA_DIR, client=_wfs_client()) == 0
     altstetten = reconstruct_pool_id("hallenbad-altstetten")
     # Uncurated before the scrape: Slice F gives it a SCHEDULE-LESS prose blob, so it may be
     # present on the read path but carries no schedule rule yet.
@@ -185,7 +194,7 @@ def test_scrape_merge_puts_curated_schedule_and_scraped_price_on_read_path(tmp_p
     # over the real curated City with its price stripped so the scraped price is the one that
     # fills the gap.
     db = tmp_path / "gold.sqlite"
-    assert build(db_path=db, data_dir=DATA_DIR) == 0
+    assert build(db_path=db, data_dir=DATA_DIR, client=_wfs_client()) == 0
     conn = open_db(db)
 
     curated_city = GoldRepository(conn).get(reconstruct_pool_id("hallenbad-city"))
@@ -238,7 +247,7 @@ def test_scrape_gold_unreconcilable_name_is_reported_not_silently_written(
     # wrong-pool write. Nothing is composed (no resolved refs), the miss is reported to stderr,
     # and the exit code is non-zero so the miss stays visible.
     db = tmp_path / "gold.sqlite"
-    assert build(db_path=db, data_dir=DATA_DIR) == 0
+    assert build(db_path=db, data_dir=DATA_DIR, client=_wfs_client()) == 0
     before = {f.identity.facility_id for f in GoldRepository(open_db(db)).load_all()}
 
     catalog_file = tmp_path / "catalog.json"
@@ -313,7 +322,7 @@ def test_scrape_gold_partial_success_writes_matched_reports_unmatched(
     # `pool.facility_doc` (partial success — the good scrapes are not discarded), the unmatched
     # name is reported to stderr, and the exit code is non-zero so the miss stays visible.
     db = tmp_path / "gold.sqlite"
-    assert build(db_path=db, data_dir=DATA_DIR) == 0
+    assert build(db_path=db, data_dir=DATA_DIR, client=_wfs_client()) == 0
     altstetten = reconstruct_pool_id("hallenbad-altstetten")
     # Scraped-only pool: before the scrape it carries at most a SCHEDULE-LESS Slice-F prose blob
     # (no rule), so no scraped schedule is on the read path yet.
@@ -349,7 +358,7 @@ def test_scrape_gold_ambiguous_reconcile_aborts_writing_nothing(
     # `test_resolve_all_is_fatal_on_ambiguous_ref_naming_the_offender`). The store must be left
     # untouched — never a silent wrong-pool write.
     db = tmp_path / "gold.sqlite"
-    assert build(db_path=db, data_dir=DATA_DIR) == 0
+    assert build(db_path=db, data_dir=DATA_DIR, client=_wfs_client()) == 0
     before = {f.identity.facility_id for f in GoldRepository(open_db(db)).load_all()}
 
     ambiguous = SchemaMismatch(source="reconcile", detail="ambiguous basin hint: 'Twin Bad'")
@@ -372,7 +381,7 @@ def test_build_and_scrape_gold_share_one_id_namespace(tmp_path: Path) -> None:
     # The acceptance: build and scrape-gold write into the SAME id namespace. Every facility row
     # id (the /swim read path) is a real pool PK — no long-vs-short split-brain.
     db = tmp_path / "gold.sqlite"
-    assert build(db_path=db, data_dir=DATA_DIR) == 0
+    assert build(db_path=db, data_dir=DATA_DIR, client=_wfs_client()) == 0
     assert (
         scrape_gold(
             db_path=db,
@@ -430,7 +439,7 @@ def test_scrape_lanes_attaches_plan_to_curated_basin(tmp_path: Path) -> None:
     # `build` spine present, discovers the pool page's Belegungsplan links, then writes the
     # attached plan back through `write_schedules`.
     db = tmp_path / "gold.sqlite"
-    assert build(db_path=db, data_dir=DATA_DIR) == 0
+    assert build(db_path=db, data_dir=DATA_DIR, client=_wfs_client()) == 0
 
     body = FIXTURE_PDF.read_bytes()
     client = _lane_client(lambda _r: httpx.Response(200, content=body))
@@ -454,7 +463,8 @@ def test_scrape_lanes_missing_db_is_error(tmp_path: Path) -> None:
 
 def test_scrape_lanes_reports_when_no_pdf_parses(tmp_path: Path) -> None:
     db = tmp_path / "gold.sqlite"
-    assert build(db_path=db, data_dir=DATA_DIR) == 0  # spine present, so the 503 is the cause
+    # spine present, so the 503 is the cause of the failure below
+    assert build(db_path=db, data_dir=DATA_DIR, client=_wfs_client()) == 0
     # Pages discover their Belegungsplan links, but every PDF 503s -> all declared sources record
     # LanePlanUnavailable, nothing attaches -> non-zero.
     client = _lane_client(lambda _r: httpx.Response(503, text="down"))
@@ -474,7 +484,7 @@ def test_scrape_lanes_prints_unbound_and_unavailable_audit(
     # 503'd, so each records a per-basin `unavailable` line carrying its typed cause — NOT a bare
     # `unmatched` list.
     db = tmp_path / "gold.sqlite"
-    assert build(db_path=db, data_dir=DATA_DIR) == 0
+    assert build(db_path=db, data_dir=DATA_DIR, client=_wfs_client()) == 0
     oerlikon = _facility_from_read_path(db, "hallenbad-oerlikon")
     sprung = next(b for b in oerlikon.basins if b.basin_id == BasinId("oerlikon-sprungbecken"))
     assert sprung.lane_plan_source is not None
@@ -508,7 +518,7 @@ def test_scrape_lanes_prints_unmatched_section_audit(
     # at the combined URL — "Sprungbecken" never appears). The basin is left None, but the silent
     # drop is surfaced as an `unmatched section` audit line (a parser-header-regression alarm).
     db = tmp_path / "gold.sqlite"
-    assert build(db_path=db, data_dir=DATA_DIR) == 0
+    assert build(db_path=db, data_dir=DATA_DIR, client=_wfs_client()) == 0
     oerlikon = _facility_from_read_path(db, "hallenbad-oerlikon")
     combined_url = next(
         b.lane_plan_source.url
@@ -549,18 +559,18 @@ def test_scrape_lanes_empty_store_is_error(tmp_path: Path) -> None:
     assert code == 1
 
 
-def test_build_produces_complete_offline_store(tmp_path: Path) -> None:
+def test_build_produces_complete_store(tmp_path: Path) -> None:
     db = tmp_path / "gold.sqlite"
-    code = build(db_path=db, data_dir=DATA_DIR)
+    code = build(db_path=db, data_dir=DATA_DIR, client=_wfs_client())
     assert code == 0
     assert db.exists()
 
     conn = open_db(db)
-    # The pool spine holds every known pool (committed data/catalog.json).
+    # The pool spine holds every known pool (the ~57-pool WFS roster).
     assert len(load_roster(conn)) == 57
     # Calendar table covers the current planning horizon.
     assert load_calendar(conn).covers(datetime(2026, 1, 1, tzinfo=ZURICH).date())
-    # The curated facilities land on the read path (`pool.facility_doc`) — no network needed.
+    # The curated facilities land on the read path (`pool.facility_doc`), keyed to the WFS roster.
     dataset = load_dataset(DATA_DIR)
     assert isinstance(dataset, Ok)
     facilities = GoldRepository(conn).load_all()
@@ -577,32 +587,31 @@ def test_build_produces_complete_offline_store(tmp_path: Path) -> None:
     assert stored > scheduled
 
 
-def test_build_via_main_offline(tmp_path: Path) -> None:
+def test_build_via_main(tmp_path: Path) -> None:
+    # `main` threads an injected client into `build` (live runs create their own); the recorded
+    # WFS snapshot lets the CLI-level build run offline.
     db = tmp_path / "gold.sqlite"
-    code = main(["build", "--db", str(db), "--data", str(DATA_DIR)])
+    code = main(["build", "--db", str(db), "--data", str(DATA_DIR)], client=_wfs_client())
     assert code == 0
     assert len(load_roster(open_db(db))) == 57
 
 
-def test_build_missing_catalog_is_error(tmp_path: Path) -> None:
-    # A data dir with calendar/registry/pools but no catalog.json.
-    data = tmp_path / "data"
-    (data / "pools").mkdir(parents=True)
-    (data / "calendar").mkdir()
-    (data / "registry.yaml").write_bytes((DATA_DIR / "registry.yaml").read_bytes())
-    (data / "calendar" / "zurich.yaml").write_bytes(
-        (DATA_DIR / "calendar" / "zurich.yaml").read_bytes()
-    )
-    for pool in (DATA_DIR / "pools").glob("*.yaml"):
-        (data / "pools" / pool.name).write_bytes(pool.read_bytes())
-
-    code = build(db_path=tmp_path / "gold.sqlite", data_dir=data)
+def test_build_unreachable_wfs_aborts_writing_nothing(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # S3 acceptance: an unreachable WFS makes the build exit non-zero — the LOCAL abort at the
+    # roster step. Because the roster is fetched BEFORE any DB is opened, nothing is written (the
+    # general atomic-swap abort is S4). The typed ProviderError is surfaced on stderr.
+    db = tmp_path / "gold.sqlite"
+    code = build(db_path=db, data_dir=DATA_DIR, client=unreachable_wfs_client())
     assert code == 1
+    assert not db.exists()  # aborted before opening the store — no partial write
+    assert "roster unavailable" in capsys.readouterr().err
 
 
 def test_build_then_scrape_gold_enriches(tmp_path: Path) -> None:
     db = tmp_path / "gold.sqlite"
-    assert build(db_path=db, data_dir=DATA_DIR) == 0
+    assert build(db_path=db, data_dir=DATA_DIR, client=_wfs_client()) == 0
     before = GoldRepository(open_db(db)).count()
 
     catalog_file = tmp_path / "catalog.json"
@@ -636,7 +645,7 @@ def test_build_then_scrape_gold_enriches(tmp_path: Path) -> None:
 
 def test_build_then_scrape_lanes_enriches(tmp_path: Path) -> None:
     db = tmp_path / "gold.sqlite"
-    assert build(db_path=db, data_dir=DATA_DIR) == 0
+    assert build(db_path=db, data_dir=DATA_DIR, client=_wfs_client()) == 0
 
     body = FIXTURE_PDF.read_bytes()
     client = _lane_client(lambda _r: httpx.Response(200, content=body))

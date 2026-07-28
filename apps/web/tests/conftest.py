@@ -14,15 +14,19 @@ import pytest
 
 from swimzh.core.result import Ok
 from swimzh.etl.build import build_store
+from swimzh.storage import catalog_json
 
 DATA_DIR = Path(__file__).resolve().parents[3] / "data"
+# Since S3 the roster is a `build_store` argument sourced live from the WFS. The committed
+# catalog.json IS that WFS snapshot, so it is the recorded roster double for the app-test gold DB.
+_ROSTER = catalog_json.loads((DATA_DIR / "catalog.json").read_text(encoding="utf-8"))
 
 
 @pytest.fixture(scope="session")
 def gold_db(tmp_path_factory: pytest.TempPathFactory) -> Path:
-    """A complete, self-contained gold DB built offline from the committed inputs."""
+    """A complete, self-contained gold DB built from the committed inputs + recorded WFS roster."""
     db = tmp_path_factory.mktemp("gold") / "gold.sqlite"
-    result = build_store(DATA_DIR, db)
+    result = build_store(DATA_DIR, db, _ROSTER)
     assert isinstance(result, Ok), result
     return db
 

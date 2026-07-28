@@ -16,9 +16,12 @@ import yaml
 
 from swimzh.core.result import Ok
 from swimzh.etl.build import build_store
-from swimzh.storage import codec
+from swimzh.storage import catalog_json, codec
 
 DATA_DIR = Path(__file__).resolve().parents[2] / "data"
+# Since S3 the roster is a `build_store` argument sourced from the WFS; the committed catalog.json
+# IS that WFS snapshot, so it is the recorded roster double for this offline spine build test.
+_ROSTER = catalog_json.loads((DATA_DIR / "catalog.json").read_text(encoding="utf-8"))
 
 # The pre-unification short ids (S1's crosswalk) — each must still resolve via an alias.
 LEGACY_SHORT_IDS: dict[str, str] = {
@@ -35,7 +38,7 @@ LEGACY_SHORT_IDS: dict[str, str] = {
 
 def _build(tmp_path: Path, name: str = "gold.sqlite") -> sqlite3.Connection:
     db = tmp_path / name
-    result = build_store(DATA_DIR, db)
+    result = build_store(DATA_DIR, db, _ROSTER)
     assert isinstance(result, Ok), result
     return sqlite3.connect(db)
 

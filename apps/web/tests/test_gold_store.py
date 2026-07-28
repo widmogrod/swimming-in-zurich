@@ -12,16 +12,20 @@ from apps.web.services.gold_store import GoldSwimStore
 from swimzh.core.result import Ok
 from swimzh.etl.build import build_store
 from swimzh.providers.curated import load_dataset
+from swimzh.storage import catalog_json
 from swimzh.storage.sqlite_repo import open_db
 
 DATA_DIR = Path(__file__).resolve().parents[3] / "data"
+# Since S3 the roster is a `build_store` argument sourced from the WFS; the committed catalog.json
+# IS that WFS snapshot, so it is the recorded roster double for these gold-store tests.
+_ROSTER = catalog_json.loads((DATA_DIR / "catalog.json").read_text(encoding="utf-8"))
 
 
 def test_reads_facilities_and_calendar(tmp_path: Path) -> None:
     dataset = load_dataset(DATA_DIR)
     assert isinstance(dataset, Ok)
     db = tmp_path / "gold.sqlite"
-    assert isinstance(build_store(DATA_DIR, db), Ok)
+    assert isinstance(build_store(DATA_DIR, db, _ROSTER), Ok)
 
     data = GoldSwimStore.open(db)
     # Every curated facility reaches the read path; Slice F adds schedule-less prose pools too, so
@@ -36,7 +40,7 @@ def test_reads_facilities_and_calendar(tmp_path: Path) -> None:
 
 def test_roster_holds_the_full_catalog_with_curation(tmp_path: Path) -> None:
     db = tmp_path / "gold.sqlite"
-    assert isinstance(build_store(DATA_DIR, db), Ok)
+    assert isinstance(build_store(DATA_DIR, db, _ROSTER), Ok)
 
     data = GoldSwimStore.open(db)
     roster = data.roster()
@@ -52,7 +56,7 @@ def test_roster_holds_the_full_catalog_with_curation(tmp_path: Path) -> None:
 
 def test_facility_resolves_a_catalog_pool_to_its_schedule(tmp_path: Path) -> None:
     db = tmp_path / "gold.sqlite"
-    assert isinstance(build_store(DATA_DIR, db), Ok)
+    assert isinstance(build_store(DATA_DIR, db, _ROSTER), Ok)
 
     data = GoldSwimStore.open(db)
     # A curated catalog id resolves to its facility (schedule) via the canonical-id join.
