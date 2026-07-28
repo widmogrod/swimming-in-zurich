@@ -2,10 +2,18 @@
 type: concept
 created: 2026-07-21
 updated: 2026-07-22
-links: ["[[2026-07-21-lane-plan-reconciliation-plan]]", "[[lane-data-availability]]", "[[gold-store]]", "[[data-layer-architecture]]"]
+links: ["[[2026-07-21-lane-plan-reconciliation-plan]]", "[[lane-data-availability]]", "[[gold-store]]", "[[data-layer-architecture]]", "[[discovery-driven-providers]]"]
 ---
 
 # Lane-plan source binding — a first-class domain attribute; extraction outcomes as persisted data
+
+> **Partly superseded (direction, 2026-07-28) by [[discovery-driven-providers]].** Three
+> decisions below are the *current* implementation but no longer the *intended* one: the
+> lane-plan URL as a **curated YAML input** (it should be *discovered* by the upstream page
+> provider, not hand-authored), the Altstetten "out of scope / not surfaced as a raw link"
+> punt (that rejects *curated* links; discovered links re-derive and don't rot), and the
+> best-effort skip / "the facility still builds" posture (becomes fail-fast, non-zero). The
+> typed error *values* and the URL-keyed deterministic join stay.
 
 A basin's lane document (its Belegungsplan) is a **first-class domain attribute**:
 `Basin.lane_plan_source: LanePlanSource | None`, where `LanePlanSource(url, section=None)`. It is authored in
