@@ -156,22 +156,36 @@ builds", and the stale-store fetch-set invariant.
   declared fact.
 - **Depends on**: S2, S3.
 
-### S5 — Resolve every residual curated fact-class (per the S1 gap report)
+### S5 — SOURCE every residual curated fact-class (per the S1 gap report; GO decision: no data loss)
 
-- **Goal**: Route each fact-class in the S1 **residue** (basin-*schedule*-split, `lane_swim`/
-  `family` access, prices, `public_holiday_policy`, closures) to exactly one of:
-  sourced-by-provider, or dropped-from-domain-with-a-recorded-decision. (`kind`/dimensions/
-  amenities are **already** sourced by `infrastruktur` — this slice only formalizes that binding,
-  it does not re-source or drop them.)
-- **Touches**: `price_provider`, `notice_provider`, the basin-schedule-decomposition rule (or its
-  removal), `providers/infrastruktur.py` (formalize as the `kind`/amenities provider),
-  `domain` (drop any abandoned field), `docs/concepts/*` + `docs/entities/basin` (record decisions).
+> **Scope grew at the S1 GO gate (2026-07-28):** the owner chose *source the residue, don't drop
+> it*. So S5 is no longer "source-or-drop" — it must **build providers** for the five
+> `not-in-source` classes. This is large enough that **S5 will very likely split into its own
+> plan(s)** (one per provider); this slice's acceptance is the *contract those sub-plans satisfy*,
+> and closures are already proven sourced (route to `sourced-by-notice`, not residue).
+- **Goal**: Provide a website-sourced producer for each residual class rather than dropping it:
+  - **prices** → a `price_provider` over a discovered price page (the discovery hop from S2).
+  - **basin physicals for the 5 NULL-prose pools** → another WFS/page field or per-page parse, so
+    `kind`/dims/lanes are sourced beyond the current 2/7 (`infrastruktur` covers only city,
+    bungertwies today).
+  - **richer access (`lane_swim`/`family`/`adults_only`)** → extracted from the Belegungsplan lane
+    doc or finer page text, since the flat timetable's category vocabulary is closed and cannot
+    emit them.
+  - **per-basin schedule split** → route the flat facility-level timetable to basins (needs a rule
+    or a per-basin source; if genuinely impossible, this is the ONE class that may still be dropped
+    with a recorded decision — but only after an extraction attempt is shown to fail).
+  - **holiday policy** → from a discovered/parsed signal if one exists; else the recorded-drop
+    exception applies.
+- **Touches**: `price_provider`, richer-access extractor (Belegungsplan/page), basin-physical
+  provider for NULL-prose pools, `providers/infrastruktur.py` (formalize), `notice_provider`
+  (closures), `domain`, `docs/concepts/*` + `docs/entities/basin`.
 - **Acceptance**: (1) A committed **field→producer table** maps *every* surviving domain field to
-  exactly one producing provider module (or names the PR that deleted the field); a test asserts
-  the table covers all serialized `facility_doc` fields (no field unlisted). (2) A test asserts
-  `build` reads **no** fact from `data/pools/*.yaml`. (3) Each residue fact-class has a dated
-  `sourced-by-<module> | dropped` decision in the plan's Decisions section.
-- **Depends on**: S1 (gap report), S4 (fail-fast in place before dropping fallbacks).
+  exactly one **provider module** (drops are the recorded exception, allowed only for a class with
+  a demonstrated failed extraction attempt — currently at most per-basin-split / holiday-policy);
+  a test asserts the table covers all serialized `facility_doc` fields (no field unlisted). (2) A
+  test asserts `build` reads **no** fact from `data/pools/*.yaml`. (3) Each residue fact-class has a
+  dated `sourced-by-<module> | dropped-after-failed-extraction` decision in the Decisions section.
+- **Depends on**: S1 (gap report), S2 (discovery hop feeds the price/access sources), S4 (fail-fast).
 
 ### S6 — Delete the curated-YAML tier and reconcile docs
 
@@ -278,6 +292,16 @@ Appended by /dev:implement after each slice — never rewritten. Newest row last
   illustrative fiction) and closures are sourced; the real cost of full removal is concentrated in
   four `not-in-source` classes (richer access, per-basin split, prices, holiday policy) + thin
   basin-physical coverage. The decision reduces to: drop those four classes, or source/curate them.
+
+### S1 GO/NO-GO decision (2026-07-28)
+
+- **Verdict: GO**, with the directive **"source the residue, don't drop it."** On the real 7/7
+  evidence the owner chose to proceed S2→S6 and to have S5 **build providers** for the five
+  `not-in-source` classes (prices, richer access, basin physicals for the 5 NULL-prose pools,
+  per-basin split, holiday policy) rather than accept data loss. S5 accordingly grew (see the
+  amended S5) and is expected to split into its own plan(s). Closures are already sourced, so they
+  leave the residue. The only classes that may still end in a recorded *drop* are ones with a
+  demonstrated failed extraction attempt (at most per-basin-split and holiday-policy).
 
 ## Summary
 
