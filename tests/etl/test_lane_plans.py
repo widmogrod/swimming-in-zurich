@@ -6,14 +6,30 @@ recorded as a typed miss."""
 from __future__ import annotations
 
 from collections.abc import Callable
+from datetime import date
 from pathlib import Path
 
 import httpx
 
 from swimzh.core.errors import HttpStatus
 from swimzh.core.http import HttpClient, RetryPolicy
-from swimzh.domain.models import PoolId
-from swimzh.etl.lane_plans import fetch_set, scrape_lane_plans
+from swimzh.domain.models import (
+    Basin,
+    BasinId,
+    BasinKind,
+    Facility,
+    LanePlanSource,
+    PoolId,
+    PoolIdentity,
+    PoolKind,
+    Provenance,
+)
+from swimzh.etl.lane_plans import (
+    UndiscoveredSource,
+    fetch_set,
+    scrape_lane_plans,
+    undiscovered_authored,
+)
 from swimzh.providers.page_provider import DiscoveredLink
 
 FIXTURES = Path(__file__).resolve().parents[1] / "providers" / "fixtures"
@@ -78,6 +94,51 @@ def test_scrape_of_no_discovered_links_is_empty() -> None:
     client = _client(lambda _r: httpx.Response(200, content=CITY_BYTES))
     report = scrape_lane_plans(client, ())
     assert report.plans == () and report.misses == ()
+
+
+def _facility_with_sources(pool_id: str, *sources: tuple[str, str]) -> Facility:
+    """A facility whose basins each declare a `lane_plan_source` at the given (basin_id, url)."""
+    return Facility(
+        identity=PoolIdentity(facility_id=PoolId(pool_id), name=pool_id, kind=PoolKind.INDOOR),
+        address="",
+        provenance=Provenance(source="test", curated=True, valid_as_of=date(2026, 1, 1)),
+        basins=tuple(
+            Basin(
+                basin_id=BasinId(bid),
+                name=bid,
+                rules=(),
+                kind=BasinKind.LAP,
+                lane_plan_source=LanePlanSource(url=url),
+            )
+            for bid, url in sources
+        ),
+    )
+
+
+def test_undiscovered_authored_flags_a_source_no_page_advertises() -> None:
+    # S4 (S2-surfaced): an authored `lane_plan_source.url` NOT among the discovered links is
+    # `authored − discovered` — a declared fact discovery can no longer produce.
+    facility = _facility_with_sources("hallenbad-city", ("city-50m", CITY_URL))
+    discovered = (_link("hallenbad-city", LEIMBACH_URL),)  # advertises a DIFFERENT url
+    assert undiscovered_authored([facility], discovered) == (
+        UndiscoveredSource(pool_id=PoolId("hallenbad-city"), url=CITY_URL),
+    )
+
+
+def test_undiscovered_authored_empty_when_every_source_is_discovered() -> None:
+    facility = _facility_with_sources("hallenbad-city", ("city-50m", CITY_URL))
+    discovered = (_link("hallenbad-city", CITY_URL),)
+    assert undiscovered_authored([facility], discovered) == ()
+
+
+def test_undiscovered_authored_dedupes_two_basins_sharing_one_url() -> None:
+    # Two basins declaring the SAME undiscovered url yield ONE UndiscoveredSource, not two.
+    facility = _facility_with_sources(
+        "hallenbad-city", ("city-50m", CITY_URL), ("city-vario", CITY_URL)
+    )
+    assert undiscovered_authored([facility], ()) == (
+        UndiscoveredSource(pool_id=PoolId("hallenbad-city"), url=CITY_URL),
+    )
 
 
 def test_hardcoded_url_list_and_fuzzy_matcher_symbols_are_gone() -> None:

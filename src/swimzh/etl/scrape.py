@@ -4,8 +4,13 @@ Per pool we scrape: the timetable (→ rules), notices/alerts (→ `Notice`s, an
 notices → `ClosureRange`s), and attach the shared scraped admission `PriceTable` for city-run
 pools. The result is a ``ScrapedAspects`` payload paired with a ``Name`` ``SourceRef`` (the WFS
 display name) — **never a canonical id**. ``build.reconcile.resolve_all`` turns each ``Name``
-into a ``PoolId`` by lookup, and ``build.compose`` folds the aspects onto the matching pool. A
-pool whose page fails to parse is skipped and reported (best-effort).
+into a ``PoolId`` by lookup, and ``build.compose`` folds the aspects onto the matching pool.
+
+**Fail-fast (S4):** a declared source (an INDOOR catalog pool with a page URL) whose page fails
+to fetch or parse is **NOT skipped**. Its typed ``ProviderError`` is preserved in
+``ScrapeReport.failures`` so the ``scrape-gold`` command aborts the whole run non-zero carrying
+that cause (owner decision 2026-07-28: no green-exit-with-a-hole). The best-effort skip-and-report
+posture is gone; the typed error *value* stays.
 """
 
 from __future__ import annotations
@@ -15,6 +20,7 @@ from datetime import datetime
 
 from swimzh.build.compose import ScrapedAspects
 from swimzh.build.reconcile import Name, SourceRef
+from swimzh.core.errors import ProviderError
 from swimzh.core.http import HttpClient
 from swimzh.core.result import Err, Ok
 from swimzh.domain.catalog import PoolCatalogEntry
@@ -36,9 +42,20 @@ Extract = tuple[SourceRef, ScrapedAspects]
 
 
 @dataclass(frozen=True, slots=True)
+class ScrapeFailure:
+    """A declared source (INDOOR catalog pool) whose page failed to fetch or parse, keyed to its
+    **typed** ``ProviderError`` cause. Not a swallowed skip: ``scrape-gold`` aborts the whole run
+    on any of these, surfacing the cause (S4 fail-fast)."""
+
+    name: str
+    url: str
+    cause: ProviderError
+
+
+@dataclass(frozen=True, slots=True)
 class ScrapeReport:
     extracts: tuple[Extract, ...]  # (SourceRef, ScrapedAspects) — no canonical id minted here
-    skipped: tuple[str, ...]  # pool names whose page could not be parsed
+    failures: tuple[ScrapeFailure, ...]  # declared sources that failed (typed cause preserved)
 
 
 def _closures_from_notices(notices: tuple[Notice, ...]) -> tuple[ClosureRange, ...]:
@@ -84,20 +101,20 @@ def scrape_indoor_facilities(
     prices: PriceTable | None = None,
 ) -> ScrapeReport:
     extracts: list[Extract] = []
-    skipped: list[str] = []
+    failures: list[ScrapeFailure] = []
     for entry in catalog:
         if entry.kind is not PoolKind.INDOOR or not entry.url:
             continue
         match fetch_page(client, entry.url):
-            case Err(_):
-                skipped.append(entry.name)
+            case Err(cause):
+                failures.append(ScrapeFailure(name=entry.name, url=entry.url, cause=cause))
                 continue
             case Ok(raw):
                 page = raw.decode("utf-8", "replace")
 
         schedule = parse_schedule(page)
         if isinstance(schedule, Err):
-            skipped.append(entry.name)
+            failures.append(ScrapeFailure(name=entry.name, url=entry.url, cause=schedule.error))
             continue
         notices = parse_notices(page)
         pool_prices = prices if (prices is not None and _CITY_HOST in entry.url) else None
@@ -110,4 +127,4 @@ def scrape_indoor_facilities(
             fetched_at,
         )
         extracts.append((Name(entry.name), aspects))
-    return ScrapeReport(extracts=tuple(extracts), skipped=tuple(skipped))
+    return ScrapeReport(extracts=tuple(extracts), failures=tuple(failures))

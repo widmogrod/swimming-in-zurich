@@ -19,21 +19,26 @@ from zoneinfo import ZoneInfo
 
 from swimzh.build.compose import compose
 from swimzh.build.reconcile import crosswalk_from_rows, resolve_all
-from swimzh.core.errors import describe
+from swimzh.core.errors import ProviderError, SchemaMismatch, describe
 from swimzh.core.http import HttpClient
 from swimzh.core.result import Err, Ok
 from swimzh.domain.lane_plan import LanePlan
-from swimzh.domain.models import LanePlanUnavailable, PoolId
+from swimzh.domain.models import PoolId
 from swimzh.etl.build import build_store
 from swimzh.etl.catalog import build_catalog
-from swimzh.etl.lane_plans import scrape_lane_plans
+from swimzh.etl.lane_plans import (
+    UndiscoveredSource,
+    scrape_lane_plans,
+    undiscovered_authored,
+)
 from swimzh.etl.roster import fetch_roster
 from swimzh.etl.scrape import scrape_indoor_facilities
 from swimzh.etl.silver import LanePlanAttachment, attach_lane_plans
 from swimzh.providers import geo_sport
-from swimzh.providers.page_provider import discover_pages
+from swimzh.providers.page_provider import DiscoveryReport, discover_pages
 from swimzh.providers.price_scraper import scrape_prices
 from swimzh.storage import catalog_json
+from swimzh.storage.atomic import atomic_swap
 from swimzh.storage.sqlite_repo import (
     GoldRepository,
     load_alias_rows,
@@ -51,21 +56,30 @@ def build(*, db_path: Path, data_dir: Path, client: HttpClient) -> int:
 
     Since S3 the ~57-pool roster (identity + geo) comes from the WFS via `fetch_roster`, not a
     committed `catalog.json`. An unreachable/failing WFS aborts the whole build non-zero at the
-    roster step — the LOCAL abort, BEFORE any DB is opened, so nothing is written (the general
-    atomic-swap abort is S4). Curated facilities + calendar + the registry crosswalk still come
-    from `data_dir`. Returns a process exit code."""
+    roster step — BEFORE any temp DB is opened, so nothing is written. Curated facilities +
+    calendar + the registry crosswalk still come from `data_dir`.
+
+    S4 atomic write: the store is assembled in a temp DB beside `db_path` and atomically swapped
+    over the live file ONLY on full success (`build_store` returning `Ok`). Any abort — the WFS
+    roster failure above, or a curated-input `Err` below — discards the temp and leaves the prior
+    gold DB **content-unchanged** (never a partial/half-written store). Returns a process exit
+    code."""
     match fetch_roster(client):
         case Err(error):
             print(f"build failed: WFS roster unavailable: {describe(error)}", file=sys.stderr)
             return 1
         case Ok(roster):
-            match build_store(data_dir, db_path, roster):
-                case Ok(repo):
-                    print(f"gold store built at {db_path} ({repo.count()} facilities)")
-                    return 0
-                case Err(error):
-                    print(f"build failed: {describe(error)}", file=sys.stderr)
-                    return 1
+            with atomic_swap(db_path) as staging:
+                match build_store(data_dir, staging.path, roster):
+                    case Ok(repo):
+                        count = repo.count()
+                        staging.commit()  # success: the temp atomically replaces the live DB
+                        print(f"gold store built at {db_path} ({count} facilities)")
+                        return 0
+                    case Err(error):
+                        # No commit: the temp is discarded, the prior gold DB is untouched.
+                        print(f"build failed: {describe(error)}", file=sys.stderr)
+                        return 1
 
 
 def build_catalog_file(*, out: Path, client: HttpClient, generated_at: datetime) -> int:
@@ -92,6 +106,13 @@ def scrape_gold(
     unreconcilable name is a loud typed ``Err``, never a silent wrong-pool write); ``compose``
     folds the scraped aspects onto the curated pool (curated-wins per aspect — a curated pool
     keeps its schedule AND gains a scraped price). There is no second door into a gold row.
+
+    Fail-fast (S4): a declared source (an INDOOR catalog pool) whose page fails to fetch/parse is
+    **no longer skipped** — the whole run aborts non-zero carrying the typed ``ProviderError``. All
+    writes go into a temp copy of the live store that atomically replaces it ONLY on a completed
+    run; any abort leaves the prior gold DB content-unchanged. An unresolved WFS name (a scraped
+    pool in no alias) stays a benign partial-success: the resolved pools are written and the run
+    exits non-zero with the miss named — not a data hole, a reconcile gap on an extra source.
     """
     if not catalog_path.exists():
         print(f"catalog not found at {catalog_path}; run build-catalog first", file=sys.stderr)
@@ -103,69 +124,64 @@ def scrape_gold(
     prices_result = scrape_prices(client, fetched_at.date())
     prices = prices_result.value if isinstance(prices_result, Ok) else None
     report = scrape_indoor_facilities(client, catalog, fetched_at, prices=prices)
+    if report.failures:
+        # A declared source failed to fetch/parse: abort the whole run, surfacing the typed cause.
+        failure = report.failures[0]
+        print(
+            f"scrape-gold aborted: declared source {failure.name} ({failure.url}) failed: "
+            f"{describe(failure.cause)}",
+            file=sys.stderr,
+        )
+        return 1
     if not report.extracts:
         print("no schedules could be scraped", file=sys.stderr)
         return 1
 
-    conn = open_db(db_path)
-    curated = GoldRepository(conn).load_all()
-    crosswalk = crosswalk_from_rows(load_alias_rows(conn), load_xref_rows(conn))
-    match resolve_all(report.extracts, crosswalk):
-        case Err(error):
-            print(f"scrape reconcile failed: {describe(error)}", file=sys.stderr)
-            return 1
-        case Ok(outcome):
-            # Partial success: compose + write the pools that reconciled, UNCONDITIONALLY —
-            # one unmatched WFS name no longer discards every good scrape. Benign misses are
-            # reported to stderr and signalled by a non-zero exit (visible, not silent); the
-            # good scrapes are still written. Only an ambiguous ref (the `Err` case above) is
-            # fatal — never a silent wrong-pool write.
-            composition = compose(curated, outcome.resolved)
-            write_schedules(
-                conn,
-                tuple((f.identity.facility_id, f) for f in composition.facilities),
-            )
-            msg = f"scraped {len(outcome.resolved)} indoor pools into {db_path}"
-            msg += " (with prices)" if prices is not None else " (prices unavailable)"
-            for note in composition.notes:
-                msg += f"; {note}"
-            if report.skipped:
-                msg += f"; skipped {len(report.skipped)}: {', '.join(report.skipped)}"
-            print(msg)
-            if outcome.unresolved:
-                print(
-                    f"unresolved (no pool matched): {', '.join(sorted(outcome.unresolved))}",
-                    file=sys.stderr,
-                )
+    with atomic_swap(db_path, seed_from=db_path) as staging:
+        conn = open_db(staging.path)
+        curated = GoldRepository(conn).load_all()
+        crosswalk = crosswalk_from_rows(load_alias_rows(conn), load_xref_rows(conn))
+        match resolve_all(report.extracts, crosswalk):
+            case Err(error):
+                # No commit: the ambiguous batch aborts whole, the live store is untouched.
+                print(f"scrape reconcile failed: {describe(error)}", file=sys.stderr)
                 return 1
-            return 0
-
-
-def _report_lane_audit(attachment: LanePlanAttachment) -> tuple[int, int]:
-    """Print the honest scrape-lanes audit to stderr and return `(attached, unavailable)` counts.
-
-    Three audit streams: (a) each per-basin `unavailable` extraction with its typed cause; (b) each
-    `unbound` parsed section a URL/header no basin claims; (c) each `unmatched section` — a declared
-    token that matched no parsed header. `lane_plan` is a closed three-case union, matched
-    exhaustively."""
-    attached = 0
-    unavailable = 0
-    for facility in attachment.facilities:
-        for basin in facility.basins:
-            match basin.lane_plan:
-                case LanePlan():
-                    attached += 1
-                case LanePlanUnavailable() as miss:
-                    unavailable += 1
+            case Ok(outcome):
+                composition = compose(curated, outcome.resolved)
+                write_schedules(
+                    conn,
+                    tuple((f.identity.facility_id, f) for f in composition.facilities),
+                )
+                conn.close()  # release the staging handle before the atomic rename
+                staging.commit()  # the resolved scrapes are good — swap them in
+                msg = f"scraped {len(outcome.resolved)} indoor pools into {db_path}"
+                msg += " (with prices)" if prices is not None else " (prices unavailable)"
+                for note in composition.notes:
+                    msg += f"; {note}"
+                print(msg)
+                if outcome.unresolved:
                     print(
-                        f"unavailable ({basin.basin_id} <- {miss.source_url}): "
-                        f"{describe(miss.cause)}",
+                        f"unresolved (no pool matched): {', '.join(sorted(outcome.unresolved))}",
                         file=sys.stderr,
                     )
-                case None:
-                    pass
-                case _ as unreachable:  # pragma: no cover - exhaustiveness guard
-                    assert_never(unreachable)
+                    return 1
+                return 0
+
+
+def _report_lane_audit(attachment: LanePlanAttachment) -> int:
+    """Print the honest scrape-lanes audit to stderr and return the count of attached lane plans.
+
+    Two non-fatal audit streams (S4 removed the persisted-`unavailable` hole — a fetch/parse miss
+    now aborts before attach): (a) each `unbound` parsed section a URL/header no basin claims — a
+    discovered sheet no basin authored, not a missing declared fact; (b) each `unmatched section` —
+    a declared token that matched no parsed header of its sheet. Post-fail-fast a basin's
+    `lane_plan` is only ever a `LanePlan` (attached) or `None`."""
+    attached = sum(
+        1
+        for facility in attachment.facilities
+        for basin in facility.basins
+        if isinstance(basin.lane_plan, LanePlan)
+    )
     for plan in attachment.unbound:
         print(
             f"unbound ({plan.source_url}): {plan.basin_hint!r} — {plan.reason}",
@@ -179,70 +195,113 @@ def _report_lane_audit(attachment: LanePlanAttachment) -> tuple[int, int]:
         )
     for warning in attachment.warnings:
         print(f"warning: {warning}", file=sys.stderr)
-    return attached, unavailable
+    return attached
+
+
+def _undiscovered_error(source: UndiscoveredSource, discovery: DiscoveryReport) -> ProviderError:
+    """The typed cause for an authored lane source discovery could not surface: the owning page's
+    own fetch failure if that is WHY it wasn't advertised, else a `SchemaMismatch` that the page no
+    longer lists the URL. Errors stay typed values even for a 'missing declared fact' abort."""
+    for page_miss in discovery.page_misses:
+        if page_miss.pool_id == source.pool_id:
+            return page_miss.cause
+    return SchemaMismatch(
+        source="scrape-lanes",
+        detail=f"authored lane source not advertised by its pool page: {source.url}",
+    )
 
 
 def scrape_lanes(*, db_path: Path, client: HttpClient, fetched_at: datetime) -> int:
     """Discover each pool page's Belegungsplan links, fetch those DISCOVERED PDFs, and attach the
     parsed plans onto the basin that owns each URL — a deterministic URL-keyed join. The fetch-set
     is a projection of the links `page_provider` discovers on the pool pages (not of any authored
-    `lane_plan_source` URL). A source that fails to fetch/parse is recorded as first-class
-    `LanePlanUnavailable` state (never a silent drop). Prints an honest operational audit to
-    stderr: each un-fetchable page, each `unbound` parsed section (a URL/header no basin claims),
-    each per-basin `unavailable` cause, and each `unmatched section` (a declared token that matched
-    no parsed header). Exit code."""
+    `lane_plan_source` URL).
+
+    Fail-fast (S4), all writes into a temp copy of the live store swapped in ONLY on a completed
+    run — any abort below leaves the prior gold DB content-unchanged:
+      * an authored `lane_plan_source.url` its pool page fails to advertise (`authored −
+        discovered` non-empty — the stale-store fetch-set invariant, incl. a page that failed to
+        fetch) is a HARD abort carrying the typed cause, never a silent drop;
+      * a discovered lane source that fails to fetch/parse is a HARD abort carrying its typed
+        `ProviderError`, never a persisted `LanePlanUnavailable` that lets the facility build.
+    Prints an honest audit to stderr: each un-fetchable page, each `unbound` parsed section (a
+    discovered sheet no basin claims — an undeclared extra, non-fatal), and each `unmatched
+    section` (a declared token that matched no parsed header). Exit code."""
     if not db_path.exists():
         print(f"gold store not found at {db_path}; build it first", file=sys.stderr)
         return 1
-    conn = open_db(db_path)
-    facilities = GoldRepository(conn).load_all()
-    if not facilities:
-        print(f"gold store {db_path} is empty; build it first", file=sys.stderr)
-        return 1
 
-    # The discovery hop: fetch each pool's official page and collect the Belegungsplan links it
-    # advertises, stamped with the owning PoolId. The pool page URL is the roster's `url`.
-    page_url = {entry.entry.pool_id: entry.entry.url for entry in load_roster(conn)}
-    pages: list[tuple[PoolId, str]] = []
-    for facility in facilities:
-        url = page_url.get(str(facility.identity.facility_id))
-        if url is not None:
-            pages.append((facility.identity.facility_id, url))
-    discovery = discover_pages(client, pages)
-    for page_miss in discovery.page_misses:
-        print(
-            f"page discovery failed ({page_miss.pool_id} <- {page_miss.page_url}): "
-            f"{describe(page_miss.cause)}",
-            file=sys.stderr,
-        )
-
-    report = scrape_lane_plans(client, discovery.links)
-    if not report.plans and not report.misses:
-        print("no Belegungsplan links discovered; nothing to scrape", file=sys.stderr)
-        return 1
-
-    misses = {miss.source_url: miss.cause for miss in report.misses}
-    match attach_lane_plans(facilities, report.plans, misses, fetched_at):
-        case Err(error):
-            print(f"lane-plan reconcile failed: {describe(error)}", file=sys.stderr)
+    with atomic_swap(db_path, seed_from=db_path) as staging:
+        conn = open_db(staging.path)
+        facilities = GoldRepository(conn).load_all()
+        if not facilities:
+            print(f"gold store {db_path} is empty; build it first", file=sys.stderr)
             return 1
-        case Ok(attachment):
-            attached, unavailable = _report_lane_audit(attachment)
-            # Persist the run's outcomes (parsed plans AND recorded failures) to the read path.
-            write_schedules(
-                conn,
-                tuple((f.identity.facility_id, f) for f in attachment.facilities),
+
+        # The discovery hop: fetch each pool's official page and collect the Belegungsplan links it
+        # advertises, stamped with the owning PoolId. The pool page URL is the roster's `url`.
+        page_url = {entry.entry.pool_id: entry.entry.url for entry in load_roster(conn)}
+        pages: list[tuple[PoolId, str]] = []
+        for facility in facilities:
+            url = page_url.get(str(facility.identity.facility_id))
+            if url is not None:
+                pages.append((facility.identity.facility_id, url))
+        discovery = discover_pages(client, pages)
+        # A page fetch failure is audited; it only ABORTS if it stranded an authored source (caught
+        # by `authored − discovered` below). A page with no authored source dropping no declared
+        # fact stays a non-fatal audit line.
+        for page_miss in discovery.page_misses:
+            print(
+                f"page discovery failed ({page_miss.pool_id} <- {page_miss.page_url}): "
+                f"{describe(page_miss.cause)}",
+                file=sys.stderr,
             )
-            if attached == 0:
-                print("no lane plan reconciled to a curated basin", file=sys.stderr)
+
+        # Fail-fast: an authored source its page no longer advertises is a declared fact gone
+        # missing — abort, never a silent drop (no commit -> live store untouched).
+        undiscovered = undiscovered_authored(facilities, discovery.links)
+        if undiscovered:
+            source = undiscovered[0]
+            print(
+                f"scrape-lanes aborted: authored lane source not discovered on its page "
+                f"({source.pool_id} <- {source.url}): "
+                f"{describe(_undiscovered_error(source, discovery))}",
+                file=sys.stderr,
+            )
+            return 1
+
+        report = scrape_lane_plans(client, discovery.links)
+        # Fail-fast: a discovered lane source that failed to fetch/parse aborts the whole run
+        # carrying its typed cause — no persisted hole (no commit -> live store untouched).
+        if report.misses:
+            miss = report.misses[0]
+            print(
+                f"scrape-lanes aborted: lane source {miss.source_url} failed: "
+                f"{describe(miss.cause)}",
+                file=sys.stderr,
+            )
+            return 1
+
+        match attach_lane_plans(facilities, report.plans, fetched_at):
+            case Err(error):
+                print(f"lane-plan reconcile failed: {describe(error)}", file=sys.stderr)
                 return 1
-            msg = f"attached {attached} lane plan(s) into {db_path}"
-            if unavailable:
-                msg += f"; {unavailable} unavailable (recorded)"
-            print(msg)
-            return 0
-        case _ as unreachable:  # pragma: no cover - exhaustiveness guard
-            assert_never(unreachable)
+            case Ok(attachment):
+                attached = _report_lane_audit(attachment)
+                if attached == 0:
+                    print("no lane plan reconciled to a curated basin", file=sys.stderr)
+                    return 1
+                # Persist the parsed plans to the read path, then swap the temp store in.
+                write_schedules(
+                    conn,
+                    tuple((f.identity.facility_id, f) for f in attachment.facilities),
+                )
+                conn.close()  # release the staging handle before the atomic rename
+                staging.commit()
+                print(f"attached {attached} lane plan(s) into {db_path}")
+                return 0
+            case _ as unreachable:  # pragma: no cover - exhaustiveness guard
+                assert_never(unreachable)
 
 
 def main(argv: list[str] | None = None, *, client: HttpClient | None = None) -> int:

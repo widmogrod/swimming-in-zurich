@@ -218,6 +218,7 @@ Appended by /dev:implement after each slice — never rewritten. Newest row last
 | 2026-07-28 | S1 | re-measured | user chose "close fixture gap first": fetched real stadt-zuerich pages for all 7 curated pools → schedule fidelity now 7/7; fixed stale evidence prose in the generator | basin physicals still 2/7 (NULL WFS prose unchanged) | yes (GO/NO-GO) |
 | 2026-07-29 | S2 | done | fetch-set moved to discovery, but `lane_plan_source` RETAINED as the per-basin binding key (irreducibly per-basin; discovery knows only pool+url) — plan intent met, literal "remove" deferred to S6; `cli.py` touched (necessary wiring) | S6 cannot delete `lane_plan_source` from YAML without a per-basin binding replacement; an authored URL a page fails to advertise is currently a silent drop (→ S4 must surface/abort) | yes |
 | 2026-07-29 | S3 | done | roster identity+geo now from live WFS (`etl/roster.py`); `registry.yaml` RETAINED, reduced to the crosswalk (xref keys/aliases/kaeferberg kind-override); WFS I/O at CLI composition root, `build_store` takes roster as data; `reconcile.py` untouched | golden test is a WFS parser round-trip (fixtures reshaped from `catalog.json`); only the INDOOR layer's real wire shape is pinned (by `test_geo_sport`) — a non-indoor WFS field rename is invisible until a live re-record | yes |
+| 2026-07-29 | S4 | done | temp-DB+atomic-swap (`storage/atomic.py`) for all 3 commands (scrape-gold/scrape-lanes survive as SEPARATE commands, `seed_from` live copy); skip-and-report + persisted-`LanePlanUnavailable` converted to hard aborts; the hole-persist code removed from `silver.py` (touch-list said `lane_plans.py`) | `LanePlanUnavailable` TYPE retained (lossless round-trip) but has NO ETL producer now — full type removal deferred (~S6); `build` no-commit branch unexercised (covered by atomic unit tests) | yes |
 
 ## Decisions & divergences
 
@@ -356,6 +357,28 @@ Appended by /dev:implement after each slice — never rewritten. Newest row last
 - 2026-07-29 (S3, shrinks the crosswalk later): the real WFS payload carries `poi_id` (e.g.
   `"hb001"`) which `build_catalog` currently discards — so `geo_sport_id` is **WFS-sourceable**, an
   S5 candidate that would remove one field from the retained crosswalk.
+
+### S4 (implementation) — fail-fast, abort-whole-build
+
+- 2026-07-29 (S4, atomic approach chosen): **temp-DB-before-swap for all three commands**, not a
+  single folded transactional build. `build` seeds an empty temp; `scrape-gold`/`scrape-lanes`
+  `seed_from` a byte-copy of the live store, layer enrichment, and `os.replace` on success
+  (`storage/atomic.py`). Consequence for the ledger/architecture: **scrape-gold and scrape-lanes
+  survive as separate commands** (the build→scrape→scrape shape is unchanged; they just no longer
+  mutate the live file in place). Content-unchanged-on-abort is asserted via `conn.iterdump()`
+  digests, not byte hashes. Critic: approve.
+- 2026-07-29 (S4, semantic reversal — as designed): `scrape-gold`'s skip-and-report and the
+  persisted-`LanePlanUnavailable`-that-lets-the-facility-build are **gone**; a failed declared/
+  discovered source now aborts the whole command non-zero with its typed `ProviderError`, gold
+  untouched. The `LanePlanUnavailable` *value* type stays (round-trips) but has no ETL producer.
+- 2026-07-29 (S4, judgment call — validated by critic): a pool page that fails to fetch but
+  declares **no** lane source is a non-fatal audit line (strands no *declared* fact, per rule 4); a
+  page failure that strands an **authored** source aborts via `undiscovered_authored`
+  (`authored − discovered`), which also makes the stale-store fetch-set invariant loud.
+- 2026-07-29 (S4 → S5/S6 gating): the `undiscovered_authored` abort is the guard that a declared
+  lane source can't silently vanish — but it depends on `lane_plan_source` existing as the
+  `authored` set. So when S6 deletes `lane_plan_source`, **S5's sourced per-basin binding must
+  carry this invariant forward**, or the protection is lost with the field.
 
 ## Summary
 

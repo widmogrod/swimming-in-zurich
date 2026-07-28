@@ -3,6 +3,7 @@ enrich it via scrape (all HTTP through MockTransport / recorded snapshots — ne
 
 from __future__ import annotations
 
+import sqlite3
 from collections.abc import Callable
 from dataclasses import replace
 from datetime import datetime
@@ -41,6 +42,19 @@ def _wfs_client() -> HttpClient:
     WFS snapshot (all pools) offline via MockTransport, so a `build(...)` reproduces the full spine
     without touching the network."""
     return recorded_wfs_client()
+
+
+def _db_content_digest(path: Path) -> tuple[str, ...]:
+    """A CONTENT digest of the gold DB: its logical schema+data as an `iterdump()` statement stream.
+
+    Deliberately not a file-byte hash — a temp-swapped/rolled-back SQLite file can differ byte-wise
+    while logically identical, so S4's "prior gold content-unchanged" is asserted on the dumped rows
+    (schema + `INSERT`s), not on the bytes."""
+    conn = sqlite3.connect(path)
+    try:
+        return tuple(conn.iterdump())
+    finally:
+        conn.close()
 
 
 def _facility_from_read_path(db: Path, facility_id: str) -> Facility:
@@ -377,6 +391,36 @@ def test_scrape_gold_ambiguous_reconcile_aborts_writing_nothing(
     assert after == before
 
 
+def test_scrape_gold_declared_source_parse_failure_aborts_content_unchanged(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # S4 acceptance (scrape-gold): a declared source (an INDOOR catalog pool) whose page cannot be
+    # parsed is NOT skipped-and-green — the whole run ABORTS non-zero carrying the typed cause, and
+    # the prior gold DB is CONTENT-unchanged (content digest, not byte hash).
+    db = tmp_path / "gold.sqlite"
+    assert build(db_path=db, data_dir=DATA_DIR, client=_wfs_client()) == 0
+    before = _db_content_digest(db)
+
+    # The city page fetches 200 but has no timetable, so `parse_schedule` fails -> a declared
+    # source failure with a typed ParseError cause.
+    unparseable = b"<html>no table</html>"
+    inner = httpx.Client(
+        transport=httpx.MockTransport(lambda _r: httpx.Response(200, content=unparseable))
+    )
+    client = HttpClient(inner, source="schedule_scraper", retry=RetryPolicy(max_attempts=1))
+    code = scrape_gold(
+        db_path=db,
+        catalog_path=_city_catalog_file(tmp_path),
+        client=client,
+        fetched_at=FETCHED_AT,
+    )
+    assert code == 1
+    assert _db_content_digest(db) == before  # nothing written — the live store is unchanged
+    err = capsys.readouterr().err
+    assert "aborted" in err
+    assert "parse error" in err.lower()  # the typed ProviderError cause is surfaced
+
+
 def test_build_and_scrape_gold_share_one_id_namespace(tmp_path: Path) -> None:
     # The acceptance: build and scrape-gold write into the SAME id namespace. Every facility row
     # id (the /swim read path) is a real pool PK — no long-vs-short split-brain.
@@ -461,28 +505,37 @@ def test_scrape_lanes_missing_db_is_error(tmp_path: Path) -> None:
     assert code == 1
 
 
-def test_scrape_lanes_reports_when_no_pdf_parses(tmp_path: Path) -> None:
+def test_scrape_lanes_pdf_fetch_failure_aborts_leaving_store_content_unchanged(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # S4 acceptance: pages discover their Belegungsplan links, but every discovered PDF 503s. That
+    # is a declared/discovered source fetch failure -> the WHOLE run ABORTS non-zero (no persisted
+    # LanePlanUnavailable that lets the facility build), and the prior gold DB is CONTENT-unchanged
+    # (asserted via a content digest, not a byte hash). The abort message carries the typed cause.
     db = tmp_path / "gold.sqlite"
-    # spine present, so the 503 is the cause of the failure below
     assert build(db_path=db, data_dir=DATA_DIR, client=_wfs_client()) == 0
-    # Pages discover their Belegungsplan links, but every PDF 503s -> all declared sources record
-    # LanePlanUnavailable, nothing attaches -> non-zero.
+    before = _db_content_digest(db)
+
     client = _lane_client(lambda _r: httpx.Response(503, text="down"))
     code = scrape_lanes(db_path=db, client=client, fetched_at=FETCHED_AT)
     assert code == 1
+    assert _db_content_digest(db) == before  # temp discarded — the live store never mutated
+    err = capsys.readouterr().err
+    assert "aborted" in err
+    assert "HTTP 503" in err  # the typed ProviderError cause is surfaced
 
 
 _OERLIKON_COMBINED_PDF = _FIXTURES / "oerlikon-nichtschwimmer-sprungbecken.pdf"
 
 
-def test_scrape_lanes_prints_unbound_and_unavailable_audit(
+def test_scrape_lanes_prints_unbound_audit_for_uncurated_section(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    # S3 acceptance: the honest operational audit. The combined Oerlikon sheet attaches
-    # Sprungbecken (its section token) and surfaces the still-uncurated Nichtschwimmer section as
-    # a per-URL `unbound` line (source_url + header + reason); every other declared source is
-    # 503'd, so each records a per-basin `unavailable` line carrying its typed cause — NOT a bare
-    # `unmatched` list.
+    # S4 audit: with every discovered source fetching fine (no miss -> no abort), the combined
+    # Oerlikon sheet attaches Sprungbecken (its section token) and surfaces the still-uncurated
+    # Nichtschwimmer section as a per-URL `unbound` line (an undiscovered-basin extra, non-fatal —
+    # NOT a missing declared fact). The run succeeds. (Under S4 a 503 here would ABORT instead, so
+    # the audit is exercised on an all-success run.)
     db = tmp_path / "gold.sqlite"
     assert build(db_path=db, data_dir=DATA_DIR, client=_wfs_client()) == 0
     oerlikon = _facility_from_read_path(db, "hallenbad-oerlikon")
@@ -490,24 +543,23 @@ def test_scrape_lanes_prints_unbound_and_unavailable_audit(
     assert sprung.lane_plan_source is not None
     combined_url = sprung.lane_plan_source.url
     combined_pdf = _OERLIKON_COMBINED_PDF.read_bytes()
+    # Every OTHER discovered single-basin sheet is served a valid (URL-agnostic) plan so it binds
+    # by URL and nothing fails to fetch.
+    single_pdf = FIXTURE_PDF.read_bytes()
 
     def handler(request: httpx.Request) -> httpx.Response:
         if str(request.url) == combined_url:
             return httpx.Response(200, content=combined_pdf)
-        return httpx.Response(503, text="down")
+        return httpx.Response(200, content=single_pdf)
 
     code = scrape_lanes(db_path=db, client=_lane_client(handler), fetched_at=FETCHED_AT)
-    assert code == 0  # Sprungbecken attached, so the run succeeds
+    assert code == 0  # every source fetched; Sprungbecken + the single-basin sheets attach
 
     err = capsys.readouterr().err
-    # (a) per-URL unbound: the uncurated Nichtschwimmer section — url + header + reason.
+    # per-URL unbound: the uncurated Nichtschwimmer section — url + header + reason.
     assert "unbound" in err
     assert combined_url in err
     assert "Nichtschwimmer" in err
-    # (b) per-basin unavailable: each 503'd declared source with its typed cause (HTTP 503).
-    assert "unavailable" in err
-    assert "city-50m" in err
-    assert "HTTP 503" in err
 
 
 def test_scrape_lanes_prints_unmatched_section_audit(
@@ -525,22 +577,17 @@ def test_scrape_lanes_prints_unmatched_section_audit(
         for b in oerlikon.basins
         if b.basin_id == BasinId("oerlikon-sprungbecken") and b.lane_plan_source is not None
     )
-    city = _facility_from_read_path(db, "hallenbad-city")
-    city_url = next(
-        b.lane_plan_source.url
-        for b in city.basins
-        if b.basin_id == BasinId("city-50m") and b.lane_plan_source is not None
-    )
     # The single-basin Schwimmerbecken sheet's header never contains the "Sprungbecken" token.
     wrong_sheet = (_FIXTURES / "oerlikon-schwimmerbecken.pdf").read_bytes()
     city_sheet = FIXTURE_PDF.read_bytes()
 
+    # Under S4 any 503 would ABORT before the unmatched-section audit, so every OTHER discovered
+    # source is served a valid single-basin plan (it binds by URL); only the combined URL gets the
+    # wrong sheet, whose header lacks the declared "Sprungbecken" token.
     def handler(request: httpx.Request) -> httpx.Response:
         if str(request.url) == combined_url:
             return httpx.Response(200, content=wrong_sheet)
-        if str(request.url) == city_url:
-            return httpx.Response(200, content=city_sheet)
-        return httpx.Response(503, text="down")
+        return httpx.Response(200, content=city_sheet)
 
     code = scrape_lanes(db_path=db, client=_lane_client(handler), fetched_at=FETCHED_AT)
     assert code == 0  # City attached, so the run succeeds
@@ -557,6 +604,30 @@ def test_scrape_lanes_empty_store_is_error(tmp_path: Path) -> None:
     client = _pdf_client(lambda _r: httpx.Response(200, content=FIXTURE_PDF.read_bytes()))
     code = scrape_lanes(db_path=db, client=client, fetched_at=FETCHED_AT)
     assert code == 1
+
+
+def test_scrape_lanes_authored_source_not_advertised_aborts(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # S4 acceptance (S2-surfaced case): an authored `lane_plan_source.url` its pool page fails to
+    # advertise (`authored − discovered` non-empty — here every page returns an EMPTY body, so no
+    # link is discovered) is a HARD abort, never a silent drop. The prior gold DB is
+    # content-unchanged and the abort carries the typed cause.
+    db = tmp_path / "gold.sqlite"
+    assert build(db_path=db, data_dir=DATA_DIR, client=_wfs_client()) == 0
+    before = _db_content_digest(db)
+
+    # Pool pages fetch 200 but advertise NO Belegungsplan links (so no PDF is ever fetched).
+    inner = httpx.Client(
+        transport=httpx.MockTransport(lambda _r: httpx.Response(200, content=b"<html></html>"))
+    )
+    client = HttpClient(inner, source="belegungsplan", retry=RetryPolicy(max_attempts=1))
+    code = scrape_lanes(db_path=db, client=client, fetched_at=FETCHED_AT)
+    assert code == 1
+    assert _db_content_digest(db) == before  # never mutated — the authored source is stranded loud
+    err = capsys.readouterr().err
+    assert "aborted" in err
+    assert "not advertised" in err  # typed SchemaMismatch: the page no longer lists the URL
 
 
 def test_build_produces_complete_store(tmp_path: Path) -> None:
@@ -607,6 +678,31 @@ def test_build_unreachable_wfs_aborts_writing_nothing(
     assert code == 1
     assert not db.exists()  # aborted before opening the store — no partial write
     assert "roster unavailable" in capsys.readouterr().err
+
+
+def test_build_failure_leaves_prior_gold_content_unchanged(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # S4 acceptance (build): a rebuild whose declared source (the WFS roster) fails exits non-zero
+    # and leaves the PRIOR gold DB CONTENT-unchanged — asserted via a content digest, not a byte
+    # hash. The atomic temp-swap guarantees no partial/half-written store replaces a good one.
+    db = tmp_path / "gold.sqlite"
+    assert build(db_path=db, data_dir=DATA_DIR, client=_wfs_client()) == 0
+    before = _db_content_digest(db)
+
+    code = build(db_path=db, data_dir=DATA_DIR, client=unreachable_wfs_client())
+    assert code == 1
+    assert _db_content_digest(db) == before  # the prior store is byte-for-content identical
+    assert "roster unavailable" in capsys.readouterr().err
+
+
+def test_build_atomically_replaces_an_existing_store(tmp_path: Path) -> None:
+    # The atomic swap works over an EXISTING target: a second successful build replaces the live
+    # file in place (via temp + os.replace), leaving a complete, valid store.
+    db = tmp_path / "gold.sqlite"
+    assert build(db_path=db, data_dir=DATA_DIR, client=_wfs_client()) == 0
+    assert build(db_path=db, data_dir=DATA_DIR, client=_wfs_client()) == 0
+    assert len(load_roster(open_db(db))) == 57
 
 
 def test_build_then_scrape_gold_enriches(tmp_path: Path) -> None:

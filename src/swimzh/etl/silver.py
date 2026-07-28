@@ -16,13 +16,19 @@ fuzzy `normalise("<facility> <basin word>")` title index is gone.
 
 Failures are typed values, never guesses:
   * a URL no basin claims, or a parsed section no declared token matches -> non-fatal
-    `UnboundPlan` (audited, reported to stderr);
+    `UnboundPlan` (audited, reported to stderr). An unbound plan is an *undeclared* extra fact
+    (a discovered sheet no basin authored), not a missing declared one, so it stays non-fatal;
   * a declared `section` token that matched NONE of a fetched sheet's parsed headers -> non-fatal
     `UnmatchedSection` (audited: a likely parser-header regression that dropped a curated section,
     surfaced loud rather than left silently `None`);
-  * a duplicate `(url, section)` binding, or two plans bound to one basin -> a fatal `Err`;
-  * a declared source that FAILED to fetch/parse -> its basin gets `LanePlanUnavailable(cause)`,
-    first-class persisted state, never a silent `None`.
+  * a duplicate `(url, section)` binding, or two plans bound to one basin -> a fatal `Err`.
+
+**Fail-fast (S4):** a declared source that FAILED to fetch/parse is **no longer** reconciled here
+into a persisted `LanePlanUnavailable` that lets the facility build with a hole. That green-exit
+posture is gone (owner decision 2026-07-28): the `scrape-lanes` orchestration aborts the whole run
+non-zero on any such fetch/parse miss, before this attach ever runs, so `attach_lane_plans`
+only ever sees successfully-parsed plans. The typed `ProviderError` *value* still rides the abort
+message; only the persist-a-hole path is removed.
 `PoolId`/`BasinId` are READ off the loaded facilities (never minted here).
 """
 
@@ -41,7 +47,6 @@ from swimzh.domain.models import (
     Basin,
     BasinId,
     Facility,
-    LanePlanUnavailable,
     PoolId,
 )
 from swimzh.providers.belegungsplan import ParsedPlan
@@ -310,18 +315,17 @@ def _staleness_warning(
 def attach_lane_plans(
     facilities: Sequence[Facility],
     parsed_plans: Sequence[ParsedPlan],
-    misses: Mapping[str, ProviderError],
     fetched_at: datetime,
 ) -> Result[LanePlanAttachment, ProviderError]:
-    """Reconcile parsed plans to basins by URL-origin and attach them, stamping the run's
-    `fetched_at`; record every extraction failure as first-class `LanePlanUnavailable` state.
+    """Reconcile SUCCESSFULLY-parsed plans to basins by URL-origin and attach them, stamping the
+    run's `fetched_at`.
 
-    A declared source whose fetch/parse failed (`misses[url]`) stamps `LanePlanUnavailable(cause)`
-    on every basin that declared it — a scoped failure that never touches the facility or its
-    schedule. Two plans bound to one basin is a **fatal** `Err` (never a wrong overwrite). A plan
-    that binds to no declared basin is reported in `LanePlanAttachment.unbound`, and a declared
-    stacked `section` whose token matched no parsed header in `unmatched_sections` — both audited,
-    not fatal."""
+    Fail-fast (S4): a declared source whose fetch/parse FAILED never reaches here — the
+    `scrape-lanes` orchestration aborts the whole run on any such miss first — so this only ever
+    binds parsed plans, and no basin is left with a persisted `LanePlanUnavailable` hole. Two
+    plans bound to one basin is a **fatal** `Err` (never a wrong overwrite). A plan that binds to
+    no declared basin is reported in `LanePlanAttachment.unbound`, and a declared stacked `section`
+    whose token matched no parsed header in `unmatched_sections` — both audited, not fatal."""
     bindings_result = build_url_bindings(facilities)
     if isinstance(bindings_result, Err):
         return bindings_result
@@ -334,17 +338,6 @@ def attach_lane_plans(
     if isinstance(by_basin_result, Err):
         return by_basin_result
     by_basin = by_basin_result.value
-
-    # A failed source stamps LanePlanUnavailable on every basin that declared it (keyed by URL).
-    unavailable: dict[_BasinRef, LanePlanUnavailable] = {}
-    for url, cause in misses.items():
-        for binding in url_bindings.get(url, ()):
-            unavailable[(binding.pool_id, binding.basin_id)] = LanePlanUnavailable(
-                source_url=url,
-                section=binding.section,
-                cause=cause,
-                observed_at=fetched_at,
-            )
 
     warnings: list[str] = []
     merged: list[Facility] = []
@@ -360,9 +353,6 @@ def attach_lane_plans(
                 if warning is not None:
                     warnings.append(warning)
                 new_basins.append(replace(basin, lane_plan=plan))
-            elif ref in unavailable:
-                changed = True
-                new_basins.append(replace(basin, lane_plan=unavailable[ref]))
             else:
                 new_basins.append(basin)
         merged.append(replace(facility, basins=tuple(new_basins)) if changed else facility)
