@@ -1,6 +1,9 @@
 ---
 type: plan
-status: approved         # draft -> approved -> in-progress -> done
+status: in-progress      # draft -> approved -> in-progress -> done
+branch: plan/delete-curated-schedule-tier
+worktree: .claude/worktrees/plan-delete-curated-schedule-tier
+base_branch: feat/new-ui
 created: 2026-07-29
 feature: delete-curated-schedule-tier
 gates:
