@@ -240,6 +240,7 @@ Appended by /dev:implement after each slice — never rewritten. Newest row last
 | 2026-07-29 | S2 | done | fetch-set moved to discovery, but `lane_plan_source` RETAINED as the per-basin binding key (irreducibly per-basin; discovery knows only pool+url) — plan intent met, literal "remove" deferred to S6; `cli.py` touched (necessary wiring) | S6 cannot delete `lane_plan_source` from YAML without a per-basin binding replacement; an authored URL a page fails to advertise is currently a silent drop (→ S4 must surface/abort) | yes |
 | 2026-07-29 | S3 | done | roster identity+geo now from live WFS (`etl/roster.py`); `registry.yaml` RETAINED, reduced to the crosswalk (xref keys/aliases/kaeferberg kind-override); WFS I/O at CLI composition root, `build_store` takes roster as data; `reconcile.py` untouched | golden test is a WFS parser round-trip (fixtures reshaped from `catalog.json`); only the INDOOR layer's real wire shape is pinned (by `test_geo_sport`) — a non-indoor WFS field rename is invisible until a live re-record | yes |
 | 2026-07-29 | S4 | done | temp-DB+atomic-swap (`storage/atomic.py`) for all 3 commands (scrape-gold/scrape-lanes survive as SEPARATE commands, `seed_from` live copy); skip-and-report + persisted-`LanePlanUnavailable` converted to hard aborts; the hole-persist code removed from `silver.py` (touch-list said `lane_plans.py`) | `LanePlanUnavailable` TYPE retained (lossless round-trip) but has NO ETL producer now — full type removal deferred (~S6); `build` no-commit branch unexercised (covered by atomic unit tests) | yes |
+| 2026-07-29 | S5a | done | field→producer audit — machine-checkable `etl/field_sourcing.py` + coverage test over the real DTO fields; added a 4th `BUILD_METADATA` bucket for provenance tags (disclosed); prices confirmed already-sourced (curated-wins until S6) | audit coverage test guards only the 2 root DTOs, not nested leaf DTOs (disclosed scope) | yes |
 
 ## Decisions & divergences
 
@@ -418,6 +419,25 @@ Appended by /dev:implement after each slice — never rewritten. Newest row last
 - **Probed drops (feasibility, 2026-07-29):** the 5 NULL-prose pools' pages carry no basin
   dimensions/kind (grep of blaesi/leimbach/kaeferberg fixtures) and their WFS prose is `"NULL"` — so
   basin physicals for them are not sourceable → accept absent (no curation), a recorded S5d drop.
+
+### S5a residue map (audit result — the ground truth for S5b–d)
+
+- **Already sourced** (no new provider): identity/geo → roster; schedules/access-categories/closures/
+  notices/basins → schedule_scraper; **prices → price_scraper** (wired; curated-wins until S6);
+  basin physicals (kind/dims/lanes/temp/diving/features) → infrastruktur (2/7 prose pools);
+  `lane_plan` → belegungsplan.
+- **Thin crosswalk** (on no website, retained): `geo_sport_id`, `crowdmonitor_keys`,
+  `baditicker_poiid`, `aliases`, `lane_plan_source`.
+- **Belegungsplan feasibility** (code-verified): **per-basin session times → SOURCEABLE** (S5c;
+  one ParsedPlan per basin, but only for basins with a PDF); **richer access
+  (lane_swim/family/adults_only) → DROP** — `_code_to_access` maps only to
+  {PublicSwim, SchoolReserved, ClubReserved}; the legend encodes lane *ownership*, not session
+  *subtype*, so neither the timetable (S1) nor the lane PDF can emit them.
+- **Drops (residue, S5d)**: richer access (above), `amenities` (distinct from sourced `features`),
+  `public_holiday_policy`, `lockers`, `accessibility`, `last_admission_before`, basin `exceptions`,
+  `measured_temp_c`, and basin physicals for the 5 NULL-prose pools (probed absent).
+- **Net**: S5b (geo_sport_id from WFS poi_id) and S5c (per-basin split from lane PDFs) are the only
+  build work left; everything else is already-sourced or a recorded drop.
 
 ## Summary
 
