@@ -242,6 +242,7 @@ Appended by /dev:implement after each slice — never rewritten. Newest row last
 | 2026-07-29 | S4 | done | temp-DB+atomic-swap (`storage/atomic.py`) for all 3 commands (scrape-gold/scrape-lanes survive as SEPARATE commands, `seed_from` live copy); skip-and-report + persisted-`LanePlanUnavailable` converted to hard aborts; the hole-persist code removed from `silver.py` (touch-list said `lane_plans.py`) | `LanePlanUnavailable` TYPE retained (lossless round-trip) but has NO ETL producer now — full type removal deferred (~S6); `build` no-commit branch unexercised (covered by atomic unit tests) | yes |
 | 2026-07-29 | S5a | done | field→producer audit — machine-checkable `etl/field_sourcing.py` + coverage test over the real DTO fields; added a 4th `BUILD_METADATA` bucket for provenance tags (disclosed); prices confirmed already-sourced (curated-wins until S6) | audit coverage test guards only the 2 root DTOs, not nested leaf DTOs (disclosed scope) | yes |
 | 2026-07-29 | S5b | done | `geo_sport_id` now SOURCED from the WFS `poi_id` (`build_spine` stamps it), reclassified crosswalk→sourced; removed the field from `IdentityDTO` + the null `registry.yaml` placeholder; +7 geo_sport `pool_xref` rows (were 0 — `geo_sport_id` was always null) | `baditicker_poiid` NOT collapsed despite 6/6 indoor `poi_id` match — non-indoor layers have no recorded `poi_id`; deferred to a live multi-layer WFS record | yes |
+| 2026-07-29 | S5c/d | done | residue resolution (Decisions-only, no new code): per-basin split → DROP (lane plan *refines*, doesn't provide opening hours; only 2/7 pools); richer access, 5-pool physicals, amenities, holiday-policy, lockers/accessibility/last-admission, exceptions, measured_temp_c → DROP with evidence. No provider left to build | after S6, city & oerlikon lose the curated per-basin schedule *rule* split (keep facility schedule + lane refinement) | yes |
 
 ## Decisions & divergences
 
@@ -439,6 +440,33 @@ Appended by /dev:implement after each slice — never rewritten. Newest row last
   `measured_temp_c`, and basin physicals for the 5 NULL-prose pools (probed absent).
 - **Net**: S5b (geo_sport_id from WFS poi_id) and S5c (per-basin split from lane PDFs) are the only
   build work left; everything else is already-sourced or a recorded drop.
+
+### S5c/S5d — residue resolution: recorded DROPs after demonstrated infeasibility (2026-07-29)
+
+S5a's audit + these checks show **no further provider can be built** — the entire remaining residue
+is drops. Each with its demonstrated-infeasibility evidence (owner rule: drop only after a shown
+failed extraction):
+
+- **Per-basin schedule split → DROP (was S5c, the only remaining "build" candidate).** Evidence:
+  the `LanePlan` domain docstring states the Belegungsplan **"refines (never overrides) the
+  HTML-scraped eligibility with a lane count"** — the lane grid encodes lane *ownership within
+  known-open hours*, not basin *opening schedules*. Deriving per-basin opening windows from it is a
+  lossy inference the domain explicitly disclaims. Also only **2/7** pools (city, oerlikon) have a
+  per-basin split at all. So after S6 those two pools carry facility-level schedules (sourced) +
+  per-basin lane-plan refinement (sourced), losing the curated per-basin *rule* split. Accepted.
+- **Richer access (`lane_swim`/`family`/`adults_only`) → DROP.** Evidence (S5a): the timetable's
+  category vocabulary is closed (public/women/seniors/school) and `belegungsplan._code_to_access`
+  emits only {PublicSwim, SchoolReserved, ClubReserved} — the subtype exists on neither channel.
+- **Basin physicals for the 5 NULL-prose pools → DROP.** Evidence: WFS prose is `"NULL"` and the
+  pool pages carry no basin dimensions/kind (probed blaesi/leimbach/kaeferberg). Accept absent.
+- **`amenities` → DROP** (distinct from sourced `features`; no provider emits the free string-set),
+  **`public_holiday_policy`, `lockers`, `accessibility`, `last_admission_before`, basin
+  `exceptions`, `measured_temp_c` → DROP** (no website producer; `measured_temp_c` is a live feed,
+  out of this scope). Each recorded as `dropped-after-failed-extraction` in `etl/field_sourcing.py`.
+
+**Net after S5: the only curated YAML that carries authoritative weight is the thin crosswalk**
+(`lane_plan_source` binding, `baditicker_poiid`, `crowdmonitor_keys`, `aliases`) — everything else
+is sourced or a recorded drop. S6 can now delete the curated schedules/prices/physicals.
 
 ## Summary
 
