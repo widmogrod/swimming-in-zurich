@@ -191,6 +191,22 @@ builds", and the stale-store fetch-set invariant.
   dated `sourced-by-<module> | dropped-after-failed-extraction` decision in the Decisions section.
 - **Depends on**: S1 (gap report), S2 (discovery hop feeds the price/access sources), S4 (fail-fast).
 
+- **Decomposition (2026-07-29, owner chose "continue S5 in this worktree"; the S1 residue is
+  SMALLER than reported — the S1 harness read only the pool-page timetable + WFS prose, missing the
+  central price page and the Belegungsplan PDFs which are real providers):**
+  - **S5a — field→producer audit** (do first): a committed, test-asserted table mapping every
+    serialized `facility_doc` field to its producer, separating *already-sourced* (schedules/access
+    → schedule scraper; **prices → the EXISTING `price_scraper`, already wired into scrape-gold**;
+    closures → notices; identity/geo → WFS roster; basin physicals → `infrastruktur` for 2/7) from
+    the *genuine residue* (richer access, per-basin split, holiday policy, physicals for 5 NULL-prose
+    pools). This de-risks the rest — no provider is built for a fact already sourced.
+  - **S5b — `geo_sport_id` from WFS `poi_id`** (shrinks the crosswalk by one field).
+  - **S5c — richer access + per-basin split from the Belegungsplan PDFs** (the lane docs are
+    per-basin and session-typed; feasibility TBD by S5a — SOURCE if the parser yields it, else DROP).
+  - **S5d — recorded DROPs after demonstrated failed extraction**: basin physicals for the 5
+    NULL-prose pools (probed: absent from both page and WFS prose), holiday policy, and any residue
+    S5c can't source. Each with a dated decision.
+
 ### S6 — Delete the curated-YAML tier and reconcile docs
 
 - **Goal**: Remove the deprecated inputs and update the knowledge base to the as-built reality.
@@ -198,9 +214,14 @@ builds", and the stale-store fetch-set invariant.
   makes WFS live); `data/calendar/*.yaml` decision; grep-asserted single-source test; `CLAUDE.md`;
   mark [[discovery-driven-providers]] `status: implemented`; excise the superseded parts of
   [[lane-plan-url-binding]]; `docs/summaries/`.
-- **Acceptance**: A clean build succeeds with `data/pools/` and `data/registry.yaml` **absent**;
-  full QA chain green; a test asserts those paths are not referenced by `build`/`etl`; `CLAUDE.md`
-  no longer describes curated YAML as a source of truth.
+- **Acceptance (REVISED 2026-07-29 — end-state is "no curated-YAML-as-*truth*", not zero-YAML):**
+  the owner accepted that a **thin irreducible crosswalk** remains (facts on no website: per-basin
+  lane URL binding, `baditicker_poiid`/`crowdmonitor_keys`, `aliases`). So S6 deletes the curated
+  **authoritative** payload — the per-pool **schedules/rules/prices/closures** in `data/pools/*.yaml`
+  (now sourced) — and reduces the YAML to that named crosswalk (e.g. `data/crosswalk/*.yaml`), NOT
+  to nothing. A clean build succeeds reading **only** the WFS/scrape providers **plus** the thin
+  crosswalk; a test asserts `build`/`etl` read no *authoritative* fact (schedule/price/geo) from
+  curated YAML; `CLAUDE.md` + [[discovery-driven-providers]] updated to the thin-crosswalk end-state.
 - **Blocked-by (surfaced by S2, 2026-07-29):** the lane-plan **binding key** is irreducibly
   per-basin and undiscoverable (discovery yields only pool+url; a single-basin PDF header can't
   name its basin — `test_bungertwies_binds_by_url_despite_a_garbled_basin_hint`). So `data/pools/`
@@ -379,6 +400,24 @@ Appended by /dev:implement after each slice — never rewritten. Newest row last
   lane source can't silently vanish — but it depends on `lane_plan_source` existing as the
   `authored` set. So when S6 deletes `lane_plan_source`, **S5's sourced per-basin binding must
   carry this invariant forward**, or the protection is lost with the field.
+
+### S5 checkpoint decisions (2026-07-29)
+
+- **End-state redefined (owner): "no curated-YAML-as-*truth*", NOT zero-YAML.** Across S2–S4 it
+  became clear some facts are on no website (per-basin lane binding, `baditicker_poiid`/
+  `crowdmonitor_keys`, `aliases`), so S6's zero-YAML goal is unreachable. Accepted: source the
+  authoritative facts (schedules/geo/closures/prices/physicals-where-present); retain a **thin,
+  clearly-named crosswalk** for the irreducible correlation/binding facts. S6 acceptance amended.
+- **Proceed: continue S5 in this worktree** (owner), accepting it is research-heavy with possible
+  dead ends and many sub-slices. S5 decomposed into S5a–S5d (see the S5 slice).
+- **Finding — the residue is smaller than the S1 gap report:** the S1 harness measured only the
+  pool-page timetable + WFS prose. It did NOT run the **central price page** (`price_scraper`,
+  already wired into `scrape-gold`) or the **Belegungsplan PDFs** (per-basin, session-typed). So
+  prices are ALREADY sourced, and richer-access / per-basin-split may be sourceable from the lane
+  PDFs. S5a's audit establishes the true residue before any provider is built.
+- **Probed drops (feasibility, 2026-07-29):** the 5 NULL-prose pools' pages carry no basin
+  dimensions/kind (grep of blaesi/leimbach/kaeferberg fixtures) and their WFS prose is `"NULL"` — so
+  basin physicals for them are not sourceable → accept absent (no curation), a recorded S5d drop.
 
 ## Summary
 
