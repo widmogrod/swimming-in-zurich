@@ -1,6 +1,6 @@
 ---
 type: plan
-status: in-progress      # draft -> approved -> in-progress -> done
+status: done             # S1–S5 shipped + merged; S6 spun off to its own plan (see Summary)
 created: 2026-07-28
 feature: website-sourced-providers
 branch: plan/website-sourced-providers
@@ -470,5 +470,22 @@ is sourced or a recorded drop. S6 can now delete the curated schedules/prices/ph
 
 ## Summary
 
-Written when the plan reaches `done`; then distilled into
-`docs/summaries/website-sourced-providers.md` (what EXISTS now, not what was intended).
+**Shipped increment (S1–S5), merged to `feat/new-ic`.** The pipeline now: sources roster identity +
+geo (and `geo_sport_id`) from the live WFS with a fail-fast abort if the WFS is unreachable (S3);
+derives the lane-plan fetch-set from links *discovered* on each pool page rather than hand-authored
+`lane_plan_source` URLs (S2); builds/scrapes atomically (temp-DB + swap) and **aborts loud** instead
+of skipping-and-reporting or persisting silent holes (S4); and carries a machine-checkable
+field→producer audit (S5a) proving what is sourced vs. the thin crosswalk vs. recorded drops. S5b
+sourced `geo_sport_id` from the WFS `poi_id`, shrinking the crosswalk.
+
+**End-state (owner decision):** "no curated-YAML-as-*truth*", NOT zero-YAML. A thin irreducible
+crosswalk remains (per-basin lane URL binding, `baditicker_poiid`, `crowdmonitor_keys`, `aliases`) —
+these are correlation/binding facts on no website. Everything authoritative (schedules, geo,
+closures, prices, physicals-where-present) is sourced or a recorded drop.
+
+**S6 SPUN OFF (not done here).** Deleting the curated schedules/prices from `data/pools/*.yaml` and
+reducing the YAML to the thin crosswalk is destructive, high-churn (~40 tests), changes the build
+contract (plain `build` yields schedule-less pools until `scrape-gold` runs), and dissolves the
+curated/uncurated UI distinction — so the owner chose to ship S1–S5 and give S6 **its own
+`/dev:plan`** rather than bolt it onto this run. This plan's `done` = the S1–S5 increment; the
+"remove curated-YAML tier" goal completes in the S6 plan. Then distil `docs/summaries/…`.
