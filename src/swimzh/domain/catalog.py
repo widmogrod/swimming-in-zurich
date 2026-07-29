@@ -35,6 +35,10 @@ class PoolCatalogEntry:
     url: str | None
     description: str | None
     phone: str | None
+    # The WFS `poi_id` (e.g. "hb001") — the stable geo_sport occupancy key. Sourced onto the
+    # roster so the build can stamp it as the facility's `geo_sport_id` (S5b), replacing the
+    # retired registry-crosswalk placeholder. `None` when the WFS layer carries no poi_id.
+    poi_id: str | None = None
 
 
 @dataclass(frozen=True, slots=True)

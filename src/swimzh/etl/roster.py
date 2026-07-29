@@ -6,11 +6,13 @@ WFS (``geo_sport.fetch_all_pools``), shaped into ``PoolCatalogEntry`` rows by ``
 A WFS failure surfaces as a typed ``ProviderError`` value: the build's **local abort at the
 roster step** (the general abort-orchestration / atomic-swap is S4).
 
-The WFS carries roster IDENTITY + GEO but NOT the external-correlation crosswalk keys
-(``baditicker_poiid``, ``geo_sport_id``, ``crowdmonitor_keys``, human ``aliases``). Those remain
-irreducibly curated in ``data/registry.yaml`` — the disclosed crosswalk exception, exactly as S2
-kept ``lane_plan_source`` as the per-basin binding key. ``build_store`` no longer reads
-``registry.yaml`` for the roster's identity/geo; it consults it only for that crosswalk.
+The WFS carries roster IDENTITY + GEO and, via each layer's ``poi_id``, the ``geo_sport_id`` that
+S5b now SOURCES onto the spine (``build_spine`` stamps ``poi_id`` → ``geo_sport_id``). The remaining
+external-correlation crosswalk keys (``baditicker_poiid``, ``crowdmonitor_keys``, human ``aliases``)
+are on no website and stay irreducibly curated in ``data/registry.yaml`` — the disclosed crosswalk
+exception, exactly as S2 kept ``lane_plan_source`` as the per-basin binding key. ``build_store`` no
+longer reads ``registry.yaml`` for the roster's identity/geo (or for ``geo_sport_id``); it consults
+it only for that remaining crosswalk.
 
 This is the ONE place the build reaches the network for the roster, reversing the previous
 offline/no-network build guarantee (recorded in the plan's Decisions; CLAUDE.md updated in S6).

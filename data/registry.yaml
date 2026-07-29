@@ -11,14 +11,14 @@
 # `oerlikon`, …) are preserved LOSSLESSLY as aliases so every legacy id still resolves by
 # lookup (registry.resolve_name).
 #
-# geo_sport_id values are placeholders (null) until wired from the geo_sport provider.
+# `geo_sport_id` is NO LONGER a crosswalk field here: since S5b it is SOURCED from the WFS
+# `poi_id` by the roster/spine build, so it is intentionally absent from every identity below.
 
 facilities:
   # --- curated (have a schedule file under data/pools/) ---
   - facility_id: "hallenbad-city"
     name: "Hallenbad City"
     kind: "indoor"
-    geo_sport_id: null
     crowdmonitor_keys: ["City", "Hallenbad City", "Sportbad City"]
     # Real Baditicker feed poiid (verified against tests/providers/fixtures/baditicker.xml).
     # Baditicker covers the indoor Hallenbäder (City, Oerlikon, …) too.
@@ -28,7 +28,6 @@ facilities:
   - facility_id: "hallenbad-oerlikon"
     name: "Hallenbad Oerlikon"
     kind: "indoor"
-    geo_sport_id: null
     crowdmonitor_keys: ["Oerlikon", "Hallenbad Oerlikon"]
     baditicker_poiid: "hb004"  # real feed poiid (tests/providers/fixtures/baditicker.xml)
     aliases: ["oerlikon", "Oerlikon"]
@@ -36,7 +35,6 @@ facilities:
   - facility_id: "hallenbad-bungertwies"
     name: "Hallenbad Bungertwies"
     kind: "indoor"
-    geo_sport_id: null
     crowdmonitor_keys: ["Bungertwies", "Hallenbad Bungertwies"]
     baditicker_poiid: "hb002"  # real feed poiid (tests/providers/fixtures/baditicker.xml)
     aliases: ["bungertwies", "Bungertwies"]
@@ -44,7 +42,6 @@ facilities:
   - facility_id: "schulschwimmanlage-aemtler"
     name: "Schulschwimmanlage Aemtler"
     kind: "school"
-    geo_sport_id: null
     crowdmonitor_keys: []
     aliases: ["aemtler", "Aemtler", "Schulschwimmanlage Aemtler"]
 

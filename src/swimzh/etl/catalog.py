@@ -26,6 +26,7 @@ def build_catalog(geo_pools: list[GeoPool]) -> tuple[PoolCatalogEntry, ...]:
                 url=pool.url,
                 description=pool.description,
                 phone=pool.phone,
+                poi_id=pool.poi_id,
             )
         )
     return tuple(entries)

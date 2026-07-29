@@ -399,7 +399,8 @@ class IdentityDTO(_Strict):
     facility_id: str
     name: str
     kind: _PoolKind
-    geo_sport_id: str | None = None
+    # `geo_sport_id` is no longer a registry-crosswalk field: since S5b it is SOURCED from the
+    # WFS `poi_id` by the roster/spine build (`build_spine`), so it is deliberately absent here.
     crowdmonitor_keys: list[str] = Field(default_factory=list)
     baditicker_poiid: str | None = None  # Baditicker water-temp feed poiid; None when unmapped
     aliases: list[str] = Field(default_factory=list)

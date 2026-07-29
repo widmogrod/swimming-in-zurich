@@ -21,8 +21,9 @@ Producer kinds
   wired into ``scrape-gold``; basin physicals → ``infrastruktur`` for the 2/7 prose pools; lane
   plans → ``belegungsplan`` via ``scrape-lanes``). ``coverage`` states the honest scope.
 * ``CURATED_CROSSWALK`` — an irreducible correlation/binding fact that is on **no** website
-  (per-basin lane URL→basin binding, ``baditicker_poiid``, ``crowdmonitor_keys``, ``geo_sport_id``,
-  human ``aliases``). The retained thin crosswalk (S3/S6 checkpoint).
+  (per-basin lane URL→basin binding, ``baditicker_poiid``, ``crowdmonitor_keys``, human
+  ``aliases``). The retained thin crosswalk (S3/S6 checkpoint). ``geo_sport_id`` LEFT this bucket
+  in S5b — it is now ``SOURCED`` from the WFS ``poi_id``.
 * ``DROP_CANDIDATE`` — genuine residue: a curated fact with **no** website producer today
   (``public_holiday_policy``, ``lockers``, ``accessibility``, ``last_admission_before``,
   ``amenities``, schedule ``exceptions``, basin physicals for the 5 NULL-prose pools, richer access
@@ -117,11 +118,13 @@ _FACILITY: tuple[FieldSourcing, ...] = (
     ),
     FieldSourcing(
         "facility.geo_sport_id",
-        ProducerKind.CURATED_CROSSWALK,
-        None,
-        "crosswalk",
-        "geo-sport occupancy key; retained in registry crosswalk today. S5b sources it from the "
-        "WFS `poi_id`, which would shrink the crosswalk by one field.",
+        ProducerKind.SOURCED,
+        _ROSTER,
+        "7/7 indoor (recorded)",
+        "geo-sport occupancy key, SOURCED from the WFS `poi_id` by build_spine (S5b): the roster "
+        "carries `poi_id` (e.g. `hb001`) and the spine stamps it as `geo_sport_id`, replacing the "
+        "retired registry-crosswalk placeholder. Verified 7/7 against the indoor WFS cassette "
+        "(hb001–hb007); live WFS carries poi_id per layer for the rest.",
     ),
     FieldSourcing(
         "facility.crowdmonitor_keys",

@@ -114,7 +114,8 @@ def _build_registry(dto: RegistryDTO) -> Registry:
             facility_id=reconstruct_pool_id(i.facility_id),
             name=i.name,
             kind=_KINDS[i.kind],
-            geo_sport_id=i.geo_sport_id,
+            # `geo_sport_id` is left at its domain default (`None`) here: it is no longer read from
+            # the registry crosswalk but SOURCED from the WFS `poi_id` in `build_spine` (S5b).
             crowdmonitor_keys=tuple(i.crowdmonitor_keys),
             baditicker_poiid=i.baditicker_poiid,
             aliases=tuple(i.aliases),

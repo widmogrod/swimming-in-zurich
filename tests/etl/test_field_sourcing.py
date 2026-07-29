@@ -63,13 +63,19 @@ def test_residue_and_crosswalk_are_recorded() -> None:
     by_field = {entry.field: entry for entry in FACILITY_FIELD_SOURCING}
 
     for crosswalk_field in (
-        "facility.geo_sport_id",
         "facility.crowdmonitor_keys",
         "facility.baditicker_poiid",
         "facility.aliases",
         "basin.lane_plan_source",
     ):
         assert by_field[crosswalk_field].producer is ProducerKind.CURATED_CROSSWALK
+
+    # S5b: `geo_sport_id` LEFT the crosswalk — it is now SOURCED from the WFS `poi_id` by the
+    # roster/spine build, so it must name the roster as its producer (guard against a regression
+    # that folds it back into the crosswalk).
+    geo_sport = by_field["facility.geo_sport_id"]
+    assert geo_sport.producer is ProducerKind.SOURCED
+    assert geo_sport.module == "etl.roster"
 
     for drop_field in (
         "facility.public_holiday_policy",
