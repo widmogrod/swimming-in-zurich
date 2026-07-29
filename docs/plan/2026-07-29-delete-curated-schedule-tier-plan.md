@@ -81,19 +81,22 @@ layers add the real schedule/lane data.
   already exposes to merge prose physicals into an existing facility's basins) onto the built
   facility. S1 must either wire it (source-where-possible) or record a deliberate drop for those 2.
 
-**Two design decisions this plan must settle (S1 pause):**
-1. **Build contract** — does `swimzh build` stay offline-assembly-only (operator then runs
-   `scrape-gold`), or does a single command orchestrate the whole provider chain
-   (roster→discover→scrape→lanes→prices) atomically? Recommendation: keep them separate (smaller
-   change, honors S4's atomic-per-command design), but document the required sequence and make a
-   schedule-less store an **honest, non-error** state, not a silent hole.
-2. **Curation model** — the real seam is **`is_curated(facility_doc)`** (`storage/codec.py:182`,
-   today = "the blob is present AND ≥1 basin has ≥1 rule"), surfaced as the `/pools` `curated` flag
-   and the `/swim` uncurated status. After deletion a schedule-less-but-scrapeable pool must not read
-   as "closed". S1 **decides and documents** the redefinition (proposal: a scraped pool with rules
-   reads `curated=true`; a pool awaiting/without a schedule source reads `curated=false` +
-   uncurated status, never "closed") and **pins the chosen concrete values with tests** (see S1
-   acceptance) — the redefinition is a deliverable, its pinned values are the checkable artifact.
+**Two design decisions — SETTLED by the owner 2026-07-29 (both the larger-scope option):**
+1. **Build contract → ONE ATOMIC PIPELINE COMMAND.** `swimzh build` orchestrates the whole provider
+   chain — roster → page-discovery → schedule scrape → lane scrape → price scrape → compose —
+   atomically (temp-DB + swap, reusing S4's `storage/atomic.py`), so a single invocation yields a
+   **complete** store and a mid-chain provider failure aborts the whole build content-unchanged. This
+   makes `build` **network-dependent** (already true for the WFS roster since S3) and effectively
+   folds today's separate `scrape-gold`/`scrape-lanes` into `build` (they may remain as thin
+   re-layer commands or be retired — the implementer records which). This is its **own slice** (see
+   S2 below), larger than the plan's original "keep separate" recommendation.
+2. **Curation model → THREE-STATE FRESHNESS, replacing the `is_curated` boolean.** A pool's
+   schedule state becomes an enum surfaced on `/pools` (+ `/swim` status + UI): **`scraped`** (has a
+   real scraped schedule), **`awaiting_scrape`** (scrapeable — an indoor stadt-zuerich pool — but no
+   schedule yet), **`no_source`** (no schedule source at all, e.g. `aemtler` the school pool). This
+   replaces the boolean `is_curated` (`storage/codec.py:182`) and touches the `/pools` + `/swim` API
+   contract and the UI's curated/uncurated split — a larger change than a redefined boolean, so its
+   API/UI reach is called out in S1's touches. A schedule-less pool never reads as "closed".
 
 **Invariants.**
 - Gold stays the sole runtime SoT; `apps/web/**` still reads only the gold DB (grep-asserted).
@@ -103,72 +106,93 @@ layers add the real schedule/lane data.
 
 ## Out of scope
 
-- Building any new provider (all sourcing shipped in S1–S5; this plan only deletes + rewires).
+- Building any new provider (all sourcing shipped in S1–S5; this plan only deletes + rewires +
+  orchestrates the existing providers into the atomic build).
 - The `baditicker_poiid → poi_id` collapse (needs a live multi-layer WFS cassette; separate).
 - Live occupancy / `measured_temp_c`.
-- Folding scrape into build as one command, unless S1 chooses that build-contract option.
 
 ## Slices
 
-### S1 — Schedule-less build + curation-model redefinition (GO/NO-GO, riskiest)
+### S1 — Optional-DTO + WFS physicals/address + THREE-STATE freshness model (GO/NO-GO, riskiest)
 
 - **Goal**: Make `address`/`source`/`rules`/physicals optional in the curated DTO, source `address`
-  + basin physicals from the WFS when omitted, and settle + pin the curation model — BEFORE any real
-  YAML is stripped.
-- **Touches**: `boundary/curated_dto.py` (make `FacilityDTO.address`/`.source`/`BasinDTO.rules` (and
-  the physical fields) optional), `build/seed.py` + `build/compose.py` (stamp `address` from
+  + basin physicals from the WFS when omitted, and land the **three-state freshness** curation model
+  (decision #2) — BEFORE any real YAML is stripped and BEFORE the atomic-build rewire (S2).
+- **Touches**: `boundary/curated_dto.py` (make `FacilityDTO.address`/`.source`/`BasinDTO.rules` +
+  physical fields optional), `build/seed.py` + `build/compose.py` (stamp `address` from
   `entry.address` onto the curated blob; wire `infrastruktur.apply_physicals` so a curated facility's
-  basins get WFS-prose physicals — the location-only path is not enough), `storage/codec.py`
-  (`is_curated` for a schedule-less blob), the `apps/web` `/pools` `curated` + `/swim` status surface
-  + `tests/storage/test_is_curated.py`.
+  basins get WFS-prose physicals — the location-only path is not enough), `storage/codec.py` (replace
+  the `is_curated` boolean with a `ScheduleFreshness` enum `scraped | awaiting_scrape | no_source`,
+  derived from the blob having rules + whether the pool is scrapeable), the **`/pools` + `/swim` API
+  contract** (`curated` bool → freshness field) and the **UI** curated/uncurated split, +
+  `tests/storage/test_is_curated.py` (→ freshness tests).
 - **Acceptance** (concrete, against a stripped *fixture*, not real `data/`): (1) a pool blob reduced
   to the allowlist (`facility_id` + basins with `basin_id`/`name`/`lane_plan_source` only) loads +
-  builds without a validation error; its `address` is the roster's. (2) `is_curated(<that blob>)`
-  returns the **decided value** (proposal: `False`) — pinned by a test asserting that exact value.
-  (3) `/swim` for that pool returns **uncurated status, NOT "closed"**, no option, no error;
-  `/pools` lists it with `curated == <decided>`. (4) A scraped pool (rules present) still reads
-  `is_curated == True`. (5) For a stripped **prose** pool (city/bungertwies analogue), basin `kind`/
-  dimensions are present via `apply_physicals` OR a deliberate drop is recorded — assert whichever is
-  decided. The S1 pause records the decided values. **No `data/pools/*.yaml` stripped.**
+  builds without a validation error; its `address` is the roster's. (2) the freshness of a
+  rules-present pool is **`scraped`**; a schedule-less scrapeable (indoor stadt-zuerich) pool is
+  **`awaiting_scrape`**; `aemtler` (school, unscraped) is **`no_source`** — each pinned by a test.
+  (3) `/swim` for a non-`scraped` pool returns its freshness status, **NOT "closed"**, no option, no
+  error; `/pools` exposes the freshness field and the UI renders all three states. (4) For a stripped
+  **prose** pool (city/bungertwies analogue), basin `kind`/dimensions are present via
+  `apply_physicals` OR a deliberate drop is recorded — assert whichever is decided. **No
+  `data/pools/*.yaml` stripped; no atomic-build rewire yet.**
 - **Depends on**: —
 
-### S2 — Strip `data/pools/*.yaml` to the crosswalk; retest
+### S2 — Atomic pipeline build (decision #1): `swimzh build` runs the whole provider chain
+
+- **Goal**: Fold the provider chain — roster → page-discovery → schedule scrape → lane scrape →
+  price scrape → compose — into a single **atomic** `swimzh build` (temp-DB + swap, reusing
+  `storage/atomic.py`), so one invocation yields a complete store and a mid-chain failure aborts
+  content-unchanged.
+- **Touches**: `cli.py` (`build` orchestrates the chain; `scrape-gold`/`scrape-lanes` become thin
+  re-layer commands or are retired — record which), `etl/build.py`/`build/compose.py` (compose the
+  scraped schedule/lanes/prices into the store within the one atomic swap), and the tests that ran
+  the phases separately (incl. `apps/web/tests/conftest.py` `gold_db`, which becomes "one atomic
+  offline `build`" via `MockTransport` over the committed page/WFS fixtures).
+- **Acceptance**: `swimzh build` against fixtured providers yields a store with **schedules present**
+  (from the scrape) in one command; a single injected provider failure exits non-zero and leaves the
+  prior gold **content-unchanged** (iterdump digest, per S4); `scrape-gold`/`scrape-lanes` behaviour
+  is preserved or their retirement is recorded; full QA green. **Still no `data/pools/*.yaml`
+  stripped** (schedules still come from curated YAML here — S3 flips the source).
+- **Depends on**: S1.
+
+### S3 — Strip `data/pools/*.yaml` to the crosswalk; retest
 
 - **Goal**: Delete the authoritative payload from the pool files (heavy in 4: `city`, `oerlikon`,
   `bungertwies`, `aemtler`; the other 3 are already minimal), keeping only the binding.
-- **Touches**: `data/pools/*.yaml`, the ~40 tests that assume curated schedules/prices, AND
-  critically **`apps/web/tests/conftest.py`** — the session `gold_db` fixture today calls only
-  `build_store(DATA_DIR, db, _ROSTER)` (offline), so after the strip it yields schedule-less pools
-  and the web integration assertions (`/swim` options non-empty; `city` `curated is True`) break.
-  **Rewire `gold_db` to also run `scrape_gold` offline** via `MockTransport` over the committed page
-  fixtures (`tests/providers/fixtures/*.html`; the machinery exists in `tests/test_cli.py`), so the
-  web suite exercises the real sourced pipeline and `city` stays served + `curated`.
+- **Goal**: Delete the authoritative payload from the pool files (heavy in 4: `city`, `oerlikon`,
+  `bungertwies`, `aemtler`; the other 3 are already minimal), keeping only the binding — so the
+  atomic build's **scrape becomes the sole schedule source**.
+- **Touches**: `data/pools/*.yaml` (all), and the ~40 tests that assume curated schedules/prices
+  (convert to the sourced pipeline's expectations — not weakened). The `gold_db` rewire is **already
+  done in S2** (the atomic build scrapes offline), so this slice just removes the curated schedules
+  and confirms the S2 pipeline now supplies them; it does not re-touch conftest for the fixture.
 - **Acceptance** (ALLOWLIST, not a partial denylist — a 6-field grep would pass green while
   `amenities`/`public_holiday_policy`/`lockers`/basin `kind`/`exceptions`/… survive in the served
-  blob): **S2 authors** a **parsed-YAML key-set test** (allowlist-per-level) asserting every
+  blob): **S3 authors** a **parsed-YAML key-set test** (allowlist-per-level) asserting every
   `data/pools/*.yaml` has top-level keys ⊆ {`facility_id`, `basins`}, each basin's keys ⊆
   {`basin_id`, `name`, `lane_plan_source`}, and — where present — `lane_plan_source`'s keys ⊆
-  {`url`, `section`} (keep the binding's own nested fields; not "no key anywhere"). The rewired
-  `gold_db` serves `city`/`oerlikon` schedules from the offline scrape and the web suite asserts them
-  (not weakened to "no options"); `city`/`bungertwies` basin physicals resolve per the S1 decision
-  (`apply_physicals` or recorded drop); `aemtler` (school, unscraped) is asserted schedule-less;
-  full QA green.
-- **Depends on**: S1.
+  {`url`, `section`} (keep the binding's own nested fields; not "no key anywhere"). With curated
+  schedules gone, the S2 atomic build supplies `city`/`oerlikon` schedules from the scrape and the
+  web suite still asserts them; `city`/`bungertwies` basin physicals resolve per the S1 decision
+  (`apply_physicals` or recorded drop); `aemtler` (school, unscraped) is `no_source`; full QA green.
+- **Depends on**: S2.
 
-### S3 — Reconcile the single-source test, CLAUDE.md, and concept docs
+### S4 — Reconcile the single-source test, CLAUDE.md, and concept docs
 
 - **Goal**: Update the guardrails and knowledge base to the as-built thin-crosswalk end-state.
-- **Touches**: the S2 **build-side** invariant test (the parsed-YAML key-set allowlist) is the guard
-  that curated YAML carries no authoritative fact — that belongs with `etl/`/`field_sourcing`, NOT
-  the app-runtime `apps/web/tests/api/test_single_source_of_truth.py` (whose `FORBIDDEN` tuple guards
-  a *different* invariant: no `apps/web/**` module reads YAML at runtime — already true, leave it).
-  `CLAUDE.md` (data-sourcing section → sourced + thin crosswalk); mark [[discovery-driven-providers]]
-  `status: implemented`; excise the superseded parts of [[lane-plan-url-binding]]; distil
-  `docs/summaries/website-sourced-providers.md`.
-- **Acceptance**: the build-side key-set test (from S2) enforces "no authoritative fact from curated
-  YAML"; the app-runtime single-source test still passes unchanged; `CLAUDE.md` no longer calls
-  curated YAML a source of truth; concept docs match reality; full QA green.
-- **Depends on**: S2.
+- **Touches**: the S3 **build-side** key-set test (the parsed-YAML allowlist) is the guard that
+  curated YAML carries no authoritative fact — that belongs with `etl/`/`field_sourcing`, NOT the
+  app-runtime `apps/web/tests/api/test_single_source_of_truth.py` (whose `FORBIDDEN` tuple guards a
+  *different* invariant: no `apps/web/**` module reads YAML at runtime — already true, leave it).
+  `CLAUDE.md` (data-sourcing + the new atomic-build contract + three-state freshness); mark
+  [[discovery-driven-providers]] `status: implemented`; excise the superseded parts of
+  [[lane-plan-url-binding]]; distil `docs/summaries/website-sourced-providers.md`.
+- **Acceptance**: the S3 build-side key-set test enforces "no authoritative fact from curated YAML";
+  the app-runtime single-source test still passes unchanged; `CLAUDE.md` documents the one-command
+  atomic build + three-state freshness and no longer calls curated YAML a source of truth; concept
+  docs match reality; full QA green.
+- **Depends on**: S3.
 
 ## Ledger
 
@@ -192,6 +216,15 @@ Appended by /dev:implement after each slice — never rewritten. Newest row last
   (WFS-sourced) + `source` added to the delete-list and the S2 grep. Non-blocking facts folded in:
   3/7 files already schedule-less; only 4 carry the heavy payload; `aemtler` (school) is permanently
   schedule-less after strip (unscraped).
+- 2026-07-29 (post-approval, owner settled the two S1-gated decisions — both the LARGER option, so
+  the plan was re-decomposed from 3 to **4 slices**): **#1 build contract → ONE ATOMIC PIPELINE
+  COMMAND** (`swimzh build` runs roster→discover→scrape→lanes→prices atomically; folds the separate
+  scrape commands) — now its own slice **S2**. **#2 curation model → THREE-STATE FRESHNESS**
+  (`scraped | awaiting_scrape | no_source`) replacing the `is_curated` boolean — expands S1 to touch
+  the `/pools` + `/swim` API contract and the UI. Slice chain is now S1→S2→S3→S4 (S1 optional-DTO +
+  WFS physicals/address + freshness model; S2 atomic build; S3 strip; S4 docs); `pause_after: S1`
+  unchanged. NB: the `/dev:implement` specialised subagents became unavailable this session, so
+  execution mechanics differ (implement + adversarial review run without the `dev:*` agents).
 - 2026-07-29 (pre-approval, 2nd independent plan-critic): **BLOCKING fixed** — S2 acceptance was a
   6-field denylist grep that would pass green while `amenities`/`public_holiday_policy`/`lockers`/
   basin `kind`/`exceptions`/`valid_as_of`/`features` survived in the served blob (they're
