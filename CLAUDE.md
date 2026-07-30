@@ -16,13 +16,15 @@ intent and design decisions, and `README.md` for orientation.
 - `src/swimzh/boundary/` — pydantic v2 DTOs (ingest boundary).
 - `src/swimzh/providers/` — adapters returning `Result[..., ProviderError]` (`curated`,
   `geo_sport`; occupancy later).
-- `src/swimzh/build/` + `src/swimzh/etl/` + `src/swimzh/storage/` — the single offline builder
-  (`build_store`: seed → identity spine → curated blob) writes the SQLite gold store (pure
-  functions); `find_swim_options` reads from `GoldRepository`.
+- `src/swimzh/build/` + `src/swimzh/etl/` + `src/swimzh/storage/` — the atomic pipeline builder
+  (`build`: WFS roster → identity spine → schedule/price/lane scrape → `compose`) writes the SQLite
+  gold store; `find_swim_options` reads from `GoldRepository`.
 - `apps/web/` — FastAPI service + minimal HTML UI over the gold DB (see below).
-- `data/` — **ETL inputs** (the curated source of truth): pools/registry/calendar YAML +
-  `catalog.json`, built into the gold DB by `swimzh build`; never read at app runtime. Plus
-  `sources.md` legal register.
+- `data/` — **ETL inputs**: `registry.yaml` (crosswalk: aliases, Baditicker/crowdmonitor keys, kind
+  overrides), `calendar/*.yaml` (term dates), and `pools/*.yaml` — now a **thin crosswalk**
+  (`facility_id` + basins carrying only `lane_plan_source`), **not** a source of truth. `catalog.json`
+  is a WFS snapshot. Consumed by `swimzh build` only; never read at app runtime. Plus `sources.md`
+  legal register.
 - `tests/` — mirrors `src/swimzh/`; `apps/web/tests/` mirrors the service.
 
 ## Web UI / API
@@ -43,12 +45,14 @@ The app reads **only** one SQLite gold store — every endpoint (`/swim`, `/pool
 **required**: if the DB is missing or empty, startup **fails fast** with `run \`swimzh build …\``.
 
 ```sh
-# 1. Build a complete, self-contained gold DB from committed inputs — OFFLINE, no network.
+# 1. Build a COMPLETE gold DB in ONE atomic pipeline — NETWORK-DEPENDENT (WFS + scrapers).
+#    Runs the whole provider chain (roster → discover → schedule/price scrape → lanes → compose)
+#    inside a temp-DB + swap: any provider failure aborts non-zero, prior gold content-unchanged.
 uv run python -m swimzh.cli build --db gold.sqlite
 
-# 2. (optional) Enrich the same store with real scraped data (network):
-uv run python -m swimzh.cli scrape-gold   --db gold.sqlite   # REAL schedules scraped per pool
-uv run python -m swimzh.cli scrape-lanes  --db gold.sqlite   # per-basin Belegungsplan lane plans
+# 2. (optional) Thin RE-LAYER commands — refresh one cadence onto an already-built store:
+uv run python -m swimzh.cli scrape-gold   --db gold.sqlite   # re-run the schedule/price phase
+uv run python -m swimzh.cli scrape-lanes  --db gold.sqlite   # re-run the Belegungsplan lane phase
 
 # 3. Run the app against the DB (UI at /, API at /swim). Missing/empty DB -> clean
 #    one-line fail-fast (no ASGI traceback). SWIMZH_RELOAD=0 disables auto-reload.
@@ -59,41 +63,61 @@ SWIMZH_GOLD_DB=gold.sqlite uv run python -m apps.web.main   # http://127.0.0.1:8
 uvicorn). `uvicorn apps.web.main:app` still works and still fails fast without a DB, but reports
 through uvicorn's lifespan traceback rather than the one-liner.
 
-`swimzh build` is the **single offline builder**: it assembles the identity spine (the `pool`
-table = the ~57-pool roster, plus its `pool_alias`/`pool_xref` crosswalk) + the `calendar`
-singleton into one store from the committed inputs alone (offline, no network). The curated
-schedule payload rides as a typed blob on the `pool` row (`facility_doc`); there is **no
-`facility` table** and no stored `curation_status` (it is derived at read from that blob). Geo
-comes from the committed `catalog.json` (WFS coordinates), stamped onto `facility_doc` at build
-time — not a live WFS merge. The network commands (`scrape-gold`, `scrape-lanes`) **layer onto**
-an already-built store. The curated data directory is supplied to the CLI/ETL via `--data`
-(default `data/`); the **app never reads `data/`** — only the gold DB.
+`swimzh build` is **one atomic pipeline command** (`cli.build`): WFS roster (`fetch_roster`) →
+identity spine + thin crosswalk (`build_store`, the `pool` table = ~57-pool roster + its
+`pool_alias`/`pool_xref` crosswalk + the `calendar` singleton) → schedule + price scrape and
+reconcile (`_compose_schedules`) → lane discovery/fetch/attach (`_attach_lanes`) → `compose`. The
+whole chain runs inside **one** temp-DB + `os.replace` swap (`storage/atomic.py`): the store commits
+only if every phase completed, so a mid-chain provider failure aborts non-zero and leaves the prior
+gold **content-unchanged** — never a partial store. It is therefore **network-dependent** (the WFS
+roster + the page scrapers). `scrape-gold` / `scrape-lanes` are **thin re-layer commands** driving
+the same extracted phase functions (per-cadence refresh onto an already-built store). The facility
+payload rides as a typed blob on the `pool` row (`facility_doc`); there is **no `facility` table**.
+The `--data` dir (default `data/`) supplies only the thin crosswalk; the **app never reads `data/`**.
 
-Data sources:
-- **ETL inputs (human/curated source of truth, committed in git):** `data/pools/*.yaml`,
-  `data/registry.yaml`, `data/calendar/*.yaml`, and `data/catalog.json`. These are consumed by
-  `swimzh build`/the ETL only — never read at app runtime. Regenerate the catalog from the WFS
-  with `uv run python -m swimzh.cli build-catalog --out data/catalog.json`.
+**Curation model — three-state `ScheduleFreshness`, not a boolean.** A pool's schedule state is
+derived at read from its `facility_doc` blob (`storage/codec.schedule_freshness`, replacing the old
+`is_curated` boolean): **`scraped`** (≥1 basin carries a rule), **`awaiting_scrape`** (scrapeable —
+a WFS-`indoor` stadt-zuerich pool, incl. a `thermal` display-override like Käferberg — but no
+schedule yet), **`no_source`** (not scrapeable, e.g. the `aemtler` school pool, or an outdoor/lake
+pool). A schedule-less pool is a first-class honest state on `/pools` (`freshness`), `/swim`
+(status), and the UI's three ghost states — **never rendered as "closed"**.
+
+Data sources — **everything authoritative is SOURCED**; `data/` carries no source-of-truth facts:
+- **Sourced (WFS roster + scrapers):** identity, geo, address, basin physicals, schedules, prices,
+  closures — all extracted by providers, composed into `facility_doc`. Regenerate the catalog
+  snapshot with `uv run python -m swimzh.cli build-catalog --out data/catalog.json`.
+- **Thin crosswalk (facts on no page, committed in git):** `data/pools/*.yaml` per-basin
+  `lane_plan_source` (url + optional `section`) URL→basin binding, and `data/registry.yaml`
+  (aliases, Baditicker/crowdmonitor keys, kind overrides). Guarded by
+  `tests/etl/test_pool_yaml_allowlist.py` (top-level keys ⊆ {`facility_id`, `basins`}; basin ⊆
+  {`basin_id`, `name`, `lane_plan_source`}).
 - **Single runtime source:** the gold `.sqlite` the app reads (git-ignored; build it, don't
   commit it). `/swim` schedules, `/pools` catalog, and the calendar all come from this one store.
 
-The WFS has locations but not opening hours (`n.a.`). `scrape-gold` parses the timetable
-JSON embedded in stadt-zuerich.ch pool pages (`providers/schedule_scraper.py`) — brittle,
-best-effort (unparseable pages are skipped and reported), pinned by a saved-page fixture test.
+The WFS has locations but not opening hours (`n.a.`). The schedule phase parses the timetable JSON
+embedded in stadt-zuerich.ch pool pages (`providers/schedule_scraper.py`) — brittle, pinned by a
+saved-page fixture test. Under the atomic build it is **fail-fast**: an unparseable declared page
+aborts the build (a benign unresolved *extra* scrape name is the one non-fatal miss, exit 1).
 
-`scrape-lanes` attaches per-basin Belegungsplan lane plans. The lane document is a **first-class
-domain attribute** — `Basin.lane_plan_source` (url + optional `section`), authored in
-`data/pools/*.yaml` on the owning basin (rides `facility_doc`, no gold DDL). The ETL is **driven
-by the domain**: the fetch-set is a projection of the declared sources (no hardcoded URL list), and
-reconciliation is a **deterministic URL-keyed join** in `etl/silver.py` (`ParsedPlan.basin_hint` is
-not an identity key — a single-basin sheet binds by URL alone; a stacked multi-basin sheet routes
-each section by its declared `section` token, failing safe to an audited `UnboundPlan` on any
-zero/ambiguous match). **Extraction outcomes are first-class persisted state:**
-`Basin.lane_plan: LanePlan | LanePlanUnavailable | None` — a parsed grid, a typed
-`LanePlanUnavailable(cause: ProviderError)` for a declared source whose fetch/parse failed (scoped
-to that basin — the facility still builds), or `None`. The command prints an honest audit to
-stderr (`unbound` URLs/headers, per-basin `unavailable` causes, `unmatched section` alarms). See
-`docs/concepts/lane-plan-url-binding.md`.
+The lane phase attaches per-basin Belegungsplan lane plans. `Basin.lane_plan_source` (url + optional
+`section`) is the thin-crosswalk binding, carried through `compose` onto the scraped basins so it
+survives the schedule scrape. The fetch-set is **discovered** (the page provider emits Belegungsplan
+links; the lane provider fetches them), and each authored binding is validated against discovery
+(`authored − discovered` → `MissingDiscoveredLink`). Reconciliation is a **deterministic URL-keyed
+join** in `etl/silver.py` (a single-basin sheet binds by URL alone; a stacked multi-basin sheet
+routes each section by its declared `section` token, failing safe to an audited `UnboundPlan` on any
+zero/ambiguous match). A failed declared lane source is **fatal** to the build (no per-basin
+`LanePlanUnavailable` hole is persisted any more — the DTO survives only for old-blob round-trip).
+See `docs/concepts/lane-plan-url-binding.md`.
+
+**Accepted limitation (flat scrape).** The schedule scraper emits **one synthetic basin**
+(`Hauptbecken`) per pool — it cannot split the flat timetable per basin. So a scraped pool's
+schedule lives on that synthetic basin while its carried `lane_plan_source` + physicals ride the
+named crosswalk basin; the two never coexist. Consequence: the **per-basin lane-availability panel
+is inert for scraped pools** — it renders only where genuine per-basin data exists (the illustrative
+fixtures / a future per-basin schedule source). Owner-accepted 2026-07-31 (the flat-endpoint cost);
+`freshness` — not `provenance.curated` — is the schedule signal.
 
 ## Internationalization (pl / en / de / it / fr)
 

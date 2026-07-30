@@ -1,19 +1,20 @@
 ---
 type: concept
 name: discovery-driven-providers
-status: proposed   # direction set 2026-07-28; not yet built. Supersedes parts of the sourcing stance.
+status: implemented   # direction set 2026-07-28; shipped via website-sourced-providers S1–S5 + delete-curated-schedule-tier S1–S4.
 created: 2026-07-28
-updated: 2026-07-28
+updated: 2026-07-31
 links: ["[[lane-plan-url-binding]]", "[[data-layer-architecture]]", "[[source-links]]", "[[lane-data-availability]]", "[[gold-store]]", "[[2026-07-28-website-sourced-providers-plan]]"]
 ---
 
 # Discovery-driven providers — every fact from a source, links discovered not curated, fail-fast
 
-> **Status: proposed.** This records an owner decision (2026-07-28) about how the ETL should
-> source data. It is *not yet built*, and it deliberately overrides parts of the as-built
-> design below (`lane_plan_source` as curated YAML input; the Altstetten "out of scope" punt;
-> the best-effort skip-and-continue posture). Where prose here and elsewhere conflict, this is
-> the intended direction and the older text is the current implementation.
+> **Status: implemented.** This recorded an owner decision (2026-07-28) about how the ETL sources
+> data; it is now the as-built design. The `website-sourced-providers` run (S1–S5) built the
+> roster/geo/`geo_sport_id`/schedule/price/notice/lane providers and the fail-fast posture, and
+> `delete-curated-schedule-tier` (S1–S4) reduced curated YAML to the thin crosswalk and folded the
+> whole chain into one atomic `swimzh build`. The "anti-patterns to fix" below are kept as a record
+> of what was resolved (each is annotated). See [[website-sourced-providers]] for the end-state.
 
 ## The rules
 
@@ -75,14 +76,12 @@ store — which is what removes the stale-fetch-set bug (see anti-patterns).
   persisted *losslessly* and keyed by error class (retry `retriable()` network causes,
   quarantine `ParseError`). The right substrate for fail-fast that stays granular.
 
-## Anti-patterns / tensions to fix under this rule
+## Anti-patterns / tensions that were fixed under this rule (RESOLVED — kept for the record)
 
-- **Links are hand-authored, not discovered — the discovery hop doesn't exist yet.**
-  `lane_plan_source` is *"authored in `data/pools/*.yaml`"* and called a *"curated input"*
-  ([[lane-plan-url-binding]]); the page scraper (`providers/schedule_scraper.py`) extracts **no
-  links** — it only parses the embedded timetable JSON. Today the "previous provider" that
-  discovers the Belegungsplan link is a **human**. Rule 2 says the page provider must *emit*
-  those links and feed the next provider.
+- **RESOLVED — links are now discovered.** The page provider emits the Belegungsplan links it
+  finds and they become the lane provider's fetch-set (the discovery hop, `website-sourced-providers`
+  S1). `lane_plan_source` in `data/pools/*.yaml` survives only as the thin-crosswalk URL→basin
+  *binding* (where a link is not discoverable on the page), no longer a general curated input.
 - **A punt this rule *reframes* (does not automatically dissolve).** [[lane-plan-url-binding]]
   declines Altstetten because a *curated* link rots: *"a standing maintenance liability
   (Altstetten's URL sits in a rotating year-folder and would rot); we decline to own one… not
@@ -92,15 +91,14 @@ store — which is what removes the stale-fetch-set bug (see anti-patterns).
   and Altstetten's plan is a **PNG grid with no PDF parser** ([[lane-plan-url-binding]]) — so it
   stays out of scope on the *parser* axis even once discovery removes the rot. Discovery makes the
   punt worth **revisiting**, not automatically reversed. (See also [[lane-data-availability]].)
-- **A silent-staleness invariant that violates rule 4.** [[lane-plan-url-binding]] admits an
-  un-type-enforced invariant: *"editing a basin's source in YAML without rebuilding leaves
-  `scrape-lanes` fetching the old, smaller set."* That stale-store projection is exactly the
-  "silent" failure banned here. A discovery-driven fetch-set (from a *fresh* parent scrape, not
-  the built store) removes this class of bug.
-- **Best-effort skip-and-report.** `scrape-gold` is documented "best-effort — unparseable pages
-  skipped and reported" (build stays green), and `LanePlanUnavailable` is scoped so "the
-  facility still builds." Both let a run exit 0 with missing data → become hard, non-zero
-  failures under rule 4. The typed-error *values* stay; the green-exit posture goes.
+- **RESOLVED — the stale-fetch-set bug is gone.** `swimzh build` now runs the chain in one atomic
+  pass, so the lane fetch-set is a projection of the *fresh* parent scrape within the same build,
+  not the previously-built store. The "edit YAML without rebuilding" staleness window no longer
+  exists.
+- **RESOLVED — fail-fast, not skip-and-continue-green.** The atomic build aborts non-zero on any
+  fatal provider failure and leaves the prior gold content-unchanged (temp-DB + swap). The
+  typed-error *values* stayed; the green-exit posture went. (One deliberate exception: the price
+  scrape is best-effort — the single non-fatal chain link — recorded in the plan ledger.)
 
 ## Resolved decision — fail semantics
 

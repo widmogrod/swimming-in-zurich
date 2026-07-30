@@ -1,19 +1,28 @@
 ---
 type: concept
 created: 2026-07-21
-updated: 2026-07-22
+updated: 2026-07-31
 links: ["[[2026-07-21-lane-plan-reconciliation-plan]]", "[[lane-data-availability]]", "[[gold-store]]", "[[data-layer-architecture]]", "[[discovery-driven-providers]]"]
 ---
 
 # Lane-plan source binding — a first-class domain attribute; extraction outcomes as persisted data
 
-> **Partly superseded (direction, 2026-07-28) by [[discovery-driven-providers]].** Three
-> decisions below are the *current* implementation but no longer the *intended* one: the
-> lane-plan URL as a **curated YAML input** (it should be *discovered* by the upstream page
-> provider, not hand-authored), the Altstetten "out of scope / not surfaced as a raw link"
-> punt (that rejects *curated* links; discovered links re-derive and don't rot), and the
-> best-effort skip / "the facility still builds" posture (becomes fail-fast, non-zero). The
-> typed error *values* and the URL-keyed deterministic join stay.
+> **Reconciled to the as-built (2026-07-31) — see [[discovery-driven-providers]].** The three
+> decisions once flagged "superseded" are now built and this doc describes them:
+> - **The lane-plan URL is DISCOVERED, not a general curated input.** The page provider emits the
+>   Belegungsplan links it finds; those become the lane provider's fetch-set. `lane_plan_source`
+>   in `data/pools/*.yaml` survives only as the thin-crosswalk **binding** (url + optional
+>   `section`) for the URL→basin join — a fact on no page. Every authored URL must appear among the
+>   links its page advertises, else the build fails (`authored − discovered`, `UndiscoveredSource`).
+> - **Fail-fast, not skip-and-continue-green.** A declared source whose fetch/parse fails now aborts
+>   the atomic build non-zero (prior gold content-unchanged); there is **no longer a persisted
+>   `LanePlanUnavailable` written for a failed source** — the DTO survives only for lossless
+>   round-trip compatibility of an old blob.
+> - **The binding is carried through compose.** When the scraped timetable wins (the post-strip
+>   world), `build/compose.py` carries each curated basin's `lane_plan_source` onto the composed
+>   facility so the crosswalk binding + physicals survive the schedule scrape.
+>
+> The URL-keyed deterministic join and the typed-error *values* below are unchanged.
 
 A basin's lane document (its Belegungsplan) is a **first-class domain attribute**:
 `Basin.lane_plan_source: LanePlanSource | None`, where `LanePlanSource(url, section=None)`. It is authored in
@@ -22,15 +31,18 @@ authored — on the basin that owns the plan — so a binding can never referenc
 there is no second identity store.
 
 **Every declared source is a Belegungsplan PDF we parse — nothing else.** There is no `format` discriminator, no
-view/download "fallback", and no fidelity ladder: a source either parses to a grid or records why it didn't. A
-source with no PDF parser — an image/HTML grid such as Hallenbad Altstetten's PNG — is **out of scope**, not
-surfaced as a raw link. A curated external link is a standing maintenance liability (Altstetten's URL sits in a
-rotating year-folder and would rot; see [[lane-data-availability]]), and we decline to own one.
+view/download "fallback", and no fidelity ladder: a source either parses to a grid or fails the build. A
+source with no PDF parser — an image/HTML grid such as Hallenbad Altstetten's PNG — is **out of scope on the
+parser axis**. (Discovery removed the *rot* objection — a discovered link re-derives the rotating year-folder URL
+each run rather than being hand-owned — but the missing PDF parser keeps Altstetten out; see
+[[lane-data-availability]] and [[discovery-driven-providers]].)
 
-**The ETL is driven by the domain, not a hardcoded list.** What to extract is a projection of the model —
-`{(basin, source.url) for every basin that declares one}`; the old `CITY_BELEGUNGSPLAN_URLS` /
-`PENDING_BELEGUNGSPLAENE` constants are deleted. A source exists to be extracted *iff a basin declares it*, and
-adding one is a single YAML edit on the owning basin.
+**The fetch-set is DISCOVERED, and the binding is validated against it.** The lane provider fetches the links the
+page provider discovered on each pool page — no hardcoded list, and no longer a projection of the authored
+`lane_plan_source` URLs. The authored binding is now *checked* against discovery: every basin's declared
+`lane_plan_source.url` must appear among the links its page advertises, or the build reports it as
+`authored − discovered` (`UndiscoveredSource`) — so a stale hand-authored URL can never silently vanish. The
+old `CITY_BELEGUNGSPLAN_URLS` / `PENDING_BELEGUNGSPLAENE` constants are gone.
 
 **Granular join — URL-keyed for single-basin sheets, URL+section-text for stacked ones.** The fetch loop stamps
 `ParsedPlan.source_url` (the URL it already knows); for a **single-basin** sheet `attach_lane_plans` is a pure
@@ -49,33 +61,26 @@ regression), never a silent `None`. This residual soft match depends on the pars
 basin claims → non-fatal `UnboundPlan` (audited to stderr); a duplicate or double binding → fatal
 `Err(SchemaMismatch)`. `PoolId`/`BasinId` are read off loaded facilities (`reconstruct_pool_id`), never minted.
 
-**Extraction outcome is first-class persisted state — errors are data, not exceptions.**
-`Basin.lane_plan: LanePlan | LanePlanUnavailable | None`:
+**Extraction outcome state.** `Basin.lane_plan: LanePlan | LanePlanUnavailable | None`:
 - `None` → nothing to extract (no source) **or** the scrape has not run yet.
 - `LanePlan` → the parsed grid.
-- `LanePlanUnavailable(source_url, section, cause: ProviderError, observed_at)` → a declared source whose
-  extraction was attempted and **failed**.
+- `LanePlanUnavailable(source_url, section, cause: ProviderError, observed_at)` → a **legacy** typed
+  extraction-failure value. **No longer produced by the current pipeline** — under the fail-fast atomic build a
+  failed declared source aborts the whole build (non-zero, prior gold content-unchanged), it is not written as a
+  per-basin hole. The variant + its DTO survive only so an older blob still round-trips.
 
 The `cause` is the real closed-union `ProviderError` — `HttpStatus(status, body_snippet)`, `Timeout(after_s)`,
-`ConnectionFailed(detail)`, `ParseError(detail, raw_snippet)`, … — persisted **losslessly**, not reduced to a
-status code or a `describe()` string. Because the failure is a stored value keyed by its typed cause, **partial
-extraction loses nothing**: a run that parses 5/8 sheets writes 5 `LanePlan` + 3 `LanePlanUnavailable`, and
-recovery selects the failed rows *by error class* — retry the `retriable()` network causes (`Timeout`,
-`ConnectionFailed`), quarantine the `ParseError` sheets that need a parser fix, not a re-run. The selective-retry
-command is deferred; the data model is what enables it.
+`ConnectionFailed(detail)`, `ParseError(detail, raw_snippet)`, … Lossless encodability was designed in (every
+variant round-trips: `ProviderSpecific.detail` is narrowed `object → JsonValue`, no variant special-cased, no
+`repr`), which is what would let a future selective-retry model store failures by error class — but the shipped
+posture is fail-fast, so no such per-basin failure is persisted today.
 
-Lossless persistence requires that **every** `ProviderError` variant be encodable, so `ProviderSpecific.detail`
-is narrowed `object → JsonValue` (its only real payloads are `str`/`dict`/`None`) — the union then round-trips
-through the boundary DTO with no variant special-cased and no `repr`.
+**Failure aborts the build.** A fetch/parse failure of a declared lane source is fatal to the atomic build (the
+fail-fast posture of [[discovery-driven-providers]]), not scoped to the basin — the older "the facility still
+builds with a lane hole" behaviour is gone.
 
-**Failure is scoped to the field.** A fetch/parse failure fails **only** that basin's `lane_plan` (→
-`LanePlanUnavailable`); the facility, its schedule, geo, and eligibility build and serve normally. This is
-asserted, not assumed.
-
-Do **not** conflate `lane_plan_source` (curated **input**) with `lane_plan` (the extraction **outcome**).
-Accepted seams: stacked-sheet routing is a scoped text match; the parse fetch-set derives from the built store,
-so **"rebuild before scrape" is a real, un-type-enforced operational invariant** — editing a basin's source in
-YAML without rebuilding leaves `scrape-lanes` fetching the *old, smaller* set. The closed source universe
-([[lane-data-availability]]) does **not** bound this: closure rules out an *unknown* source appearing, but not a
-*known* source silently dropped by a stale store; that risk is caught only by a fetch-set derivation test. See
-the plan [[2026-07-21-lane-plan-reconciliation-plan]] for the slices.
+Do **not** conflate `lane_plan_source` (the thin-crosswalk **binding**) with `lane_plan` (the extraction
+**outcome**). Accepted seams: stacked-sheet routing is a scoped text match. The old "rebuild before scrape"
+operational invariant is **gone** — `swimzh build` runs discovery → scrape → lanes → compose in one atomic pass,
+so the lane fetch-set is a projection of the *fresh* parent scrape within the same build, never a stale store.
+See the plan [[2026-07-21-lane-plan-reconciliation-plan]] for the original slices.

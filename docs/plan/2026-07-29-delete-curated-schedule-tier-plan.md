@@ -1,6 +1,6 @@
 ---
 type: plan
-status: in-progress      # draft -> approved -> in-progress -> done
+status: done             # draft -> approved -> in-progress -> done
 branch: plan/delete-curated-schedule-tier
 worktree: .claude/worktrees/plan-delete-curated-schedule-tier
 base_branch: feat/new-ui
@@ -217,6 +217,7 @@ Appended by /dev:implement after each slice — never rewritten. Newest row last
 | 2026-07-30 | S1 | done | `ScheduleFreshness` enum lives in `domain/catalog.py` (layering — domain can't import storage), derivation in `storage/codec.py`; freshness predicate broadened to `{INDOOR, THERMAL}` so Käferberg (scrapeable Wärmebad) reads `awaiting_scrape` not `no_source` (review fix) | `apply_physicals` matches prose→basin by exact normalized name; real `city.yaml` basins (`50m-Becken`, `Lehrschwimmbecken`) won't name-match the German prose → **S3 must rename stripped basins to prose names or record a physicals drop for city/bungertwies**; predicate can't see WFS `url` (an indoor pool without a page would read `awaiting_scrape` forever — inert today) | yes |
 | 2026-07-31 | S2 | done | atomic `build` folds roster→build_store→schedule(+price)→lanes→compose into ONE `atomic_swap`; `scrape-gold`/`scrape-lanes` KEPT as thin re-layer commands sharing extracted `_compose_schedules`/`_attach_lanes`; `gold_db` → one offline atomic build via composite `MockTransport`; `main`→`_dispatch` refactor; `follow_redirects=True` | scraped schedule-less curated pools surface with curated source-less provenance (`valid_as_of=None`) — honest-provenance fix deferred; price scrape is best-effort (the one non-fatal chain link, pre-existing); **S3 BLOCKER surfaced (see Decisions + amended S3)** | yes |
 | 2026-07-31 | S3 | done | `compose` carries `lane_plan_source` from curated onto scraped basins (fixed the S2 latent drop — lane attach 3→6); stripped all 7 `data/pools/*.yaml` to the crosswalk (allowlist test); renamed city/bungertwies basins to WFS prose names to keep physicals (oerlikon NULL-prose → physicals DROP, recorded); illustrative schedules relocated byte-identical to `tests/domain/fixtures/`; ~40 tests converted | **PRODUCT REGRESSION (owner-facing, finding #1): the per-basin lane-availability panel is INERT in production for scraped pools** — the flat scrape's synthetic `Hauptbecken` and the carried named basin never coexist, so the per-basin projection can't render; a scraped `/swim` option carries no length/lanes (physicals only on `/pools`); `provenance.curated` still reads True for scraped pools (freshness is the real signal); city `Lehrschwimmbecken` dropped | yes |
+| 2026-07-31 | S4 | done | owner ACCEPTED the flat-scrape lane-panel regression (parked). Made `provenance.curated` honest — `compose` adopts the scraper's full provenance (`source=schedule_scraper`, `curated=False`, `valid_as_of`=scrape date) when the scraped timetable wins, also closing the S2 `valid_as_of=None` gap; genuine curated (illustrative fixtures) still reads `curated=True`. Reconciled CLAUDE.md (atomic build, thin crosswalk, three-state freshness, the accepted lane-panel limitation), marked `discovery-driven-providers` implemented, updated `lane-plan-url-binding` to as-built (fixed a fabricated type name `MissingDiscoveredLink`→`UndiscoveredSource`), distilled `docs/summaries/website-sourced-providers.md` | flat-scrape lane panel parked (needs a per-basin schedule source); an `awaiting_scrape` pool still reads `curated=True` (freshness is the signal there) | yes |
 
 ## Decisions & divergences
 
@@ -322,5 +323,19 @@ Appended by /dev:implement after each slice — never rewritten. Newest row last
 
 ## Summary
 
-Written when the plan reaches `done`; then distilled into
-`docs/summaries/website-sourced-providers.md` (what EXISTS now, not what was intended).
+**Done — all 4 slices shipped (each adversarially reviewed `approve`, both QA chains green).** The
+curated-schedule tier is gone: `data/pools/*.yaml` is now a **thin crosswalk** (per-basin
+`lane_plan_source` binding only), guarded by a per-level allowlist key-set test; identity/geo/
+address/basin-physicals/schedules/prices/closures are all **sourced** (WFS roster + scrapers). The
+curation model is the three-state `ScheduleFreshness` (`scraped`/`awaiting_scrape`/`no_source`),
+replacing the `is_curated` boolean, on `/pools` + `/swim` + UI. `swimzh build` is **one atomic
+network pipeline** (roster→discover→schedule/price→lanes→compose, temp-DB+swap, aborts
+content-unchanged); `scrape-gold`/`scrape-lanes` remain as thin re-layer commands. `compose` carries
+the `lane_plan_source` binding onto scraped basins, and `provenance.curated` is honest (scraped →
+`False`).
+
+**Accepted cost (owner decision 2026-07-31):** the flat scraper emits one synthetic basin, so the
+per-basin **lane-availability panel is parked** (inert for scraped pools; renders only where genuine
+per-basin data exists) and scraped `/swim` options carry no length/lanes (physicals on `/pools`).
+Restoring it needs a per-basin schedule source (the S5c drop). Full as-built state +
+backlog: `docs/summaries/website-sourced-providers.md`.

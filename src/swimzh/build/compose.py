@@ -171,7 +171,9 @@ def _carry_bindings(
     return scraped_basins + carried
 
 
-def _merge_basins(by_source: dict[Source, Facility]) -> tuple[tuple[Basin, ...], str | None]:
+def _merge_basins(
+    by_source: dict[Source, Facility],
+) -> tuple[tuple[Basin, ...], str | None, bool]:
     """Fold the two sources' basins, preserving the thin-crosswalk lane binding.
 
     Unlike a plain aspect (replace with the winner), basins need a merge so the ``lane_plan_source``
@@ -184,6 +186,9 @@ def _merge_basins(by_source: dict[Source, Facility]) -> tuple[tuple[Basin, ...],
       (``_carry_bindings``), so the crosswalk binding + physicals survive and ``_attach_lanes``
       finds an owner (no ``attached == 0`` abort);
     * neither has a schedule → keep whichever source has basins (curated first).
+
+    The third return value is ``True`` iff the **scraped** timetable won — the caller uses it to
+    make ``provenance`` honest (a scraped schedule ⇒ ``curated=False``, `_fold`).
     """
     curated = by_source.get(Source.CURATED)
     scraped = by_source.get(Source.SCRAPED)
@@ -191,13 +196,13 @@ def _merge_basins(by_source: dict[Source, Facility]) -> tuple[tuple[Basin, ...],
     scraped_basins = scraped.basins if scraped is not None else ()
 
     if _has_schedule(curated_basins):
-        return curated_basins, None
+        return curated_basins, None, False
     if _has_schedule(scraped_basins):
         merged = _carry_bindings(scraped_basins, curated_basins)
         carried = len(merged) - len(scraped_basins)
         note = f"basins: scraped schedule + {carried} curated lane binding(s)" if carried else None
-        return merged, note
-    return (curated_basins or scraped_basins), None
+        return merged, note, True
+    return (curated_basins or scraped_basins), None, False
 
 
 def _fold(by_source: dict[Source, Facility]) -> tuple[Facility, tuple[str, ...]]:
@@ -223,10 +228,17 @@ def _fold(by_source: dict[Source, Facility]) -> tuple[Facility, tuple[str, ...]]
                 f"{base.identity.name}: {aspect.field} kept from {winner.value} "
                 f"(also supplied by {also})"
             )
-    basins, basin_note = _merge_basins(by_source)
+    basins, basin_note, scraped_schedule = _merge_basins(by_source)
     changes["basins"] = basins
     if basin_note is not None:
         notes.append(f"{base.identity.name}: {basin_note}")
+    # Honest provenance: when the SCRAPED timetable won (the post-strip world — the base is the
+    # thin-crosswalk curated blob but the schedule came from the page scraper), adopt the scraped
+    # facility's provenance so ``curated`` reads False and ``source``/``valid_as_of`` name the
+    # scrape. A genuinely curated schedule (illustrative fixtures) keeps ``curated=True``. Freshness
+    # remains the primary signal; this stops the boolean from silently lying.
+    if scraped_schedule and Source.SCRAPED in by_source:
+        changes["provenance"] = by_source[Source.SCRAPED].provenance
     return replace(base, **changes), tuple(notes)
 
 

@@ -1,9 +1,12 @@
-"""The curated-data provider: loads hand-authored YAML into the domain.
+"""The curated-data provider: loads the thin-crosswalk YAML into the domain.
 
 Curated YAML is a first-class provider — the same `Result[..., ProviderError]` contract as
-any network adapter. For v1 it is the *only* source of schedules/prices (we deliberately do
-not scrape), so it is where the product's accuracy lives. Every facility carries provenance
-(`valid_as_of`, `curated=True`) so downstream answers can be honest about freshness.
+any network adapter. Post-strip it is a **thin crosswalk** (`facility_id` + basins carrying only
+`lane_plan_source`), not a source of schedules/prices/physicals: those are all sourced (WFS
+roster + page/price/notice scrapers). A loaded facility carries `curated=True` provenance here,
+but `build/compose.py` overrides it to `curated=False` once the scraped timetable wins, so a
+scraped-schedule pool never reads as hand-verified. `ScheduleFreshness` is the primary freshness
+signal downstream.
 
 DTO↔domain mapping lives in `swimzh.boundary.mapping` (shared with the gold codec); this
 module handles YAML I/O, validation, and the facility-level assembly that needs the registry.

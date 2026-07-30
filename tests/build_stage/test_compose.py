@@ -189,6 +189,13 @@ def test_scraped_schedule_carries_curated_lane_binding() -> None:
     )
     # A build note records the binding-carry.
     assert any("curated lane binding" in note for note in result.notes)
+    # S4 honest provenance: the schedule came from the SCRAPER, so the composed facility must NOT
+    # read as hand-verified even though a (thin-crosswalk) curated blob is its base. `curated` flips
+    # to False and `source`/`valid_as_of` name the scrape — freshness stays the primary signal, but
+    # the boolean no longer lies.
+    assert merged.provenance.curated is False
+    assert merged.provenance.source == "schedule_scraper"
+    assert merged.provenance.valid_as_of == FETCHED.date()
 
 
 def test_scraped_basin_url_already_declared_is_not_duplicated() -> None:
