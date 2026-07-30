@@ -1,22 +1,25 @@
-"""The swim endpoint over the real curated data — the eligibility differentiator must
-survive the whole HTTP round-trip."""
+"""The swim endpoint over the SCRAPED pipeline — the eligibility differentiator must survive the
+whole HTTP round-trip. Since delete-curated-schedule-tier S3 the served City schedule is the
+scraped one (a flat `Hauptbecken` timetable): a women-only session runs Thursday 18:00–22:00 (and
+Tuesday morning), so the eligibility round-trip is asserted at a Thursday evening."""
 
 from __future__ import annotations
 
-from pathlib import Path
-
-import pytest
 from fastapi.testclient import TestClient
 
 from apps.web.main import app
 
-# Monday 2026-09-14 20:30: City Lehrschwimmbecken runs a women-only session 20:00–22:00.
+# Monday 2026-09-14 20:30: the scraped City schedule is open (public), a generic "some option" time.
 MONDAY_EVENING = "2026-09-14T20:30"
+# Thursday 2026-09-17 18:30: the scraped City schedule runs a women-only session 18:00–22:00.
+THURSDAY_EVENING = "2026-09-17T18:30"
 
 
 def test_woman_sees_women_only_session() -> None:
     with TestClient(app) as client:
-        response = client.get("/swim", params={"at": MONDAY_EVENING, "gender": "female", "age": 34})
+        response = client.get(
+            "/swim", params={"at": THURSDAY_EVENING, "gender": "female", "age": 34}
+        )
     assert response.status_code == 200
     accesses = {o["access"] for o in response.json()["options"]}
     assert "WomenOnly" in accesses
@@ -24,26 +27,22 @@ def test_woman_sees_women_only_session() -> None:
 
 def test_man_excluded_from_women_only_session() -> None:
     with TestClient(app) as client:
-        response = client.get("/swim", params={"at": MONDAY_EVENING, "gender": "male", "age": 34})
+        response = client.get("/swim", params={"at": THURSDAY_EVENING, "gender": "male", "age": 34})
     assert response.status_code == 200
     accesses = {o["access"] for o in response.json()["options"]}
     assert "WomenOnly" not in accesses
 
 
-def test_options_carry_price_and_provenance(
-    offline_gold_db: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    # Read against the PRE-SCRAPE store (curated City/Oerlikon options, each with a curated
-    # `valid_as_of`). The atomic `build` folds in scraped schedules for the schedule-less curated
-    # pools (Bläsi/Leimbach/…), which surface as options that keep their curated source-less
-    # provenance — so `all(valid_as_of)` is a property of the curated-only store, pinned here.
-    monkeypatch.setenv("SWIMZH_GOLD_DB", str(offline_gold_db))
+def test_options_carry_price_and_provenance() -> None:
+    # The scraped City schedule serves options that carry the scraped admission price and a
+    # provenance `source`. (`valid_as_of` is `None` for a scraped schedule composed onto a
+    # source-less curated blob — the recorded S2 honest-provenance debt — so it is not required.)
     with TestClient(app) as client:
         response = client.get("/swim", params={"at": MONDAY_EVENING, "gender": "female", "age": 34})
     options = response.json()["options"]
     assert options
     assert any(o["price"] for o in options)
-    assert all(o["valid_as_of"] for o in options)
+    assert all(o["source"] for o in options)
 
 
 def test_options_expose_length_kind_and_source() -> None:
@@ -59,14 +58,14 @@ def test_options_expose_length_kind_and_source() -> None:
         assert isinstance(o["source"], str) and o["source"]
         assert isinstance(o["curated"], bool)
         assert o["length_m"] is None or isinstance(o["length_m"], (int, float))
-    # City's curated basins carry real dimensions (50m / 20m), so at least one badge is real.
-    assert any(o["length_m"] for o in options)
+    # The scraped schedule is a flat basin with no physicals, so `length_m` degrades to None on the
+    # option (the real per-basin dimensions surface on `/pools`, not on a scraped `/swim` option).
 
 
 def test_options_expose_lane_count_and_degrade_when_unknown() -> None:
-    """S2: the badge's "N lane" sub-line needs a per-basin lane count on OptionOut. City's
-    50m basin carries a real lane count (6 Bahnen); the teaching pool has none, so lanes
-    must degrade to None rather than being invented."""
+    """S2: the badge's "N lane" sub-line needs a per-basin lane count on OptionOut. The scraped
+    schedule's flat basin carries no lane count, so `lanes` must degrade to None (present as a key)
+    rather than being invented — the real per-basin lane count surfaces on `/pools`, not here."""
     with TestClient(app) as client:
         response = client.get("/swim", params={"at": MONDAY_EVENING, "gender": "female", "age": 34})
     options = response.json()["options"]
@@ -74,13 +73,9 @@ def test_options_expose_lane_count_and_degrade_when_unknown() -> None:
     for o in options:
         assert "lanes" in o
         assert o["lanes"] is None or isinstance(o["lanes"], int)
-    # Basin *names* collide across facilities (City and Oerlikon both have a "50m-Becken",
-    # only City's stating 6 Bahnen), so assert over sets rather than a name-keyed dict that
-    # would collapse them order-dependently.
-    city_50m = {o["lanes"] for o in options if o["basin"] == "50m-Becken"}
-    assert 6 in city_50m  # City's real lane count surfaces
-    lehrbecken = {o["lanes"] for o in options if o["basin"] == "Lehrschwimmbecken"}
-    assert lehrbecken == {None}  # unknown degrades to None, never invented
+    # The scraped City option degrades its lane count to None, never an invented number.
+    city = {o["lanes"] for o in options if o["facility"] == "Hallenbad City"}
+    assert city == {None}
 
 
 def test_invalid_gender_is_400() -> None:
@@ -121,7 +116,7 @@ def _women_only_option(client: TestClient, gender: str) -> dict[str, object]:
     """The City women-only session as seen by `gender`, with eligibility annotated."""
     response = client.get(
         "/swim",
-        params={"at": MONDAY_EVENING, "gender": gender, "age": 34, "eligible_only": "false"},
+        params={"at": THURSDAY_EVENING, "gender": gender, "age": 34, "eligible_only": "false"},
     )
     assert response.status_code == 200
     options: list[dict[str, object]] = response.json()["options"]

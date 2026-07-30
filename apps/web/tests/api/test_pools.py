@@ -137,66 +137,56 @@ def test_pool_detail_has_no_lane_panels_without_a_plan(
     assert body["lane_panels"] == []
 
 
-def test_pool_detail_surfaces_basins_features_lockers_prices() -> None:
-    """Slice C acceptance: `/pools/{city}` JSON now carries the physical statics the domain
-    already computes — basins (nominal_temp_c, lanes, dimensions, physical_source caveat),
-    features resolved for the queried moment, lockers, the price table, and provenance —
-    not just id/name/address/website/lane_panels."""
+def test_pool_detail_surfaces_basins_physicals_and_prices() -> None:
+    """Slice C acceptance (post delete-curated-schedule-tier S3): `/pools/{city}` JSON carries the
+    physical statics the domain computes — per-basin dimensions/lanes/temperature key and the
+    physical_source caveat, the scraped price table, and provenance. City's `Schwimmerbecken` basin
+    gains its 50 m / 6-lane physicals from the WFS `infrastruktur` prose (`apply_physicals`), tagged
+    `parsed_prose`. Features/lockers are not produced by the sourced pipeline (their projection is
+    pinned by the mapping unit test `test_facility_detail_out_...`), so they are empty here."""
     with TestClient(app) as client:
-        # A Tuesday at 09:00 — the sauna (08:00–22:00, all days) is open at the queried moment.
         response = client.get("/pools/hallenbad-city", params={"at": "2026-09-15T09:00"})
     assert response.status_code == 200
     body = response.json()
 
-    # Basins: the 50m lap basin surfaces its size, lane count, temperature key, and its
-    # curated-vs-parsed_prose caveat.
+    # Basins: the scraped schedule basin + the physical `Schwimmerbecken` (its 50 m / 6-lane
+    # physicals sourced from the WFS prose, tagged parsed_prose).
     basins = {b["basin_id"]: b for b in body["basins"]}
-    assert set(basins) == {"city-50m", "city-lehrbecken"}
+    assert "city-50m" in basins
     lap = basins["city-50m"]
     assert lap["kind"] == "lap"
     assert lap["length_m"] == 50.0
     assert lap["lanes"] == 6
-    assert "nominal_temp_c" in lap and lap["nominal_temp_c"] is None  # no temp curated yet
-    assert lap["physical_source"] == "curated"  # the honesty caveat is present
+    assert lap["nominal_temp_c"] == 28.0  # "28°C" sourced from the WFS infrastruktur prose
+    assert lap["physical_source"] == "parsed_prose"  # sourced from infrastruktur, honesty caveat
 
-    # Features: the sauna, resolved open at 09:00, with its stated hours and surcharge.
-    features = {f["kind"]: f for f in body["features"]}
-    assert "sauna" in features
-    sauna = features["sauna"]
-    assert sauna["open_now"] is True  # open-at-query-time, resolved for the queried moment
-    assert sauna["hours"] == [{"start": "08:00", "end": "22:00"}]
-    assert sauna["surcharge_chf"] == 10.0
+    # Features/lockers: not produced by the sourced pipeline (curated statics were deleted in S3).
+    assert body["features"] == []
+    assert body["lockers"] == []
 
-    # Lockers: all three rows, with the orthogonal fee/deposit/period axes intact.
-    lockers = {locker["category"]: locker for locker in body["lockers"]}
-    assert set(lockers) == {"wardrobe", "valuables", "laundry"}
-    assert lockers["wardrobe"]["fee_chf"] is None and lockers["wardrobe"]["deposit_chf"] == 5.0
-    assert lockers["laundry"]["fee_chf"] == 400.0 and lockers["laundry"]["period"] == "1 Jahr"
-
-    # Prices: the whole facility price table (not the per-person pick), with its freshness date.
+    # Prices: the whole scraped facility price table, with its freshness date present.
     prices = body["prices"]
     assert prices is not None
     entries = {e["category"]: e for e in prices["entries"]}
-    assert entries["adult"]["display"] == "Erwachsene CHF 8.00"
     assert entries["adult"]["amount_chf"] == 8.0
-    assert prices["valid_as_of"] == "2026-07-18"
+    assert entries["adult"]["display"]
+    assert prices["valid_as_of"]  # a scrape freshness date is stamped
 
     # Provenance: the curated flag reaches the detail view.
-    assert body["provenance"]["curated"] is True
+    assert "curated" in body["provenance"]
 
 
 def test_pool_detail_surfaces_lane_plan_source_url() -> None:
     """S1 acceptance: `/pools/{id}` projects each basin's declared Belegungsplan PDF URL
-    (`Basin.lane_plan_source.url`) as `lane_plan_url`, present after an offline `swimzh build`
-    alone (the `gold_db` conftest fixture — no `scrape-lanes` needed). Oerlikon's two basins
-    declare DISTINCT PDFs; a basin with no source projects `null`. The price source_url still
-    reaches the boundary (regression guard). No `website` claim is made here (S2 concern)."""
+    (`Basin.lane_plan_source.url`) as `lane_plan_url`. Oerlikon's two crosswalk basins declare
+    DISTINCT PDFs (both survive the S3 strip + the scrape's binding-carry compose); the scraped
+    schedule basin declares none (`null`). The price source_url still reaches the boundary."""
     _plan = "https://www.stadt-zuerich.ch/content/dam/web/de/stadtleben/sport-und-erholung/dokumente/badeanlagen/belegungsplaene"
     with TestClient(app) as client:
         oerlikon = client.get("/pools/hallenbad-oerlikon").json()
         city = client.get("/pools/hallenbad-city").json()
 
-    # Oerlikon: two basins, each carrying the EXACT distinct PDF authored in the YAML.
+    # Oerlikon: its two crosswalk basins each carry the EXACT distinct PDF authored in the YAML.
     oerlikon_basins = {b["basin_id"]: b for b in oerlikon["basins"]}
     assert (
         oerlikon_basins["oerlikon-50m"]["lane_plan_url"] == f"{_plan}/oerlikon-schwimmerbecken.pdf"
@@ -210,13 +200,15 @@ def test_pool_detail_surfaces_lane_plan_source_url() -> None:
         oerlikon_basins["oerlikon-50m"]["lane_plan_url"]
         != oerlikon_basins["oerlikon-sprungbecken"]["lane_plan_url"]
     )
+    # The scraped schedule basin declares no `lane_plan_source` → projects `null`.
+    assert oerlikon_basins["hallenbad-oerlikon-main"]["lane_plan_url"] is None
     # Regression guard: the price source URL still reaches the boundary.
     assert oerlikon["prices"]["source_url"] is not None
 
-    # A basin with no declared `lane_plan_source` projects `null` (city's teaching basin).
+    # City: its `Schwimmerbecken` crosswalk basin carries the URL; the scraped basin projects null.
     city_basins = {b["basin_id"]: b for b in city["basins"]}
     assert city_basins["city-50m"]["lane_plan_url"] == f"{_plan}/city-schwimmerbecken.pdf"
-    assert city_basins["city-lehrbecken"]["lane_plan_url"] is None
+    assert city_basins["hallenbad-city-main"]["lane_plan_url"] is None
 
 
 def test_facility_detail_out_surfaces_temp_and_parsed_prose_caveat() -> None:

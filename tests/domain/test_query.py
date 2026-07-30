@@ -8,7 +8,6 @@ from __future__ import annotations
 import dataclasses
 from datetime import date, datetime, time, timedelta
 from decimal import Decimal
-from pathlib import Path
 from zoneinfo import ZoneInfo
 
 import pytest
@@ -49,18 +48,12 @@ from swimzh.domain.query import (
     read_temperature,
 )
 from swimzh.domain.schedule import ScheduleRule, TimeRange, Weekday
-from swimzh.providers.curated import Dataset, load_dataset
+from swimzh.providers.curated import Dataset
 
-DATA_DIR = Path(__file__).resolve().parents[2] / "data"
+# The `dataset` fixture (the illustrative curated schedules, now committed as test fixtures) lives
+# in tests/domain/conftest.py — see the note there on why it is no longer read from `data/pools/`.
 ZURICH = ZoneInfo("Europe/Zurich")
 ADULT = Person(gender=Gender.MALE, age=40)
-
-
-@pytest.fixture(scope="module")
-def dataset() -> Dataset:
-    result = load_dataset(DATA_DIR)
-    assert isinstance(result, Ok), result
-    return result.value
 
 
 def test_dataset_loads_curated_and_lane_plan_only_pools(dataset: Dataset) -> None:

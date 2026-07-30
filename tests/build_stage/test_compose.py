@@ -27,6 +27,7 @@ from swimzh.domain.models import (
     Facility,
     Feature,
     FeatureKind,
+    LanePlanSource,
     PoolId,
     PoolIdentity,
     PoolKind,
@@ -149,6 +150,65 @@ def test_scraped_features_and_lockers_survive_compose_onto_non_curated_base() ->
     assert merged.website == "https://example.test/pool"
     assert merged.amenities == frozenset({"wifi"})
     assert merged.accessibility == "barrierefrei"
+
+
+def _stripped_curated_city() -> Facility:
+    """A post-strip curated City: a schedule-less binding basin (only `lane_plan_source`), the shape
+    `data/pools/city.yaml` reduces to once the curated schedule is deleted."""
+    return Facility(
+        identity=PoolIdentity(PoolId("hallenbad-city"), "Hallenbad City", PoolKind.INDOOR),
+        address="Sihlstrasse 71",
+        provenance=Provenance(source="curated", curated=True),
+        basins=(
+            Basin(
+                basin_id=BasinId("city-50m"),
+                name="Schwimmerbecken",
+                rules=(),
+                lane_plan_source=LanePlanSource(url="https://example.test/city-schwimmer.pdf"),
+            ),
+        ),
+    )
+
+
+def test_scraped_schedule_carries_curated_lane_binding() -> None:
+    # S3 crux: once the curated schedule is stripped, the scraped basin wins the timetable — but the
+    # curated basin's `lane_plan_source` (the thin-crosswalk binding) must be CARRIED, not replaced
+    # away, or `_attach_lanes` would abort on `attached == 0`.
+    result = compose(
+        (_stripped_curated_city(),),
+        ((CITY, _scraped_city(prices=None)),),
+    )
+    merged = result.facilities[0]
+    # The scraped timetable is present...
+    scraped_basin = next(b for b in merged.basins if b.basin_id == BasinId("hallenbad-city-main"))
+    assert scraped_basin.rules  # the scraped schedule survived
+    # ...AND the curated lane binding survived alongside it.
+    lane_basin = next(b for b in merged.basins if b.basin_id == BasinId("city-50m"))
+    assert lane_basin.lane_plan_source == LanePlanSource(
+        url="https://example.test/city-schwimmer.pdf"
+    )
+    # A build note records the binding-carry.
+    assert any("curated lane binding" in note for note in result.notes)
+
+
+def test_scraped_basin_url_already_declared_is_not_duplicated() -> None:
+    # Defensive: if a scraped basin already carries the curated binding's URL, the curated basin is
+    # not appended (no duplicate binding); the scraped basin wins.
+    url = "https://example.test/city-schwimmer.pdf"
+    scraped = replace(
+        _scraped_city(prices=None),
+        basins=(
+            Basin(
+                basin_id=BasinId("hallenbad-city-main"),
+                name="Hauptbecken",
+                rules=_scraped_city(prices=None).basins[0].rules,
+                lane_plan_source=LanePlanSource(url=url),
+            ),
+        ),
+    )
+    result = compose((_stripped_curated_city(),), ((CITY, scraped),))
+    merged = result.facilities[0]
+    assert [b.basin_id for b in merged.basins] == [BasinId("hallenbad-city-main")]
 
 
 def test_output_is_ordered_by_canonical_id() -> None:

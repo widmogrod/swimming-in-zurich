@@ -101,9 +101,11 @@ def _is_nonempty(value: tuple[Any, ...]) -> bool:
 
 
 # The declarative precedence map — the single place aspect merge policy is stated. No aspect is
-# merged by a hand-written provider ``if``; adding one means one row here.
+# merged by a hand-written provider ``if``; adding one means one row here. ``basins`` is NOT here:
+# it is not a plain replace-the-winner field but a binding-preserving merge (``_merge_basins``),
+# because a stripped pool's ``lane_plan_source`` crosswalk must survive when the scraped schedule
+# wins the timetable — see below.
 _ASPECTS: tuple[_Aspect, ...] = (
-    _Aspect("basins", _has_schedule, CURATED_WINS),
     _Aspect("prices", _is_not_none, CURATED_WINS),
     _Aspect("closures", _is_nonempty, CURATED_WINS),
     _Aspect("notices", _is_nonempty, CURATED_WINS),
@@ -149,6 +151,55 @@ def _scraped_facility(pool_id: PoolId, aspects: ScrapedAspects) -> Facility:
     )
 
 
+def _carry_bindings(
+    scraped_basins: tuple[Basin, ...], curated_basins: tuple[Basin, ...]
+) -> tuple[Basin, ...]:
+    """Scraped basins carry the real schedule; every curated basin that carries a
+    ``lane_plan_source`` (the thin-crosswalk URL→basin binding, plus its WFS-sourced physicals) is
+    preserved ALONGSIDE them, so a stripped pool's lane binding survives the schedule scrape instead
+    of being replaced away. A curated binding whose URL a scraped basin already declares is dropped
+    (the scraped basin wins the schedule); today the scrape emits a single synthetic ``Hauptbecken``
+    with no ``lane_plan_source``, so every authored lane basin is appended untouched."""
+    scraped_urls = {
+        b.lane_plan_source.url for b in scraped_basins if b.lane_plan_source is not None
+    }
+    carried = tuple(
+        basin
+        for basin in curated_basins
+        if basin.lane_plan_source is not None and basin.lane_plan_source.url not in scraped_urls
+    )
+    return scraped_basins + carried
+
+
+def _merge_basins(by_source: dict[Source, Facility]) -> tuple[tuple[Basin, ...], str | None]:
+    """Fold the two sources' basins, preserving the thin-crosswalk lane binding.
+
+    Unlike a plain aspect (replace with the winner), basins need a merge so the ``lane_plan_source``
+    binding is not discarded when the scraped timetable wins:
+
+    * curated has a schedule (≥1 rule) → **curated-wins wholesale** (scraped basins discarded), as
+      the original per-aspect precedence did — a fully-curated pool is unchanged;
+    * scraped has the schedule (curated has none — the post-strip world) → the scraped basins carry
+      the timetable and every curated basin bearing a ``lane_plan_source`` is CARRIED alongside them
+      (``_carry_bindings``), so the crosswalk binding + physicals survive and ``_attach_lanes``
+      finds an owner (no ``attached == 0`` abort);
+    * neither has a schedule → keep whichever source has basins (curated first).
+    """
+    curated = by_source.get(Source.CURATED)
+    scraped = by_source.get(Source.SCRAPED)
+    curated_basins = curated.basins if curated is not None else ()
+    scraped_basins = scraped.basins if scraped is not None else ()
+
+    if _has_schedule(curated_basins):
+        return curated_basins, None
+    if _has_schedule(scraped_basins):
+        merged = _carry_bindings(scraped_basins, curated_basins)
+        carried = len(merged) - len(scraped_basins)
+        note = f"basins: scraped schedule + {carried} curated lane binding(s)" if carried else None
+        return merged, note
+    return (curated_basins or scraped_basins), None
+
+
 def _fold(by_source: dict[Source, Facility]) -> tuple[Facility, tuple[str, ...]]:
     """Fold one pool's per-source facilities into one, applying each aspect's precedence."""
     # The base carries identity + all un-merged fields; prefer curated (its crosswalk/lane
@@ -172,6 +223,10 @@ def _fold(by_source: dict[Source, Facility]) -> tuple[Facility, tuple[str, ...]]
                 f"{base.identity.name}: {aspect.field} kept from {winner.value} "
                 f"(also supplied by {also})"
             )
+    basins, basin_note = _merge_basins(by_source)
+    changes["basins"] = basins
+    if basin_note is not None:
+        notes.append(f"{base.identity.name}: {basin_note}")
     return replace(base, **changes), tuple(notes)
 
 

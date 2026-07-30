@@ -40,7 +40,6 @@ from swimzh.etl.silver import (
 from swimzh.providers.belegungsplan import ParsedPlan
 from swimzh.providers.curated import Dataset, load_dataset
 
-DATA_DIR = Path(__file__).resolve().parents[2] / "data"
 FETCHED_AT = datetime(2026, 7, 18, 9, 0, tzinfo=ZoneInfo("Europe/Zurich"))
 
 
@@ -61,8 +60,12 @@ def _parsed(
 
 
 @pytest.fixture(scope="module")
-def dataset() -> Dataset:
-    result = load_dataset(DATA_DIR)
+def dataset(illustrative_data_dir: Path) -> Dataset:
+    # The lane-reconciliation tests need pools that carry BOTH a `lane_plan_source` binding AND a
+    # schedule with a `valid_as_of` (for the staleness comparison). Production `data/pools/*.yaml`
+    # keep only the binding since delete-curated-schedule-tier S3, so these tests load the committed
+    # illustrative pre-strip pools (shared `illustrative_data_dir`, see tests/conftest.py).
+    result = load_dataset(illustrative_data_dir)
     assert isinstance(result, Ok), result
     return result.value
 

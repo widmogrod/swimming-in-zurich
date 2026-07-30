@@ -12,31 +12,41 @@ Replaced the `is_curated` boolean (delete-curated-schedule-tier S1):
 from __future__ import annotations
 
 from dataclasses import replace
-from pathlib import Path
+from datetime import time
 
 import pytest
 
-from swimzh.core.result import Ok
+from swimzh.domain.access import PublicSwim
 from swimzh.domain.catalog import ScheduleFreshness
-from swimzh.domain.models import Facility, PoolKind
-from swimzh.providers.curated import load_dataset
+from swimzh.domain.models import (
+    Basin,
+    BasinId,
+    Facility,
+    PoolId,
+    PoolIdentity,
+    PoolKind,
+    Provenance,
+)
+from swimzh.domain.schedule import ScheduleRule, TimeRange, Weekday
 from swimzh.storage import codec
-
-DATA_DIR = Path(__file__).resolve().parents[2] / "data"
 
 
 @pytest.fixture(scope="module")
 def scheduled_facility() -> Facility:
-    """A real curated facility that is indoor AND carries ≥1 rule (Hallenbad City) — so stripping
-    its rules exercises the `awaiting_scrape` branch, not a school's `no_source`."""
-    result = load_dataset(DATA_DIR)
-    assert isinstance(result, Ok), result
-    facility = next(
-        f
-        for f in result.value.facilities
-        if f.identity.kind is PoolKind.INDOOR and any(b.rules for b in f.basins)
+    """An indoor facility carrying ≥1 rule — the shape a scraped stadt-zuerich pool takes once its
+    timetable is composed on. Built in-memory (curated YAML no longer carries any schedule after
+    delete-curated-schedule-tier S3), so stripping the rule exercises `awaiting_scrape`."""
+    rule = ScheduleRule(
+        weekdays=frozenset({Weekday.MONDAY}),
+        time=TimeRange(start=time(11, 0), end=time(22, 0)),
+        access=PublicSwim(),
     )
-    return facility
+    return Facility(
+        identity=PoolIdentity(PoolId("hallenbad-city"), "Hallenbad City", PoolKind.INDOOR),
+        address="Sihlstrasse 71, 8001 Zürich",
+        provenance=Provenance(source="schedule_scraper", curated=False),
+        basins=(Basin(basin_id=BasinId("hallenbad-city-main"), name="Hauptbecken", rules=(rule,)),),
+    )
 
 
 def _ruleless(facility: Facility) -> Facility:

@@ -1,28 +1,10 @@
-# Schulschwimmanlage Aemtler — CURATED, ILLUSTRATIVE DATA (not verified). See city.yaml
-# header. Proof case for school pools: they stay ordinary basins — SchoolReserved during
-# school time, with public windows scoped to the school calendar, including an ADULTS-ONLY
-# evening swim (the reason `AdultsOnly` exists: a child must not be told "you can swim").
+# Schulschwimmanlage Aemtler — thin CROSSWALK only (delete-curated-schedule-tier S3).
 #
-# Identity, address, geo and website come from data/catalog.json (WFS). The timetable is
-# plausible-but-unverified, marked illustrative like the other curated pools; verify
-# against stadt-zuerich.ch and update `valid_as_of` before relying on any answer.
+# A `school` pool: NOT scraped by `scrape_indoor_facilities` (WFS-`indoor` only) and it publishes
+# no Belegungsplan, so it carries no lane binding at all. After the strip it is permanently
+# schedule-less → `ScheduleFreshness.NO_SOURCE` (no rules, non-scrapeable kind). Identity, address
+# and geo come from the WFS roster. No basin declares a crosswalk fact, so `basins` is empty.
 
 facility_id: "schulschwimmanlage-aemtler"
-address: "8003 Zürich"  # catalog states only the postal locality — no street invented
-source: "stadt-zuerich.ch/hallenbaeder/aemtler (curated, illustrative)"
-valid_as_of: "2026-07-19"
-geo: { lat: 47.374173, lon: 8.512659 }
-website: "https://www.stadt-zuerich.ch/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/hallenbaeder/aemtler.html"
-public_holiday_policy: "closed"
 
-basins:
-  - basin_id: "aemtler-becken"
-    name: "Schwimmbecken"
-    kind: "teaching"
-    rules:
-      # School time (term only): reserved for school classes — not open to the public.
-      - { weekdays: ["mon", "tue", "wed", "thu", "fri"], start: "08:00", end: "17:00", access: { type: "school_reserved" }, scope: "school_term" }
-      # Term-time evening public window, restricted to adults (18+):
-      - { weekdays: ["mon", "wed"], start: "18:00", end: "21:00", access: { type: "adults_only", note: "Erwachsenenschwimmen" }, scope: "school_term" }
-      # During school holidays the daytime block opens to the general public:
-      - { weekdays: ["mon", "tue", "wed", "thu", "fri"], start: "09:00", end: "17:00", access: { type: "public" }, scope: "school_holiday" }
+basins: []

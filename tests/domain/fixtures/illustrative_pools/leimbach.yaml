@@ -1,0 +1,18 @@
+# Hallenbad Leimbach — MINIMAL, lane-plan-only (NOT fully curated).
+#
+# This file exists only to make the pool's already-parsing Belegungsplan a FIRST-CLASS domain
+# fact: a single schedule-less basin carrying its `lane_plan_source`. There is deliberately NO
+# timetable / eligibility here yet, so the pool stays out of `/swim` (Decision #5: no rules → no
+# option); full curation is a later slice. Its lane plan attaches by URL-origin identity.
+
+facility_id: "hallenbad-leimbach"
+address: "Klebestrasse 3, 8041 Zürich"
+source: "stadt-zuerich.ch/hallenbaeder/leimbach (lane-plan source only, uncurated schedule)"
+
+basins:
+  - basin_id: "leimbach-25m"
+    name: "25m-Becken"
+    kind: "lap"
+    rules: []  # schedule-less: identity + lane document only, no /swim option yet
+    lane_plan_source:
+      url: "https://www.stadt-zuerich.ch/content/dam/web/de/stadtleben/sport-und-erholung/dokumente/badeanlagen/belegungsplaene/leimbach.pdf"

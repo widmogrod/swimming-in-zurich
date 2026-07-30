@@ -62,15 +62,18 @@ def test_schedule_freshness_is_derived(spine: PoolSpine, dataset: Dataset) -> No
         if any(b.rules for b in f.basins)
     }
     assert scraped == expected
-    assert len(scraped) == 4
-    # The remaining 53 roster pools derive a schedule-less freshness (awaiting_scrape / no_source).
+    # Since delete-curated-schedule-tier S3, curated YAML carries NO schedule — the pre-scrape
+    # spine is schedule-less, so NO pool derives `SCRAPED` here. `SCRAPED` appears only once
+    # the atomic build's scrape phase composes the real timetable in (proven end-to-end in
+    # tests/test_cli.py); all 57 roster pools are awaiting_scrape / no_source at seed time.
+    assert scraped == set()
     assert (
         sum(
             1
             for p in spine.pools
             if codec.schedule_freshness(p.facility_doc) is not ScheduleFreshness.SCRAPED
         )
-        == 53
+        == 57
     )
 
 

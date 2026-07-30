@@ -27,13 +27,19 @@ DATA_DIR = Path(__file__).resolve().parents[4] / "data"
 _ROSTER = catalog_json.loads((DATA_DIR / "catalog.json").read_text(encoding="utf-8"))
 
 
-def _gold_db_with_lane_plan(tmp_path: Path) -> Path:
+def _gold_db_with_lane_plan(tmp_path: Path, data_dir: Path) -> Path:
     """A complete gold DB (facilities + catalog + calendar) whose City 50m basin carries a
-    lane plan, so a gold-backed query surfaces the availability badge."""
-    dataset = load_dataset(DATA_DIR)
+    lane plan, so a gold-backed query surfaces the availability badge.
+
+    Built from the illustrative curated data (`data_dir`), which carries City's per-basin schedule
+    and its named `50m-Becken` basin — the sourced pipeline's flat scrape (a single schedule-less
+    `Hauptbecken`) cannot host this per-basin lane-panel projection. Production `data/pools/*.yaml`
+    carry no schedule since delete-curated-schedule-tier S3; the lane-PANEL projection is exercised
+    here against the illustrative schedules (shared `illustrative_data_dir`, tests/conftest.py)."""
+    dataset = load_dataset(data_dir)
     assert isinstance(dataset, Ok)
     db = tmp_path / "gold.sqlite"
-    assert isinstance(build_store(DATA_DIR, db, _ROSTER), Ok)
+    assert isinstance(build_store(data_dir, db, _ROSTER), Ok)
     # Re-write City's `pool.facility_doc` (the flipped read path) with a lane-plan-attached copy
     # via the single write door; the other pools keep their build-stamped catalog geo.
     attached = _attach_lane_plan(dataset.value.facilities)
@@ -80,14 +86,14 @@ def _attach_lane_plan(facilities: tuple[Facility, ...]) -> tuple[Facility, ...]:
     return tuple(out)
 
 
-def test_app_serves_from_gold_store(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    db = tmp_path / "gold.sqlite"
-    assert isinstance(build_store(DATA_DIR, db, _ROSTER), Ok)
-
-    monkeypatch.setenv("SWIMZH_GOLD_DB", str(db))
+def test_app_serves_from_gold_store(gold_db: Path) -> None:
+    # The default `gold_db` is the shipping store: ONE offline atomic `build` whose scrape supplies
+    # the real City schedule (delete-curated-schedule-tier S3). The scraped City timetable runs a
+    # women-only session Thursday 18:00–22:00, so a female query then surfaces `WomenOnly` — the app
+    # serving the SCRAPED schedule end-to-end (autouse fixture already points the app at gold_db).
     with TestClient(app) as client:
         response = client.get(
-            "/swim", params={"at": "2026-09-14T20:30", "gender": "female", "age": 34}
+            "/swim", params={"at": "2026-09-17T18:30", "gender": "female", "age": 34}
         )
     assert response.status_code == 200
     accesses = {o["access"] for o in response.json()["options"]}
@@ -95,9 +101,9 @@ def test_app_serves_from_gold_store(tmp_path: Path, monkeypatch: pytest.MonkeyPa
 
 
 def test_lane_availability_badge_surfaces_through_the_swim_endpoint(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, illustrative_data_dir: Path
 ) -> None:
-    db = _gold_db_with_lane_plan(tmp_path)
+    db = _gold_db_with_lane_plan(tmp_path, illustrative_data_dir)
 
     monkeypatch.setenv("SWIMZH_GOLD_DB", str(db))
     with TestClient(app) as client:
@@ -122,9 +128,9 @@ def test_lane_availability_badge_surfaces_through_the_swim_endpoint(
 
 
 def test_lane_timeline_surfaces_through_the_swim_endpoint(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, illustrative_data_dir: Path
 ) -> None:
-    db = _gold_db_with_lane_plan(tmp_path)
+    db = _gold_db_with_lane_plan(tmp_path, illustrative_data_dir)
 
     monkeypatch.setenv("SWIMZH_GOLD_DB", str(db))
     with TestClient(app) as client:
@@ -148,12 +154,12 @@ def test_lane_timeline_surfaces_through_the_swim_endpoint(
 
 
 def test_facility_detail_lane_panel_surfaces_through_pools_endpoint(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, illustrative_data_dir: Path
 ) -> None:
     """S4: the /pools/{id} facility-detail response carries a per-basin lane panel — the
     per-lane day timeline, the best public window, and the club roster — for basins with a
     parsed Belegungsplan."""
-    db = _gold_db_with_lane_plan(tmp_path)
+    db = _gold_db_with_lane_plan(tmp_path, illustrative_data_dir)
 
     monkeypatch.setenv("SWIMZH_GOLD_DB", str(db))
     with TestClient(app) as client:

@@ -672,6 +672,26 @@ def test_build_produces_complete_store(tmp_path: Path) -> None:
     assert stored > scheduled
 
 
+def test_atomic_build_carries_lane_bindings_so_lane_plans_still_attach(tmp_path: Path) -> None:
+    # delete-curated-schedule-tier S3 crux: with the curated schedule stripped, the scraped
+    # timetable wins the `basins` aspect — but `compose` CARRIES each curated basin's
+    # `lane_plan_source` (the thin-crosswalk binding) alongside the scraped schedule, so the lane
+    # phase still finds an owner. Without the carry, `_attach_lanes` would abort on `attached == 0`.
+    db = tmp_path / "gold.sqlite"
+    assert build(db_path=db, data_dir=DATA_DIR, client=_build_client()) == 0
+    repo = GoldRepository(open_db(db))
+
+    for pool_id in ("hallenbad-city", "hallenbad-oerlikon"):
+        facility = repo.get(reconstruct_pool_id(pool_id))
+        assert facility is not None
+        # The scraped schedule is present (a rule-bearing basin)…
+        assert any(b.rules for b in facility.basins), pool_id
+        # …AND the crosswalk lane binding survived the compose (a basin still declares its source)…
+        assert any(b.lane_plan_source is not None for b in facility.basins), pool_id
+        # …AND at least one lane plan actually attached (the URL-keyed join found its basin).
+        assert any(isinstance(b.lane_plan, LanePlan) for b in facility.basins), pool_id
+
+
 def test_build_atomic_pipeline_scrapes_then_aborts_content_unchanged(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:

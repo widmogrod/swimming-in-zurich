@@ -53,7 +53,7 @@ def _option_facilities(swim: dict[str, object]) -> set[str]:
 
 
 def test_scraping_a_schedule_flips_curation_and_serves_it(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, illustrative_data_dir: Path
 ) -> None:
     db = tmp_path / "gold.sqlite"
     assert isinstance(build_store(DATA_DIR, db, _ROSTER), Ok)
@@ -73,9 +73,11 @@ def test_scraping_a_schedule_flips_curation_and_serves_it(
     assert "Hallenbad Altstetten" not in _option_facilities(before)
 
     # Land a real schedule on that previously-schedule-less pool through the SINGLE write door,
-    # exactly as a scrape does — donor is City's curated schedule re-identified as Altstetten,
-    # carrying scraped (non-curated) provenance so nothing else could have set a status flag.
-    dataset = load_dataset(DATA_DIR)
+    # exactly as a scrape does — donor is a scheduled City re-identified as Altstetten, carrying
+    # scraped (non-curated) provenance so nothing else could have set a status flag. Production
+    # `data/pools/*.yaml` carry no schedule since delete-curated-schedule-tier S3, so the donor
+    # schedule comes from the committed illustrative pools (shared `illustrative_data_dir`).
+    dataset = load_dataset(illustrative_data_dir)
     assert isinstance(dataset, Ok)
     donor = next(f for f in dataset.value.facilities if f.identity.name == "Hallenbad City")
     scraped = replace(

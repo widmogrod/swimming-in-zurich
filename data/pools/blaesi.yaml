@@ -1,13 +1,10 @@
-# Hallenbad Bläsi — MINIMAL, lane-plan-only (NOT fully curated). See leimbach.yaml header.
+# Hallenbad Bläsi — thin CROSSWALK only (delete-curated-schedule-tier S3).
+# Schedule scraped; identity/address/geo from the WFS roster. Only the URL→basin lane binding.
 
 facility_id: "hallenbad-blaesi"
-address: "Limmattalstrasse 154, 8049 Zürich"
-source: "stadt-zuerich.ch/hallenbaeder/blaesi (lane-plan source only, uncurated schedule)"
 
 basins:
   - basin_id: "blaesi-25m"
     name: "25m-Becken"
-    kind: "lap"
-    rules: []  # schedule-less: identity + lane document only, no /swim option yet
     lane_plan_source:
       url: "https://www.stadt-zuerich.ch/content/dam/web/de/stadtleben/sport-und-erholung/dokumente/badeanlagen/belegungsplaene/blaesi.pdf"

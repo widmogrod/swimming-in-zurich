@@ -1,13 +1,15 @@
 """S1 fidelity spike (GO/NO-GO) regeneration test.
 
-Builds ``PoolMeasurement``s for the 7 currently-curated pools by running the real providers
-over committed fixtures (WFS ``infrastruktur`` prose from ``data/catalog.json``; saved pool
-pages from ``tests/providers/fixtures/``), then asserts that both artifacts — the per-pool
-schedule diff and the fact-class gap report — regenerate **byte-for-byte** from those fixtures.
-The committed ``*.golden.md`` files are the artifacts the S1 human gate reads.
+Builds ``PoolMeasurement``s for the 7 illustrative pools by running the real providers over
+committed fixtures (WFS ``infrastruktur`` prose from ``data/catalog.json``; saved pool pages from
+``tests/providers/fixtures/``), then asserts that both artifacts — the per-pool schedule diff and
+the fact-class gap report — regenerate **byte-for-byte** from those fixtures. The committed
+``*.golden.md`` files are the artifacts the S1 human gate read.
 
-Only ``hallenbad-city`` currently has a saved page fixture; the other six curated pools have
-none, so their schedule fidelity is honestly recorded as *not measured* rather than fabricated.
+The fidelity spike measures the ILLUSTRATIVE curated schedules against the real source — the very
+comparison that justified deleting the curated tier. Since delete-curated-schedule-tier S3 the
+production ``data/pools/*.yaml`` carry no schedule, so the curated side is loaded from the committed
+pre-strip illustrative pool YAMLs (shared ``illustrative_data_dir`` fixture, tests/conftest.py).
 """
 
 from __future__ import annotations
@@ -34,7 +36,7 @@ _DATA = _REPO_ROOT / "data"
 _PAGE_FIXTURES = _REPO_ROOT / "tests" / "providers" / "fixtures"
 _GOLDEN = Path(__file__).resolve().parent / "fidelity"
 
-# The 7 currently-curated pools -> their saved page fixture. All seven now have a real saved
+# The 7 illustrative pools -> their saved page fixture. All seven now have a real saved
 # stadt-zuerich.ch page (fetched 2026-07-28), so schedule fidelity is measured for every pool.
 _PAGE_FIXTURE_BY_POOL: dict[str, str | None] = {
     "schulschwimmanlage-aemtler": "schulschwimmanlage_aemtler.html",
@@ -52,15 +54,15 @@ def _wfs_prose() -> dict[str, str]:
     return {e["pool_id"]: e["description"] for e in entries if e.get("description") is not None}
 
 
-def _curated_by_id() -> dict[str, Facility]:
-    dataset = load_dataset(_DATA)
+def _curated_by_id(data_dir: Path) -> dict[str, Facility]:
+    dataset = load_dataset(data_dir)
     assert isinstance(dataset, Ok), dataset
     return {f.identity.facility_id: f for f in dataset.value.facilities}
 
 
-def _build_measurements() -> tuple[PoolMeasurement, ...]:
+def _build_measurements(data_dir: Path) -> tuple[PoolMeasurement, ...]:
     prose = _wfs_prose()
-    curated = _curated_by_id()
+    curated = _curated_by_id(data_dir)
     out: list[PoolMeasurement] = []
     for pool_id, page_name in _PAGE_FIXTURE_BY_POOL.items():
         page_html = (
@@ -90,46 +92,58 @@ def _render_gap(measurements: tuple[PoolMeasurement, ...]) -> str:
 # --- regeneration / determinism ----------------------------------------------------------
 
 
-def test_schedule_diff_regenerates_from_fixtures() -> None:
+def test_schedule_diff_regenerates_from_fixtures(illustrative_data_dir: Path) -> None:
     expected = (_GOLDEN / "schedule_diff.golden.md").read_text(encoding="utf-8")
-    assert _render_diff(_build_measurements()) == expected
+    assert _render_diff(_build_measurements(illustrative_data_dir)) == expected
 
 
-def test_gap_report_regenerates_from_fixtures() -> None:
+def test_gap_report_regenerates_from_fixtures(illustrative_data_dir: Path) -> None:
     expected = (_GOLDEN / "gap_report.golden.md").read_text(encoding="utf-8")
-    assert _render_gap(_build_measurements()) == expected
+    assert _render_gap(_build_measurements(illustrative_data_dir)) == expected
 
 
-def test_both_artifacts_are_deterministic() -> None:
+def test_both_artifacts_are_deterministic(illustrative_data_dir: Path) -> None:
     # Independent builds must produce identical bytes — no set-ordering / dict-ordering leak.
-    assert _render_diff(_build_measurements()) == _render_diff(_build_measurements())
-    assert _render_gap(_build_measurements()) == _render_gap(_build_measurements())
+    assert _render_diff(_build_measurements(illustrative_data_dir)) == _render_diff(
+        _build_measurements(illustrative_data_dir)
+    )
+    assert _render_gap(_build_measurements(illustrative_data_dir)) == _render_gap(
+        _build_measurements(illustrative_data_dir)
+    )
 
 
 # --- the findings the human gate depends on ----------------------------------------------
 
 
-def test_all_seven_curated_pools_are_now_measured() -> None:
-    # Every curated pool now has a real saved page whose timetable parses, so none is an
+def test_all_seven_curated_pools_are_now_measured(illustrative_data_dir: Path) -> None:
+    # Every illustrative pool has a real saved page whose timetable parses, so none is an
     # unmeasured fixture gap.
-    measured = {m.pool_id for m in _build_measurements() if m.source_rules is not None}
+    measured = {
+        m.pool_id for m in _build_measurements(illustrative_data_dir) if m.source_rules is not None
+    }
     assert measured == set(_PAGE_FIXTURE_BY_POOL)
 
 
-def test_city_schedule_has_zero_overlap_with_illustrative_curated_data() -> None:
+def test_city_schedule_has_zero_overlap_with_illustrative_curated_data(
+    illustrative_data_dir: Path,
+) -> None:
     # The real city page and the illustrative curated YAML share NO facility-level rule: every
     # entry is source-poorer or source-richer, none matched. This is the core GO/NO-GO signal.
-    diff = next(diff_schedule(m) for m in _build_measurements() if m.pool_id == "hallenbad-city")
+    diff = next(
+        diff_schedule(m)
+        for m in _build_measurements(illustrative_data_dir)
+        if m.pool_id == "hallenbad-city"
+    )
     assert diff.source_available
     assert diff.count(DiffClass.MATCHED) == 0
     assert diff.count(DiffClass.SOURCE_POORER) > 0
     assert diff.count(DiffClass.SOURCE_RICHER) > 0
 
 
-def test_missing_fixture_pool_is_recorded_not_fabricated() -> None:
+def test_missing_fixture_pool_is_recorded_not_fabricated(illustrative_data_dir: Path) -> None:
     # A pool with no committed page (page_html=None) is an explicit unavailable gap with no
     # fabricated rows — verified synthetically now that all seven real pools have fixtures.
-    oerlikon = _curated_by_id()["hallenbad-oerlikon"]
+    oerlikon = _curated_by_id(illustrative_data_dir)["hallenbad-oerlikon"]
     measurement = measure_pool(
         pool_id="hallenbad-oerlikon", curated=oerlikon, wfs_prose=None, page_html=None
     )
@@ -139,24 +153,24 @@ def test_missing_fixture_pool_is_recorded_not_fabricated() -> None:
     assert diff.curated_rule_count > 0  # curated rules exist; they are simply not verifiable
 
 
-def _gap_by_class() -> dict[str, Sourcing]:
-    report = build_gap_report(_build_measurements())
+def _gap_by_class(data_dir: Path) -> dict[str, Sourcing]:
+    report = build_gap_report(_build_measurements(data_dir))
     return {e.fact_class: e.sourcing for e in report.entries}
 
 
-def test_infrastruktur_sources_kind_dimensions_lanes() -> None:
-    gaps = _gap_by_class()
+def test_infrastruktur_sources_kind_dimensions_lanes(illustrative_data_dir: Path) -> None:
+    gaps = _gap_by_class(illustrative_data_dir)
     assert gaps["basin.kind"] is Sourcing.SOURCED_BY_INFRASTRUKTUR
     assert gaps["basin.dimensions"] is Sourcing.SOURCED_BY_INFRASTRUKTUR
     assert gaps["basin.lanes"] is Sourcing.SOURCED_BY_INFRASTRUKTUR
 
 
-def test_closures_are_sourced_by_the_notice_scraper() -> None:
-    assert _gap_by_class()["facility.closures"] is Sourcing.SOURCED_BY_SCHEDULE
+def test_closures_are_sourced_by_the_notice_scraper(illustrative_data_dir: Path) -> None:
+    assert _gap_by_class(illustrative_data_dir)["facility.closures"] is Sourcing.SOURCED_BY_SCHEDULE
 
 
-def test_residue_classes_are_not_in_source() -> None:
-    gaps = _gap_by_class()
+def test_residue_classes_are_not_in_source(illustrative_data_dir: Path) -> None:
+    gaps = _gap_by_class(illustrative_data_dir)
     for residue in (
         "access.lane_swim",
         "access.family",
@@ -169,15 +183,19 @@ def test_residue_classes_are_not_in_source() -> None:
         assert gaps[residue] is Sourcing.NOT_IN_SOURCE, residue
 
 
-def test_amenities_are_derivable_with_a_rule() -> None:
-    assert _gap_by_class()["facility.amenities"] is Sourcing.DERIVABLE_WITH_RULE
+def test_amenities_are_derivable_with_a_rule(illustrative_data_dir: Path) -> None:
+    assert (
+        _gap_by_class(illustrative_data_dir)["facility.amenities"] is Sourcing.DERIVABLE_WITH_RULE
+    )
 
 
-def test_unparseable_page_is_a_source_error_not_a_missing_fixture() -> None:
+def test_unparseable_page_is_a_source_error_not_a_missing_fixture(
+    illustrative_data_dir: Path,
+) -> None:
     # A page that exists but yields no timetable is a *parse failure* (source_error set),
     # distinct from source_rules is None meaning "no fixture committed" — the diff still marks
     # it unavailable, but the cause is recorded for the human gate.
-    city = _curated_by_id()["hallenbad-city"]
+    city = _curated_by_id(illustrative_data_dir)["hallenbad-city"]
     measurement = measure_pool(
         pool_id="hallenbad-city",
         curated=city,

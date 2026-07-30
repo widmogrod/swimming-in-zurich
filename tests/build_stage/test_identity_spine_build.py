@@ -61,25 +61,24 @@ def test_build_yields_exactly_57_pool_rows(tmp_path: Path) -> None:
     assert conn.execute("SELECT COUNT(*) FROM pool").fetchone()[0] == 57
 
 
-def test_build_derives_scraped_freshness_for_the_four_scheduled_pools(tmp_path: Path) -> None:
+def test_offline_build_is_schedule_less_freshness_comes_from_the_scrape(tmp_path: Path) -> None:
     conn = _build(tmp_path)
     # Freshness is no longer a stored column: it is derived at read from `facility_doc` by the
     # shared `codec.schedule_freshness` rule (NULL blob → no_source; rules present → scraped).
+    # Since delete-curated-schedule-tier S3 curated YAML carries NO schedule, so the OFFLINE
+    # `build_store` is uniformly schedule-less — NO pool derives `SCRAPED` here. `SCRAPED` freshness
+    # appears only after the atomic build's scrape phase folds the real timetable in (end-to-end in
+    # tests/test_cli.py).
     rows = conn.execute("SELECT id, facility_doc FROM pool").fetchall()
     scraped = {
         pool_id
         for pool_id, doc in rows
         if codec.schedule_freshness(doc) is ScheduleFreshness.SCRAPED
     }
-    assert scraped == {
-        "hallenbad-city",
-        "hallenbad-oerlikon",
-        "hallenbad-bungertwies",
-        "schulschwimmanlage-aemtler",
-    }
+    assert scraped == set()
     assert (
         sum(1 for _, doc in rows if codec.schedule_freshness(doc) is not ScheduleFreshness.SCRAPED)
-        == 53
+        == 57
     )
 
 

@@ -7,7 +7,6 @@ import json
 from dataclasses import replace
 from datetime import date, datetime, time, timedelta
 from decimal import Decimal
-from pathlib import Path
 from zoneinfo import ZoneInfo
 
 import pytest
@@ -26,11 +25,12 @@ from swimzh.core.errors import (
     Timeout,
     TooLarge,
 )
-from swimzh.core.result import Ok
 from swimzh.domain.access import ClubReserved, PublicSwim
 from swimzh.domain.lane_plan import LanePlan, LaneReservation, PlanConfidence, PlanCoverage
 from swimzh.domain.lockers import LockerCategory, LockerMechanism, LockerOption
 from swimzh.domain.models import (
+    Basin,
+    BasinId,
     BasinKind,
     BasinSource,
     Dimensions,
@@ -39,25 +39,68 @@ from swimzh.domain.models import (
     FeatureKind,
     LanePlanSource,
     LanePlanUnavailable,
+    PoolId,
+    PoolIdentity,
+    PoolKind,
+    Provenance,
 )
-from swimzh.domain.schedule import TimeRange, Weekday
-from swimzh.providers.curated import load_dataset
+from swimzh.domain.schedule import ScheduleRule, TimeRange, Weekday
 from swimzh.storage import codec
 
-DATA_DIR = Path(__file__).resolve().parents[2] / "data"
+_RULE = ScheduleRule(
+    weekdays=frozenset({Weekday.MONDAY}),
+    time=TimeRange(start=time(11, 0), end=time(22, 0)),
+    access=PublicSwim(),
+)
+
+
+def _rich_facility() -> Facility:
+    """A fully-populated facility standing in for a composed store row: a ruled basin carrying
+    physicals + a lane binding, plus facility-level statics (website/features/lockers). Built
+    in-memory because curated YAML no longer carries any of this (delete-curated-schedule-tier S3);
+    the codec is a pure inverse, so a synthetic subject exercises it exactly as a real one did."""
+    return Facility(
+        identity=PoolIdentity(PoolId("hallenbad-city"), "Hallenbad City", PoolKind.INDOOR),
+        address="Sihlstrasse 71, 8001 Zürich",
+        provenance=Provenance(
+            source="schedule_scraper", curated=False, valid_as_of=date(2026, 7, 18)
+        ),
+        basins=(
+            Basin(
+                basin_id=BasinId("city-50m"),
+                name="Schwimmerbecken",
+                rules=(_RULE,),
+                kind=BasinKind.LAP,
+                dimensions=Dimensions(length_m=Decimal("50")),
+                physical_source=BasinSource.CURATED,
+            ),
+        ),
+        website="https://example.org/hallenbad-city",
+        features=(
+            Feature(
+                kind=FeatureKind.SAUNA,
+                name="Gemischte Sauna",
+                hours=(_RULE,),
+                surcharge_chf=Decimal("10.00"),
+            ),
+        ),
+        lockers=tuple(LockerOption(category=cat) for cat in LockerCategory),
+    )
 
 
 @pytest.fixture(scope="module")
 def facilities() -> tuple[Facility, ...]:
-    result = load_dataset(DATA_DIR)
-    assert isinstance(result, Ok), result
-    return result.value.facilities
+    # A synthetic pair: a rich composed-store row + a minimal lane-binding-only pool.
+    minimal = Facility(
+        identity=PoolIdentity(PoolId("hallenbad-blaesi"), "Hallenbad Bläsi", PoolKind.INDOOR),
+        address="Limmattalstrasse 154, 8049 Zürich",
+        provenance=Provenance(source="curated", curated=True),
+        basins=(Basin(basin_id=BasinId("blaesi-25m"), name="25m-Becken", rules=()),),
+    )
+    return (_rich_facility(), minimal)
 
 
-def test_roundtrip_all_curated_facilities(facilities: tuple[Facility, ...]) -> None:
-    # 4 fully-curated pools + 3 lane-plan-only pools (leimbach/blaesi/käferberg carry a minimal
-    # schedule-less basin with a `lane_plan_source`).
-    assert len(facilities) == 7
+def test_roundtrip_all_facilities(facilities: tuple[Facility, ...]) -> None:
     for facility in facilities:
         assert codec.loads(codec.dumps(facility)) == facility
 
@@ -77,15 +120,15 @@ def test_roundtrip_preserves_stamped_fields(facilities: tuple[Facility, ...]) ->
     assert back.provenance.fetched_at == stamped.provenance.fetched_at
 
 
-def test_curated_basins_carry_kind_and_decimal_dimensions(
+def test_basins_carry_kind_and_decimal_dimensions(
     facilities: tuple[Facility, ...],
 ) -> None:
-    # The YAML migration replaced `length_m: 50` with `dimensions: {length_m: "50"}`.
-    city = next(f for f in facilities if str(f.identity.facility_id) == "hallenbad-city")
-    fifty = next(b for b in city.basins if str(b.basin_id) == "city-50m")
+    # A basin's physicals (kind + Decimal dimensions + physical_source) survive the codec exactly.
+    fifty = next(b for b in facilities[0].basins if str(b.basin_id) == "city-50m")
     assert fifty.kind is BasinKind.LAP
     assert fifty.dimensions == Dimensions(length_m=Decimal("50"))
     assert fifty.physical_source is BasinSource.CURATED
+    assert codec.loads(codec.dumps(facilities[0])).basins[0] == fifty
 
 
 def test_roundtrip_covers_every_physical_basin_field(facilities: tuple[Facility, ...]) -> None:
@@ -147,13 +190,12 @@ def test_basin_without_slice_f_fields_serializes_without_the_new_keys(
     assert '"diving_platforms_m"' not in dumped
 
 
-def test_curated_city_carries_facility_level_statics(facilities: tuple[Facility, ...]) -> None:
-    # The curated YAML schema expresses website/features/lockers, and the all-facilities
-    # round-trip above already proves they survive the codec on real data.
-    city = next(f for f in facilities if str(f.identity.facility_id) == "hallenbad-city")
+def test_facility_level_statics_survive_the_codec(facilities: tuple[Facility, ...]) -> None:
+    # Facility-level statics (website/features/lockers) round-trip through the codec.
+    city = codec.loads(codec.dumps(facilities[0]))
     assert city.website is not None
     assert {f.kind for f in city.features} == {FeatureKind.SAUNA}
-    assert city.features[0].hours, "sauna hours should be curated as ScheduleRules"
+    assert city.features[0].hours, "sauna hours should survive as ScheduleRules"
     assert {lo.category for lo in city.lockers} == set(LockerCategory)
 
 
@@ -390,9 +432,7 @@ def test_lane_plan_source_round_trips_and_is_absent_when_unset(
 def test_provider_error_union_round_trips_losslessly_through_the_dto() -> None:
     # Acceptance: the FULL closed ProviderError union — incl. every ProviderSpecific payload shape
     # — survives the boundary codec as a `LanePlanUnavailable.cause`, deep-equal, no repr.
-    base_facility = load_dataset(DATA_DIR)
-    assert isinstance(base_facility, Ok)
-    base = base_facility.value.facilities[0]
+    base = _rich_facility()
     for cause in _ALL_PROVIDER_ERRORS:
         unavailable = LanePlanUnavailable(
             source_url="https://example.test/a.pdf",

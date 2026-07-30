@@ -216,6 +216,7 @@ Appended by /dev:implement after each slice — never rewritten. Newest row last
 |------|-------|--------|----------------------|-------------------|---------------|
 | 2026-07-30 | S1 | done | `ScheduleFreshness` enum lives in `domain/catalog.py` (layering — domain can't import storage), derivation in `storage/codec.py`; freshness predicate broadened to `{INDOOR, THERMAL}` so Käferberg (scrapeable Wärmebad) reads `awaiting_scrape` not `no_source` (review fix) | `apply_physicals` matches prose→basin by exact normalized name; real `city.yaml` basins (`50m-Becken`, `Lehrschwimmbecken`) won't name-match the German prose → **S3 must rename stripped basins to prose names or record a physicals drop for city/bungertwies**; predicate can't see WFS `url` (an indoor pool without a page would read `awaiting_scrape` forever — inert today) | yes |
 | 2026-07-31 | S2 | done | atomic `build` folds roster→build_store→schedule(+price)→lanes→compose into ONE `atomic_swap`; `scrape-gold`/`scrape-lanes` KEPT as thin re-layer commands sharing extracted `_compose_schedules`/`_attach_lanes`; `gold_db` → one offline atomic build via composite `MockTransport`; `main`→`_dispatch` refactor; `follow_redirects=True` | scraped schedule-less curated pools surface with curated source-less provenance (`valid_as_of=None`) — honest-provenance fix deferred; price scrape is best-effort (the one non-fatal chain link, pre-existing); **S3 BLOCKER surfaced (see Decisions + amended S3)** | yes |
+| 2026-07-31 | S3 | done | `compose` carries `lane_plan_source` from curated onto scraped basins (fixed the S2 latent drop — lane attach 3→6); stripped all 7 `data/pools/*.yaml` to the crosswalk (allowlist test); renamed city/bungertwies basins to WFS prose names to keep physicals (oerlikon NULL-prose → physicals DROP, recorded); illustrative schedules relocated byte-identical to `tests/domain/fixtures/`; ~40 tests converted | **PRODUCT REGRESSION (owner-facing, finding #1): the per-basin lane-availability panel is INERT in production for scraped pools** — the flat scrape's synthetic `Hauptbecken` and the carried named basin never coexist, so the per-basin projection can't render; a scraped `/swim` option carries no length/lanes (physicals only on `/pools`); `provenance.curated` still reads True for scraped pools (freshness is the real signal); city `Lehrschwimmbecken` dropped | yes |
 
 ## Decisions & divergences
 
@@ -292,6 +293,32 @@ Appended by /dev:implement after each slice — never rewritten. Newest row last
   on `attached == 0`, so a fully-stripped world would **abort the atomic build entirely**. S3 must
   make `compose` **carry `lane_plan_source` from the curated basin onto the scraped basin** (merge
   the binding, don't let it be replaced) — see the amended S3.
+
+### S3 (implementation) — strip to the crosswalk
+
+- 2026-07-31 (S3, done — both QA chains green: Python 515 passed / 95.95% cov / crap OK; TS 300
+  passed; adversarial review approve): `compose` carries `lane_plan_source` (url+section) from the
+  curated basin onto the scraped basin (merge not replace) — this both satisfies the S2-surfaced
+  prerequisite AND fixed the pre-existing latent drop (lane attach 3→6: blaesi/leimbach/kaeferberg
+  now attach). All 7 `data/pools/*.yaml` stripped to the per-level crosswalk allowlist (guarded by
+  `tests/etl/test_pool_yaml_allowlist.py`). city/bungertwies basins renamed to their WFS prose
+  segment names so `apply_physicals` keeps their physicals; oerlikon's prose is `"NULL"` → physicals
+  are a recorded DROP. The illustrative curated schedules were relocated **byte-identically** to
+  `tests/domain/fixtures/illustrative_pools/` behind an `illustrative_data_dir` fixture, preserving
+  resolver/lane/fidelity coverage; no test was `xfail`/skipped or trivially weakened (critic-verified
+  byte-identical + goldens unchanged).
+- 2026-07-31 (**S3 — OWNER-FACING PRODUCT REGRESSION, needs a decision before/at S4**): the flat
+  schedule scraper emits ONE synthetic `Hauptbecken` per pool. After the strip, a real scraped pool's
+  schedule lives on `Hauptbecken` while its lane plan + physicals ride the *carried* named basin
+  (`Schwimmerbecken`, …) — the two never coexist on one basin. Consequences: the **per-basin
+  lane-availability panel + lane timeline go inert in production** (they still render only for pools
+  with genuine per-basin data, i.e. the illustrative fixtures — the tests were moved there, so the
+  suite is green but no longer guards the production path); a scraped `/swim` option carries **no
+  length/lanes** (physicals survive only on `/pools`); `provenance.curated` still reads `True` for a
+  scraped-schedule pool (misleading — `freshness` is the real signal). Root cause is the S5c drop
+  ("per-basin schedule split is not sourceable from the flat timetable"), now concrete. This is the
+  cost of the flat-scrape endpoint; owner must accept it (lane panel = illustrative/future-per-basin
+  only) or fund a per-basin schedule source. NOT blocking S3 (which meets its literal acceptance).
 
 ## Summary
 

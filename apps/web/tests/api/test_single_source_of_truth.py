@@ -125,24 +125,22 @@ def test_swim_emits_freshness_statuses_live_for_catalog_pools(gold_db: Path) -> 
     assert {s["status"] for s in statuses} <= {"closed", "awaiting_scrape", "no_source"}
 
 
-def test_pools_expose_the_derived_freshness(
-    offline_gold_db: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_pools_expose_the_derived_freshness(gold_db: Path) -> None:
     """`/pools` reads the one `pool` table and surfaces each pool's derived three-state
     `freshness`, so the UI reads schedule status from the API rather than guessing it by name.
 
-    Read against the PRE-SCRAPE store: the atomic `build` scrapes every indoor pool, so the
-    three-state mix (a scrapeable-but-unscraped `awaiting_scrape` pool alongside a `scraped` one)
-    is only observable before the folded scrape runs — exactly what `build_store` alone yields.
+    Read against the shipping store (the atomic `build`): City's schedule is SCRAPED, the school
+    pool `aemtler` has no schedule source at all (`no_source`), and the ~50 non-indoor roster pins
+    are `no_source` too. The `awaiting_scrape` state (a scrapeable indoor pool not yet scraped) is
+    exercised by the pre-scrape store in the S1 acceptance tests; here the shipping mix is
+    scraped + no_source. (The autouse fixture already points the app at `gold_db`.)
     """
-    monkeypatch.setenv("SWIMZH_GOLD_DB", str(offline_gold_db))
     with TestClient(app) as client:
         response = client.get("/pools")
     pools = {p["pool_id"]: p for p in response.json()["pools"]}
     valid = {"scraped", "awaiting_scrape", "no_source"}
     assert all(p["freshness"] in valid for p in pools.values())
-    # City is curated-scheduled (→ scraped); Altstetten is an unscraped indoor pool (awaiting).
+    # City's schedule is scraped in the atomic build; the school pool aemtler stays no_source.
     assert pools["hallenbad-city"]["freshness"] == "scraped"
-    assert "hallenbad-altstetten" in pools
-    assert pools["hallenbad-altstetten"]["freshness"] != "scraped"
+    assert pools["schulschwimmanlage-aemtler"]["freshness"] == "no_source"
     assert sum(1 for p in pools.values() if p["freshness"] != "scraped") >= 40

@@ -10,12 +10,10 @@ from __future__ import annotations
 from dataclasses import replace
 from datetime import date, datetime, time
 from decimal import Decimal
-from pathlib import Path
 from zoneinfo import ZoneInfo
 
 import pytest
 
-from swimzh.core.result import Ok
 from swimzh.domain.access import ClubReserved, PublicSwim
 from swimzh.domain.closure import ClosureCode
 from swimzh.domain.lane_plan import (
@@ -29,17 +27,11 @@ from swimzh.domain.lockers import LockerCategory
 from swimzh.domain.models import Basin, Facility, FeatureKind
 from swimzh.domain.query import facility_detail
 from swimzh.domain.schedule import ClosedDay, OpenDay, TimeRange, Weekday
-from swimzh.providers.curated import Dataset, load_dataset
+from swimzh.providers.curated import Dataset
 
-DATA_DIR = Path(__file__).resolve().parents[2] / "data"
+# The `dataset` fixture (illustrative curated schedules, now committed as test fixtures) lives in
+# tests/domain/conftest.py — see the note there.
 ZURICH = ZoneInfo("Europe/Zurich")
-
-
-@pytest.fixture(scope="module")
-def dataset() -> Dataset:
-    result = load_dataset(DATA_DIR)
-    assert isinstance(result, Ok), result
-    return result.value
 
 
 @pytest.fixture(scope="module")
