@@ -24,7 +24,7 @@ from swimzh.domain.geo import GeoPoint
 from swimzh.domain.lane_plan import LanePlan
 from swimzh.domain.models import BasinId, Facility, PoolKind, reconstruct_pool_id
 from swimzh.domain.pricing import PriceCategory, PriceEntry, PriceTable
-from swimzh.providers.curated import load_dataset
+from swimzh.etl.build import build_store
 from swimzh.providers.geo_sport import POOL_LAYERS
 from swimzh.storage import catalog_json
 from swimzh.storage.sqlite_repo import (
@@ -34,14 +34,15 @@ from swimzh.storage.sqlite_repo import (
     open_db,
     write_schedules,
 )
-from tests.providers.wfs_snapshot import recorded_wfs_client, unreachable_wfs_client
+from tests.providers.wfs_snapshot import recorded_build_client, unreachable_wfs_client
 
 
-def _wfs_client() -> HttpClient:
-    """Since S3 `build` sources its ~57-pool roster from the WFS; these tests replay the committed
-    WFS snapshot (all pools) offline via MockTransport, so a `build(...)` reproduces the full spine
-    without touching the network."""
-    return recorded_wfs_client()
+def _build_client() -> HttpClient:
+    """The composite client the ONE-command atomic `build` needs: since S2 `build` runs the whole
+    pipeline (WFS roster → schedule scrape → lane scrape → compose), a single `MockTransport` routes
+    WFS layers, pool pages, Belegungsplan PDFs, and the price page from committed fixtures — so a
+    `build(...)` reproduces the full store offline, with real scraped schedules."""
+    return recorded_build_client()
 
 
 def _db_content_digest(path: Path) -> tuple[str, ...]:
@@ -75,6 +76,18 @@ FIXTURE_PDF = _FIXTURES / "city-schwimmerbecken.pdf"
 DATA_DIR = Path(__file__).resolve().parents[1] / "data"
 ZURICH = ZoneInfo("Europe/Zurich")
 FETCHED_AT = datetime(2026, 7, 18, 9, 0, tzinfo=ZURICH)
+# The committed catalog.json IS the WFS snapshot, so it is the recorded roster double for the
+# offline `build_store` base some scrape-gold re-layer tests need (a store with schedule-less
+# indoor pools, so the thin scrape-gold command demonstrably adds the schedule).
+_ROSTER = catalog_json.loads((DATA_DIR / "catalog.json").read_text(encoding="utf-8"))
+
+
+def _offline_base(db: Path) -> None:
+    """Assemble the pre-scrape base offline via `build_store` (no schedule scrape), so an indoor
+    pool like Altstetten starts SCHEDULE-LESS — the precondition the thin `scrape-gold` re-layer
+    tests need. (The atomic `build` folds the scrape in, so it would arrive already scheduled.)"""
+    result = build_store(DATA_DIR, db, _ROSTER)
+    assert isinstance(result, Ok), result
 
 
 def _layer_handler(request: httpx.Request) -> httpx.Response:
@@ -152,7 +165,7 @@ def test_scrape_gold_composes_onto_built_store(tmp_path: Path) -> None:
     # scrape-gold now layers onto an already-built spine: it resolves the scraped WFS name to a
     # canonical id by lookup and composes, rather than minting a second (long-slug) row.
     db = tmp_path / "gold.sqlite"
-    assert build(db_path=db, data_dir=DATA_DIR, client=_wfs_client()) == 0
+    assert build(db_path=db, data_dir=DATA_DIR, client=_build_client()) == 0
 
     code = scrape_gold(
         db_path=db,
@@ -174,9 +187,10 @@ def test_scrape_gold_wires_scraped_only_pool_onto_read_path(tmp_path: Path) -> N
     # (→ `pool.facility_doc`, the read path). A scraped-ONLY pool (curated data lacks it) can
     # appear on that path only if the reroute holds; were scrape-gold to stop writing
     # `pool.facility_doc`, the pool's blob stays NULL and `get` returns None — so this test goes
-    # red on that mutation, closing the enrichment gap for good.
+    # red on that mutation, closing the enrichment gap for good. Base built OFFLINE (no folded
+    # scrape) so Altstetten starts schedule-less; the thin scrape-gold then adds its schedule.
     db = tmp_path / "gold.sqlite"
-    assert build(db_path=db, data_dir=DATA_DIR, client=_wfs_client()) == 0
+    _offline_base(db)
     altstetten = reconstruct_pool_id("hallenbad-altstetten")
     # Uncurated before the scrape: Slice F gives it a SCHEDULE-LESS prose blob, so it may be
     # present on the read path but carries no schedule rule yet.
@@ -208,7 +222,7 @@ def test_scrape_merge_puts_curated_schedule_and_scraped_price_on_read_path(tmp_p
     # over the real curated City with its price stripped so the scraped price is the one that
     # fills the gap.
     db = tmp_path / "gold.sqlite"
-    assert build(db_path=db, data_dir=DATA_DIR, client=_wfs_client()) == 0
+    assert build(db_path=db, data_dir=DATA_DIR, client=_build_client()) == 0
     conn = open_db(db)
 
     curated_city = GoldRepository(conn).get(reconstruct_pool_id("hallenbad-city"))
@@ -261,7 +275,7 @@ def test_scrape_gold_unreconcilable_name_is_reported_not_silently_written(
     # wrong-pool write. Nothing is composed (no resolved refs), the miss is reported to stderr,
     # and the exit code is non-zero so the miss stays visible.
     db = tmp_path / "gold.sqlite"
-    assert build(db_path=db, data_dir=DATA_DIR, client=_wfs_client()) == 0
+    assert build(db_path=db, data_dir=DATA_DIR, client=_build_client()) == 0
     before = {f.identity.facility_id for f in GoldRepository(open_db(db)).load_all()}
 
     catalog_file = tmp_path / "catalog.json"
@@ -334,9 +348,10 @@ def test_scrape_gold_partial_success_writes_matched_reports_unmatched(
 ) -> None:
     # D2 acceptance: one unmatched name among several matched. The matched pools ARE written to
     # `pool.facility_doc` (partial success — the good scrapes are not discarded), the unmatched
-    # name is reported to stderr, and the exit code is non-zero so the miss stays visible.
+    # name is reported to stderr, and the exit code is non-zero so the miss stays visible. Base
+    # built OFFLINE (no folded scrape) so Altstetten starts schedule-less.
     db = tmp_path / "gold.sqlite"
-    assert build(db_path=db, data_dir=DATA_DIR, client=_wfs_client()) == 0
+    _offline_base(db)
     altstetten = reconstruct_pool_id("hallenbad-altstetten")
     # Scraped-only pool: before the scrape it carries at most a SCHEDULE-LESS Slice-F prose blob
     # (no rule), so no scraped schedule is on the read path yet.
@@ -372,7 +387,7 @@ def test_scrape_gold_ambiguous_reconcile_aborts_writing_nothing(
     # `test_resolve_all_is_fatal_on_ambiguous_ref_naming_the_offender`). The store must be left
     # untouched — never a silent wrong-pool write.
     db = tmp_path / "gold.sqlite"
-    assert build(db_path=db, data_dir=DATA_DIR, client=_wfs_client()) == 0
+    assert build(db_path=db, data_dir=DATA_DIR, client=_build_client()) == 0
     before = {f.identity.facility_id for f in GoldRepository(open_db(db)).load_all()}
 
     ambiguous = SchemaMismatch(source="reconcile", detail="ambiguous basin hint: 'Twin Bad'")
@@ -398,7 +413,7 @@ def test_scrape_gold_declared_source_parse_failure_aborts_content_unchanged(
     # parsed is NOT skipped-and-green — the whole run ABORTS non-zero carrying the typed cause, and
     # the prior gold DB is CONTENT-unchanged (content digest, not byte hash).
     db = tmp_path / "gold.sqlite"
-    assert build(db_path=db, data_dir=DATA_DIR, client=_wfs_client()) == 0
+    assert build(db_path=db, data_dir=DATA_DIR, client=_build_client()) == 0
     before = _db_content_digest(db)
 
     # The city page fetches 200 but has no timetable, so `parse_schedule` fails -> a declared
@@ -425,7 +440,7 @@ def test_build_and_scrape_gold_share_one_id_namespace(tmp_path: Path) -> None:
     # The acceptance: build and scrape-gold write into the SAME id namespace. Every facility row
     # id (the /swim read path) is a real pool PK — no long-vs-short split-brain.
     db = tmp_path / "gold.sqlite"
-    assert build(db_path=db, data_dir=DATA_DIR, client=_wfs_client()) == 0
+    assert build(db_path=db, data_dir=DATA_DIR, client=_build_client()) == 0
     assert (
         scrape_gold(
             db_path=db,
@@ -483,7 +498,7 @@ def test_scrape_lanes_attaches_plan_to_curated_basin(tmp_path: Path) -> None:
     # `build` spine present, discovers the pool page's Belegungsplan links, then writes the
     # attached plan back through `write_schedules`.
     db = tmp_path / "gold.sqlite"
-    assert build(db_path=db, data_dir=DATA_DIR, client=_wfs_client()) == 0
+    assert build(db_path=db, data_dir=DATA_DIR, client=_build_client()) == 0
 
     body = FIXTURE_PDF.read_bytes()
     client = _lane_client(lambda _r: httpx.Response(200, content=body))
@@ -513,7 +528,7 @@ def test_scrape_lanes_pdf_fetch_failure_aborts_leaving_store_content_unchanged(
     # LanePlanUnavailable that lets the facility build), and the prior gold DB is CONTENT-unchanged
     # (asserted via a content digest, not a byte hash). The abort message carries the typed cause.
     db = tmp_path / "gold.sqlite"
-    assert build(db_path=db, data_dir=DATA_DIR, client=_wfs_client()) == 0
+    assert build(db_path=db, data_dir=DATA_DIR, client=_build_client()) == 0
     before = _db_content_digest(db)
 
     client = _lane_client(lambda _r: httpx.Response(503, text="down"))
@@ -537,7 +552,7 @@ def test_scrape_lanes_prints_unbound_audit_for_uncurated_section(
     # NOT a missing declared fact). The run succeeds. (Under S4 a 503 here would ABORT instead, so
     # the audit is exercised on an all-success run.)
     db = tmp_path / "gold.sqlite"
-    assert build(db_path=db, data_dir=DATA_DIR, client=_wfs_client()) == 0
+    assert build(db_path=db, data_dir=DATA_DIR, client=_build_client()) == 0
     oerlikon = _facility_from_read_path(db, "hallenbad-oerlikon")
     sprung = next(b for b in oerlikon.basins if b.basin_id == BasinId("oerlikon-sprungbecken"))
     assert sprung.lane_plan_source is not None
@@ -570,7 +585,7 @@ def test_scrape_lanes_prints_unmatched_section_audit(
     # at the combined URL — "Sprungbecken" never appears). The basin is left None, but the silent
     # drop is surfaced as an `unmatched section` audit line (a parser-header-regression alarm).
     db = tmp_path / "gold.sqlite"
-    assert build(db_path=db, data_dir=DATA_DIR, client=_wfs_client()) == 0
+    assert build(db_path=db, data_dir=DATA_DIR, client=_build_client()) == 0
     oerlikon = _facility_from_read_path(db, "hallenbad-oerlikon")
     combined_url = next(
         b.lane_plan_source.url
@@ -614,7 +629,7 @@ def test_scrape_lanes_authored_source_not_advertised_aborts(
     # link is discovered) is a HARD abort, never a silent drop. The prior gold DB is
     # content-unchanged and the abort carries the typed cause.
     db = tmp_path / "gold.sqlite"
-    assert build(db_path=db, data_dir=DATA_DIR, client=_wfs_client()) == 0
+    assert build(db_path=db, data_dir=DATA_DIR, client=_build_client()) == 0
     before = _db_content_digest(db)
 
     # Pool pages fetch 200 but advertise NO Belegungsplan links (so no PDF is ever fetched).
@@ -631,8 +646,12 @@ def test_scrape_lanes_authored_source_not_advertised_aborts(
 
 
 def test_build_produces_complete_store(tmp_path: Path) -> None:
+    # S2: `build` is now the ONE atomic pipeline — roster + curated assemble + schedule scrape +
+    # lane scrape + compose. So a single command yields a store whose INDOOR pools carry REAL
+    # scraped schedules (curated-wins keeps a curated schedule where present, and the scrape fills
+    # the schedule-less indoor pools), on top of the full ~57-pool roster.
     db = tmp_path / "gold.sqlite"
-    code = build(db_path=db, data_dir=DATA_DIR, client=_wfs_client())
+    code = build(db_path=db, data_dir=DATA_DIR, client=_build_client())
     assert code == 0
     assert db.exists()
 
@@ -641,28 +660,51 @@ def test_build_produces_complete_store(tmp_path: Path) -> None:
     assert len(load_roster(conn)) == 57
     # Calendar table covers the current planning horizon.
     assert load_calendar(conn).covers(datetime(2026, 1, 1, tzinfo=ZURICH).date())
-    # The curated facilities land on the read path (`pool.facility_doc`), keyed to the WFS roster.
-    dataset = load_dataset(DATA_DIR)
-    assert isinstance(dataset, Ok)
     facilities = GoldRepository(conn).load_all()
-    # The curated *scheduled* facilities land on the read path — matched against the dataset's
-    # scheduled facilities (the lane-plan-only pools in the dataset are schedule-less, so they
-    # are excluded from this scheduled-parity check on both sides).
-    scheduled = {f.identity.facility_id for f in facilities if any(b.rules for b in f.basins)}
-    scheduled_dataset = {
-        f.identity.facility_id for f in dataset.value.facilities if any(b.rules for b in f.basins)
-    }
-    assert scheduled == scheduled_dataset
-    # …plus schedule-less pools (Slice-F prose + lane-plan-only) — a superset of the scheduled set.
-    stored = {f.identity.facility_id for f in facilities}
+    # Every one of the 7 INDOOR pools now carries a schedule from the folded scrape — the atomic
+    # build's scrape is the schedule source (city/oerlikon among them, asserted by the web suite).
+    scheduled = {str(f.identity.facility_id) for f in facilities if any(b.rules for b in f.basins)}
+    assert {"hallenbad-city", "hallenbad-oerlikon"} <= scheduled
+    indoor = {str(e.entry.pool_id) for e in load_roster(conn) if e.entry.kind is PoolKind.INDOOR}
+    assert indoor <= scheduled  # every indoor pool got a scraped schedule
+    # …plus the schedule-less non-indoor pools (outdoor/lake/school) — a strict superset.
+    stored = {str(f.identity.facility_id) for f in facilities}
     assert stored > scheduled
+
+
+def test_build_atomic_pipeline_scrapes_then_aborts_content_unchanged(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # S2 acceptance: ONE `build` yields a store with schedules present (city + oerlikon, from the
+    # folded scrape). Then a SINGLE injected provider failure (one pool page 503s → a declared
+    # schedule source fails to fetch) aborts the whole build non-zero and leaves the PRIOR gold DB
+    # CONTENT-unchanged (iterdump digest, per S4) — the mid-chain failure discards the temp store.
+    db = tmp_path / "gold.sqlite"
+    assert build(db_path=db, data_dir=DATA_DIR, client=_build_client()) == 0
+    repo = GoldRepository(open_db(db))
+    for pool_id in ("hallenbad-city", "hallenbad-oerlikon"):
+        facility = repo.get(reconstruct_pool_id(pool_id))
+        assert facility is not None and any(b.rules for b in facility.basins), pool_id
+    before = _db_content_digest(db)
+
+    def fail_city_page(request: httpx.Request) -> httpx.Response | None:
+        if str(request.url).endswith("city.html"):
+            return httpx.Response(503, text="down")
+        return None
+
+    code = build(db_path=db, data_dir=DATA_DIR, client=recorded_build_client(fail_city_page))
+    assert code == 1
+    assert _db_content_digest(db) == before  # temp discarded — the live store never mutated
+    err = capsys.readouterr().err
+    assert "aborted" in err
+    assert "HTTP 503" in err  # the typed ProviderError cause is surfaced
 
 
 def test_build_via_main(tmp_path: Path) -> None:
     # `main` threads an injected client into `build` (live runs create their own); the recorded
     # WFS snapshot lets the CLI-level build run offline.
     db = tmp_path / "gold.sqlite"
-    code = main(["build", "--db", str(db), "--data", str(DATA_DIR)], client=_wfs_client())
+    code = main(["build", "--db", str(db), "--data", str(DATA_DIR)], client=_build_client())
     assert code == 0
     assert len(load_roster(open_db(db))) == 57
 
@@ -687,7 +729,7 @@ def test_build_failure_leaves_prior_gold_content_unchanged(
     # and leaves the PRIOR gold DB CONTENT-unchanged — asserted via a content digest, not a byte
     # hash. The atomic temp-swap guarantees no partial/half-written store replaces a good one.
     db = tmp_path / "gold.sqlite"
-    assert build(db_path=db, data_dir=DATA_DIR, client=_wfs_client()) == 0
+    assert build(db_path=db, data_dir=DATA_DIR, client=_build_client()) == 0
     before = _db_content_digest(db)
 
     code = build(db_path=db, data_dir=DATA_DIR, client=unreachable_wfs_client())
@@ -700,14 +742,14 @@ def test_build_atomically_replaces_an_existing_store(tmp_path: Path) -> None:
     # The atomic swap works over an EXISTING target: a second successful build replaces the live
     # file in place (via temp + os.replace), leaving a complete, valid store.
     db = tmp_path / "gold.sqlite"
-    assert build(db_path=db, data_dir=DATA_DIR, client=_wfs_client()) == 0
-    assert build(db_path=db, data_dir=DATA_DIR, client=_wfs_client()) == 0
+    assert build(db_path=db, data_dir=DATA_DIR, client=_build_client()) == 0
+    assert build(db_path=db, data_dir=DATA_DIR, client=_build_client()) == 0
     assert len(load_roster(open_db(db))) == 57
 
 
 def test_build_then_scrape_gold_enriches(tmp_path: Path) -> None:
     db = tmp_path / "gold.sqlite"
-    assert build(db_path=db, data_dir=DATA_DIR, client=_wfs_client()) == 0
+    assert build(db_path=db, data_dir=DATA_DIR, client=_build_client()) == 0
     before = GoldRepository(open_db(db)).count()
 
     catalog_file = tmp_path / "catalog.json"
@@ -741,7 +783,7 @@ def test_build_then_scrape_gold_enriches(tmp_path: Path) -> None:
 
 def test_build_then_scrape_lanes_enriches(tmp_path: Path) -> None:
     db = tmp_path / "gold.sqlite"
-    assert build(db_path=db, data_dir=DATA_DIR, client=_wfs_client()) == 0
+    assert build(db_path=db, data_dir=DATA_DIR, client=_build_client()) == 0
 
     body = FIXTURE_PDF.read_bytes()
     client = _lane_client(lambda _r: httpx.Response(200, content=body))
@@ -756,6 +798,56 @@ def test_build_then_scrape_lanes_enriches(tmp_path: Path) -> None:
     assert isinstance(lap.lane_plan, LanePlan)
     # Roster + calendar assembled by `build` are untouched by lane enrichment.
     assert len(load_roster(conn)) == 57
+
+
+def test_build_lane_phase_failure_aborts_content_unchanged(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # S2 acceptance (SECOND phase): the schedule scrape succeeds but every discovered Belegungsplan
+    # PDF 503s — a mid-chain LANE-phase provider failure. The whole atomic build aborts non-zero
+    # (the good schedule writes discarded too) and the prior gold DB is CONTENT-unchanged.
+    db = tmp_path / "gold.sqlite"
+    assert build(db_path=db, data_dir=DATA_DIR, client=_build_client()) == 0
+    before = _db_content_digest(db)
+
+    def fail_pdfs(request: httpx.Request) -> httpx.Response | None:
+        if str(request.url).endswith(".pdf"):
+            return httpx.Response(503, text="down")
+        return None
+
+    code = build(db_path=db, data_dir=DATA_DIR, client=recorded_build_client(fail_pdfs))
+    assert code == 1
+    assert _db_content_digest(db) == before  # temp discarded — the live store never mutated
+    err = capsys.readouterr().err
+    assert "aborted" in err
+    assert "HTTP 503" in err
+
+
+def test_main_routes_scrape_gold_scrape_lanes_and_build_catalog(tmp_path: Path) -> None:
+    # `main` threads an injected client through `_dispatch` to each command (live runs make their
+    # own). Build the base first, then drive the two re-layer commands + build-catalog via `main`.
+    db = tmp_path / "gold.sqlite"
+    assert main(["build", "--db", str(db), "--data", str(DATA_DIR)], client=_build_client()) == 0
+
+    catalog = _city_catalog_file(tmp_path)
+    assert (
+        main(
+            ["scrape-gold", "--db", str(db), "--catalog", str(catalog)],
+            client=_city_scrape_client(),
+        )
+        == 0
+    )
+    lane_client = _lane_client(lambda _r: httpx.Response(200, content=FIXTURE_PDF.read_bytes()))
+    assert main(["scrape-lanes", "--db", str(db)], client=lane_client) == 0
+
+    out = tmp_path / "catalog.json"
+    layer_client = HttpClient(
+        httpx.Client(transport=httpx.MockTransport(_layer_handler)),
+        source="geo_sport",
+        retry=RetryPolicy(max_attempts=1),
+    )
+    assert main(["build-catalog", "--out", str(out)], client=layer_client) == 0
+    assert out.exists()
 
 
 def test_main_requires_a_subcommand() -> None:

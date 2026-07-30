@@ -162,14 +162,22 @@ layers add the real schedule/lane data.
 ### S3 — Strip `data/pools/*.yaml` to the crosswalk; retest
 
 - **Goal**: Delete the authoritative payload from the pool files (heavy in 4: `city`, `oerlikon`,
-  `bungertwies`, `aemtler`; the other 3 are already minimal), keeping only the binding.
-- **Goal**: Delete the authoritative payload from the pool files (heavy in 4: `city`, `oerlikon`,
   `bungertwies`, `aemtler`; the other 3 are already minimal), keeping only the binding — so the
-  atomic build's **scrape becomes the sole schedule source**.
-- **Touches**: `data/pools/*.yaml` (all), and the ~40 tests that assume curated schedules/prices
-  (convert to the sourced pipeline's expectations — not weakened). The `gold_db` rewire is **already
-  done in S2** (the atomic build scrapes offline), so this slice just removes the curated schedules
-  and confirms the S2 pipeline now supplies them; it does not re-touch conftest for the fixture.
+  atomic build's **scrape becomes the sole schedule source** — WITHOUT losing the `lane_plan_source`
+  binding when scraped basins replace curated ones.
+- **PREREQUISITE fix (surfaced by the S2 review — do this FIRST, before stripping):** today
+  `compose`'s `basins` aspect lets a scraped basin *replace* the curated basin wholesale, discarding
+  `lane_plan_source` (harmless in S2 for the 3 already-minimal pools, fatal once all pools are
+  stripped: `_attach_lanes` aborts on `attached == 0`). S3 must make `compose` **carry
+  `lane_plan_source` (and `section`) from the curated basin onto the matching scraped basin** — a
+  merge, not a replace — keyed by basin identity/name. Add a test: after a full atomic build over
+  stripped pools, `city`/`oerlikon` basins still carry their `lane_plan_source` and their lane plans
+  still attach (`attached > 0`, no abort). This is the crux of S3; land it before deleting YAML.
+- **Touches**: `build/compose.py` (the binding-carry merge above), `data/pools/*.yaml` (all), and the
+  ~40 tests that assume curated schedules/prices (convert to the sourced pipeline's expectations —
+  not weakened). The `gold_db` rewire is **already done in S2** (the atomic build scrapes offline),
+  so this slice removes the curated schedules and confirms the S2 pipeline supplies them; it does not
+  re-touch conftest for the fixture.
 - **Acceptance** (ALLOWLIST, not a partial denylist — a 6-field grep would pass green while
   `amenities`/`public_holiday_policy`/`lockers`/basin `kind`/`exceptions`/… survive in the served
   blob): **S3 authors** a **parsed-YAML key-set test** (allowlist-per-level) asserting every
@@ -177,8 +185,11 @@ layers add the real schedule/lane data.
   {`basin_id`, `name`, `lane_plan_source`}, and — where present — `lane_plan_source`'s keys ⊆
   {`url`, `section`} (keep the binding's own nested fields; not "no key anywhere"). With curated
   schedules gone, the S2 atomic build supplies `city`/`oerlikon` schedules from the scrape and the
-  web suite still asserts them; `city`/`bungertwies` basin physicals resolve per the S1 decision
-  (`apply_physicals` or recorded drop); `aemtler` (school, unscraped) is `no_source`; full QA green.
+  web suite still asserts them; **`lane_plan_source` survives compose so `city`/`oerlikon` lane plans
+  still attach (`attached > 0`, no `_attach_lanes` abort)**; `city`/`bungertwies` basin physicals
+  resolve per the S1 decision (`apply_physicals` or recorded drop — note the S1 name-match caveat:
+  stripped basins may need renaming to the prose names); `aemtler` (school, unscraped) is
+  `no_source`; full QA green.
 - **Depends on**: S2.
 
 ### S4 — Reconcile the single-source test, CLAUDE.md, and concept docs
@@ -204,6 +215,7 @@ Appended by /dev:implement after each slice — never rewritten. Newest row last
 | date | slice | status | divergence from plan | tech debt created | human review? |
 |------|-------|--------|----------------------|-------------------|---------------|
 | 2026-07-30 | S1 | done | `ScheduleFreshness` enum lives in `domain/catalog.py` (layering — domain can't import storage), derivation in `storage/codec.py`; freshness predicate broadened to `{INDOOR, THERMAL}` so Käferberg (scrapeable Wärmebad) reads `awaiting_scrape` not `no_source` (review fix) | `apply_physicals` matches prose→basin by exact normalized name; real `city.yaml` basins (`50m-Becken`, `Lehrschwimmbecken`) won't name-match the German prose → **S3 must rename stripped basins to prose names or record a physicals drop for city/bungertwies**; predicate can't see WFS `url` (an indoor pool without a page would read `awaiting_scrape` forever — inert today) | yes |
+| 2026-07-31 | S2 | done | atomic `build` folds roster→build_store→schedule(+price)→lanes→compose into ONE `atomic_swap`; `scrape-gold`/`scrape-lanes` KEPT as thin re-layer commands sharing extracted `_compose_schedules`/`_attach_lanes`; `gold_db` → one offline atomic build via composite `MockTransport`; `main`→`_dispatch` refactor; `follow_redirects=True` | scraped schedule-less curated pools surface with curated source-less provenance (`valid_as_of=None`) — honest-provenance fix deferred; price scrape is best-effort (the one non-fatal chain link, pre-existing); **S3 BLOCKER surfaced (see Decisions + amended S3)** | yes |
 
 ## Decisions & divergences
 
@@ -260,6 +272,26 @@ Appended by /dev:implement after each slice — never rewritten. Newest row last
   the real `city.yaml` basin names don't match the German WFS prose, so S3's strip must rename the
   stripped basins to the prose names (or record a physicals drop for city/bungertwies). Inert in S1
   (nothing stripped; authored physicals retained).
+
+### S2 (implementation) — atomic pipeline build
+
+- 2026-07-31 (S2, done — Python QA green: 504 passed / 96.08% cov / crap OK; adversarial review
+  approve): `swimzh build` now runs `fetch_roster → build_store → _compose_schedules(+prices) →
+  _attach_lanes → compose` inside ONE `atomic_swap`; any fatal provider failure exits non-zero with
+  the prior gold **content-unchanged** (iterdump digests pin both the schedule-phase and lane-phase
+  abort). `scrape-gold`/`scrape-lanes` kept as thin re-layer commands driving the same extracted
+  phase functions (no drift; per-cadence refresh preserved). Non-destructive.
+- 2026-07-31 (S2, verified pre-existing — NOT a regression): folding scrape into build makes scraped
+  basins win over schedule-less curated basins (blaesi/leimbach/kaeferberg), dropping their
+  `lane_plan_source` before the lane phase — but `compose.py` is unchanged and the atomic order
+  (`_compose_schedules → _attach_lanes`) is identical to today's `build → scrape-gold → scrape-lanes`.
+- 2026-07-31 (**S3 BLOCKER surfaced by the S2 review — must be fixed before S3**): the same compose
+  precedence means once S3 strips **city/oerlikon**'s curated `rules`, scraped basins (which carry
+  **no** `lane_plan_source`) will win **everywhere**, discarding the `lane_plan_source` binding on
+  **all** pools — the very thin-crosswalk field S3 must keep. And `_attach_lanes` returns **fatal**
+  on `attached == 0`, so a fully-stripped world would **abort the atomic build entirely**. S3 must
+  make `compose` **carry `lane_plan_source` from the curated basin onto the scraped basin** (merge
+  the binding, don't let it be replaced) — see the amended S3.
 
 ## Summary
 

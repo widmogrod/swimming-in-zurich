@@ -4,8 +4,10 @@ from __future__ import annotations
 
 from datetime import date, datetime, time, timedelta
 from decimal import Decimal
+from pathlib import Path
 from zoneinfo import ZoneInfo
 
+import pytest
 from fastapi.testclient import TestClient
 
 from apps.web.api.pools.service import facility_detail_out
@@ -119,9 +121,13 @@ def test_location_only_pool_is_never_a_swim_option_nor_closed() -> None:
     assert "Freibad Heuried" in schedule_less
 
 
-def test_pool_detail_has_no_lane_panels_without_a_plan() -> None:
-    # The curated app carries no lane plans yet: the detail resolves (200) but its lane-panel
-    # list is empty — never an invented panel.
+def test_pool_detail_has_no_lane_panels_without_a_plan(
+    offline_gold_db: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Without a scraped lane plan the detail resolves (200) but its lane-panel list is empty —
+    # never an invented panel. Read against the PRE-SCRAPE store: the atomic `build` attaches
+    # City's lane plan, so "no plan" is the pre-scrape (`build_store`) state.
+    monkeypatch.setenv("SWIMZH_GOLD_DB", str(offline_gold_db))
     with TestClient(app) as client:
         response = client.get("/pools/hallenbad-city", params={"at": "2026-09-15T07:00"})
     assert response.status_code == 200
@@ -264,11 +270,18 @@ def test_facility_detail_out_surfaces_temp_and_parsed_prose_caveat() -> None:
     assert out.provenance.curated is False and out.provenance.valid_as_of == "2026-07-01"
 
 
-def test_parsed_prose_pool_shows_in_detail_but_never_a_swim_option() -> None:
+def test_parsed_prose_pool_shows_in_detail_but_never_a_swim_option(
+    offline_gold_db: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """Slice F / Decision #5 acceptance: a location-only pool whose WFS prose names basins gains
     auto-extracted PARSED_PROSE basins visible in `/pools/{id}` detail (with caveat), yet produces
     NO `/swim` option — it stays reported with its freshness status, never conflated with a
-    real session (Altstetten is indoor + schedule-less → `awaiting_scrape`)."""
+    real session (Altstetten is indoor + schedule-less → `awaiting_scrape`).
+
+    Read against the PRE-SCRAPE store: the atomic `build` would scrape Altstetten into a real
+    schedule, so the schedule-less/prose-only state this pins is only observable before the fold.
+    """
+    monkeypatch.setenv("SWIMZH_GOLD_DB", str(offline_gold_db))
     swim_params = {
         "at": "2026-09-15T09:00",
         "gender": "female",

@@ -16,6 +16,7 @@ WFS-down abort path — no recorded interaction exists for a failed connection.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from pathlib import Path
 
 import httpx
@@ -23,7 +24,26 @@ import yaml
 
 from swimzh.core.http import HttpClient, RetryPolicy
 
-WFS_FIXTURES = Path(__file__).resolve().parent / "fixtures" / "wfs"
+FIXTURES = Path(__file__).resolve().parent / "fixtures"
+WFS_FIXTURES = FIXTURES / "wfs"
+
+# The composite build client's page routing: each indoor pool's roster `url` (its filename, or the
+# third-party bad-altstetten host) → the saved page fixture whose timetable `_compose_schedules`
+# scrapes and whose Belegungsplan links `_attach_lanes` discovers. Every INDOOR pool the WFS roster
+# carries has a parseable fixture here, so the atomic `build`'s fail-fast scrape completes.
+_PAGE_BY_FILENAME: dict[str, str] = {
+    "city.html": "hallenbad_city.html",
+    "oerlikon.html": "hallenbad_oerlikon.html",
+    "bungertwies.html": "hallenbad_bungertwies.html",
+    "blaesi.html": "hallenbad_blaesi.html",
+    "leimbach.html": "hallenbad_leimbach.html",
+    "kaeferberg.html": "waermebad_kaeferberg.html",
+    "aemtler.html": "schulschwimmanlage_aemtler.html",
+}
+# A valid single-basin Belegungsplan sheet; the URL-keyed lane join binds by URL, not by content,
+# so serving one good plan for every discovered PDF attaches each authored single-basin source.
+_LANE_PDF = "city-schwimmerbecken.pdf"
+_PRICE_FIXTURE = "preise_abos.html"
 
 # The reconstructed per-layer snapshot above carries `poi_id: null` (catalog.json, from which it
 # was reshaped, never captured `poi_id`). The one place a REAL WFS `poi_id` is recorded is the
@@ -74,4 +94,51 @@ def unreachable_wfs_client() -> HttpClient:
         raise httpx.ConnectError("WFS unreachable")
 
     inner = httpx.Client(transport=httpx.MockTransport(_refuse))
+    return HttpClient(inner, source="geo_sport", retry=RetryPolicy(max_attempts=1))
+
+
+def _build_handler(request: httpx.Request) -> httpx.Response:
+    """Route ONE request across every provider the atomic `build` reaches, offline:
+
+    * a WFS layer request (has ``TYPENAME``) → the committed per-layer snapshot;
+    * the shared price page (``preise-abos``) → the price fixture;
+    * a Belegungsplan ``.pdf`` → a valid single-basin lane sheet (URL-keyed join binds by URL);
+    * a pool page (mapped filename, or the ``bad-altstetten`` host) → its saved timetable fixture;
+    * any other roster page (a location-only pool) → an empty page (no schedule, no links).
+    """
+    url = str(request.url)
+    if request.url.params.get("TYPENAME"):
+        return _wfs_handler(request)
+    if url.endswith(".pdf"):
+        return httpx.Response(200, content=(FIXTURES / _LANE_PDF).read_bytes())
+    if "preise-abos" in url:
+        return httpx.Response(200, content=(FIXTURES / _PRICE_FIXTURE).read_bytes())
+    if "bad-altstetten" in url:
+        return httpx.Response(200, content=(FIXTURES / "hallenbad_altstetten.html").read_bytes())
+    fixture = _PAGE_BY_FILENAME.get(url.rsplit("/", 1)[-1])
+    if fixture is not None:
+        return httpx.Response(200, content=(FIXTURES / fixture).read_bytes())
+    return httpx.Response(200, content=b"<html></html>")
+
+
+def recorded_build_client(
+    override: Callable[[httpx.Request], httpx.Response | None] | None = None,
+) -> HttpClient:
+    """A composite `HttpClient` for the ONE-command atomic `build`, replayed fully offline.
+
+    Routes WFS layers, pool pages, Belegungsplan PDFs, and the price page from committed fixtures
+    (see `_build_handler`) through a single `MockTransport`, so `build(...)` reproduces the whole
+    pipeline — roster → schedule scrape → lane scrape → compose — with no network. `override` lets
+    a test inject a per-request failure (return a `Response` to pre-empt routing, or `None` to fall
+    through to the default) — e.g. a 503 on one pool page to prove the atomic abort.
+    """
+
+    def _serve(request: httpx.Request) -> httpx.Response:
+        if override is not None:
+            injected = override(request)
+            if injected is not None:
+                return injected
+        return _build_handler(request)
+
+    inner = httpx.Client(transport=httpx.MockTransport(_serve), follow_redirects=True)
     return HttpClient(inner, source="geo_sport", retry=RetryPolicy(max_attempts=1))

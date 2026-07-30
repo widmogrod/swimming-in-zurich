@@ -125,15 +125,23 @@ def test_swim_emits_freshness_statuses_live_for_catalog_pools(gold_db: Path) -> 
     assert {s["status"] for s in statuses} <= {"closed", "awaiting_scrape", "no_source"}
 
 
-def test_pools_expose_the_derived_freshness(gold_db: Path) -> None:
+def test_pools_expose_the_derived_freshness(
+    offline_gold_db: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """`/pools` reads the one `pool` table and surfaces each pool's derived three-state
-    `freshness`, so the UI reads schedule status from the API rather than guessing it by name."""
+    `freshness`, so the UI reads schedule status from the API rather than guessing it by name.
+
+    Read against the PRE-SCRAPE store: the atomic `build` scrapes every indoor pool, so the
+    three-state mix (a scrapeable-but-unscraped `awaiting_scrape` pool alongside a `scraped` one)
+    is only observable before the folded scrape runs — exactly what `build_store` alone yields.
+    """
+    monkeypatch.setenv("SWIMZH_GOLD_DB", str(offline_gold_db))
     with TestClient(app) as client:
         response = client.get("/pools")
     pools = {p["pool_id"]: p for p in response.json()["pools"]}
     valid = {"scraped", "awaiting_scrape", "no_source"}
     assert all(p["freshness"] in valid for p in pools.values())
-    # City is scraped; the vast majority of catalog pools carry no schedule.
+    # City is curated-scheduled (→ scraped); Altstetten is an unscraped indoor pool (awaiting).
     assert pools["hallenbad-city"]["freshness"] == "scraped"
     assert "hallenbad-altstetten" in pools
     assert pools["hallenbad-altstetten"]["freshness"] != "scraped"

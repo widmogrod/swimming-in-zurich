@@ -3,6 +3,9 @@ survive the whole HTTP round-trip."""
 
 from __future__ import annotations
 
+from pathlib import Path
+
+import pytest
 from fastapi.testclient import TestClient
 
 from apps.web.main import app
@@ -27,7 +30,14 @@ def test_man_excluded_from_women_only_session() -> None:
     assert "WomenOnly" not in accesses
 
 
-def test_options_carry_price_and_provenance() -> None:
+def test_options_carry_price_and_provenance(
+    offline_gold_db: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Read against the PRE-SCRAPE store (curated City/Oerlikon options, each with a curated
+    # `valid_as_of`). The atomic `build` folds in scraped schedules for the schedule-less curated
+    # pools (Bläsi/Leimbach/…), which surface as options that keep their curated source-less
+    # provenance — so `all(valid_as_of)` is a property of the curated-only store, pinned here.
+    monkeypatch.setenv("SWIMZH_GOLD_DB", str(offline_gold_db))
     with TestClient(app) as client:
         response = client.get("/swim", params={"at": MONDAY_EVENING, "gender": "female", "age": 34})
     options = response.json()["options"]
