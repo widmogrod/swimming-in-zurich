@@ -100,6 +100,8 @@ export const pl = {
   "status.closed": "Zamknięte",
   "status.closed_reason": "Zamknięte · {reason}",
   "status.uncurated": "Godziny nieopublikowane",
+  "status.awaiting_scrape": "Godziny jeszcze nieopublikowane",
+  "status.no_source": "Godziny nieopublikowane",
 
   "closure.seasonal_break": "Przerwa letnia",
   "closure.seasonal_break_maintenance": "Przerwa letnia / remont",

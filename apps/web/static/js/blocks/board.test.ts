@@ -62,16 +62,22 @@ test('boardRows honours FilterState.mode (day vs pool)', () => {
 test('rowStatus: open when options, closed/unknown from statuses', () => {
   expect(rowStatus({ options: [{}], statuses: [] })).toBe('open');
   expect(rowStatus({ options: [], statuses: [{ status: 'closed' }] })).toBe('closed');
-  expect(rowStatus({ options: [], statuses: [{ status: 'uncurated' }] })).toBe('unknown');
+  expect(rowStatus({ options: [], statuses: [{ status: 'awaiting_scrape' }] })).toBe('unknown');
 });
 
-test('rowStatusLine folds the terminal state onto the row (FIX 1): closed keeps reason, uncurated is distinct', () => {
-  // Closed keeps its stated reason; uncurated reads "Hours not listed" (never "closed").
+test('rowStatusLine folds the terminal state onto the row (FIX 1): closed keeps reason, schedule-less is distinct', () => {
+  // Closed keeps its stated reason; a schedule-less status reads its own freshness label
+  // (awaiting_scrape → "Hours not published yet"), never "closed".
   expect(rowStatusLine({ options: [], statuses: [{ status: 'closed', detail: 'Sommerpause' }] })).toEqual({
     kind: 'closed',
     text: 'Closed · Sommerpause',
   });
-  expect(rowStatusLine({ options: [], statuses: [{ status: 'uncurated' }] })).toEqual({
+  expect(rowStatusLine({ options: [], statuses: [{ status: 'awaiting_scrape' }] })).toEqual({
+    kind: 'unknown',
+    text: 'Hours not published yet',
+  });
+  // no_source renders its own label, distinct from awaiting_scrape — three states, never merged.
+  expect(rowStatusLine({ options: [], statuses: [{ status: 'no_source' }] })).toEqual({
     kind: 'unknown',
     text: 'Hours not listed',
   });
@@ -97,7 +103,8 @@ test('a closed/uncurated row shows its state sub-line ON the label (FIX 1), open
   const closedSub = subs.find((s) => s.classList.contains('board__rowsub--closed'));
   expect(closedSub && closedSub.textContent.startsWith('Closed')).toBeTruthy();
   const unknownSub = subs.find((s) => s.classList.contains('board__rowsub--unknown'));
-  expect(unknownSub && unknownSub.textContent === 'Hours not listed').toBeTruthy();
+  // The fixture's schedule-less rows are `awaiting_scrape` → their own freshness label.
+  expect(unknownSub && unknownSub.textContent === 'Hours not published yet').toBeTruthy();
 });
 
 test('rowEligibility reacts to the FilterState gender/age', () => {

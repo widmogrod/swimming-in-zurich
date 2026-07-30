@@ -10,6 +10,7 @@ import pytest
 
 from apps.web.services.gold_store import GoldSwimStore
 from swimzh.core.result import Ok
+from swimzh.domain.catalog import ScheduleFreshness
 from swimzh.etl.build import build_store
 from swimzh.providers.curated import load_dataset
 from swimzh.storage import catalog_json
@@ -46,12 +47,14 @@ def test_roster_holds_the_full_catalog_with_curation(tmp_path: Path) -> None:
     roster = data.roster()
     # The roster is the whole catalog (~57 pools), far more than the handful of curated ones.
     assert len(roster) >= 50
-    # A pool is `curated` iff a facility with a SCHEDULE backs it. `data.facilities()` now also
-    # includes Slice-F schedule-less prose pools, which are NOT curated — filter to scheduled.
+    # A pool derives `SCRAPED` freshness iff a facility with a SCHEDULE backs it.
+    # `data.facilities()` also includes schedule-less prose pools (NOT scraped) — filter to those.
     scheduled_ids = {
         str(f.identity.facility_id) for f in data.facilities() if any(b.rules for b in f.basins)
     }
-    assert {r.entry.pool_id for r in roster if r.curated} == scheduled_ids
+    assert {
+        r.entry.pool_id for r in roster if r.freshness is ScheduleFreshness.SCRAPED
+    } == scheduled_ids
 
 
 def test_facility_resolves_a_catalog_pool_to_its_schedule(tmp_path: Path) -> None:

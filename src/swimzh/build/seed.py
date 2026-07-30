@@ -5,8 +5,9 @@ The catalog is the **roster authority** — every one of the ~57 published pools
 slug, per S1). Curated authoring layers on top: a hand-authored ``kind`` overrides the WFS
 ``kind`` (curated-wins — e.g. *Wärmebad Käferberg* is ``thermal`` here, not the WFS ``indoor``),
 and the curated schedule payload rides along as a typed blob. Curation is **not** stored: it is
-derived at read from that blob (``codec.is_curated`` — ``curated`` iff ≥1 basin with ≥1 rule),
-so the status can never desync from the schedule fact it describes.
+derived at read from that blob (``codec.schedule_freshness`` — ``scraped`` iff ≥1 basin with ≥1
+rule, else ``awaiting_scrape``/``no_source`` by kind), so the status can never desync from the
+schedule fact it describes.
 
 Every *other* identifier becomes a value pointing at the canonical id: names/aliases →
 ``pool_alias`` rows (deduped by ``norm``), external keys (crowdmonitor, geo_sport) →
@@ -25,7 +26,10 @@ from swimzh.build.reconcile import Crosswalk
 from swimzh.core.normalize import normalize
 from swimzh.domain.catalog import PoolCatalogEntry
 from swimzh.domain.models import (
+    Basin,
     BasinId,
+    BasinKind,
+    BasinSource,
     Facility,
     PoolId,
     PoolIdentity,
@@ -34,6 +38,8 @@ from swimzh.domain.models import (
 )
 from swimzh.domain.registry import Registry
 from swimzh.providers.infrastruktur import (
+    ParsedBasinPhysical,
+    apply_physicals,
     basin_from_physical,
     parse_features,
     parse_infrastruktur,
@@ -87,7 +93,17 @@ def build_spine(
                 facility,
                 geo=entry.geo or facility.geo,
                 identity=replace(facility.identity, geo_sport_id=entry.poi_id),
+                # Address-from-roster (delete-curated-schedule-tier S1): a stripped pool file omits
+                # `address` (the curated loader leaves an empty sentinel — it has no roster), so the
+                # authoritative WFS-roster `entry.address` is stamped here, never a served "". A
+                # file that still authors an address keeps it (the `or` short-circuits).
+                address=facility.address or entry.address,
             )
+            # Basin physicals-from-prose (S1): a stripped pool file omits basin `kind`/dimensions;
+            # source them from the WFS `infrastruktur` prose. The location-only path already mints
+            # prose basins — this ENRICHES a curated facility's existing basins, guarded so an
+            # authored (`CURATED`, physically-populated) basin is never clobbered.
+            facility = _apply_prose_physicals(facility, entry.description)
 
         # Curated-wins on kind: a hand-authored registry kind (richer/verified) overrides the
         # generic WFS catalog kind; catalog is the authority only where no curation exists.
@@ -161,9 +177,9 @@ def _location_only_facility(
     when it names swimmable basins (schedule-less ``PARSED_PROSE``); a pool whose prose names
     none (an outdoor pin like *Freibad Heuried*, whose catalog description is the literal
     ``"NULL"``) gets a **location-only** facility with ZERO basins. Either way every basin is
-    rule-less, so ``codec.is_curated`` stays False and ``find_swim_options`` yields no option
-    (it ``continue``s on ``not basin.rules``) and no spurious "closed" status — the uncurated
-    invariant holds.
+    rule-less, so ``codec.schedule_freshness`` derives ``awaiting_scrape``/``no_source`` (never
+    ``scraped``) and ``find_swim_options`` yields no option (it ``continue``s on ``not
+    basin.rules``) and no spurious "closed" status — the schedule-less invariant holds.
 
     Identity is the **registry** identity when the pool has a registry entry, so external keys
     (crowdmonitor today, ``baditicker_poiid`` next) survive onto an *uncurated* pool's facility
@@ -196,6 +212,55 @@ def _location_only_facility(
         geo=entry.geo,
         features=features,
     )
+
+
+def _needs_physicals(basin: Basin) -> bool:
+    """A curated basin that carries NO authored physicals — the only kind `_apply_prose_physicals`
+    fills. Guards the invariant that a hand-verified (`CURATED`, populated) basin is never
+    downgraded to `PARSED_PROSE`: true only when the source is still `CURATED` and every physical
+    fact is at its empty default (no dimensions/lanes/temp, `kind == other`)."""
+    return (
+        basin.physical_source is BasinSource.CURATED
+        and basin.dimensions is None
+        and basin.lanes is None
+        and basin.nominal_temp_c is None
+        and basin.kind is BasinKind.OTHER
+        and not basin.diving_platforms_m
+    )
+
+
+def _match_physical(
+    basin: Basin, physicals: dict[str, ParsedBasinPhysical]
+) -> ParsedBasinPhysical | None:
+    """Bind a prose physical to a basin by NORMALIZED-NAME equality — deterministic and safe from
+    the `Schwimmerbecken` ⊂ `Nichtschwimmerbecken` substring trap (exact match, never contains).
+    A basin with no exact prose counterpart gets no physicals (a recorded drop, not a wrong
+    bind)."""
+    return physicals.get(normalize(basin.name))
+
+
+def _apply_prose_physicals(facility: Facility, prose: str | None) -> Facility:
+    """Enrich a curated facility's physically-empty basins with WFS `infrastruktur` prose physicals.
+
+    The location-only path already mints prose basins for a pool with no curated facility; this is
+    the parallel for a CURATED facility (which takes the `codec.dumps(facility)` branch and never
+    reached `parse_infrastruktur` before S1). Only `_needs_physicals` basins are touched, matched
+    to a prose segment by exact normalized name — so today's hand-verified city/bungertwies basins
+    (already populated) are untouched, and after the S3 strip the prose fills the emptied basins."""
+    if prose is None:
+        return facility
+    physicals = {normalize(p.name): p for p in parse_infrastruktur(prose)}
+    if not physicals:
+        return facility
+    changed = False
+    new_basins: list[Basin] = []
+    for basin in facility.basins:
+        match = _match_physical(basin, physicals) if _needs_physicals(basin) else None
+        if match is not None:
+            basin = apply_physicals(basin, match)
+            changed = True
+        new_basins.append(basin)
+    return replace(facility, basins=tuple(new_basins)) if changed else facility
 
 
 def build_crosswalk(spine: PoolSpine) -> Crosswalk:

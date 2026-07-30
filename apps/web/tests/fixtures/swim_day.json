@@ -11,7 +11,7 @@
       "end": "08:00",
       "access": "LaneSwim",
       "eligible": true,
-      "reason": "lane swimming \u2014 open to all",
+      "reason": "lane swimming — open to all",
       "price": "Erwachsene CHF 8.00",
       "distance_km": null,
       "open_now": false,
@@ -49,7 +49,7 @@
       "end": "21:30",
       "access": "PublicSwim",
       "eligible": true,
-      "reason": "public swimming \u2014 open to all",
+      "reason": "public swimming — open to all",
       "price": "Erwachsene CHF 8.00",
       "distance_km": null,
       "open_now": true,
@@ -167,7 +167,7 @@
       "end": "17:00",
       "access": "PublicSwim",
       "eligible": true,
-      "reason": "public swimming \u2014 open to all",
+      "reason": "public swimming — open to all",
       "price": null,
       "distance_km": null,
       "open_now": true,
@@ -190,268 +190,268 @@
       "detail": "Sommerpause / Revision"
     },
     {
-      "facility": "Flussbad Au-H\u00f6ngg",
-      "status": "uncurated",
+      "facility": "Flussbad Au-Höngg",
+      "status": "awaiting_scrape",
       "detail": "schedule not yet curated"
     },
     {
       "facility": "Flussbad Oberer Letten",
-      "status": "uncurated",
+      "status": "awaiting_scrape",
       "detail": "schedule not yet curated"
     },
     {
       "facility": "Flussbad Unterer Letten",
-      "status": "uncurated",
+      "status": "awaiting_scrape",
       "detail": "schedule not yet curated"
     },
     {
       "facility": "Flussbad Unterer Letten (Flussteil)",
-      "status": "uncurated",
+      "status": "awaiting_scrape",
       "detail": "schedule not yet curated"
     },
     {
       "facility": "Frauenbad Stadthausquai",
-      "status": "uncurated",
+      "status": "awaiting_scrape",
       "detail": "schedule not yet curated"
     },
     {
       "facility": "Freibad Allenmoos",
-      "status": "uncurated",
+      "status": "awaiting_scrape",
       "detail": "schedule not yet curated"
     },
     {
       "facility": "Freibad Auhof",
-      "status": "uncurated",
+      "status": "awaiting_scrape",
       "detail": "schedule not yet curated"
     },
     {
       "facility": "Freibad Dolder",
-      "status": "uncurated",
+      "status": "awaiting_scrape",
       "detail": "schedule not yet curated"
     },
     {
       "facility": "Freibad Heuried",
-      "status": "uncurated",
+      "status": "awaiting_scrape",
       "detail": "schedule not yet curated"
     },
     {
       "facility": "Freibad Letzigraben",
-      "status": "uncurated",
+      "status": "awaiting_scrape",
       "detail": "schedule not yet curated"
     },
     {
       "facility": "Freibad Seebach",
-      "status": "uncurated",
+      "status": "awaiting_scrape",
       "detail": "schedule not yet curated"
     },
     {
-      "facility": "Freibad Zwischen den H\u00f6lzern",
-      "status": "uncurated",
+      "facility": "Freibad Zwischen den Hölzern",
+      "status": "awaiting_scrape",
       "detail": "schedule not yet curated"
     },
     {
       "facility": "Hallenbad Altstetten",
-      "status": "uncurated",
+      "status": "awaiting_scrape",
       "detail": "schedule not yet curated"
     },
     {
-      "facility": "Hallenbad Bl\u00e4si",
-      "status": "uncurated",
+      "facility": "Hallenbad Bläsi",
+      "status": "awaiting_scrape",
       "detail": "schedule not yet curated"
     },
     {
       "facility": "Hallenbad Leimbach",
-      "status": "uncurated",
+      "status": "awaiting_scrape",
       "detail": "schedule not yet curated"
     },
     {
-      "facility": "M\u00e4nnerbad Schanzengraben",
-      "status": "uncurated",
+      "facility": "Männerbad Schanzengraben",
+      "status": "awaiting_scrape",
       "detail": "schedule not yet curated"
     },
     {
       "facility": "Planschbecken Althoos",
-      "status": "uncurated",
+      "status": "awaiting_scrape",
       "detail": "schedule not yet curated"
     },
     {
       "facility": "Planschbecken Am Uetliberg",
-      "status": "uncurated",
+      "status": "awaiting_scrape",
       "detail": "schedule not yet curated"
     },
     {
       "facility": "Planschbecken Artergut",
-      "status": "uncurated",
+      "status": "awaiting_scrape",
       "detail": "schedule not yet curated"
     },
     {
       "facility": "Planschbecken Bachwiesen",
-      "status": "uncurated",
+      "status": "awaiting_scrape",
       "detail": "schedule not yet curated"
     },
     {
-      "facility": "Planschbecken B\u00e4ckeranlage",
-      "status": "uncurated",
+      "facility": "Planschbecken Bäckeranlage",
+      "status": "awaiting_scrape",
       "detail": "schedule not yet curated"
     },
     {
       "facility": "Planschbecken Bullingerhof",
-      "status": "uncurated",
+      "status": "awaiting_scrape",
       "detail": "schedule not yet curated"
     },
     {
-      "facility": "Planschbecken F\u00f6hrenwald",
-      "status": "uncurated",
+      "facility": "Planschbecken Föhrenwald",
+      "status": "awaiting_scrape",
       "detail": "schedule not yet curated"
     },
     {
       "facility": "Planschbecken Fritschiwiese",
-      "status": "uncurated",
+      "status": "awaiting_scrape",
       "detail": "schedule not yet curated"
     },
     {
       "facility": "Planschbecken Josefswiese",
-      "status": "uncurated",
+      "status": "awaiting_scrape",
       "detail": "schedule not yet curated"
     },
     {
       "facility": "Planschbecken Pfingstweid",
-      "status": "uncurated",
+      "status": "awaiting_scrape",
       "detail": "schedule not yet curated"
     },
     {
-      "facility": "Planschbecken Schl\u00f6ssliareal",
-      "status": "uncurated",
+      "facility": "Planschbecken Schlössliareal",
+      "status": "awaiting_scrape",
       "detail": "schedule not yet curated"
     },
     {
-      "facility": "Planschbecken Sihlh\u00f6lzli",
-      "status": "uncurated",
+      "facility": "Planschbecken Sihlhölzli",
+      "status": "awaiting_scrape",
       "detail": "schedule not yet curated"
     },
     {
       "facility": "Planschbecken Wahlenpark",
-      "status": "uncurated",
+      "status": "awaiting_scrape",
       "detail": "schedule not yet curated"
     },
     {
       "facility": "Schulschwimmanlage Altweg",
-      "status": "uncurated",
+      "status": "awaiting_scrape",
       "detail": "schedule not yet curated"
     },
     {
-      "facility": "Schulschwimmanlage Aubr\u00fccke",
-      "status": "uncurated",
+      "facility": "Schulschwimmanlage Aubrücke",
+      "status": "awaiting_scrape",
       "detail": "schedule not yet curated"
     },
     {
       "facility": "Schulschwimmanlage Borrweg",
-      "status": "uncurated",
+      "status": "awaiting_scrape",
       "detail": "schedule not yet curated"
     },
     {
       "facility": "Schulschwimmanlage Buhn",
-      "status": "uncurated",
+      "status": "awaiting_scrape",
       "detail": "schedule not yet curated"
     },
     {
       "facility": "Schulschwimmanlage Freilager",
-      "status": "uncurated",
+      "status": "awaiting_scrape",
       "detail": "schedule not yet curated"
     },
     {
-      "facility": "Schulschwimmanlage Gr\u00fcnau",
-      "status": "uncurated",
+      "facility": "Schulschwimmanlage Grünau",
+      "status": "awaiting_scrape",
       "detail": "schedule not yet curated"
     },
     {
       "facility": "Schulschwimmanlage Hardau",
-      "status": "uncurated",
+      "status": "awaiting_scrape",
       "detail": "schedule not yet curated"
     },
     {
       "facility": "Schulschwimmanlage Isengrind",
-      "status": "uncurated",
+      "status": "awaiting_scrape",
       "detail": "schedule not yet curated"
     },
     {
-      "facility": "Schulschwimmanlage K\u00fcgeliloo",
-      "status": "uncurated",
+      "facility": "Schulschwimmanlage Kügeliloo",
+      "status": "awaiting_scrape",
       "detail": "schedule not yet curated"
     },
     {
       "facility": "Schulschwimmanlage Letten",
-      "status": "uncurated",
+      "status": "awaiting_scrape",
       "detail": "schedule not yet curated"
     },
     {
       "facility": "Schulschwimmanlage Looren",
-      "status": "uncurated",
+      "status": "awaiting_scrape",
       "detail": "schedule not yet curated"
     },
     {
       "facility": "Schulschwimmanlage Riedtli",
-      "status": "uncurated",
+      "status": "awaiting_scrape",
       "detail": "schedule not yet curated"
     },
     {
       "facility": "Schulschwimmanlage Riesbach",
-      "status": "uncurated",
+      "status": "awaiting_scrape",
       "detail": "schedule not yet curated"
     },
     {
-      "facility": "Schulschwimmanlage Staudenb\u00fchl",
-      "status": "uncurated",
+      "facility": "Schulschwimmanlage Staudenbühl",
+      "status": "awaiting_scrape",
       "detail": "schedule not yet curated"
     },
     {
       "facility": "Schulschwimmanlage Stettbach",
-      "status": "uncurated",
+      "status": "awaiting_scrape",
       "detail": "schedule not yet curated"
     },
     {
       "facility": "Schulschwimmanlage Tannenrauch",
-      "status": "uncurated",
+      "status": "awaiting_scrape",
       "detail": "schedule not yet curated"
     },
     {
       "facility": "Schulschwimmanlage Vogtsrain",
-      "status": "uncurated",
+      "status": "awaiting_scrape",
       "detail": "schedule not yet curated"
     },
     {
       "facility": "Seebad Enge",
-      "status": "uncurated",
+      "status": "awaiting_scrape",
       "detail": "schedule not yet curated"
     },
     {
       "facility": "Seebad Katzensee",
-      "status": "uncurated",
+      "status": "awaiting_scrape",
       "detail": "schedule not yet curated"
     },
     {
       "facility": "Seebad Utoquai",
-      "status": "uncurated",
+      "status": "awaiting_scrape",
       "detail": "schedule not yet curated"
     },
     {
       "facility": "Strandbad Mythenquai",
-      "status": "uncurated",
+      "status": "awaiting_scrape",
       "detail": "schedule not yet curated"
     },
     {
       "facility": "Strandbad Tiefenbrunnen",
-      "status": "uncurated",
+      "status": "awaiting_scrape",
       "detail": "schedule not yet curated"
     },
     {
       "facility": "Strandbad Wollishofen",
-      "status": "uncurated",
+      "status": "awaiting_scrape",
       "detail": "schedule not yet curated"
     },
     {
-      "facility": "W\u00e4rmebad K\u00e4ferberg",
-      "status": "uncurated",
+      "facility": "Wärmebad Käferberg",
+      "status": "awaiting_scrape",
       "detail": "schedule not yet curated"
     }
   ],

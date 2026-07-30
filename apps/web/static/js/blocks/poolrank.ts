@@ -15,6 +15,7 @@
 //      never "✕ not for you" — that would blame the swimmer for the pool's outage.
 
 import { hhmmToMin } from './cursor.js';
+import { isUnlisted } from '../appdata.js';
 import type { MessageKey } from '../i18n.js';
 
 /** The tiers a row can land in, in display order. */
@@ -110,11 +111,11 @@ export function isPartlyReserved(split: LaneSplit | null): boolean {
   return !!split && split.public_lanes < split.lane_count;
 }
 
-/** A row's terminal state, if it has one. Closed beats uncurated. */
+/** A row's terminal state, if it has one. Closed beats a schedule-less (unlisted) status. */
 export function terminalStatus(row: RankRow): 'closed' | 'unknown' | null {
   const statuses = row.statuses ?? [];
   if (statuses.some((s) => s.status === 'closed')) return 'closed';
-  if (statuses.some((s) => s.status === 'uncurated')) return 'unknown';
+  if (statuses.some((s) => isUnlisted(s.status))) return 'unknown';
   return null;
 }
 

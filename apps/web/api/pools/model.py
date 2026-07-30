@@ -15,7 +15,10 @@ class PoolOut(BaseModel):
     url: str | None
     description: str | None
     phone: str | None
-    curated: bool  # True = a curated timetable exists (derived); False = location only
+    # The derived three-state schedule freshness (delete-curated-schedule-tier S1): "scraped"
+    # (a real schedule), "awaiting_scrape" (indoor, scrapeable, no schedule yet), or "no_source"
+    # (no timetable source at all). Replaced the `curated` boolean; never "closed".
+    freshness: str
 
 
 class PoolsOut(BaseModel):

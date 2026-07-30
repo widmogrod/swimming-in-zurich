@@ -68,7 +68,10 @@ class OptionOut(BaseModel):
 
 class StatusOut(BaseModel):
     facility: str
-    status: str  # "closed" | "uncurated"
+    # The three-state schedule freshness of a no-options pool (delete-curated-schedule-tier S1):
+    # "closed" (curated but shut today) | "awaiting_scrape" (indoor, no schedule yet) | "no_source"
+    # (no timetable source). A schedule-less pool is NEVER "closed".
+    status: str
     # --- i18n ------------------------------------------------------------------------
     # `detail` used to mix languages here: English "schedule not yet curated" in one branch
     # and curated German ("Sommerpause") in the other. Retired in S5 — the code names which

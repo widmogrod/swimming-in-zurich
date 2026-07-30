@@ -14,7 +14,7 @@ import pytest
 from swimzh.build.reconcile import Name, Xref
 from swimzh.build.seed import build_crosswalk, build_spine
 from swimzh.core.result import Ok
-from swimzh.domain.catalog import PoolCatalogEntry
+from swimzh.domain.catalog import PoolCatalogEntry, ScheduleFreshness
 from swimzh.domain.models import BasinSource, PoolId, PoolKind
 from swimzh.providers.curated import Dataset, load_dataset
 from swimzh.storage import catalog_json, codec
@@ -47,27 +47,38 @@ def test_spine_has_one_row_per_catalog_pool(
     assert {p.id for p in spine.pools} == {PoolId(e.pool_id) for e in catalog}
 
 
-def test_curation_status_is_derived(spine: PoolSpine, dataset: Dataset) -> None:
-    # Curation is not stored on the spine; it is derived from `facility_doc` by the single
-    # shared rule (`codec.is_curated`) — the same predicate for every consumer.
-    curated = {p.id for p in spine.pools if codec.is_curated(p.facility_doc)}
-    # Exactly the curated facilities that carry at least one basin with a rule.
+def test_schedule_freshness_is_derived(spine: PoolSpine, dataset: Dataset) -> None:
+    # Freshness is not stored on the spine; it is derived from `facility_doc` by the single
+    # shared rule (`codec.schedule_freshness`) — the same predicate for every consumer.
+    scraped = {
+        p.id
+        for p in spine.pools
+        if codec.schedule_freshness(p.facility_doc) is ScheduleFreshness.SCRAPED
+    }
+    # Exactly the facilities that carry at least one basin with a rule are `scraped`.
     expected = {
         PoolId(str(f.identity.facility_id))
         for f in dataset.facilities
         if any(b.rules for b in f.basins)
     }
-    assert curated == expected
-    assert len(curated) == 4
-    # The remaining 53 roster pools derive uncurated.
-    assert sum(1 for p in spine.pools if not codec.is_curated(p.facility_doc)) == 53
+    assert scraped == expected
+    assert len(scraped) == 4
+    # The remaining 53 roster pools derive a schedule-less freshness (awaiting_scrape / no_source).
+    assert (
+        sum(
+            1
+            for p in spine.pools
+            if codec.schedule_freshness(p.facility_doc) is not ScheduleFreshness.SCRAPED
+        )
+        == 53
+    )
 
 
 def test_curated_pools_carry_a_facility_blob_uncurated_carry_at_most_prose(
     spine: PoolSpine,
 ) -> None:
     for p in spine.pools:
-        if codec.is_curated(p.facility_doc):
+        if codec.schedule_freshness(p.facility_doc) is ScheduleFreshness.SCRAPED:
             assert p.facility_doc is not None
         else:
             # S1: every catalog pool now carries a non-NULL blob, but an uncurated one is always
@@ -138,7 +149,7 @@ def test_location_only_pool_is_zero_basin_and_uncurated(spine: PoolSpine) -> Non
     facility = codec.loads(row.facility_doc)
     assert facility.basins == ()  # location-only: no basin at all
     assert facility.provenance.curated is False
-    assert codec.is_curated(row.facility_doc) is False
+    assert codec.schedule_freshness(row.facility_doc) is not ScheduleFreshness.SCRAPED
 
 
 def test_uncurated_pool_with_registry_entry_keeps_its_identity(spine: PoolSpine) -> None:

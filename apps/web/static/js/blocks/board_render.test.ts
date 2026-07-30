@@ -130,7 +130,7 @@ test("a closed row paints a DASHED status ribbon (never a solid public block)", 
 test("an uncurated row paints too — 'hours not listed' is drawn, not skipped", () => {
   const calls: Call[] = [];
   mountBoard(calls, {
-    day: answer([], [{ facility: "Unknown", status: "uncurated" }]),
+    day: answer([], [{ facility: "Unknown", status: "awaiting_scrape" }]),
   });
   expect(calls.some((c) => c.op === "clearRect")).toBe(true);
 });

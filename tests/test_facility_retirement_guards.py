@@ -138,7 +138,7 @@ def _pool_columns() -> str:
 def test_pool_table_has_no_curation_status_column() -> None:
     assert "curation_status" not in _pool_columns(), (
         "`curation_status` must NOT be a stored `pool` column — it is derived at read via "
-        "codec.is_curated (B3); a stored column can desync from the schedule it describes."
+        "codec.schedule_freshness; a stored column can desync from the schedule it describes."
     )
 
 

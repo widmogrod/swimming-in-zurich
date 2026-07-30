@@ -98,10 +98,10 @@ def test_swim_and_pools_read_the_same_store(gold_db: Path) -> None:
     assert detail.json()["facility_name"] == "Hallenbad City"
 
 
-def test_swim_emits_uncurated_statuses_live_for_catalog_pools(gold_db: Path) -> None:
-    """S3 acceptance: `/swim` returns `uncurated` statuses at runtime for catalog pools that
-    have no curated schedule — `uncurated = roster − scheduled`, identity known via the roster.
-    The three states stay un-merged: a curated pool never appears as `uncurated`."""
+def test_swim_emits_freshness_statuses_live_for_catalog_pools(gold_db: Path) -> None:
+    """`/swim` returns schedule-freshness statuses at runtime for catalog pools that have no
+    schedule — `schedule-less = roster − scheduled`, identity known via the roster. The states
+    stay un-merged: a scheduled pool never appears as a freshness status, and never "closed"."""
     with TestClient(app) as client:
         response = client.get(
             "/swim",
@@ -114,23 +114,27 @@ def test_swim_emits_uncurated_statuses_live_for_catalog_pools(gold_db: Path) -> 
         )
     assert response.status_code == 200
     statuses = response.json()["statuses"]
-    uncurated = {s["facility"] for s in statuses if s["status"] == "uncurated"}
-    # Most of the ~57 catalog pools carry no curated timetable → many live `uncurated` rows.
-    assert len(uncurated) >= 40
-    # A curated pool (City appears among the options) is never also reported `uncurated`.
-    assert "Hallenbad City" not in uncurated
-    # The states are distinct labels, never merged.
-    assert {s["status"] for s in statuses} <= {"closed", "uncurated"}
+    schedule_less = {
+        s["facility"] for s in statuses if s["status"] in {"awaiting_scrape", "no_source"}
+    }
+    # Most of the ~57 catalog pools carry no schedule → many live freshness rows.
+    assert len(schedule_less) >= 40
+    # A scheduled pool (City appears among the options) is never also a freshness status.
+    assert "Hallenbad City" not in schedule_less
+    # The states are distinct labels, never merged — a schedule-less pool is NEVER "closed".
+    assert {s["status"] for s in statuses} <= {"closed", "awaiting_scrape", "no_source"}
 
 
-def test_pools_expose_the_derived_curation_flag(gold_db: Path) -> None:
-    """S3: `/pools` reads the one `pool` table and surfaces each pool's derived `curated` flag,
-    so the UI reads schedule status from the API rather than guessing it by name."""
+def test_pools_expose_the_derived_freshness(gold_db: Path) -> None:
+    """`/pools` reads the one `pool` table and surfaces each pool's derived three-state
+    `freshness`, so the UI reads schedule status from the API rather than guessing it by name."""
     with TestClient(app) as client:
         response = client.get("/pools")
     pools = {p["pool_id"]: p for p in response.json()["pools"]}
-    assert all(isinstance(p["curated"], bool) for p in pools.values())
-    # City is curated; the vast majority of catalog pools are locations only.
-    assert pools["hallenbad-city"]["curated"] is True
-    assert "hallenbad-altstetten" in pools and pools["hallenbad-altstetten"]["curated"] is False
-    assert sum(1 for p in pools.values() if not p["curated"]) >= 40
+    valid = {"scraped", "awaiting_scrape", "no_source"}
+    assert all(p["freshness"] in valid for p in pools.values())
+    # City is scraped; the vast majority of catalog pools carry no schedule.
+    assert pools["hallenbad-city"]["freshness"] == "scraped"
+    assert "hallenbad-altstetten" in pools
+    assert pools["hallenbad-altstetten"]["freshness"] != "scraped"
+    assert sum(1 for p in pools.values() if p["freshness"] != "scraped") >= 40

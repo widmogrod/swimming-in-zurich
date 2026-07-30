@@ -1,7 +1,8 @@
 """The gold store: SQLite as the single source of truth the query surface reads from.
 
 The identity spine is one ``pool`` table (all ~57 published pools, canonical id PK; curation is
-**not** a column — it is derived at read from ``facility_doc`` via ``codec.is_curated``), plus
+**not** a column — the schedule state is derived at read from ``facility_doc`` via
+``codec.schedule_freshness``), plus
 its DB-enforced crosswalk: ``pool_alias`` with a
 global ``UNIQUE(norm)`` and ``pool_xref`` with ``UNIQUE(namespace, ext_id)`` — so "same
 entity → two ids" is a write-time ``IntegrityError``, not a convention. These are ``STRICT``
@@ -157,10 +158,10 @@ def load_xref_rows(conn: sqlite3.Connection) -> tuple[tuple[str, str, str], ...]
 
 def load_roster(conn: sqlite3.Connection) -> tuple[RosterEntry, ...]:
     """Rehydrate the full roster (all ~57 pools) from the ``pool`` spine, ordered by canonical
-    id, each carrying its **derived** ``curation_status`` as a ``curated`` flag.
+    id, each carrying its **derived** ``ScheduleFreshness``.
 
     This is the single read that backs both ``/pools`` (catalog + schedule indicator) and the
-    runtime ``uncurated = roster − scheduled`` computation — one store, joinable by ``pool.id``.
+    runtime freshness statuses (``roster − scheduled``) — one store, joinable by ``pool.id``.
     """
     cursor = conn.execute(
         "SELECT id, name, kind, address, lat, lon, url, description, phone, facility_doc "
@@ -173,7 +174,7 @@ def _roster_entry(row: tuple[Any, ...]) -> RosterEntry:
     *catalog_cols, facility_doc = row
     return RosterEntry(
         entry=_catalog_entry(tuple(catalog_cols)),
-        curated=codec.is_curated(str(facility_doc) if facility_doc is not None else None),
+        freshness=codec.schedule_freshness(str(facility_doc) if facility_doc is not None else None),
     )
 
 

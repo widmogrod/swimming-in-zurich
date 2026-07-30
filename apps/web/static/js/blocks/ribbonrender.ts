@@ -15,6 +15,7 @@
 // Timescale and height.
 
 import { hhmmToMin } from './cursor.js';
+import { unlistedLabelKey } from '../appdata.js';
 import { t, type MessageKey } from '../i18n.js';
 import type { Doc, El, WindowLike } from '../domtypes.js';
 /** A ribbon read STRUCTURALLY — only the fields the renderer paints. Deliberately
@@ -197,7 +198,11 @@ function drawStatusRibbon(
     ctx.font = '500 11.5px system-ui, sans-serif';
     ctx.textBaseline = 'middle';
     ctx.textAlign = 'center';
-    ctx.fillText(t('status.uncurated'), (x0 + x1) / 2, mid);
+    ctx.fillText(
+      t(unlistedLabelKey(r.status as string | undefined)),
+      (x0 + x1) / 2,
+      mid,
+    );
     ctx.textAlign = 'left';
   }
   ctx.restore();

@@ -54,7 +54,7 @@ test('closed status → a DASHED closed ribbon carrying its detail', () => {
 
 test('uncurated status → a DOTTED ghost ribbon (unknown ≠ closed)', () => {
   const { statuses } = load<{ statuses: RibbonStatus[] }>('swim_day.json');
-  const un = must(statuses.find((s: RibbonStatus) => s.status === 'uncurated'));
+  const un = must(statuses.find((s: RibbonStatus) => s.status === 'awaiting_scrape'));
   const r = statusRibbon(un);
   expect(r.variant).toBe('ghost');
   expect(r.style).toBe('dotted');

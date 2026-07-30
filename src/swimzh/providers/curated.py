@@ -80,10 +80,16 @@ def _validate[T](model: type[T], data: object, where: str) -> T:
 
 
 def _map_facility(dto: FacilityDTO, identity: PoolIdentity) -> Facility:
+    # `address`/`source` are optional since S1 (a stripped pool file omits them). This provider
+    # has NO roster, so it cannot source the address here — it leaves an empty sentinel that the
+    # build/seed path (`build_spine`) overwrites with the WFS roster's `entry.address` before the
+    # blob is serialized (never a served ""). `source` falls back to the build-assigned `_SOURCE`.
     return Facility(
         identity=identity,
-        address=dto.address,
-        provenance=Provenance(source=dto.source, curated=True, valid_as_of=dto.valid_as_of),
+        address=dto.address or "",
+        provenance=Provenance(
+            source=dto.source or _SOURCE, curated=True, valid_as_of=dto.valid_as_of
+        ),
         basins=tuple(mapping.basin_from_dto(b) for b in dto.basins),
         geo=mapping.geo_from_dto(dto.geo) if dto.geo is not None else None,
         amenities=frozenset(dto.amenities),

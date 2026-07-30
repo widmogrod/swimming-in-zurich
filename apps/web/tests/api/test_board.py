@@ -61,4 +61,5 @@ def test_board_preview_inlines_the_swim_fixtures(monkeypatch: pytest.MonkeyPatch
     assert any(o["lane_timeline"] for o in day["options"])  # a filled-ribbon option
     assert any(not o["lane_timeline"] for o in day["options"])  # a "not published" option
     assert any(s["status"] == "closed" for s in day["statuses"])  # a closed ribbon
-    assert any(s["status"] == "uncurated" for s in day["statuses"])  # a ghost ribbon
+    # a schedule-less ghost ribbon (three-state freshness replaced the "uncurated" bucket in S1)
+    assert any(s["status"] in {"awaiting_scrape", "no_source"} for s in day["statuses"])

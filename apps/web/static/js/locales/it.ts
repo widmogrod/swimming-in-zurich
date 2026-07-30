@@ -78,6 +78,8 @@ export const it = {
   "status.closed": "Chiuso",
   "status.closed_reason": "Chiuso · {reason}",
   "status.uncurated": "Orari non pubblicati",
+  "status.awaiting_scrape": "Orari non ancora pubblicati",
+  "status.no_source": "Orari non pubblicati",
   "closure.seasonal_break": "Pausa estiva",
   "closure.seasonal_break_maintenance": "Pausa estiva / revisione",
   "closure.maintenance": "Revisione",

@@ -108,7 +108,8 @@ _FACILITY: tuple[FieldSourcing, ...] = (
         None,
         "n/a",
         "Provenance flag serialized from Provenance.curated by the build/codec, not from a data "
-        "provider (distinct from codec.is_curated, a separate read-time derivation for status).",
+        "provider (distinct from codec.schedule_freshness, a separate read-time derivation for "
+        "the schedule-freshness status).",
     ),
     FieldSourcing(
         "facility.valid_as_of", ProducerKind.BUILD_METADATA, None, "n/a", "provenance freshness."

@@ -78,6 +78,8 @@ export const de = {
   "status.closed": "Geschlossen",
   "status.closed_reason": "Geschlossen · {reason}",
   "status.uncurated": "Öffnungszeiten nicht angegeben",
+  "status.awaiting_scrape": "Öffnungszeiten noch nicht veröffentlicht",
+  "status.no_source": "Öffnungszeiten nicht angegeben",
 
   "closure.seasonal_break": "Sommerpause",
   "closure.seasonal_break_maintenance": "Sommerpause / Revision",

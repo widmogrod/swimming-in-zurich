@@ -297,7 +297,10 @@ class LanePlanDTO(_Strict):
 class BasinDTO(_Strict):
     basin_id: str
     name: str
-    rules: list[RuleDTO]
+    # Optional (default empty) since S1 of delete-curated-schedule-tier: a stripped pool file
+    # carries only the crosswalk binding (`basin_id`/`name`/`lane_plan_source`), no schedule.
+    # A rule-less basin derives `awaiting_scrape`/`no_source` freshness, never a `/swim` option.
+    rules: list[RuleDTO] = []
     exceptions: list[ExceptionDTO] = []
     kind: _BasinKind = "other"
     dimensions: DimensionsDTO | None = None
@@ -376,8 +379,12 @@ class GeoDTO(_Strict):
 
 class FacilityDTO(_Strict):
     facility_id: str
-    address: str
-    source: str
+    # Optional since S1 of delete-curated-schedule-tier: a stripped pool file omits `address`
+    # (sourced from the WFS roster in the build/seed path — never defaulted to "") and `source`
+    # (build-assigned). Physical basin fields already default (see `BasinDTO`), so a blob reduced
+    # to `facility_id` + basins-with-only-`lane_plan_source` validates.
+    address: str | None = None
+    source: str | None = None
     valid_as_of: date | None = None
     geo: GeoDTO | None = None
     amenities: list[str] = Field(default_factory=list)

@@ -11,6 +11,7 @@
 // The computation is PURE (`computeInsight`) so it unit-tests headless; the thin
 // `createInsightBar` only writes the derived text into the DOM. No colour, no hex.
 
+import { isUnlisted } from '../appdata.js';
 import { asDoc, type El } from '../domtypes.js';
 import { t } from '../i18n.js';
 
@@ -112,7 +113,7 @@ function honestyCounts(answer: InsightAnswer | undefined) {
   let unlisted = 0;
   for (const s of statuses) {
     if (s.status === 'closed') closed += 1;
-    else if (s.status === 'uncurated') unlisted += 1;
+    else if (isUnlisted(s.status)) unlisted += 1;
   }
   return { closed, unlisted };
 }

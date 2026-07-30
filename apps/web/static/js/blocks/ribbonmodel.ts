@@ -7,9 +7,9 @@ import { t } from '../i18n.js';
 // HERE and unit-tested against saved `/swim` fixtures.
 //
 // The three terminal states are never merged (product invariant): a `closed` status
-// is a DASHED ribbon carrying its reason; an `uncurated` status is a DOTTED ghost;
-// an option with no published lane split is its own "not published" ribbon — none
-// of them collapses into another.
+// is a DASHED ribbon carrying its reason; a schedule-less status (`awaiting_scrape`
+// or `no_source`) is a DOTTED ghost; an option with no published lane split is its own
+// "not published" ribbon — none of them collapses into another.
 
 // access class name (`type(session.access).__name__`) → colour-family key. The board
 // maps each key to a token (see blocks.css `.fam-*`); the key itself carries no hex.
@@ -120,8 +120,8 @@ export function optionRibbon(option: RibbonOption): Ribbon {
 
 /**
  * statusRibbon(status) → a ribbon render state for a `/swim` status entry.
- *   - status === 'closed'    → a DASHED closed ribbon carrying `detail`.
- *   - status === 'uncurated' → a DOTTED ghost ribbon (unknown ≠ closed).
+ *   - status === 'closed'                       → a DASHED closed ribbon carrying `detail`.
+ *   - status === 'awaiting_scrape' | 'no_source' → a DOTTED ghost ribbon (unknown ≠ closed).
  * Any other status label falls back to the ghost/unknown ribbon (never to closed).
  */
 export function statusRibbon(status: RibbonStatus): Ribbon {
@@ -138,7 +138,9 @@ export function statusRibbon(status: RibbonStatus): Ribbon {
   if (status.status === 'closed') {
     return { ...base, variant: 'closed', style: 'dashed', family: 'closed' };
   }
-  return { ...base, variant: 'ghost', style: 'dotted', family: 'unknown' };
+  // A schedule-less status (awaiting_scrape / no_source) → a DOTTED ghost; carry the status value
+  // so the canvas can render its SPECIFIC freshness label, never a merged bucket.
+  return { ...base, status: status.status, variant: 'ghost', style: 'dotted', family: 'unknown' };
 }
 
 /**

@@ -32,6 +32,7 @@ import {
   type Timescale,
 } from './ribbonrender.js';
 import { cursorX as sharedCursorX, hhmmToMin } from './cursor.js';
+import { isUnlisted, unlistedLabelKey } from '../appdata.js';
 import { createEligibilityBadge } from '../components/eligibilitybadge.js';
 import { dayParts } from '../datefmt.js';
 import { asDoc, type El } from '../domtypes.js';
@@ -216,8 +217,10 @@ export function rowStatusLine(row: {
       text: reason ? t('status.closed_reason', { reason }) : t('status.closed'),
     };
   }
-  if ((row.statuses || []).some((s) => s.status === 'uncurated')) {
-    return { kind: 'unknown', text: t('status.uncurated') };
+  const unlisted = (row.statuses || []).find((s) => isUnlisted(s.status));
+  if (unlisted) {
+    // Render the SPECIFIC freshness label (awaiting_scrape vs no_source), never a merged bucket.
+    return { kind: 'unknown', text: t(unlistedLabelKey(unlisted.status)) };
   }
   return null;
 }

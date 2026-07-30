@@ -94,13 +94,14 @@ def test_pool_detail_location_only_pool_is_viewable() -> None:
     heuried = next(p for p in listing["pools"] if p["pool_id"] == "freibad-heuried")
     assert heuried["kind"] == "outdoor"
     assert heuried["lat"] is not None and heuried["lon"] is not None
-    assert heuried["curated"] is False
+    # Outdoor + schedule-less → `no_source` (not indoor, so not scrapeable), never `scraped`.
+    assert heuried["freshness"] == "no_source"
 
 
 def test_location_only_pool_is_never_a_swim_option_nor_closed() -> None:
-    """S1 uncurated invariant: a location-only pool (Heuried) produces NO `/swim` option and no
-    spurious `closed` status — it is reported `uncurated` (identity known, schedule not), never
-    conflated with a real session or a stated closure."""
+    """S1 schedule-less invariant: a location-only pool (Heuried) produces NO `/swim` option and no
+    spurious `closed` status — it is reported with its freshness status (`no_source`, identity
+    known, schedule not), never conflated with a real session or a stated closure."""
     swim_params = {
         "at": "2026-09-15T09:00",
         "gender": "female",
@@ -112,8 +113,10 @@ def test_location_only_pool_is_never_a_swim_option_nor_closed() -> None:
     assert "Freibad Heuried" not in {o["facility"] for o in swim["options"]}
     closed = {s["facility"] for s in swim["statuses"] if s["status"] == "closed"}
     assert "Freibad Heuried" not in closed  # no spurious "closed" for a rule-less facility
-    uncurated = {s["facility"] for s in swim["statuses"] if s["status"] == "uncurated"}
-    assert "Freibad Heuried" in uncurated
+    schedule_less = {
+        s["facility"] for s in swim["statuses"] if s["status"] in {"awaiting_scrape", "no_source"}
+    }
+    assert "Freibad Heuried" in schedule_less
 
 
 def test_pool_detail_has_no_lane_panels_without_a_plan() -> None:
@@ -264,7 +267,8 @@ def test_facility_detail_out_surfaces_temp_and_parsed_prose_caveat() -> None:
 def test_parsed_prose_pool_shows_in_detail_but_never_a_swim_option() -> None:
     """Slice F / Decision #5 acceptance: a location-only pool whose WFS prose names basins gains
     auto-extracted PARSED_PROSE basins visible in `/pools/{id}` detail (with caveat), yet produces
-    NO `/swim` option — it stays reported `uncurated`, never conflated with a real session."""
+    NO `/swim` option — it stays reported with its freshness status, never conflated with a
+    real session (Altstetten is indoor + schedule-less → `awaiting_scrape`)."""
     swim_params = {
         "at": "2026-09-15T09:00",
         "gender": "female",
@@ -282,11 +286,11 @@ def test_parsed_prose_pool_shows_in_detail_but_never_a_swim_option() -> None:
     diving = [b for b in detail["basins"] if b["kind"] == "diving"]
     assert diving and diving[0]["diving_platforms_m"] == [1.0, 3.0, 5.0]
 
-    # /swim: the gate. Never an option; reported `uncurated` instead — the test fails the moment a
-    # PARSED_PROSE basin leaks into an option.
+    # /swim: the gate. Never an option; reported `awaiting_scrape` instead — the test fails the
+    # moment a PARSED_PROSE basin leaks into an option.
     assert "Hallenbad Altstetten" not in {o["facility"] for o in swim["options"]}
-    uncurated = {s["facility"] for s in swim["statuses"] if s["status"] == "uncurated"}
-    assert "Hallenbad Altstetten" in uncurated
+    awaiting = {s["facility"] for s in swim["statuses"] if s["status"] == "awaiting_scrape"}
+    assert "Hallenbad Altstetten" in awaiting
 
 
 def test_pool_detail_surfaces_live_water_temp_from_a_wired_provider() -> None:

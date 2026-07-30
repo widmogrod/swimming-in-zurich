@@ -62,7 +62,7 @@ def _pool_out(row: RosterEntry) -> PoolOut:
         url=entry.url,
         description=entry.description,
         phone=entry.phone,
-        curated=row.curated,
+        freshness=row.freshness.value,
     )
 
 

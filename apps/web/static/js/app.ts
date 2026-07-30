@@ -26,6 +26,7 @@ import {
   classifyPools,
   focusWeekOnPool,
   isStructuralUrlChange,
+  isUnlisted,
   type PoolMeta,
   type PoolOption,
 } from "./appdata.js";
@@ -343,10 +344,12 @@ async function main() {
     cursorPoolId = id ?? null;
     cursorMin = null;
     const closed = row.statuses.find((s) => s.status === "closed");
+    // Internal panel-state vocabulary keeps "uncurated" as its schedule-less bucket; the API status
+    // values it derives from are the three-state freshness (closed / awaiting_scrape / no_source).
     const state = closed ? "closed" : "uncurated";
     const st =
       closed ||
-      row.statuses.find((s) => s.status === "uncurated") ||
+      row.statuses.find((s) => isUnlisted(s.status)) ||
       row.statuses[0];
     const detail = id ? await fetchPoolDetail(id, filter.date || today) : null;
     openPanel(detail, {

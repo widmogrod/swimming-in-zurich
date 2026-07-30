@@ -24,6 +24,7 @@ from swimzh.boundary.curated_dto import (
     _HolidayPolicy,
     _PoolKind,
 )
+from swimzh.domain.catalog import ScheduleFreshness
 from swimzh.domain.models import (
     Facility,
     Notice,
@@ -179,15 +180,27 @@ def loads(payload: str) -> Facility:
     return from_stored(StoredFacilityDTO.model_validate_json(payload))
 
 
-def is_curated(facility_doc: str | None) -> bool:
-    """The single source of the curation rule: a pool is curated iff its schedule blob is
-    present (NOT NULL) *and* the decoded facility carries at least one basin with at least one
-    rule; otherwise uncurated.
+def schedule_freshness(facility_doc: str | None) -> ScheduleFreshness:
+    """The single source of the three-state curation model: derive a pool's `ScheduleFreshness`
+    from its schedule blob (kind + rules presence), never a stored column — so the status can
+    never disagree with the blob it describes. Replaced the `is_curated` boolean in S1.
 
-    Derived from the schedule fact it describes rather than stored, so the status can never
-    disagree with the blob. Both the read path (``load_roster``) and any build-time consumer
-    share this one function so the rule cannot diverge.
+    * `SCRAPED` — the decoded facility has ≥1 basin carrying ≥1 rule.
+    * `AWAITING_SCRAPE` — no rule yet, but the pool is scrapeable. The scrapeable set is what
+      `scrape_indoor_facilities` fetches: WFS-`indoor` stadt-zuerich pools. A `Wärmebad` (`THERMAL`)
+      like Käferberg is WFS-`indoor` but registry-overridden to `thermal` for display, so it IS
+      scraped and must read `AWAITING_SCRAPE`, not `NO_SOURCE` — hence both kinds count here.
+    * `NO_SOURCE` — no rule and not a scrapeable kind (e.g. an `aemtler`-style `school` pool, or an
+      outdoor/lake/river pool), OR a NULL blob: no schedule source at all.
+
+    Both the read path (``load_roster``) and any build-time consumer share this one function so
+    the rule cannot diverge.
     """
     if facility_doc is None:
-        return False
-    return any(basin.rules for basin in loads(facility_doc).basins)
+        return ScheduleFreshness.NO_SOURCE
+    facility = loads(facility_doc)
+    if any(basin.rules for basin in facility.basins):
+        return ScheduleFreshness.SCRAPED
+    if facility.identity.kind in (PoolKind.INDOOR, PoolKind.THERMAL):
+        return ScheduleFreshness.AWAITING_SCRAPE
+    return ScheduleFreshness.NO_SOURCE

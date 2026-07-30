@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
+from enum import StrEnum
 
 from swimzh.domain.geo import GeoPoint
 from swimzh.domain.models import PoolKind
@@ -41,16 +42,34 @@ class PoolCatalogEntry:
     poi_id: str | None = None
 
 
+class ScheduleFreshness(StrEnum):
+    """A pool's schedule state, derived at read from its `facility_doc` blob (kind + rules) —
+    the three-state model that replaced the `is_curated` boolean (delete-curated-schedule-tier S1).
+
+    * `SCRAPED` — the blob carries a real schedule (≥1 basin has ≥1 rule).
+    * `AWAITING_SCRAPE` — no rule yet AND the pool is scrapeable (an indoor stadt-zuerich pool),
+      so a schedule is expected once `scrape-gold` runs (`scrape_indoor_facilities` does indoor).
+    * `NO_SOURCE` — no rule AND not scrapeable (e.g. `aemtler`, a `school`): permanently
+      schedule-less, no website timetable source at all.
+
+    A non-`SCRAPED` pool is a first-class honest state, never "closed" and never a `/swim` option.
+    """
+
+    SCRAPED = "scraped"
+    AWAITING_SCRAPE = "awaiting_scrape"
+    NO_SOURCE = "no_source"
+
+
 @dataclass(frozen=True, slots=True)
 class RosterEntry:
-    """One row of the pool roster: the catalog metadata for a pool plus whether its schedule
-    is curated (the **derived** `curation_status` from the gold `pool` table).
+    """One row of the pool roster: the catalog metadata for a pool plus its **derived**
+    `ScheduleFreshness` (from the gold `pool` table's `facility_doc` blob).
 
-    The roster is the full set of ~57 published pools; `curated` distinguishes the handful with
-    a curated timetable from the majority that are locations only. `find_swim_options` subtracts
-    the actually-scheduled facilities from the roster to emit the three-state `uncurated` answer,
-    and `/pools` surfaces `curated` so the UI reads schedule status from the store, never by name.
+    The roster is the full set of ~57 published pools; `freshness` distinguishes the handful with
+    a real schedule (`SCRAPED`) from those awaiting a scrape or with no source. `find_swim_options`
+    subtracts the actually-scheduled facilities from the roster to emit the freshness status, and
+    `/pools` surfaces `freshness` so the UI reads schedule status from the store, never by name.
     """
 
     entry: PoolCatalogEntry
-    curated: bool
+    freshness: ScheduleFreshness

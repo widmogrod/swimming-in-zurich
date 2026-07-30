@@ -15,6 +15,7 @@ from typing import Any
 import yaml
 
 from swimzh.core.result import Ok
+from swimzh.domain.catalog import ScheduleFreshness
 from swimzh.etl.build import build_store
 from swimzh.storage import catalog_json, codec
 
@@ -60,19 +61,26 @@ def test_build_yields_exactly_57_pool_rows(tmp_path: Path) -> None:
     assert conn.execute("SELECT COUNT(*) FROM pool").fetchone()[0] == 57
 
 
-def test_build_derives_curated_status_for_the_four_curated_pools(tmp_path: Path) -> None:
+def test_build_derives_scraped_freshness_for_the_four_scheduled_pools(tmp_path: Path) -> None:
     conn = _build(tmp_path)
-    # `curation_status` is no longer a stored column: it is derived at read from `facility_doc`
-    # by the shared `codec.is_curated` rule (NULL blob → uncurated).
+    # Freshness is no longer a stored column: it is derived at read from `facility_doc` by the
+    # shared `codec.schedule_freshness` rule (NULL blob → no_source; rules present → scraped).
     rows = conn.execute("SELECT id, facility_doc FROM pool").fetchall()
-    curated = {pool_id for pool_id, doc in rows if codec.is_curated(doc)}
-    assert curated == {
+    scraped = {
+        pool_id
+        for pool_id, doc in rows
+        if codec.schedule_freshness(doc) is ScheduleFreshness.SCRAPED
+    }
+    assert scraped == {
         "hallenbad-city",
         "hallenbad-oerlikon",
         "hallenbad-bungertwies",
         "schulschwimmanlage-aemtler",
     }
-    assert sum(1 for _, doc in rows if not codec.is_curated(doc)) == 53
+    assert (
+        sum(1 for _, doc in rows if codec.schedule_freshness(doc) is not ScheduleFreshness.SCRAPED)
+        == 53
+    )
 
 
 def test_cutover_every_catalog_pool_id_is_a_canonical_pool_row(tmp_path: Path) -> None:

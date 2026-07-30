@@ -163,9 +163,9 @@ def test_statuses_carry_codes_and_no_mixed_language_prose() -> None:
     with TestClient(app) as client:
         response = client.get("/swim", params={"at": MONDAY_EVENING, "eligible_only": "false"})
     statuses = response.json()["statuses"]
-    assert statuses, "expected at least one closed/uncurated facility"
+    assert statuses, "expected at least one closed / schedule-less facility"
     for status in statuses:
-        assert status["detail_code"] in {"closed_reason", "uncurated"}
+        assert status["detail_code"] in {"closed_reason", "awaiting_scrape", "no_source"}
         assert "detail" not in status, "the mixed-language prose is retired (S5)"
         if status["detail_code"] == "closed_reason":
             # S4: WHICH closure, as a code the client can translate.

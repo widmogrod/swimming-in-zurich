@@ -35,7 +35,7 @@ const hasClass = (c: string) => (e: FakeElement) => e.classList.contains(c);
 // --- Invariant 1: unknown (uncurated) ≠ closed ---------------------------------
 test('invariant: uncurated renders a DISTINCT ghost, never merged into closed', () => {
   const closed = statusRibbon({ status: 'closed', facility: 'X', detail: 'Winterpause' });
-  const ghost = statusRibbon({ status: 'uncurated', facility: 'Y', detail: null });
+  const ghost = statusRibbon({ status: 'awaiting_scrape', facility: 'Y', detail: null });
 
   // Closed = DASHED with its reason; uncurated = DOTTED ghost — different on every axis.
   expect(closed.style).toBe('dashed');
@@ -58,7 +58,7 @@ test('invariant: uncurated renders a DISTINCT ghost, never merged into closed', 
 test('invariant: rowStatus yields three DISTINCT terminal states', () => {
   const open = rowStatus({ options: [{}], statuses: [] });
   const closed = rowStatus({ options: [], statuses: [{ status: 'closed' }] });
-  const unknown = rowStatus({ options: [], statuses: [{ status: 'uncurated' }] });
+  const unknown = rowStatus({ options: [], statuses: [{ status: 'awaiting_scrape' }] });
   expect([open, closed, unknown]).toEqual(['open', 'closed', 'unknown']);
   expect(new Set([open, closed, unknown]).size).toBe(3); // none collapsed into another
 });
@@ -68,7 +68,7 @@ test('invariant: a row with BOTH a closed and an uncurated status keeps them as 
     options: [],
     statuses: [
       { status: 'closed', facility: 'A', detail: 'Renovation' },
-      { status: 'uncurated', facility: 'A', detail: null },
+      { status: 'awaiting_scrape', facility: 'A', detail: null },
     ],
   });
   const variants = ribbons.map((r) => (r as { variant?: string }).variant).sort();

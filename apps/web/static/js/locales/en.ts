@@ -95,6 +95,10 @@ export const en = {
   "status.closed": "Closed",
   "status.closed_reason": "Closed · {reason}",
   "status.uncurated": "Hours not listed",
+  // Three-state schedule freshness (S1): scrapeable-but-not-yet vs no source at all. Both are
+  // honestly "unknown", never "closed" — kept distinct so the reader knows which.
+  "status.awaiting_scrape": "Hours not published yet",
+  "status.no_source": "Hours not listed",
 
   // --- Closure codes (S4) -----------------------------------------------------------
   //

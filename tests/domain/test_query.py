@@ -16,7 +16,7 @@ import pytest
 from swimzh.core.errors import ProviderError, Timeout, describe
 from swimzh.core.result import Err, Ok, Result
 from swimzh.domain.access import ClubReserved, PublicSwim, ReasonCode
-from swimzh.domain.catalog import PoolCatalogEntry, RosterEntry
+from swimzh.domain.catalog import PoolCatalogEntry, RosterEntry, ScheduleFreshness
 from swimzh.domain.lane_plan import (
     LaneAvailability,
     LanePlan,
@@ -98,7 +98,14 @@ def _roster(dataset: Dataset) -> tuple[RosterEntry, ...]:
                 description=None,
                 phone=None,
             ),
-            curated=False,
+            # Mirror `codec.schedule_freshness`'s kind branch for a schedule-less row (this
+            # synthetic roster has no blob): indoor → awaiting_scrape, else no_source. Scheduled
+            # pools are filtered out by `roster − scheduled`, so their freshness is immaterial here.
+            freshness=(
+                ScheduleFreshness.AWAITING_SCRAPE
+                if identity.kind is PoolKind.INDOOR
+                else ScheduleFreshness.NO_SOURCE
+            ),
         )
         for identity in dataset.registry.identities.values()
     )
@@ -113,14 +120,14 @@ def _query(dataset: Dataset, when: datetime, person: Person = ADULT) -> QueryRes
     )
 
 
-def test_uncurated_facilities_are_distinguished_from_closed(dataset: Dataset) -> None:
+def test_schedule_less_facilities_are_distinguished_from_closed(dataset: Dataset) -> None:
     # A normal Wednesday afternoon in term.
     result = _query(dataset, datetime(2026, 3, 11, 14, 0, tzinfo=ZURICH))
-    uncurated = [s for s in result.statuses if s.status == "uncurated"]
-    assert {s.facility_name for s in uncurated} == {
-        # Registry-known but not scheduled (identity-only or lane-plan-only) → "uncurated", never
-        # "closed". S4 grew this set: every reconcilable Baditicker pool now carries a registry
-        # identity so its live water-temp key survives onto the location-only facility.
+    schedule_less = [s for s in result.statuses if s.status in {"awaiting_scrape", "no_source"}]
+    assert {s.facility_name for s in schedule_less} == {
+        # Registry-known but not scheduled (identity-only or lane-plan-only) → a freshness status
+        # (awaiting_scrape / no_source), never "closed". S4 grew this set: every reconcilable
+        # Baditicker pool now carries a registry identity so its water-temp key survives.
         "Hallenbad Altstetten",
         "Hallenbad Bläsi",
         "Hallenbad Leimbach",

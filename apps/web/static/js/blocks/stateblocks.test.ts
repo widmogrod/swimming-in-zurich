@@ -24,7 +24,7 @@ const load = <T,>(name: string): T =>
 
 test('stateForStatus maps closed → closed, uncurated → hours-not-listed (never merged)', () => {
   expect(stateForStatus({ status: 'closed' })).toBe(STATE_CLOSED);
-  expect(stateForStatus({ status: 'uncurated' })).toBe(STATE_UNLISTED);
+  expect(stateForStatus({ status: 'awaiting_scrape' })).toBe(STATE_UNLISTED);
   expect(STATE_CLOSED).not.toBe(STATE_UNLISTED);
   expect(stateForStatus({ status: 'open' })).toBe(null);
   expect(stateForStatus(null)).toBe(null);
@@ -41,7 +41,7 @@ test('createStateBlocks keeps a named card per CLOSED pool but collapses uncurat
   const day = load<Required<AnswerLike>>('swim_day.json');
   const { keys } = createStateBlocks(el, { answer: day });
   const closed = day.statuses.filter((s: StatusLike) => s.status === 'closed').length;
-  const uncurated = day.statuses.filter((s: StatusLike) => s.status === 'uncurated').length;
+  const uncurated = day.statuses.filter((s: StatusLike) => s.status === 'awaiting_scrape').length;
   expect(uncurated > 1).toBeTruthy();
   // Closed stays per-pool; uncurated collapses to exactly one summary card.
   expect(keys.filter((k: string) => k === STATE_CLOSED).length).toBe(closed);

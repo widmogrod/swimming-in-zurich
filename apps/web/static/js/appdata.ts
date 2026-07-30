@@ -6,10 +6,32 @@
 // pure function of its arguments: no fetch, no document, no history.
 
 import type { Answer, SwimOption, SwimStatus, Week, WeekDay } from "./api.js";
+import type { MessageKey } from "./i18n.js";
 
 type SwimAnswer = Answer;
 type WeekData = Week;
 type WeekDayEntry = WeekDay;
+
+// The three-state schedule freshness a `/swim` status / `/pools` row can carry
+// (delete-curated-schedule-tier S1). A "scraped" pool has a real schedule (options, or a "closed"
+// status); the two SCHEDULE-LESS states below replaced the single "uncurated" bucket. Each maps to
+// its own honest label — unknown is NEVER "closed".
+const UNLISTED_STATUS_LABEL: Readonly<Record<string, MessageKey>> = {
+  awaiting_scrape: "status.awaiting_scrape", // indoor, scrapeable — hours not published yet
+  no_source: "status.no_source", // no timetable source at all
+};
+
+/** A `/swim` status whose pool has no schedule (freshness `awaiting_scrape` | `no_source`). */
+export function isUnlisted(status: string | null | undefined): boolean {
+  return !!status && Object.hasOwn(UNLISTED_STATUS_LABEL, status);
+}
+
+/** The i18n key for a schedule-less status' label; falls back to the generic ghost copy. */
+export function unlistedLabelKey(
+  status: string | null | undefined,
+): MessageKey {
+  return (status && UNLISTED_STATUS_LABEL[status]) || "status.uncurated";
+}
 
 /** A `/pools` PoolOut row, read structurally. */
 export interface PoolMeta {

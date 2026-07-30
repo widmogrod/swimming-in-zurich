@@ -50,7 +50,7 @@ test('Day insight: N distinct facilities with hours + the best public window', (
 test('Day insight appends the honest closed / hours-not-listed coverage split (FIX 5)', () => {
   const day = load<Required<InsightAnswer>>('swim_day.json');
   const closed = day.statuses.filter((s) => s.status === 'closed').length;
-  const unlisted = day.statuses.filter((s) => s.status === 'uncurated').length;
+  const unlisted = day.statuses.filter((s) => s.status === 'awaiting_scrape').length;
   expect(closed + unlisted > 0).toBeTruthy();
   const insight = computeInsight({ day }, { mode: 'day' });
   expect(insight.closed).toBe(closed);

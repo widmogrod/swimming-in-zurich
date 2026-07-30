@@ -11,6 +11,7 @@
 // No colour, no hex — each state's tint is a token applied via its modifier class.
 
 // The three state keys. Exported so callers name them, never string-drift.
+import { isUnlisted } from '../appdata.js';
 import { asDoc, type Doc, type El } from '../domtypes.js';
 import { t } from '../i18n.js';
 import { closureLabel } from './board.js';
@@ -59,7 +60,7 @@ export function stateForStatus(
 ): string | null {
   if (!status) return null;
   if (status.status === 'closed') return STATE_CLOSED;
-  if (status.status === 'uncurated') return STATE_UNLISTED;
+  if (isUnlisted(status.status)) return STATE_UNLISTED;
   return null;
 }
 

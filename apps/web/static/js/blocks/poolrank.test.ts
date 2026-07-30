@@ -41,7 +41,7 @@ function city(): RankRow {
 }
 
 const closed: RankRow = { label: 'Seebad Utoquai', options: [], statuses: [{ status: 'closed' }] };
-const uncurated: RankRow = { label: 'Flussbad', options: [], statuses: [{ status: 'uncurated' }] };
+const uncurated: RankRow = { label: 'Flussbad', options: [], statuses: [{ status: 'awaiting_scrape' }] };
 /** Hours published, but no lane split at all — a real, distinct state. */
 const lake: RankRow = {
   label: 'Seebad Enge',
@@ -90,7 +90,7 @@ test('isPartlyReserved is exactly "some lanes held back"', () => {
 test('terminalStatus prefers closed over uncurated', () => {
   expect(terminalStatus(closed)).toBe('closed');
   expect(terminalStatus(uncurated)).toBe('unknown');
-  expect(terminalStatus({ label: 'x', statuses: [{ status: 'closed' }, { status: 'uncurated' }] }))
+  expect(terminalStatus({ label: 'x', statuses: [{ status: 'closed' }, { status: 'awaiting_scrape' }] }))
     .toBe('closed');
   expect(terminalStatus(city())).toBeNull();
 });

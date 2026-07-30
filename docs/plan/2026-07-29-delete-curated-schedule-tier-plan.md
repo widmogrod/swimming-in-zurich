@@ -203,6 +203,7 @@ Appended by /dev:implement after each slice — never rewritten. Newest row last
 
 | date | slice | status | divergence from plan | tech debt created | human review? |
 |------|-------|--------|----------------------|-------------------|---------------|
+| 2026-07-30 | S1 | done | `ScheduleFreshness` enum lives in `domain/catalog.py` (layering — domain can't import storage), derivation in `storage/codec.py`; freshness predicate broadened to `{INDOOR, THERMAL}` so Käferberg (scrapeable Wärmebad) reads `awaiting_scrape` not `no_source` (review fix) | `apply_physicals` matches prose→basin by exact normalized name; real `city.yaml` basins (`50m-Becken`, `Lehrschwimmbecken`) won't name-match the German prose → **S3 must rename stripped basins to prose names or record a physicals drop for city/bungertwies**; predicate can't see WFS `url` (an indoor pool without a page would read `awaiting_scrape` forever — inert today) | yes |
 
 ## Decisions & divergences
 
@@ -240,6 +241,25 @@ Appended by /dev:implement after each slice — never rewritten. Newest row last
   path, so stripping city/bungertwies would LOSE their physicals unless S1 wires
   `apply_physicals` — added as an explicit S1 deliverable / recorded-drop choice; (c) S3 clarified
   which test owns which invariant (build-side key-set vs. app-runtime single-source).
+
+### S1 (implementation) — optional DTO + WFS physicals/address + three-state freshness
+
+- 2026-07-30 (S1, done — both QA chains green: Python 501 passed / 95.90% cov / crap OK; TS 300
+  passed / crap OK; adversarial review verdict approve): made `FacilityDTO.address`/`.source`/
+  `BasinDTO.rules` optional; `build_spine` stamps `address` from the WFS roster (`_map_facility`'s
+  `""` sentinel is always overwritten) and wires `infrastruktur.apply_physicals` onto curated
+  facilities (gated by `_needs_physicals` so authored physicals are never clobbered); replaced the
+  `is_curated` boolean with the `ScheduleFreshness` enum (`scraped | awaiting_scrape | no_source`)
+  derived from the blob, surfaced on `/pools` (`freshness`) + `/swim` status + the TS UI's three
+  ghost states, catalogued in all 5 locales. Non-destructive: no `data/pools/*.yaml` stripped.
+- 2026-07-30 (S1, review fix): the freshness predicate keys off the blob's registry kind; Käferberg
+  is a `thermal` display-override of a WFS-`indoor` scrapeable pool, so `{INDOOR, THERMAL}` both map
+  to `awaiting_scrape` (else it wrongly read `no_source`). `Provenance.curated` /
+  `BasinSource.CURATED` are separate concepts, deliberately untouched.
+- 2026-07-30 (S1 → S3 dependency): `apply_physicals` binds prose→basin by exact normalized name;
+  the real `city.yaml` basin names don't match the German WFS prose, so S3's strip must rename the
+  stripped basins to the prose names (or record a physicals drop for city/bungertwies). Inert in S1
+  (nothing stripped; authored physicals retained).
 
 ## Summary
 

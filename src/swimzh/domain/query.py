@@ -8,8 +8,8 @@ with *explainable* eligibility, price, distance, and provenance.
 It deliberately distinguishes three outcomes so an empty answer is never ambiguous:
   * an option (open, with eligibility),
   * a facility that is **closed** that day (with reason), and
-  * a facility whose schedule is **not yet curated** (unknown — identity known via the pool
-    roster, schedule not curated) — never conflated with "closed".
+  * a facility that is **schedule-less** — its `ScheduleFreshness` (`awaiting_scrape` /
+    `no_source`; identity known via the roster, schedule not) — never conflated with "closed".
 """
 
 from __future__ import annotations
@@ -26,7 +26,7 @@ from swimzh.core.errors import ProviderError, describe
 from swimzh.core.result import Err, Ok, Result
 from swimzh.domain.access import EligibilityResult, eligibility
 from swimzh.domain.calendar import ZurichCalendar
-from swimzh.domain.catalog import RosterEntry
+from swimzh.domain.catalog import RosterEntry, ScheduleFreshness
 from swimzh.domain.closure import ClosureCode
 from swimzh.domain.geo import GeoPoint, haversine_km
 from swimzh.domain.lane_plan import (
@@ -265,15 +265,19 @@ class SwimOption:
 class StatusCode(StrEnum):
     """The message identity of a no-options status — the i18n key space for `detail`.
 
-    `status` says WHICH BUCKET ("closed" / "uncurated"); the code says which SENTENCE.
-    `CLOSED_REASON` is deliberately a passthrough: the reason is still curated German free
-    text (`"Sommerpause"`) travelling as a param, because mapping that text to a closed code
-    set is S4's job — the ETL owns it, not the query layer. Recording it as a distinct code
-    now means S4 replaces a known shape rather than discovering one.
+    `status` says WHICH BUCKET ("closed" / "awaiting_scrape" / "no_source"); the code says which
+    SENTENCE. `CLOSED_REASON` is deliberately a passthrough: the reason is still curated German
+    free text (`"Sommerpause"`) travelling as a param, because mapping that text to a closed code
+    set is S4's job — the ETL owns it, not the query layer.
+
+    The schedule-less codes mirror `ScheduleFreshness` (delete-curated-schedule-tier S1), which
+    replaced the single `UNCURATED` code: `AWAITING_SCRAPE` (scrapeable, no schedule yet) vs
+    `NO_SOURCE` (no timetable source at all). Neither is ever "closed".
     """
 
     CLOSED_REASON = "closed_reason"
-    UNCURATED = "uncurated"
+    AWAITING_SCRAPE = "awaiting_scrape"
+    NO_SOURCE = "no_source"
 
 
 @dataclass(frozen=True, slots=True)
@@ -282,12 +286,12 @@ class FacilityStatus:
 
     facility_id: PoolId
     facility_name: str
-    status: str  # "closed" | "uncurated"
+    status: str  # "closed" | "awaiting_scrape" | "no_source"
     #: The message key + its interpolation values. The mixed-language `detail` prose this
     #: replaced was retired in S5 — it was English in one branch and curated German in the
     #: other, which is the seam the whole i18n plan existed to close.
-    code: StatusCode = StatusCode.UNCURATED
-    #: For a closure, WHICH closure (S4). None for `uncurated`.
+    code: StatusCode = StatusCode.NO_SOURCE
+    #: For a closure, WHICH closure (S4). None for a schedule-less status.
     closure: ClosureCode | None = None
     params: Mapping[str, str] = field(default_factory=dict)
 
@@ -454,11 +458,11 @@ def find_swim_options(
                 )
             )
 
-    # The three-state answer goes live: every roster pool whose schedule is not among the
-    # curated facilities we just resolved is `uncurated` (roster − scheduled) — never merged
-    # with `closed`. An empty roster yields no uncurated rows (callers that only exercise
-    # options pass none), so this stays a single uniform path, not a `registry is None` branch.
-    statuses.extend(_uncurated_statuses(facilities, roster))
+    # The freshness answer goes live: every roster pool whose schedule is not among the
+    # facilities we just resolved carries its `ScheduleFreshness` status (roster − scheduled) —
+    # `awaiting_scrape` or `no_source`, never merged with `closed`. An empty roster yields no such
+    # rows (callers that only exercise options pass none), so this stays a single uniform path.
+    statuses.extend(_schedule_less_statuses(facilities, roster))
 
     options.sort(
         key=lambda o: (
@@ -564,16 +568,25 @@ def facility_detail(facility: Facility, at: datetime, calendar: ZurichCalendar) 
     )
 
 
-def _uncurated_statuses(
+_FRESHNESS_STATUS_CODE: dict[ScheduleFreshness, StatusCode] = {
+    ScheduleFreshness.AWAITING_SCRAPE: StatusCode.AWAITING_SCRAPE,
+    ScheduleFreshness.NO_SOURCE: StatusCode.NO_SOURCE,
+}
+
+
+def _schedule_less_statuses(
     facilities: tuple[Facility, ...], roster: tuple[RosterEntry, ...]
 ) -> list[FacilityStatus]:
-    """`uncurated = roster − scheduled`: every roster pool whose canonical id is not among the
-    curated facilities resolved this query. Identity is known (the roster), the schedule is
-    not — so it is `uncurated`, distinct from a curated pool that is `closed` today.
+    """`schedule-less = roster − scheduled`: every roster pool whose canonical id is not among the
+    facilities resolved this query. Identity is known (the roster), the schedule is not — so it
+    carries its `ScheduleFreshness` (`awaiting_scrape` / `no_source`), distinct from a pool that is
+    `closed` today. A schedule-less pool is NEVER reported "closed".
 
     "Scheduled" is a facility carrying at least one basin with a schedule rule — NOT merely a
     facility_doc: a prose-only pool (auto-extracted PARSED_PROSE basins, no rules — Decision #5)
-    has a facility_doc but no schedule, so it stays `uncurated` here, never silently dropped."""
+    has a facility_doc but no schedule, so it stays schedule-less here, never silently dropped.
+    Its `freshness` is thus `awaiting_scrape` or `no_source` (never `scraped`), so the status
+    string is the freshness value and the code mirrors it."""
     scheduled_ids = {
         str(f.identity.facility_id) for f in facilities if any(basin.rules for basin in f.basins)
     }
@@ -581,9 +594,9 @@ def _uncurated_statuses(
         FacilityStatus(
             facility_id=reconstruct_pool_id(row.entry.pool_id),
             facility_name=row.entry.name,
-            status="uncurated",
-            code=StatusCode.UNCURATED,
+            status=row.freshness.value,
+            code=_FRESHNESS_STATUS_CODE[row.freshness],
         )
         for row in roster
-        if row.entry.pool_id not in scheduled_ids
+        if row.entry.pool_id not in scheduled_ids and row.freshness is not ScheduleFreshness.SCRAPED
     ]
