@@ -202,6 +202,7 @@ Appended by /dev:implement after each slice — never rewritten. Newest row last
 
 | date | slice | status | divergence from plan | tech debt created | human review? |
 |------|-------|--------|----------------------|-------------------|---------------|
+| 2026-08-01 | S1 | done | `fresh()` derives its tier from `request.extensions["cache_tier"]` (default `"default"`) — the plan gives `fresh(request, now)` no tier parameter while the tier is part of the on-disk path, so the read side must recover it from the request | none | yes |
 
 ## Decisions & divergences
 
@@ -219,6 +220,21 @@ Appended by /dev:implement after each slice — never rewritten. Newest row last
   are cached (keyed per-hop URL) so warm-cache-zero-network holds for redirecting pages; N4 the S5
   `cache promote` bridge is acknowledged as a deliberate one-way exception to cache/cassette
   separation (optional slice).
+- 2026-08-01 (S1, critic-reviewer → adjudicated): **transfer headers must be stripped from a cached
+  entry, on write AND on read.** httpx decodes the body *above* the transport, so storing
+  `response.content` under verbatim headers writes decoded bytes under `content-encoding: gzip`;
+  `_rebuild` then hands both to `httpx.Response(...)`, whose `__init__` runs the header-driven
+  decoder → `zlib.error` → `httpx.DecodingError`, escaping `fresh()`'s except tuple. Since httpx
+  sends `Accept-Encoding: gzip, deflate` by default this would have turned essentially **every** warm
+  cache hit into an `Err(DecodeError)`. Fix: `_storable_headers()` drops `content-encoding` /
+  `content-length` / `transfer-encoding` (case-insensitively) in both `_serialize` and `_rebuild`, so
+  a legacy or hand-written entry *replays* rather than merely missing, and httpx recomputes framing;
+  `httpx.HTTPError` joins the except tuple as unreachable-by-construction defence in depth. **S2's
+  transport must buffer the same way the store expects — decoded bytes** — a transport that stored
+  raw compressed bytes would silently mismatch the stored `content-type`.
+- 2026-08-01 (S1): `put()` takes `tier` explicitly while `fresh()` re-derives it from
+  `request.extensions`; the **caller owns tier consistency** (documented on `put`). An S2 caller that
+  takes the two from different sources would write to a directory reads never visit.
 - 2026-07-31 (owner): body encoding is **text-by-default, base64 only when the response
   `Content-Type` is binary** (PDF/octet-stream/image) — NOT base64 for JSON/HTML/XML. Inspectability
   is the point; only the Belegungsplan PDFs get base64. UTF-8-decode failure is a safety fallback.
