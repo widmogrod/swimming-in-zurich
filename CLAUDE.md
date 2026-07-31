@@ -104,7 +104,7 @@ The lane phase attaches per-basin Belegungsplan lane plans. `Basin.lane_plan_sou
 `section`) is the thin-crosswalk binding, carried through `compose` onto the scraped basins so it
 survives the schedule scrape. The fetch-set is **discovered** (the page provider emits Belegungsplan
 links; the lane provider fetches them), and each authored binding is validated against discovery
-(`authored − discovered` → `MissingDiscoveredLink`). Reconciliation is a **deterministic URL-keyed
+(`authored − discovered` → `UndiscoveredSource`). Reconciliation is a **deterministic URL-keyed
 join** in `etl/silver.py` (a single-basin sheet binds by URL alone; a stacked multi-basin sheet
 routes each section by its declared `section` token, failing safe to an audited `UnboundPlan` on any
 zero/ambiguous match). A failed declared lane source is **fatal** to the build (no per-basin
