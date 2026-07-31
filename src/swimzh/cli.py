@@ -16,23 +16,39 @@ THIN RE-LAYER commands: each re-runs only its own phase against an already-built
 + swap), so an operator can refresh schedules or lane plans on their own cadence without a full
 WFS+curated rebuild. Both `build` and the thin commands drive the SAME phase functions
 (`_compose_schedules` / `_attach_lanes`), so there is no second implementation to drift.
+
+**HTTP disk cache.** Every network command runs over ONE `DiskCacheTransport` (`.cache/swimzh/`,
+git-ignored) shared by one `HttpClient` PER SOURCE (`ProviderClients`), so each provider's
+responses expire on its own volatility clock (`core/cache_tiers`) instead of collapsing to one
+tier. `--refresh` (or `SWIMZH_CACHE=refresh`) refetches everything once; `SWIMZH_CACHE=off`
+restores the uncached behaviour for a live-correctness run.
 """
 
 from __future__ import annotations
 
 import argparse
+import os
 import sqlite3
 import sys
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import assert_never
+from typing import Final, assert_never
 from zoneinfo import ZoneInfo
+
+import httpx
 
 from swimzh.build.compose import compose
 from swimzh.build.reconcile import crosswalk_from_rows, resolve_all
 from swimzh.core.errors import ProviderError, SchemaMismatch, describe
-from swimzh.core.http import HttpClient
+from swimzh.core.http import HttpClient, RetryPolicy
+from swimzh.core.httpcache import (
+    DEFAULT_CACHE_ROOT,
+    CacheMode,
+    CacheStore,
+    DiskCacheTransport,
+)
 from swimzh.core.result import Err, Ok
 from swimzh.domain.catalog import PoolCatalogEntry
 from swimzh.domain.lane_plan import LanePlan
@@ -63,6 +79,146 @@ from swimzh.storage.sqlite_repo import (
 
 _ZURICH = ZoneInfo("Europe/Zurich")
 
+#: The env var that drives the disk cache from outside: `off` (today's uncached behaviour) or
+#: `refresh` (refetch everything once, overwriting the entries). Unset means "use the cache".
+CACHE_ENV_VAR: Final = "SWIMZH_CACHE"
+
+_CACHE_MODE_BY_ENV: Final[dict[str, CacheMode]] = {
+    "": CacheMode.USE,
+    "use": CacheMode.USE,
+    "on": CacheMode.USE,
+    "off": CacheMode.OFF,
+    "refresh": CacheMode.REFRESH,
+}
+
+_LIVE_TIMEOUT_S: Final = 30.0
+
+
+class CacheModeError(ValueError):
+    """An unusable `SWIMZH_CACHE` value — a config typo, reported as a one-line error.
+
+    A dedicated type so `main` can catch *this* and nothing else: a bare `except ValueError`
+    around the live wiring would also swallow a `ValueError` from `httpx.HTTPTransport()`
+    construction (a bad SSL env, say) and report it as a cache-config problem. Still a
+    `ValueError` by inheritance, so callers that only care that the value was rejected are
+    unaffected.
+    """
+
+
+def _now() -> datetime:
+    """The pipeline clock — tz-aware `Europe/Zurich`, and one seam a test can freeze."""
+    return datetime.now(_ZURICH)
+
+
+def cache_mode(*, refresh: bool = False, env: Mapping[str, str] | None = None) -> CacheMode:
+    """Resolve the disk-cache mode from the `--refresh` flag and `SWIMZH_CACHE`.
+
+    The flag wins over the env var (an explicit "refetch now" on this one run beats an
+    ambient default). An unrecognised value is a **fail-fast `CacheModeError`**, not a silent
+    fallback: `SWIMZH_CACHE=of` quietly meaning "use the cache" is exactly the class of
+    typo that makes a live-correctness run serve stale bytes without saying so.
+    """
+    if refresh:
+        return CacheMode.REFRESH
+    raw = (env if env is not None else os.environ).get(CACHE_ENV_VAR, "").strip().lower()
+    mode = _CACHE_MODE_BY_ENV.get(raw)
+    if mode is None:
+        valid = ", ".join(sorted(k for k in _CACHE_MODE_BY_ENV if k))
+        raise CacheModeError(f"{CACHE_ENV_VAR}={raw!r} is not one of: {valid}")
+    return mode
+
+
+def cache_transport(
+    inner: httpx.BaseTransport,
+    *,
+    mode: CacheMode,
+    cache_dir: Path = DEFAULT_CACHE_ROOT,
+    now: Callable[[], datetime] = _now,
+) -> DiskCacheTransport:
+    """The ONE disk-cache transport a pipeline run shares across all five sources.
+
+    One transport over one store: the per-source separation is the *tier stamp* each
+    `HttpClient` puts on its requests (`cache_tiers`), not a separate cache per phase.
+
+    **Accepted, S2-flagged:** the transport writes through *below* `HttpClient`, so a response
+    larger than `max_bytes` is stored before `_classify` rejects it — an oversized payload caches
+    and then replays as `TooLarge` for its whole TTL. Kept deliberately: it is the same verdict
+    the live fetch gives, it is now merely reached without paying for the download again, and
+    `--refresh` / `SWIMZH_CACHE=off` are the two ways out. Making the write conditional would
+    mean teaching the transport a size policy that belongs to the client above it.
+    """
+    return DiskCacheTransport(inner, CacheStore(cache_dir), mode, now=now)
+
+
+def live_transport(
+    *,
+    refresh: bool = False,
+    env: Mapping[str, str] | None = None,
+    cache_dir: Path = DEFAULT_CACHE_ROOT,
+) -> DiskCacheTransport:
+    """The live pipeline's transport: the real network behind the disk cache, in the mode the
+    `--refresh` flag and `SWIMZH_CACHE` ask for.
+
+    This is the ONLY place the escape hatch actually takes effect, so it is a factory rather
+    than three lines inside `main`: `httpx.HTTPTransport()` opens no connection at construction
+    time, which makes the whole flag/env → `CacheMode` → transport join assertable offline (see
+    `apps.web.main.build_http_transport` for the same shape on the web side). Wired inline it
+    would sit under a `# pragma: no cover - live`, where a `--refresh` quietly degraded to
+    `USE` would keep the suite green.
+
+    Raises `CacheModeError` on an unusable `SWIMZH_CACHE`; `main` turns that — and only that —
+    into a one-line error.
+
+    **Known behaviour change (recorded, not fixed):** passing an explicit `transport=` to
+    `httpx.Client` disables httpx's environment proxy mounts, so the pipeline no longer honours
+    `HTTP(S)_PROXY`. Restoring it means reading those vars here and handing them to
+    `httpx.HTTPTransport(proxy=…)` — localized to this function if it is ever needed.
+    """
+    return cache_transport(
+        httpx.HTTPTransport(), mode=cache_mode(refresh=refresh, env=env), cache_dir=cache_dir
+    )
+
+
+@dataclass(frozen=True, slots=True)
+class ProviderClients:
+    """One `HttpClient` per provider **source**, all sharing one underlying transport.
+
+    The tier TTL keys off `HttpClient.source`, so a single client threaded through the
+    whole pipeline would stamp every request with the roster's 14-day tier and make the
+    volatility table inert. Hence one client per source — and note a *phase* is not
+    source-atomic: the schedule phase fans out to `price_scraper` **and**
+    `schedule_scraper`, the lane phase to `page_provider` **and** `belegungsplan`. The
+    granularity is the provider call, which is why both phases take two clients.
+
+    Providers stay byte-unchanged: they still just receive an `HttpClient`.
+    """
+
+    roster: HttpClient  # geo_sport — the WFS layers
+    schedules: HttpClient  # schedule_scraper — the pool-page timetables
+    prices: HttpClient  # price_scraper — the shared city tariff page
+    pages: HttpClient  # page_provider — the Belegungsplan discovery hop
+    lanes: HttpClient  # belegungsplan — the discovered lane sheets
+
+    @staticmethod
+    def over(
+        client: httpx.Client,
+        *,
+        timeout_s: float = _LIVE_TIMEOUT_S,
+        retry: RetryPolicy | None = None,
+    ) -> ProviderClients:
+        """Wrap ONE `httpx.Client` (hence one transport, one cache) in the five clients."""
+
+        def wrap(source: str) -> HttpClient:
+            return HttpClient(client, source=source, timeout_s=timeout_s, retry=retry)
+
+        return ProviderClients(
+            roster=wrap("geo_sport"),
+            schedules=wrap("schedule_scraper"),
+            prices=wrap("price_scraper"),
+            pages=wrap("page_provider"),
+            lanes=wrap("belegungsplan"),
+        )
+
 
 @dataclass(frozen=True, slots=True)
 class _PhaseResult:
@@ -85,10 +241,15 @@ def _compose_schedules(
     conn: sqlite3.Connection,
     *,
     catalog: tuple[PoolCatalogEntry, ...],
-    client: HttpClient,
+    schedule_client: HttpClient,
+    price_client: HttpClient,
     fetched_at: datetime,
 ) -> _PhaseResult:
     """Scrape indoor-pool schedules (+ the shared city price) and compose them onto the store.
+
+    **Two clients, not one**: the tariff page moves a few times a year (`price_scraper`, 7d) while
+    a pool timetable is re-cut per season (`schedule_scraper`, 12h). They are different sources at
+    different cadences, so each provider call gets the client whose cache tier matches it.
 
     Runs the ONE builder path: scrape emits identity-free ``(SourceRef, aspects)`` extracts;
     ``resolve_all`` resolves each ``SourceRef`` to a canonical id against the store's spine (an
@@ -101,9 +262,9 @@ def _compose_schedules(
     alias) is a benign partial success — the resolved pools are written and the phase exits 1 with
     the miss named (``fatal=False``), not a data hole.
     """
-    prices_result = scrape_prices(client, fetched_at.date())
+    prices_result = scrape_prices(price_client, fetched_at.date())
     prices = prices_result.value if isinstance(prices_result, Ok) else None
-    report = scrape_indoor_facilities(client, catalog, fetched_at, prices=prices)
+    report = scrape_indoor_facilities(schedule_client, catalog, fetched_at, prices=prices)
     if report.failures:
         # A declared source failed to fetch/parse: abort, surfacing the typed cause.
         failure = report.failures[0]
@@ -193,11 +354,19 @@ def _undiscovered_error(source: UndiscoveredSource, discovery: DiscoveryReport) 
 
 
 def _attach_lanes(
-    conn: sqlite3.Connection, *, client: HttpClient, fetched_at: datetime
+    conn: sqlite3.Connection,
+    *,
+    page_client: HttpClient,
+    lane_client: HttpClient,
+    fetched_at: datetime,
 ) -> _PhaseResult:
     """Discover each pool page's Belegungsplan links, fetch those DISCOVERED PDFs, and attach the
     parsed plans onto the basin that owns each URL — a deterministic URL-keyed join. The fetch-set
     is a projection of the links `page_provider` discovers on the pool pages.
+
+    **Two clients, not one**: the discovery hop reads the pool pages (`page_provider`, 7d — the
+    link set changes far more slowly than the timetable on the same page) while the sheets
+    themselves are `belegungsplan` (3d). Each provider call gets its own source's client.
 
     Fail-fast (all aborts are ``fatal`` so the atomic swap discards, prior gold content-unchanged):
       * an empty store — nothing to attach to;
@@ -220,7 +389,7 @@ def _attach_lanes(
         url = page_url.get(str(facility.identity.facility_id))
         if url is not None:
             pages.append((facility.identity.facility_id, url))
-    discovery = discover_pages(client, pages)
+    discovery = discover_pages(page_client, pages)
     # A page fetch failure is audited; it only ABORTS if it stranded an authored source (caught by
     # `authored − discovered` below). A page dropping no declared fact stays a non-fatal audit line.
     for page_miss in discovery.page_misses:
@@ -242,7 +411,7 @@ def _attach_lanes(
         )
         return _PhaseResult(code=1, fatal=True)
 
-    report = scrape_lane_plans(client, discovery.links)
+    report = scrape_lane_plans(lane_client, discovery.links)
     # Fail-fast: a discovered lane source that failed to fetch/parse aborts carrying its typed
     # cause.
     if report.misses:
@@ -275,7 +444,7 @@ def _attach_lanes(
 # ── Commands ────────────────────────────────────────────────────────────────────────────────────
 
 
-def build(*, db_path: Path, data_dir: Path, client: HttpClient) -> int:
+def build(*, db_path: Path, data_dir: Path, clients: ProviderClients) -> int:
     """Assemble a COMPLETE gold store in ONE atomic pipeline. Returns a process exit code.
 
     Order: WFS roster (`fetch_roster`) → assemble curated facilities + calendar + crosswalk
@@ -288,12 +457,12 @@ def build(*, db_path: Path, data_dir: Path, client: HttpClient) -> int:
 
     A benign non-fatal miss (e.g. an unresolved extra scrape name) keeps the store but exits 1.
     """
-    match fetch_roster(client):
+    match fetch_roster(clients.roster):
         case Err(error):
             print(f"build failed: WFS roster unavailable: {describe(error)}", file=sys.stderr)
             return 1
         case Ok(roster):
-            now = datetime.now(_ZURICH)
+            now = _now()
             with atomic_swap(db_path) as staging:
                 match build_store(data_dir, staging.path, roster):
                     case Err(error):
@@ -303,11 +472,20 @@ def build(*, db_path: Path, data_dir: Path, client: HttpClient) -> int:
                     case Ok(_repo):
                         conn = open_db(staging.path)
                         schedules = _compose_schedules(
-                            conn, catalog=roster, client=client, fetched_at=now
+                            conn,
+                            catalog=roster,
+                            schedule_client=clients.schedules,
+                            price_client=clients.prices,
+                            fetched_at=now,
                         )
                         if schedules.fatal:
                             return 1  # no commit -> prior gold content-unchanged
-                        lanes = _attach_lanes(conn, client=client, fetched_at=now)
+                        lanes = _attach_lanes(
+                            conn,
+                            page_client=clients.pages,
+                            lane_client=clients.lanes,
+                            fetched_at=now,
+                        )
                         if lanes.fatal:
                             return 1  # no commit -> prior gold content-unchanged
                         # Read the count from the staging store BEFORE the swap: `commit()` only
@@ -335,7 +513,7 @@ def build_catalog_file(*, out: Path, client: HttpClient, generated_at: datetime)
 
 
 def scrape_gold(
-    *, db_path: Path, catalog_path: Path, client: HttpClient, fetched_at: datetime
+    *, db_path: Path, catalog_path: Path, clients: ProviderClients, fetched_at: datetime
 ) -> int:
     """THIN RE-LAYER: re-run only the schedule phase against an already-built store. Exit code.
 
@@ -356,7 +534,13 @@ def scrape_gold(
 
     with atomic_swap(db_path, seed_from=db_path) as staging:
         conn = open_db(staging.path)
-        result = _compose_schedules(conn, catalog=catalog, client=client, fetched_at=fetched_at)
+        result = _compose_schedules(
+            conn,
+            catalog=catalog,
+            schedule_client=clients.schedules,
+            price_client=clients.prices,
+            fetched_at=fetched_at,
+        )
         if result.fatal:
             return 1  # no commit -> the live store is untouched
         conn.close()  # release the staging handle before the atomic rename
@@ -364,7 +548,7 @@ def scrape_gold(
         return result.code
 
 
-def scrape_lanes(*, db_path: Path, client: HttpClient, fetched_at: datetime) -> int:
+def scrape_lanes(*, db_path: Path, clients: ProviderClients, fetched_at: datetime) -> int:
     """THIN RE-LAYER: re-run only the lane-plan phase against an already-built store. Exit code.
 
     Since S2 `build` folds this phase into the one atomic pipeline; this command survives so an
@@ -378,7 +562,12 @@ def scrape_lanes(*, db_path: Path, client: HttpClient, fetched_at: datetime) -> 
 
     with atomic_swap(db_path, seed_from=db_path) as staging:
         conn = open_db(staging.path)
-        result = _attach_lanes(conn, client=client, fetched_at=fetched_at)
+        result = _attach_lanes(
+            conn,
+            page_client=clients.pages,
+            lane_client=clients.lanes,
+            fetched_at=fetched_at,
+        )
         if result.fatal:
             return 1  # no commit -> the live store is untouched
         conn.close()  # release the staging handle before the atomic rename
@@ -386,64 +575,101 @@ def scrape_lanes(*, db_path: Path, client: HttpClient, fetched_at: datetime) -> 
         return result.code
 
 
-def main(argv: list[str] | None = None, *, client: HttpClient | None = None) -> int:
-    """Parse argv and dispatch. `client` is injectable so the WFS-sourced atomic `build` (and the
-    other network commands) can be driven from recorded HTTP in tests; when None a live client is
-    created for the selected command."""
+def main(argv: list[str] | None = None, *, clients: ProviderClients | None = None) -> int:
+    """Parse argv and dispatch. `clients` is injectable so the WFS-sourced atomic `build` (and the
+    other network commands) can be driven from recorded HTTP in tests; when None the live
+    per-source clients are created over one shared disk-cache transport for the selected command.
+    """
     parser = argparse.ArgumentParser(prog="swimzh")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
+    # Shared across every network command: the one-run escape hatch from the disk cache.
+    cache_flags = argparse.ArgumentParser(add_help=False)
+    cache_flags.add_argument(
+        "--refresh",
+        action="store_true",
+        help=(
+            f"ignore cached responses and refetch every source (also {CACHE_ENV_VAR}=refresh; "
+            f"{CACHE_ENV_VAR}=off disables the cache entirely)"
+        ),
+    )
+
     roster_build = subparsers.add_parser(
-        "build", help="assemble a COMPLETE gold store (one atomic pipeline: roster+scrape+compose)"
+        "build",
+        parents=[cache_flags],
+        help="assemble a COMPLETE gold store (one atomic pipeline: roster+scrape+compose)",
     )
     roster_build.add_argument("--db", required=True, help="path to the gold SQLite file to write")
     roster_build.add_argument(
         "--data", default="data", help="curated data directory (default: data)"
     )
 
-    catalog = subparsers.add_parser("build-catalog", help="build the pool catalog from the WFS")
+    catalog = subparsers.add_parser(
+        "build-catalog", parents=[cache_flags], help="build the pool catalog from the WFS"
+    )
     catalog.add_argument("--out", default="data/catalog.json", help="catalog JSON to write")
 
     scrape = subparsers.add_parser(
-        "scrape-gold", help="re-layer only the schedule phase onto a built store"
+        "scrape-gold",
+        parents=[cache_flags],
+        help="re-layer only the schedule phase onto a built store",
     )
     scrape.add_argument("--db", required=True, help="path to the gold SQLite file to write")
     scrape.add_argument("--catalog", default="data/catalog.json", help="catalog JSON to read")
 
     lanes = subparsers.add_parser(
-        "scrape-lanes", help="re-layer only the lane-plan phase onto a built store"
+        "scrape-lanes",
+        parents=[cache_flags],
+        help="re-layer only the lane-plan phase onto a built store",
     )
     lanes.add_argument("--db", required=True, help="path to the existing gold SQLite file")
 
     args = parser.parse_args(argv)
-    now = datetime.now(_ZURICH)
-
-    # Every network command needs one HTTP client; tests inject a recorded-HTTP client, live runs
-    # build one just-in-time. `follow_redirects`: some pool pages (e.g. bad-altstetten.ch) redirect
-    # http→https, and the atomic `build` now scrapes those pages too.
-    if client is None:  # pragma: no cover - live
-        import httpx  # pragma: no cover - live
-
-        with httpx.Client(timeout=30.0, follow_redirects=True) as inner:  # pragma: no cover - live
-            live = HttpClient(inner, source="geo_sport", timeout_s=30.0)
-            return _dispatch(args, client=live, now=now)
-    return _dispatch(args, client=client, now=now)
+    now = _now()
+    if clients is None:
+        return _dispatch_live(args, now=now)
+    return _dispatch(args, clients=clients, now=now)
 
 
-def _dispatch(args: argparse.Namespace, *, client: HttpClient, now: datetime) -> int:
-    """Route a parsed command to its handler with the resolved HTTP client."""
+def _dispatch_live(args: argparse.Namespace, *, now: datetime) -> int:
+    """Build the LIVE per-source clients over one disk-cache transport, then dispatch.
+
+    Only the `with` block below is un-runnable under test (it is the real network); the join
+    that decides *how the cache behaves* — flag + env → `CacheMode` → transport — is
+    `live_transport`, deliberately a separate, fully testable factory. That split is the point:
+    a `--refresh` that silently stopped refreshing would otherwise be invisible to the suite.
+    """
+    try:
+        transport = live_transport(refresh=args.refresh)
+    except CacheModeError as exc:
+        # A typo'd SWIMZH_CACHE stops the run with the repo's one-line style, not a traceback.
+        # Narrow on purpose: a bare `except ValueError` here would also catch one raised by
+        # `httpx.HTTPTransport()` construction and mislabel it as a cache-config problem.
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+    # `follow_redirects`: some pool pages (e.g. bad-altstetten.ch) redirect http→https, and the
+    # atomic `build` scrapes those pages too.
+    with httpx.Client(  # pragma: no cover - live (the real network)
+        timeout=_LIVE_TIMEOUT_S, follow_redirects=True, transport=transport
+    ) as inner:
+        live = ProviderClients.over(inner, timeout_s=_LIVE_TIMEOUT_S)
+        return _dispatch(args, clients=live, now=now)
+
+
+def _dispatch(args: argparse.Namespace, *, clients: ProviderClients, now: datetime) -> int:
+    """Route a parsed command to its handler with the resolved per-source HTTP clients."""
     if args.command == "build":
-        return build(db_path=Path(args.db), data_dir=Path(args.data), client=client)
+        return build(db_path=Path(args.db), data_dir=Path(args.data), clients=clients)
     if args.command == "scrape-gold":
         return scrape_gold(
             db_path=Path(args.db),
             catalog_path=Path(args.catalog),
-            client=client,
+            clients=clients,
             fetched_at=now,
         )
     if args.command == "scrape-lanes":
-        return scrape_lanes(db_path=Path(args.db), client=client, fetched_at=now)
-    return build_catalog_file(out=Path(args.out), client=client, generated_at=now)
+        return scrape_lanes(db_path=Path(args.db), clients=clients, fetched_at=now)
+    return build_catalog_file(out=Path(args.out), client=clients.roster, generated_at=now)
 
 
 if __name__ == "__main__":  # pragma: no cover

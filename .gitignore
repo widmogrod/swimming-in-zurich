@@ -24,6 +24,10 @@ htmlcov/
 *.sqlite
 *.db
 
+# provider HTTP disk cache (`.cache/swimzh/<tier>/…`) — a dev/build accelerator, never a source
+# of truth and never the test-fixture store (the vcrpy cassettes stay the committed contract).
+/.cache/
+
 # TS build output (tsc emits static/js -> static/dist; a build artifact, never committed)
 apps/web/static/dist/
 apps/web/static/js/node_modules/

@@ -6,7 +6,8 @@ from __future__ import annotations
 from pathlib import Path
 
 from apps.web.config import Config
-from apps.web.main import build_temperature_provider
+from apps.web.main import build_http_transport, build_temperature_provider
+from swimzh.core.httpcache import CacheMode
 from swimzh.providers.baditicker import BaditickerProvider
 
 
@@ -28,3 +29,10 @@ def test_no_provider_when_unset() -> None:
 def test_real_provider_when_configured() -> None:
     provider = build_temperature_provider(_config("https://feed.test/bathdatadownload"))
     assert isinstance(provider, BaditickerProvider)
+
+
+def test_the_web_runtime_wires_the_provider_disk_cache_off() -> None:
+    # The disk cache is a BUILD accelerator, not a runtime tier: at request time the app must not
+    # serve bytes an operator can only invalidate with `rm -rf`. `OFF` is a straight passthrough,
+    # so this pins the one thing that could silently change — the mode the transport is built with.
+    assert build_http_transport().mode is CacheMode.OFF

@@ -9,7 +9,9 @@ from __future__ import annotations
 
 from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
+from datetime import datetime
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 import httpx
 from fastapi import FastAPI
@@ -26,10 +28,34 @@ from apps.web.config import Config
 from apps.web.services.gold_store import GoldSwimStore
 from apps.web.services.ports import SwimStore, TemperatureProvider
 from swimzh.core.http import HttpClient
+from swimzh.core.httpcache import (
+    DEFAULT_CACHE_ROOT,
+    CacheMode,
+    CacheStore,
+    DiskCacheTransport,
+)
 from swimzh.providers.baditicker import BaditickerProvider
 
 _STATIC_DIR = Path(__file__).resolve().parent / "static"
 _HTTP_TIMEOUT_S = 10.0
+_ZURICH = ZoneInfo("Europe/Zurich")
+
+
+def build_http_transport() -> DiskCacheTransport:
+    """The web runtime's outbound transport: the provider disk cache wired **OFF**.
+
+    The cache is a *build* accelerator, not a runtime tier. At request time the app must not
+    serve bytes an operator can only invalidate with `rm -rf`, and the one live provider here
+    (Baditicker) already has its own in-process 2-minute TTL. `CacheMode.OFF` is a straight
+    passthrough — nothing is read, nothing is written — so this is the seam made explicit and
+    assertable rather than an omission that a future edit could silently flip.
+    """
+    return DiskCacheTransport(
+        httpx.HTTPTransport(),
+        CacheStore(DEFAULT_CACHE_ROOT),
+        CacheMode.OFF,
+        now=lambda: datetime.now(_ZURICH),
+    )
 
 
 def build_temperature_provider(config: Config) -> TemperatureProvider | None:
@@ -39,7 +65,7 @@ def build_temperature_provider(config: Config) -> TemperatureProvider | None:
     configured")` rather than raising. The single place a concrete live provider is constructed."""
     if config.baditicker_url is None:
         return None
-    inner = httpx.Client(timeout=_HTTP_TIMEOUT_S)
+    inner = httpx.Client(timeout=_HTTP_TIMEOUT_S, transport=build_http_transport())
     client = HttpClient(inner, source="baditicker", timeout_s=_HTTP_TIMEOUT_S)
     return BaditickerProvider(client, url=config.baditicker_url)
 

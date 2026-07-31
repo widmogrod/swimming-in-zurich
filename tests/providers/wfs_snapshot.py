@@ -87,13 +87,18 @@ def recorded_wfs_client() -> HttpClient:
     return HttpClient(inner, source="geo_sport", retry=RetryPolicy(max_attempts=1))
 
 
-def unreachable_wfs_client() -> HttpClient:
-    """An `HttpClient` whose transport refuses every connection — the WFS-down abort case."""
+def unreachable_wfs_transport() -> httpx.MockTransport:
+    """A transport that refuses every connection — the WFS-down abort case."""
 
     def _refuse(_request: httpx.Request) -> httpx.Response:
         raise httpx.ConnectError("WFS unreachable")
 
-    inner = httpx.Client(transport=httpx.MockTransport(_refuse))
+    return httpx.MockTransport(_refuse)
+
+
+def unreachable_wfs_client() -> HttpClient:
+    """An `HttpClient` whose transport refuses every connection — the WFS-down abort case."""
+    inner = httpx.Client(transport=unreachable_wfs_transport())
     return HttpClient(inner, source="geo_sport", retry=RetryPolicy(max_attempts=1))
 
 
@@ -121,16 +126,19 @@ def _build_handler(request: httpx.Request) -> httpx.Response:
     return httpx.Response(200, content=b"<html></html>")
 
 
-def recorded_build_client(
+def recorded_build_transport(
     override: Callable[[httpx.Request], httpx.Response | None] | None = None,
-) -> HttpClient:
-    """A composite `HttpClient` for the ONE-command atomic `build`, replayed fully offline.
+) -> httpx.MockTransport:
+    """The composite offline transport for the ONE-command atomic `build`.
 
     Routes WFS layers, pool pages, Belegungsplan PDFs, and the price page from committed fixtures
-    (see `_build_handler`) through a single `MockTransport`, so `build(...)` reproduces the whole
-    pipeline — roster → schedule scrape → lane scrape → compose — with no network. `override` lets
-    a test inject a per-request failure (return a `Response` to pre-empt routing, or `None` to fall
-    through to the default) — e.g. a 503 on one pool page to prove the atomic abort.
+    (see `_build_handler`), so `build(...)` reproduces the whole pipeline — roster → schedule
+    scrape → lane scrape → compose — with no network. `override` lets a test inject a per-request
+    failure (return a `Response` to pre-empt routing, or `None` to fall through to the default) —
+    e.g. a 503 on one pool page to prove the atomic abort.
+
+    Handed out as a *transport* (not a finished client) so a cache test can wrap it: the disk
+    cache is itself a transport, and it must sit between httpx and this one.
     """
 
     def _serve(request: httpx.Request) -> httpx.Response:
@@ -140,5 +148,4 @@ def recorded_build_client(
                 return injected
         return _build_handler(request)
 
-    inner = httpx.Client(transport=httpx.MockTransport(_serve), follow_redirects=True)
-    return HttpClient(inner, source="geo_sport", retry=RetryPolicy(max_attempts=1))
+    return httpx.MockTransport(_serve)

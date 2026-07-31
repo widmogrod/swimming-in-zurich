@@ -48,6 +48,11 @@ from typing import Any, Final, assert_never
 
 import httpx
 
+#: Where the cache lives unless a composition root says otherwise. Relative to the working
+#: directory on purpose: it is a per-checkout dev/build accelerator, git-ignored, never a
+#: runtime source of truth. Both composition roots (`swimzh.cli`, `apps.web.main`) name it.
+DEFAULT_CACHE_ROOT: Final = Path(".cache/swimzh")
+
 #: Tier used when a request carries no `cache_tier` extension.
 DEFAULT_TIER: Final = "default"
 
@@ -332,6 +337,12 @@ class DiskCacheTransport(httpx.BaseTransport):
         self._store = store
         self._mode = mode
         self._now = now
+
+    @property
+    def mode(self) -> CacheMode:
+        """The mode this transport was wired with — public so a composition-root test can
+        assert what a wiring function actually built (the web runtime must be `OFF`)."""
+        return self._mode
 
     def handle_request(self, request: httpx.Request) -> httpx.Response:
         match self._mode:

@@ -205,6 +205,7 @@ Appended by /dev:implement after each slice — never rewritten. Newest row last
 | 2026-08-01 | S1 | done | `fresh()` derives its tier from `request.extensions["cache_tier"]` (default `"default"`) — the plan gives `fresh(request, now)` no tier parameter while the tier is part of the on-disk path, so the read side must recover it from the request | none | yes |
 | 2026-08-01 | S2 | done | (1) a miss returns a **rebuilt** response (`_replay`), not the consumed inner one — `read()` leaves it closed and stream-exhausted while still carrying framing headers that no longer describe the decoded body; rebuilding makes cold byte-identical to warm. `OFF` still returns the inner response untouched. (2) S2 needed a TTL source the plan only introduces in S3, so the transport reads `request.extensions["cache_ttl_s"]` via a new `request_ttl_s()` with a documented `DEFAULT_TTL_S = 3600` fallback | none | yes |
 | 2026-08-01 | S3 | done | none | none | yes |
+| 2026-08-01 | S4 | done | (1) `SWIMZH_CACHE` is parsed in `cli.py`, **not** `apps/web/config.py` — the web runtime is unconditionally `OFF` and reads no env, so a knob there would contradict that (the `fastapi-service` env-only-in-config rule is intact: `apps/web/main.py` reads no env). (2) `main(argv, *, client=)` → `clients=`; `build`/`scrape_gold`/`scrape_lanes` take a `ProviderClients` bundle — unavoidable given per-source clients. `build_catalog_file` still takes one `HttpClient` (genuinely one source). (3) `DiskCacheTransport.mode` (read-only) + `DEFAULT_CACHE_ROOT` added to S1/S2's `httpcache.py` | (a) an oversized response (over `max_bytes`) is written to disk **before** `_classify` rejects it, so it caches and replays as `TooLarge` for its whole TTL — accepted, cleared by `--refresh`/`SWIMZH_CACHE=off`. (b) the B1 guard cannot distinguish `price_scraper` from `page_provider` (identical `static`/7d), so a `prices`→page-client mis-binding stays invisible; noted in the test, split the assertion if those TTLs diverge. (c) `HTTP(S)_PROXY` is no longer honoured by either composition root | yes |
 
 ## Decisions & divergences
 
@@ -222,6 +223,30 @@ Appended by /dev:implement after each slice — never rewritten. Newest row last
   are cached (keyed per-hop URL) so warm-cache-zero-network holds for redirecting pages; N4 the S5
   `cache promote` bridge is acknowledged as a deliberate one-way exception to cache/cassette
   separation (optional slice).
+- 2026-08-01 (S4, critic-reviewer → adjudicated): the `--refresh` / `SWIMZH_CACHE` → `CacheMode` →
+  transport join was **unreachable by any test** — every `main(...)` in the suite passes `clients=`,
+  so the `if clients is None` branch never ran, and `# pragma: no cover - live` also hid it from the
+  coverage and crap gates. Hardcoding `CacheMode.USE` there left the whole suite green while
+  `--refresh` became a silent production no-op. Fix: the live wiring is now the testable factory
+  `live_transport(*, refresh, env, cache_dir)`, with the pragma scoped to the `with httpx.Client(...)`
+  block alone; `.mode` is asserted for unset / `off` / `refresh` / flag / flag-beats-env, and a stubbed
+  factory pins `main`'s parse→forward hop. **A composition root that cannot be constructed in a test
+  is not wired, it is asserted.**
+- 2026-08-01 (S4): the B1 guard classifies each request by **URL shape alone**, never by the stamp it
+  is checking — a guard that reads the stamp to classify the request proves nothing. Mutation-verified
+  to fail under a single shared client, one-client-per-phase, a `schedules`↔`pages` swap, and lanes
+  fetched with the page client.
+- 2026-08-01 (S4, discovery): the timetable scrape selects on the **fetched WFS roster** (7 indoor
+  pages) while lane discovery selects on the **stored spine** (6) — `registry.yaml`'s kind override
+  moves Käferberg WFS-`indoor` → stored `thermal`. The two sets are genuinely different, so each
+  per-source assertion must derive from the source its own provider reads.
+- 2026-08-01 (S4): "`SWIMZH_CACHE=off` is byte-identical to no-cache" holds at the level of **response
+  bytes**, not client construction — passing an explicit `transport=` disables httpx's environment
+  proxy mounts (`allow_env_proxies = trust_env and transport is None`, httpx 0.28.1), so neither
+  composition root honours `HTTP(S)_PROXY` any more. **Recorded, not fixed**: nothing here uses a
+  proxy and a fix would mean hand-rolling httpx's mount logic. If it ever matters: read
+  `HTTPS_PROXY`/`HTTP_PROXY` in `live_transport` and pass `proxy=` to `httpx.HTTPTransport(...)`;
+  `apps/web` needs the same one-liner.
 - 2026-08-01 (S3): the tier is a **closed `CacheTier = Literal["static","snapshot","live","default"]`**,
   not a bare `str` — a typo'd tier was otherwise "a new silently-created cache directory nothing ever
   reads", the exact hazard behind S1's "the caller owns tier consistency". `Literal` over `StrEnum`

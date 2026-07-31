@@ -4,7 +4,7 @@ The app now reads exclusively from the SQLite gold store, so every test needs a 
 `SWIMZH_GOLD_DB` pointing at it. Since S2 (`delete-curated-schedule-tier`) `build` is a SINGLE
 ATOMIC PIPELINE — WFS roster → curated assemble → schedule scrape → lane scrape → compose — so the
 session gold DB is produced by ONE offline `build(...)` driven by a composite `MockTransport`
-(`recorded_build_client`): WFS layers, pool pages, Belegungsplan PDFs, and the price page all come
+(`recorded_build_clients`): WFS layers, pool pages, Belegungsplan PDFs, and the price page all come
 from committed fixtures, no network. That means the served store carries REAL scraped schedules for
 the indoor pools (not just curated ones), so the web suite asserts against the same pipeline the
 app ships. Tests that need a bespoke store override `SWIMZH_GOLD_DB` themselves.
@@ -21,7 +21,7 @@ _REPO_ROOT = Path(__file__).resolve().parents[3]
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
-from tests.providers.wfs_snapshot import recorded_build_client  # noqa: E402
+from tests.pipeline_clients import recorded_build_clients  # noqa: E402
 
 from swimzh.cli import build  # noqa: E402
 from swimzh.core.result import Ok  # noqa: E402
@@ -36,13 +36,13 @@ _ROSTER = catalog_json.loads((DATA_DIR / "catalog.json").read_text(encoding="utf
 @pytest.fixture(scope="session")
 def gold_db(tmp_path_factory: pytest.TempPathFactory) -> Path:
     """A COMPLETE gold DB from one offline atomic `build`: WFS-roster spine + curated facilities +
-    scraped schedules/lane plans, all replayed from committed fixtures via `recorded_build_client`.
+    scraped schedules/lane plans, all replayed from committed fixtures via `recorded_build_clients`.
 
     An unresolved extra scrape name would make `build` exit 1 (non-fatal), so we assert 0 to catch
     a fixture-vs-crosswalk drift rather than silently serving a partial store.
     """
     db = tmp_path_factory.mktemp("gold") / "gold.sqlite"
-    code = build(db_path=db, data_dir=DATA_DIR, client=recorded_build_client())
+    code = build(db_path=db, data_dir=DATA_DIR, clients=recorded_build_clients())
     assert code == 0, f"atomic build failed with exit {code}"
     return db
 
