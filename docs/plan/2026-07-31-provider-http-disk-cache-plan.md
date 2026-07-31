@@ -1,6 +1,6 @@
 ---
 type: plan
-status: in-progress      # draft -> approved -> in-progress -> done
+status: done             # draft -> approved -> in-progress -> done
 created: 2026-07-31
 feature: provider-http-disk-cache
 branch: plan/provider-http-disk-cache
@@ -186,7 +186,7 @@ cached non-2xx replays exactly as the live one did (`_classify` still maps a cac
   holds since each phase reads its own tier's copy.
 - **Depends on**: S3.
 
-### S5 (optional) — `swimzh cache` subcommand + fixture bridge
+### S5 (optional) — `swimzh cache` subcommand + fixture bridge — **NOT BUILT** (owner, 2026-08-01)
 
 - **Goal**: Ergonomics — inspect/clear from the CLI and one-way seed a fixture from a live entry.
 - **Touches**: `cli.py` (`cache show <url-substring>` / `cache clear [--tier]` / `cache promote
@@ -300,4 +300,32 @@ Appended by /dev:implement after each slice — never rewritten. Newest row last
 
 ## Summary
 
-Written when the plan reaches `done`; then distilled into `docs/summaries/`.
+**Shipped S1–S4; S5 closed unbuilt** (owner call, 2026-08-01 — inspection is already `cat`/`jq`/`find`
+and clearing is `rm -rf`, exactly as the Design says, so the subcommand was ergonomics; `cache promote`
+would also have breached the cache/cassette separation for the first time).
+
+Every provider response now caches to `.cache/swimzh/<tier>/<host>/<key16>.json` — one human-readable
+JSON file per entry, git-ignored — behind an httpx **transport**, so `HttpClient` and all five
+providers are untouched (grep-asserted). A warm build makes **zero** network calls; `--refresh` /
+`SWIMZH_CACHE=refresh` forces a refetch and `SWIMZH_CACHE=off` restores the no-cache path. The web
+runtime wires the cache `OFF`.
+
+The plan's own pre-approval B1 fix was the substance: TTL keys off `HttpClient.source`, so the build's
+single shared client would have collapsed every request to the 14d tier. `cli.py` now builds one
+client per source over one shared transport and threads the source-matched client into each *provider
+call* — a phase is not source-atomic, so `_compose_schedules` and `_attach_lanes` each take two. A
+build-level guard pins all five `(source, tier, ttl)` triples plus the URL set behind each stamp,
+classifying by URL shape alone, and is mutation-verified against four wiring regressions.
+
+Two defects the review caught are the durable lessons, both recorded above: httpx decodes bodies
+**above** the transport, so storing `response.content` under verbatim headers would have turned every
+warm hit into an `Err(DecodeError)`; and the `--refresh`/`SWIMZH_CACHE` join was **unreachable by any
+test** (injected clients + a live pragma), so hardcoding `CacheMode.USE` left the suite green while the
+flag became a production no-op.
+
+Carried debt: an oversized response caches before `_classify` rejects it (replays as `TooLarge` for its
+TTL; cleared by `--refresh`); the tier guard cannot separate `price_scraper` from `page_provider` while
+they share `static`/7d; `HTTP(S)_PROXY` is no longer honoured by either composition root. The
+out-of-scope ~57-page lane-discovery scope bug is only *mitigated* by a warm cache, not fixed.
+
+Distilled into [[provider-http-disk-cache]].

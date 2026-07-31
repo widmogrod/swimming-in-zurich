@@ -54,6 +54,10 @@ uv run python -m swimzh.cli build --db gold.sqlite
 uv run python -m swimzh.cli scrape-gold   --db gold.sqlite   # re-run the schedule/price phase
 uv run python -m swimzh.cli scrape-lanes  --db gold.sqlite   # re-run the Belegungsplan lane phase
 
+# 2b. Every network command caches responses to disk per-tier (see below). Force a refetch:
+uv run python -m swimzh.cli build --db gold.sqlite --refresh    # == SWIMZH_CACHE=refresh
+SWIMZH_CACHE=off uv run python -m swimzh.cli build --db gold.sqlite   # bypass the cache entirely
+
 # 3. Run the app against the DB (UI at /, API at /swim). Missing/empty DB -> clean
 #    one-line fail-fast (no ASGI traceback). SWIMZH_RELOAD=0 disables auto-reload.
 SWIMZH_GOLD_DB=gold.sqlite uv run python -m apps.web.main   # http://127.0.0.1:8000
@@ -74,6 +78,31 @@ roster + the page scrapers). `scrape-gold` / `scrape-lanes` are **thin re-layer 
 the same extracted phase functions (per-cadence refresh onto an already-built store). The facility
 payload rides as a typed blob on the `pool` row (`facility_doc`); there is **no `facility` table**.
 The `--data` dir (default `data/`) supplies only the thin crosswalk; the **app never reads `data/`**.
+
+**Provider HTTP disk cache — a dev/build accelerator, never a source of truth.** The build is
+network-bound (a cold run is minutes), so every provider response is cached to
+`.cache/swimzh/<tier>/<host>/<key16>.json` — **git-ignored**, one human-readable JSON file per entry
+(`cat`/`jq` it to see exactly what a site returned; only the Belegungsplan PDFs are base64, text
+content-types stay inline). A warm build makes **zero** network calls. The seam is an httpx
+**transport** (`core/httpcache.py`: `CacheStore` + `DiskCacheTransport`), so `HttpClient` and all five
+providers are untouched — providers know nothing about the cache (grep-asserted by a test).
+
+TTL is **our** policy, keyed off each provider's volatility (`core/cache_tiers.py`, the whole table in
+one place): `geo_sport` 14d, `page_provider` 7d, `price_scraper` 7d, `belegungsplan` 3d,
+`schedule_scraper` 12h, `baditicker` 2m. `HttpClient.get` stamps the tier + TTL onto
+`request.extensions` from its `source=`, which is why **`cli.py` builds one `HttpClient` per source**
+over one shared transport and threads the source-matched client into each *provider call* — a phase is
+not source-atomic (`_compose_schedules` fans out to price *and* schedule; `_attach_lanes` to discovery
+*and* lanes), so both take two clients. A single shared client would silently collapse every request
+to one tier; a build-level test guards all five `(source, tier, ttl)` triples.
+
+Escape hatches: `--refresh` / `SWIMZH_CACHE=refresh` forces a refetch, `SWIMZH_CACHE=off` is
+behaviourally today's no-cache path, and clearing is `rm -rf .cache/swimzh[/<tier>]`. The **web
+runtime wires the cache OFF** (Baditicker has its own in-process 2-min TTL). The cache is *not* the
+gold DB (still the only runtime source of truth) and *not* the test-fixture store (the `vcrpy`
+cassettes stay the checked-in contract). Caveat: passing an explicit transport disables httpx's env
+proxy mounts, so `HTTP(S)_PROXY` is no longer honoured. See
+[[2026-07-31-provider-http-disk-cache-plan]].
 
 **Curation model — three-state `ScheduleFreshness`, not a boolean.** A pool's schedule state is
 derived at read from its `facility_doc` blob (`storage/codec.schedule_freshness`, replacing the old
