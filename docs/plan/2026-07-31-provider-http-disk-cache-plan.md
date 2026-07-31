@@ -204,6 +204,7 @@ Appended by /dev:implement after each slice — never rewritten. Newest row last
 |------|-------|--------|----------------------|-------------------|---------------|
 | 2026-08-01 | S1 | done | `fresh()` derives its tier from `request.extensions["cache_tier"]` (default `"default"`) — the plan gives `fresh(request, now)` no tier parameter while the tier is part of the on-disk path, so the read side must recover it from the request | none | yes |
 | 2026-08-01 | S2 | done | (1) a miss returns a **rebuilt** response (`_replay`), not the consumed inner one — `read()` leaves it closed and stream-exhausted while still carrying framing headers that no longer describe the decoded body; rebuilding makes cold byte-identical to warm. `OFF` still returns the inner response untouched. (2) S2 needed a TTL source the plan only introduces in S3, so the transport reads `request.extensions["cache_ttl_s"]` via a new `request_ttl_s()` with a documented `DEFAULT_TTL_S = 3600` fallback | none | yes |
+| 2026-08-01 | S3 | done | none | none | yes |
 
 ## Decisions & divergences
 
@@ -221,6 +222,20 @@ Appended by /dev:implement after each slice — never rewritten. Newest row last
   are cached (keyed per-hop URL) so warm-cache-zero-network holds for redirecting pages; N4 the S5
   `cache promote` bridge is acknowledged as a deliberate one-way exception to cache/cassette
   separation (optional slice).
+- 2026-08-01 (S3): the tier is a **closed `CacheTier = Literal["static","snapshot","live","default"]`**,
+  not a bare `str` — a typo'd tier was otherwise "a new silently-created cache directory nothing ever
+  reads", the exact hazard behind S1's "the caller owns tier consistency". `Literal` over `StrEnum`
+  because `httpcache.DEFAULT_TIER` is `Final = "default"` (already `Literal["default"]` to mypy) so it
+  joins the union with nothing re-declared, and the tier is a path segment + JSON field that wants to
+  stay a plain `str` at runtime.
+- 2026-08-01 (S3, tier assignment beyond what the plan pinned): `page_provider` and `price_scraper`
+  are **`static`** (7d), `belegungsplan` is **`snapshot`** (3d); the plan fixed only `geo_sport`=static
+  and `schedule_scraper`=snapshot/12h. `schedule_scraper` (snapshot) vs `page_provider` (static)
+  landing in *different* tiers is what makes NB3's "stored twice, once per tier" hold. **Consequence
+  for S4's B1 guard: assert `(source, tier, ttl)` triples, not tier alone** — tier does not separate
+  `price_scraper` from `page_provider`. Latent, no overlap today: two sources sharing a tier with
+  different TTLs (`geo_sport` 14d vs `page_provider`/`price_scraper` 7d, all `static`) would share one
+  entry if they ever fetched the same URL, first writer's TTL winning.
 - 2026-08-01 (S2, correction to the Design prose above): "**not compatible with `client.stream(...)`**"
   overstates it — streaming does **not** raise. A `client.stream()` call works cold and warm and
   yields the full body in the requested chunk sizes; what is lost is *incremental delivery and

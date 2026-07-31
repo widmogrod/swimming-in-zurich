@@ -11,11 +11,12 @@ remain, using an injectable `sleep` so tests stay fast and deterministic.
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 
 import httpx
 
+from swimzh.core.cache_tiers import cache_extensions
 from swimzh.core.errors import (
     ConnectionFailed,
     DecodeError,
@@ -79,9 +80,10 @@ class HttpClient:
         self._sleep = sleep
 
     def get(self, url: str, **kwargs: object) -> Result[httpx.Response, ProviderError]:
+        stamped = self._stamp_cache_policy(kwargs)
         last: ProviderError | None = None
         for attempt in range(1, self._retry.max_attempts + 1):
-            result = self._get_once(url, **kwargs)
+            result = self._get_once(url, **stamped)
             if isinstance(result, Ok):
                 return result
             last = result.error
@@ -93,6 +95,28 @@ class HttpClient:
         if last is None:  # pragma: no cover - unreachable
             raise RuntimeError("retry loop did not execute")
         return Err(last)
+
+    def _stamp_cache_policy(self, kwargs: dict[str, object]) -> dict[str, object]:
+        """Add this client's cache tier + TTL to the request extensions.
+
+        This is the *only* behavioural change the disk cache asks of `HttpClient`: the
+        per-source policy travels as httpx request extensions, which only
+        `DiskCacheTransport` ever reads. Without that transport installed the stamp is
+        inert — httpx carries unknown extensions untouched — so every provider and every
+        existing caller behaves exactly as before.
+
+        The stamp **merges with, never overwrites** a caller-supplied `extensions`: an
+        explicit `cache_tier`/`cache_ttl_s` from the call site wins over the table. A
+        caller passing a non-mapping `extensions` (an httpx error in its own right) is
+        left untouched rather than silently rewritten.
+        """
+        caller = kwargs.get("extensions")
+        if caller is not None and not isinstance(caller, Mapping):
+            return kwargs
+        extensions = cache_extensions(self._source)
+        if isinstance(caller, Mapping):
+            extensions.update(caller)
+        return {**kwargs, "extensions": extensions}
 
     def _get_once(self, url: str, **kwargs: object) -> Result[httpx.Response, ProviderError]:
         try:
