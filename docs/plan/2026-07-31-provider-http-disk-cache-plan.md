@@ -6,6 +6,7 @@ feature: provider-http-disk-cache
 gates:
   qa: full               # ruff, mypy, pytest+coverage, crap.py
   review: adversarial    # critic must find no blocking issues per slice
+  max_rounds: 2          # revision/retry rounds per gate before a slice is blocked
 pause_after: []          # no destructive step; nothing to gate mid-way
 links: ["[[data-layer-architecture]]", "[[discovery-driven-providers]]", "[[gold-store]]"]
 ---
