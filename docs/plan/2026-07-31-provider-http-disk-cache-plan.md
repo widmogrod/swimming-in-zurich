@@ -1,8 +1,11 @@
 ---
 type: plan
-status: approved         # draft -> approved -> in-progress -> done
+status: in-progress      # draft -> approved -> in-progress -> done
 created: 2026-07-31
 feature: provider-http-disk-cache
+branch: plan/provider-http-disk-cache
+worktree: .claude/worktrees/plan-provider-http-disk-cache
+base_branch: feat/new-ui
 gates:
   qa: full               # ruff, mypy, pytest+coverage, crap.py
   review: adversarial    # critic must find no blocking issues per slice
