@@ -1,10 +1,12 @@
-"""On-disk HTTP cache for the provider pipeline — the pure store half.
+"""On-disk HTTP cache for the provider pipeline — the pure store plus its transport.
 
 `CacheStore` is **pure**: it touches the filesystem and nothing else. It knows how to
 turn a request into a cache key + path, how to (de)serialize an `httpx.Response` as one
 **human-readable JSON file per entry**, and whether an entry is still fresh. It performs
-no network I/O and holds no httpx transport; the transport that turns this into actual
-httpx caching lands in a later slice.
+no network I/O and holds no httpx transport.
+
+`DiskCacheTransport` is the httpx seam that turns the store into actual caching: it wraps
+an inner transport, so `HttpClient` and every provider stay byte-unchanged.
 
 Two properties are load-bearing:
 
@@ -37,19 +39,24 @@ import hashlib
 import json
 import os
 import tempfile
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from datetime import datetime, timedelta
+from enum import StrEnum
 from pathlib import Path
-from typing import Any, Final
+from typing import Any, Final, assert_never
 
 import httpx
 
 #: Tier used when a request carries no `cache_tier` extension.
 DEFAULT_TIER: Final = "default"
 
-#: Request extension keys the transport stamps (read here, written in a later slice).
+#: TTL used when a request carries no (or an unusable) `cache_ttl_s` extension.
+DEFAULT_TTL_S: Final = 3600
+
+#: Request extension keys the transport reads (written by `HttpClient` in a later slice).
 TIER_EXTENSION: Final = "cache_tier"
+TTL_EXTENSION: Final = "cache_ttl_s"
 
 _KEY_LEN: Final = 16
 
@@ -85,6 +92,23 @@ def request_tier(request: httpx.Request) -> str:
     """The tier stamped on the request, or `DEFAULT_TIER` when none/ill-typed."""
     tier = request.extensions.get(TIER_EXTENSION)
     return tier if isinstance(tier, str) and tier else DEFAULT_TIER
+
+
+def request_ttl_s(request: httpx.Request) -> int:
+    """The TTL stamped on the request, or `DEFAULT_TTL_S` when none/ill-typed.
+
+    `bool` is excluded explicitly: it is an `int` subclass, and `True` as a TTL is a
+    one-second cache — silently useless rather than loudly wrong.
+
+    **A `0` (or negative) stamp is not a per-request bypass.** It is treated as "no usable
+    TTL given" and falls back to `DEFAULT_TTL_S`, so reaching for `cache_ttl_s=0` to mean
+    "don't cache this one" gets an hour of caching, the opposite of the intent. Skipping
+    the cache is a *mode*, not a TTL: use `CacheMode.OFF`.
+    """
+    ttl = request.extensions.get(TTL_EXTENSION)
+    if isinstance(ttl, int) and not isinstance(ttl, bool) and ttl > 0:
+        return ttl
+    return DEFAULT_TTL_S
 
 
 def _media_type(content_type: str) -> str:
@@ -255,3 +279,118 @@ def _write_atomic(path: Path, document: Mapping[str, Any]) -> None:
     except OSError:
         # A cache that cannot be written is a cache miss, not a build failure.
         return
+
+
+class CacheMode(StrEnum):
+    """How `DiskCacheTransport` treats the store on each request.
+
+    * `USE` — read a fresh entry if there is one, otherwise fetch once and write through.
+    * `REFRESH` — never read; always fetch once and overwrite the entry.
+    * `OFF` — never read, never write; behaviourally identical to no cache at all.
+    """
+
+    USE = "use"
+    REFRESH = "refresh"
+    OFF = "off"
+
+
+class DiskCacheTransport(httpx.BaseTransport):
+    """An `httpx` transport that serves fresh entries from a `CacheStore`.
+
+    Being a transport is the whole point: `HttpClient` and all five providers are
+    untouched, and a cache hit returns a perfectly ordinary `httpx.Response`, so
+    `HttpClient._classify` keeps mapping statuses to the `ProviderError` union exactly as
+    it does live (a cached 500 is still `HttpStatus`). Nothing new is raised here: a miss
+    delegates to `inner`, whose `TransportError`/`TimeoutException` propagate untouched
+    into `HttpClient`'s existing `try/except`, and every store fault is already a miss.
+
+    **The clock is injected** (`now`), so freshness is deterministic under test. It must
+    return tz-aware datetimes (`Europe/Zurich`); a naive one is a programming error and
+    the store raises, as it does for any other caller.
+
+    **Buffer-only.** `handle_request` reads the inner response to completion before
+    returning. `client.stream(...)` still *works* — it yields the whole body in the
+    requested chunk sizes, cold and warm alike — but it is **defeated**: every byte is in
+    memory before the caller sees the first chunk, so there is no incremental delivery and
+    no bounded memory. The pipeline uses `.get()` only, and `HttpClient(max_bytes=…)`
+    bounds the payloads.
+
+    **Tier consistency.** Reads and writes both take the tier from
+    `request.extensions["cache_tier"]` via `request_tier`, so a write can never land in a
+    directory the matching read does not visit (see `CacheStore.put`).
+    """
+
+    def __init__(
+        self,
+        inner: httpx.BaseTransport,
+        store: CacheStore,
+        mode: CacheMode,
+        *,
+        now: Callable[[], datetime],
+    ) -> None:
+        self._inner = inner
+        self._store = store
+        self._mode = mode
+        self._now = now
+
+    def handle_request(self, request: httpx.Request) -> httpx.Response:
+        match self._mode:
+            case CacheMode.OFF:
+                return self._inner.handle_request(request)
+            case CacheMode.USE:
+                hit = self._store.fresh(request, self._now())
+                if hit is not None:
+                    return hit
+            case CacheMode.REFRESH:
+                pass
+            case _:  # pragma: no cover - exhaustive over CacheMode
+                assert_never(self._mode)
+        return self._fetch_and_store(request)
+
+    def close(self) -> None:
+        self._inner.close()
+
+    def _fetch_and_store(self, request: httpx.Request) -> httpx.Response:
+        response = self._inner.handle_request(request)
+        response.request = request
+        # `read()` yields **decoded** bytes (httpx applies `content-encoding` here, above
+        # the transport), which is exactly what the store's contract expects.
+        body = response.read()
+        self._store.put(
+            request,
+            response,
+            tier=request_tier(request),
+            ttl_s=request_ttl_s(request),
+            now=self._now(),
+        )
+        return _replay(response.status_code, response.headers, body, response.extensions)
+
+
+def _replay(
+    status_code: int,
+    headers: httpx.Headers,
+    body: bytes,
+    extensions: Mapping[str, Any],
+) -> httpx.Response:
+    """Rebuild a fresh, unread response over already-buffered bytes.
+
+    A miss returns a *rebuilt* response rather than the consumed inner one, for two
+    reasons. The consumed response is already closed and its stream exhausted, and — more
+    importantly — it still carries the wire-framing headers (`content-encoding`,
+    `content-length`) that no longer describe its decoded body. Stripping them here, with
+    the same rule the store applies on write, gives cold/warm parity over exactly what the
+    store persists: **status, headers and body**.
+
+    That parity stops at the stored fields, and deliberately so. Only those three are on
+    disk, so a warm replay (`_rebuild`) carries no `extensions` and no custom
+    `reason_phrase`, while the cold response here forwards the inner transport's
+    `extensions` (`http_version` and friends — worth keeping for live diagnostics). Every
+    consumer in this repo reads status, headers and body only; a future caller that starts
+    reading `reason_phrase` or an extension would have to persist it first.
+    """
+    return httpx.Response(
+        status_code=status_code,
+        headers=httpx.Headers(_storable_headers(headers)),
+        content=body,
+        extensions=dict(extensions),
+    )

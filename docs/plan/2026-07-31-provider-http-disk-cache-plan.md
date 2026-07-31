@@ -203,6 +203,7 @@ Appended by /dev:implement after each slice — never rewritten. Newest row last
 | date | slice | status | divergence from plan | tech debt created | human review? |
 |------|-------|--------|----------------------|-------------------|---------------|
 | 2026-08-01 | S1 | done | `fresh()` derives its tier from `request.extensions["cache_tier"]` (default `"default"`) — the plan gives `fresh(request, now)` no tier parameter while the tier is part of the on-disk path, so the read side must recover it from the request | none | yes |
+| 2026-08-01 | S2 | done | (1) a miss returns a **rebuilt** response (`_replay`), not the consumed inner one — `read()` leaves it closed and stream-exhausted while still carrying framing headers that no longer describe the decoded body; rebuilding makes cold byte-identical to warm. `OFF` still returns the inner response untouched. (2) S2 needed a TTL source the plan only introduces in S3, so the transport reads `request.extensions["cache_ttl_s"]` via a new `request_ttl_s()` with a documented `DEFAULT_TTL_S = 3600` fallback | none | yes |
 
 ## Decisions & divergences
 
@@ -220,6 +221,24 @@ Appended by /dev:implement after each slice — never rewritten. Newest row last
   are cached (keyed per-hop URL) so warm-cache-zero-network holds for redirecting pages; N4 the S5
   `cache promote` bridge is acknowledged as a deliberate one-way exception to cache/cassette
   separation (optional slice).
+- 2026-08-01 (S2, correction to the Design prose above): "**not compatible with `client.stream(...)`**"
+  overstates it — streaming does **not** raise. A `client.stream()` call works cold and warm and
+  yields the full body in the requested chunk sizes; what is lost is *incremental delivery and
+  bounded memory* (every byte is buffered before the caller sees the first chunk). Streaming is
+  **defeated, not broken**. The code docstring carries the accurate wording; nothing in this repo
+  calls `client.stream(`.
+- 2026-08-01 (S2): `_replay` delivers cold/warm parity on **status, headers and body** — the three
+  things the store persists — but not on `reason_phrase` or response `extensions` (a warm `_rebuild`
+  carries neither; the cold path forwards the inner transport's). Kept deliberately: `http_version`
+  and friends are live-transport diagnostics that cost nothing cold, and dropping them would buy
+  literal parity by blinding the cold path. A future consumer reading either would first have to
+  persist it.
+- 2026-08-01 (S2): a `cache_ttl_s` stamp of `0`/negative means "no usable TTL given" and falls back
+  to `DEFAULT_TTL_S` — so `0` buys an hour of caching, it is **not** a per-request bypass. Skipping
+  the cache is a *mode* (`CacheMode.OFF`).
+- 2026-08-01 (S2, noted for S4): a response over `HttpClient(max_bytes=…)` is written to disk
+  **before** `_classify` rejects it as `TooLarge`, so an oversized payload caches and replays as
+  `TooLarge` warm. Consistent, but newly persistent — previously nothing was stored.
 - 2026-08-01 (S1, critic-reviewer → adjudicated): **transfer headers must be stripped from a cached
   entry, on write AND on read.** httpx decodes the body *above* the transport, so storing
   `response.content` under verbatim headers writes decoded bytes under `content-encoding: gzip`;
