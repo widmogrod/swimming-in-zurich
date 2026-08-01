@@ -12,7 +12,7 @@ from dataclasses import dataclass
 from enum import StrEnum
 
 from swimzh.domain.geo import GeoPoint
-from swimzh.domain.models import PoolKind
+from swimzh.domain.models import Facility, PoolKind
 
 _TRANSLIT = str.maketrans({"ä": "ae", "ö": "oe", "ü": "ue", "ß": "ss"})
 
@@ -73,3 +73,20 @@ class RosterEntry:
 
     entry: PoolCatalogEntry
     freshness: ScheduleFreshness
+
+
+def freshness_of(facility: Facility) -> ScheduleFreshness:
+    """The three-state rule itself, over a **decoded** `Facility` — the one place it lives.
+
+    `storage.codec.schedule_freshness` decodes the `facility_doc` blob and delegates here, so the
+    roster (`/pools`, `/swim`) and any caller holding an already-resolved facility (`/pools/{id}`)
+    cannot answer the same question differently. A detail response that said "illustrative" while
+    the list row beside it said `scraped` is exactly the divergence this closes.
+    """
+    if any(basin.rules for basin in facility.basins):
+        return ScheduleFreshness.SCRAPED
+    # A `Wärmebad` (THERMAL) is WFS-`indoor` but registry-overridden for display, so it IS
+    # scraped — both kinds are the scrapeable set (see ScheduleFreshness).
+    if facility.identity.kind in (PoolKind.INDOOR, PoolKind.THERMAL):
+        return ScheduleFreshness.AWAITING_SCRAPE
+    return ScheduleFreshness.NO_SOURCE

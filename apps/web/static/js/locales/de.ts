@@ -240,8 +240,9 @@ export const de = {
   "detail.emptyPanel":
     "Klicken Sie auf ein Bad, um Zeiten, Preis und Belegungsplan zu sehen.",
 
-  "prov.official": "Offizieller Zeitplan",
-  "prov.illustrative": "Illustrativ — von der Website des Bads übernommen",
+  "prov.scraped": "Offizieller Zeitplan — von der Seite des Bads übernommen",
+  "prov.awaiting": "Noch kein Zeitplan veröffentlicht",
+  "prov.noSource": "Keine Zeitplanquelle für dieses Bad",
   "prov.lastChecked": " · zuletzt geprüft am {date}",
 
   "mobile.tier.now": "Jetzt schwimmen",

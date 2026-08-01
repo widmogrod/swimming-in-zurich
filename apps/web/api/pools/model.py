@@ -174,6 +174,12 @@ class FacilityDetailOut(BaseModel):
     facility_name: str
     address: str
     website: str | None
+    # The SAME derived three-state schedule freshness `/pools` rows carry (domain
+    # `catalog.freshness_of` over this very facility) — so a detail panel and the list row beside
+    # it can never disagree about whether a pool has a schedule. This, not `provenance.curated`,
+    # is what the UI trusts: since every schedule is scraped, `curated` is False everywhere and
+    # said "illustrative" about a real, official timetable.
+    freshness: str
     # The physical statics the domain already computes — surfaced so water temperature, basin
     # size, sauna/lockers, and prices reach the swimmer (they existed in the store but were
     # dropped at this boundary before Slice C).

@@ -225,8 +225,9 @@ export const it = {
     "Conosciamo la posizione di questa piscina ma non ancora il suo orario. Sconosciuto non è la stessa cosa che chiuso — potrebbe benissimo essere aperta.",
   "detail.emptyPanel":
     "Clicca su una piscina per vederne orari, prezzo e piano delle corsie.",
-  "prov.official": "Orario ufficiale",
-  "prov.illustrative": "Indicativo — rilevato dal sito della piscina",
+  "prov.scraped": "Orario ufficiale — rilevato dalla pagina della piscina",
+  "prov.awaiting": "Nessun orario ancora pubblicato",
+  "prov.noSource": "Nessuna fonte di orario per questa piscina",
   "prov.lastChecked": " · ultima verifica il {date}",
 
   "mobile.tier.now": "Nuota adesso",

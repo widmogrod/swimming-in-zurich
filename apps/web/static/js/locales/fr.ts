@@ -227,8 +227,9 @@ export const fr = {
     "Nous connaissons l’emplacement de cette piscine mais pas encore son horaire. Inconnu n’est pas la même chose que fermé — elle peut très bien être ouverte.",
   "detail.emptyPanel":
     "Cliquez sur une piscine pour voir ses horaires, son tarif et son plan des lignes.",
-  "prov.official": "Horaire officiel",
-  "prov.illustrative": "À titre indicatif — relevé sur le site de la piscine",
+  "prov.scraped": "Horaire officiel — relevé sur la page de la piscine",
+  "prov.awaiting": "Aucun horaire publié pour l’instant",
+  "prov.noSource": "Aucune source d’horaire pour cette piscine",
   "prov.lastChecked": " · dernière vérification le {date}",
 
   "mobile.tier.now": "Nager maintenant",

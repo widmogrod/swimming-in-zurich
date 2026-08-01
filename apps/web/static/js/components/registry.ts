@@ -148,7 +148,7 @@ export const REGISTRY = {
     create: createProvenanceStamp,
     interactive: false,
     props: (state: string) => ({
-      curated: state === 'curated',
+      freshness: state,
       source: 'stadt-zuerich.ch',
       valid_as_of: '2026-07-18',
     }),

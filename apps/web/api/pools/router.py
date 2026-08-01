@@ -10,6 +10,7 @@ from fastapi import APIRouter, HTTPException, Request
 from apps.web.api.pools.model import FacilityDetailOut, PoolsOut
 from apps.web.api.pools.service import facility_detail_out, list_pools, resolve_live_water_temp
 from apps.web.deps import get_swim_data, get_temperature_provider
+from swimzh.domain.catalog import freshness_of
 from swimzh.domain.models import PoolKind
 from swimzh.domain.query import facility_detail
 
@@ -49,5 +50,10 @@ def pool_detail(
         get_temperature_provider(request), facility.identity, datetime.now(_ZURICH)
     )
     return facility_detail_out(
-        facility_detail(facility, when, data.calendar()), facility.prices, live_temp
+        facility_detail(facility, when, data.calendar()),
+        facility.prices,
+        live_temp,
+        # Derived from THIS facility by the domain rule the roster uses, not re-looked-up: the
+        # detail and the `/pools` row are then two projections of one answer.
+        freshness_of(facility),
     )

@@ -26,7 +26,7 @@ from apps.web.api.pools.model import (
 )
 from apps.web.services.ports import TemperatureProvider
 from swimzh.domain.access import PublicSwim
-from swimzh.domain.catalog import RosterEntry
+from swimzh.domain.catalog import RosterEntry, ScheduleFreshness
 from swimzh.domain.lane_plan import (
     ClubSlot,
     LanePanel,
@@ -250,7 +250,10 @@ def _live_water_temp_out(result: TempResult) -> LiveWaterTempOut:
 
 
 def facility_detail_out(
-    detail: FacilityDetail, prices: PriceTable | None, live_water_temp: TempResult
+    detail: FacilityDetail,
+    prices: PriceTable | None,
+    live_water_temp: TempResult,
+    freshness: ScheduleFreshness,
 ) -> FacilityDetailOut:
     """Shape the domain facility-detail answer for the API: the physical basins (size, lanes,
     water temperature + `physical_source` caveat), features with hours resolved for the queried
@@ -265,6 +268,7 @@ def facility_detail_out(
         facility_name=detail.facility_name,
         address=detail.address,
         website=detail.website,
+        freshness=freshness.value,
         basins=[_basin_out(b) for b in detail.basins],
         features=[_feature_status_out(f) for f in detail.features],
         lockers=[_locker_out(locker) for locker in detail.lockers],

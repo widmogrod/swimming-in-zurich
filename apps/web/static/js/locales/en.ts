@@ -283,8 +283,9 @@ export const en = {
   "detail.emptyPanel": "Click any pool to see its hours, price and lane plan.",
 
   // --- Provenance -------------------------------------------------------------------
-  "prov.official": "Official schedule",
-  "prov.illustrative": "Illustrative — read from the pool’s website",
+  "prov.scraped": "Official schedule — scraped from the pool’s own page",
+  "prov.awaiting": "No timetable published yet",
+  "prov.noSource": "No timetable source for this pool",
   "prov.lastChecked": " · last checked {date}",
 
   // --- Phone pool list (variant E) --------------------------------------------------

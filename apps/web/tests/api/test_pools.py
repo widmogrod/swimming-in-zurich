@@ -15,6 +15,7 @@ from apps.web.main import app
 from swimzh.core.errors import ProviderError
 from swimzh.core.result import Ok, Result
 from swimzh.domain.access import PublicSwim
+from swimzh.domain.catalog import ScheduleFreshness
 from swimzh.domain.lockers import LockerCategory, LockerOption
 from swimzh.domain.models import (
     Basin,
@@ -249,6 +250,7 @@ def test_facility_detail_out_surfaces_temp_and_parsed_prose_caveat() -> None:
             valid_as_of=date(2026, 7, 1),
         ),
         TempUnavailable(reason="no baditicker key"),
+        ScheduleFreshness.AWAITING_SCRAPE,
     )
     # The live facility temp is additive and labelled — it never overwrites a basin's temp.
     assert out.live_water_temp.available is False
@@ -260,6 +262,9 @@ def test_facility_detail_out_surfaces_temp_and_parsed_prose_caveat() -> None:
     assert [(h.start, h.end) for h in out.features[0].hours] == [("09:00", "21:00")]
     assert out.prices is not None and out.prices.entries[0].display == "Adult CHF 8"
     assert out.provenance.curated is False and out.provenance.valid_as_of == "2026-07-01"
+    # The detail carries the SAME three-state freshness as the `/pools` row, so the panel's
+    # trust line no longer has to read the (now always-False) `curated` flag.
+    assert out.freshness == "awaiting_scrape"
 
 
 def test_parsed_prose_pool_shows_in_detail_but_never_a_swim_option(

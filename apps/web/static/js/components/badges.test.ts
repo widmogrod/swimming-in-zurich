@@ -70,23 +70,40 @@ test('LengthLanesBadge omits lanes when unknown and degrades without a length', 
   expect(must(degraded.query((c) => c.classList.contains('ui-lenlanes__degrade'))).textContent).toBe('Teaching pool');
 });
 
-test('ProvenanceStamp distinguishes curated from illustrative', () => {
-  const curated = mount();
-  createProvenanceStamp(curated, {
-    props: { curated: true, source: 'stadt-zuerich.ch', valid_as_of: '2026-07-18' },
+test('ProvenanceStamp reads the three-state freshness, not the curated flag', () => {
+  const scraped = mount();
+  createProvenanceStamp(scraped, {
+    props: { freshness: 'scraped', source: 'stadt-zuerich.ch', valid_as_of: '2026-07-18' },
   });
-  expect(curated.getAttribute('role')).toBe('note');
-  expect(curated.classList.contains('is-curated')).toBeTruthy();
-  const text = must(curated.query((c) => c.classList.contains('ui-provstamp__text'))).textContent;
+  expect(scraped.getAttribute('role')).toBe('note');
+  expect(scraped.classList.contains('is-curated')).toBeTruthy();
+  const text = must(scraped.query((c) => c.classList.contains('ui-provstamp__text'))).textContent;
   expect(text).toMatch(/Official schedule/);
-  // The date is now RENDERED for the viewer's locale (en → en-GB) rather than shown as
-  // a raw ISO string — that is the point of routing it through Intl.
-  expect(text).toMatch(/last checked 18 Jul 2026/);
+  expect(text).toMatch(/stadt-zuerich\.ch/);
+  expect(text).toMatch(/18 Jul 2026/);
 
-  const illus = mount();
-  createProvenanceStamp(illus, { props: { curated: false } });
-  expect(illus.classList.contains('is-illustrative')).toBeTruthy();
-  expect(must(illus.query((c) => c.classList.contains('ui-provstamp__text'))).textContent).toMatch(/Illustrative/);
+  // Both schedule-less states say so plainly — and NEITHER may read as an official schedule.
+  const awaiting = mount();
+  createProvenanceStamp(awaiting, { props: { freshness: 'awaiting_scrape' } });
+  expect(awaiting.classList.contains('is-illustrative')).toBeTruthy();
+  expect(
+    must(awaiting.query((c) => c.classList.contains('ui-provstamp__text'))).textContent,
+  ).toMatch(/No timetable published yet/);
+
+  const noSource = mount();
+  createProvenanceStamp(noSource, { props: { freshness: 'no_source' } });
+  expect(
+    must(noSource.query((c) => c.classList.contains('ui-provstamp__text'))).textContent,
+  ).toMatch(/No timetable source/);
+});
+
+test('an absent freshness claims NO trust — never an official schedule', () => {
+  const el = mount();
+  createProvenanceStamp(el, { props: { source: 'stadt-zuerich.ch' } });
+  expect(el.classList.contains('is-illustrative')).toBeTruthy();
+  expect(must(el.query((c) => c.classList.contains('ui-provstamp__text'))).textContent).toMatch(
+    /No timetable source/,
+  );
 });
 
 test('IconSet glyphs are decorative currentColor SVG (no hex) by default', () => {

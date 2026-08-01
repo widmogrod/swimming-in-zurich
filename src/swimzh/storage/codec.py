@@ -24,7 +24,7 @@ from swimzh.boundary.curated_dto import (
     _HolidayPolicy,
     _PoolKind,
 )
-from swimzh.domain.catalog import ScheduleFreshness
+from swimzh.domain.catalog import ScheduleFreshness, freshness_of
 from swimzh.domain.models import (
     Facility,
     Notice,
@@ -194,13 +194,10 @@ def schedule_freshness(facility_doc: str | None) -> ScheduleFreshness:
       outdoor/lake/river pool), OR a NULL blob: no schedule source at all.
 
     Both the read path (``load_roster``) and any build-time consumer share this one function so
-    the rule cannot diverge.
+    the rule cannot diverge. This is the BLOB door onto it: the rule itself is
+    ``domain.catalog.freshness_of`` over the decoded facility, which `/pools/{id}` calls directly
+    on the facility it already resolved.
     """
     if facility_doc is None:
         return ScheduleFreshness.NO_SOURCE
-    facility = loads(facility_doc)
-    if any(basin.rules for basin in facility.basins):
-        return ScheduleFreshness.SCRAPED
-    if facility.identity.kind in (PoolKind.INDOOR, PoolKind.THERMAL):
-        return ScheduleFreshness.AWAITING_SCRAPE
-    return ScheduleFreshness.NO_SOURCE
+    return freshness_of(loads(facility_doc))

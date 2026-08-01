@@ -75,6 +75,10 @@ export interface FacilityDetail {
     source?: string;
     valid_as_of?: string | null;
   } | null;
+  /** The API's three-state schedule freshness ('scraped' | 'awaiting_scrape' | 'no_source'),
+   *  the SAME signal `/pools` and the board ghost states read. The stamp trusts THIS, not
+   *  `provenance.curated` (False on every pool since schedules became scraped). */
+  freshness?: string;
   live_water_temp?: LiveWaterTemp;
   [k: string]: unknown;
 }
@@ -437,7 +441,7 @@ function buildProvenance(
   const prov = detail.provenance || {};
   createProvenanceStamp(provHost, {
     props: {
-      curated: !!prov.curated,
+      freshness: detail.freshness,
       source: prov.source,
       valid_as_of: prov.valid_as_of ?? undefined,
     },

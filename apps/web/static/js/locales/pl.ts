@@ -265,8 +265,9 @@ export const pl = {
   "detail.emptyPanel":
     "Kliknij dowolny basen, aby zobaczyć godziny, cenę i plan torów.",
 
-  "prov.official": "Oficjalny harmonogram",
-  "prov.illustrative": "Poglądowe — odczytane ze strony basenu",
+  "prov.scraped": "Oficjalny harmonogram — pobrany ze strony basenu",
+  "prov.awaiting": "Harmonogram jeszcze nieopublikowany",
+  "prov.noSource": "Brak źródła harmonogramu dla tego basenu",
   "prov.lastChecked": " · ostatnio sprawdzono {date}",
 
   "mobile.tier.now": "Popływaj teraz",

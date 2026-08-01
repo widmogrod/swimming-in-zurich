@@ -34,7 +34,7 @@ _COMPONENTS: list[tuple[str, str, list[str]]] = [
     ("state-pill", "StatePill", ["open", "opens-later", "closed", "unknown"]),
     ("eligibility-badge", "EligibilityBadge", ["in", "chk", "no"]),
     ("length-lanes-badge", "LengthLanesBadge", ["default", "empty"]),
-    ("provenance-stamp", "ProvenanceStamp", ["curated", "illustrative"]),
+    ("provenance-stamp", "ProvenanceStamp", ["scraped", "awaiting_scrape", "no_source"]),
     ("icon-set", "IconSet", ["default"]),
 ]
 
