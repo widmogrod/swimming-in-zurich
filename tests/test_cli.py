@@ -24,6 +24,7 @@ from swimzh.cli import (
     build_catalog_file,
     cache_mode,
     cache_transport,
+    live_timeout,
     live_transport,
     main,
     scrape_gold,
@@ -1132,6 +1133,23 @@ def test_live_transport_mode_follows_the_refresh_flag_and_the_env(tmp_path: Path
     assert mode_for(env={CACHE_ENV_VAR: "refresh"}) is CacheMode.REFRESH
     assert mode_for(refresh=True, env={}) is CacheMode.REFRESH  # the flag, on its own
     assert mode_for(refresh=True, env={CACHE_ENV_VAR: "off"}) is CacheMode.REFRESH  # flag wins
+
+
+def test_live_timeout_bounds_connect_without_shortening_the_read_budget() -> None:
+    # Asserted on the FACTORY's return value, not on the client: the client is built under
+    # `# pragma: no cover - live`, so a budget that silently reverted to a flat 30s would be
+    # invisible to the suite. connect is short so a host that accepts TCP and then says nothing
+    # (retried 3x, both causes being `retriable()`) cannot eat minutes of a build; read/write/pool
+    # stay at the existing budget so no currently-passing slow fetch starts failing.
+    # Literals on purpose: these are the *budget itself*, so re-deriving them from the module's
+    # constants would let a widened budget pass silently. Changing them is a decision, not a typo.
+    budget = live_timeout()
+
+    assert isinstance(budget, httpx.Timeout)
+    assert budget.connect == 5.0
+    assert budget.read == 30.0
+    assert budget.write == 30.0
+    assert budget.pool == 30.0
 
 
 def test_main_hands_the_refresh_flag_to_the_live_transport(

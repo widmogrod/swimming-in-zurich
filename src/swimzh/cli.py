@@ -93,6 +93,8 @@ _CACHE_MODE_BY_ENV: Final[dict[str, CacheMode]] = {
 
 _LIVE_TIMEOUT_S: Final = 30.0
 
+_LIVE_CONNECT_TIMEOUT_S: Final = 5.0
+
 
 class CacheModeError(ValueError):
     """An unusable `SWIMZH_CACHE` value — a config typo, reported as a one-line error.
@@ -177,6 +179,29 @@ def live_transport(
     return cache_transport(
         httpx.HTTPTransport(), mode=cache_mode(refresh=refresh, env=env), cache_dir=cache_dir
     )
+
+
+def live_timeout() -> httpx.Timeout:
+    """The live pipeline's timeout budget: a SHORT connect budget, the long read budget unchanged.
+
+    A flat `timeout=30.0` charges a host that accepts TCP and then says nothing the full 30s
+    per attempt — and `ConnectionFailed`/`Timeout` are both `retriable()`, so a build pays that
+    three times per URL. Splitting the budget bounds what any such blackholing listener can cost
+    without shortening a *slow but working* fetch: read/write/pool stay at `_LIVE_TIMEOUT_S`, so
+    nothing that passes today starts failing.
+
+    **5.0s, not 3.0s, deliberately.** Every real host connects ~125x inside this budget
+    (measured 2026-08-01: `www.ogd.stadt-zuerich.ch` 0.019s TCP / 0.038s TLS,
+    `www.stadt-zuerich.ch` 0.013s / 0.032s — the Belegungsplan PDFs are on that same host —
+    and `www.bad-altstetten.ch` 0.020s). But a schedule-page connect failure is **fatal** to
+    the atomic build, so the budget must never be the thing that breaks it: the margin is sized
+    for a bad network minute, not for the measured best case.
+
+    A named factory rather than an inline `httpx.Timeout(...)` because the client itself is
+    built under `# pragma: no cover - live`, where a budget that silently reverted to the flat
+    30s would keep the suite green (the same lesson as `live_transport`).
+    """
+    return httpx.Timeout(_LIVE_TIMEOUT_S, connect=_LIVE_CONNECT_TIMEOUT_S)
 
 
 @dataclass(frozen=True, slots=True)
@@ -650,7 +675,7 @@ def _dispatch_live(args: argparse.Namespace, *, now: datetime) -> int:
     # `follow_redirects`: some pool pages (e.g. bad-altstetten.ch) redirect http→https, and the
     # atomic `build` scrapes those pages too.
     with httpx.Client(  # pragma: no cover - live (the real network)
-        timeout=_LIVE_TIMEOUT_S, follow_redirects=True, transport=transport
+        timeout=live_timeout(), follow_redirects=True, transport=transport
     ) as inner:
         live = ProviderClients.over(inner, timeout_s=_LIVE_TIMEOUT_S)
         return _dispatch(args, clients=live, now=now)

@@ -1,6 +1,6 @@
 ---
 type: plan
-status: in-progress      # draft -> approved -> in-progress -> done
+status: done             # draft -> approved -> in-progress -> done
 created: 2026-08-01
 feature: roster-url-scheme-normalization
 branch: plan/roster-url-scheme-normalization
@@ -173,6 +173,7 @@ Appended by /dev:implement after each slice — never rewritten. Newest row last
 |------|-------|--------|----------------------|-------------------|---------------|
 | 2026-08-01 | S1 | done | `_normalize_roster_url` also returns `raw` unchanged when `urlsplit`/`.hostname` raises `ValueError` (malformed URL) — unnamed in the plan, but `www` is untrusted upstream text and `parse_pools` maps only `JSONDecodeError`/`ValidationError`, so a raw `ValueError` would escape the provider boundary and break errors-as-values | none | yes |
 | 2026-08-01 | S2 | done | touched `tests/providers/wfs_snapshot.py` (outside the stated Touches) — its docstring told the reader to reconstruct fixture `www` values from `data/catalog.json`, which after this regeneration would inject the repaired `http` form into the fixtures and **silently dissolve the end-to-end pinning**; docstring-only caveat, no behaviour change | none | yes |
+| 2026-08-01 | S3 | done | none | the `timeout_s=_LIVE_TIMEOUT_S` label now under-reports: `httpx.ConnectTimeout` is a `TimeoutException`, so a connect failure at 5.0s is still described as `"timeout after 30.0s"`. Accurate for reads, wide for connects — a follow-up should distinguish `ConnectTimeout` or carry the connect budget into the label | yes |
 
 ## Decisions & divergences
 
@@ -253,5 +254,39 @@ Appended by /dev:implement after each slice — never rewritten. Newest row last
 
 ## Summary
 
-Written when the plan reaches `done`; then distilled into
-`docs/summaries/roster-url-scheme-normalization.md` (what EXISTS now, not what was intended).
+All three slices shipped. `www.sportamt.ch` has **no TLS listener** — it accepts TCP on 443 and then
+sends nothing (ClientHello written, 0 bytes read, clean EOF at ~5.1s), confirmed across every TLS
+version, ±SNI, ±ALPN, by-IP, under both LibreSSL and OpenSSL, and independently by SSL Labs reporting
+no protocols and no cert chain. Port 80 is healthy and 302s to the real stadt-zuerich page. The city's
+own WFS roster publishes the `https` form for 16 pools (17 carry a sportamt URL; `seebad-katzensee`
+was already `http`), so page discovery failed for all 16 at ~15.9s each — **~4 minutes of dead wait
+per build** that the disk cache cannot amortize, since failed fetches are deliberately not cached.
+
+`_normalize_roster_url` now repairs `https` → `http` at the WFS boundary for an **exact** host match,
+letting the existing `follow_redirects=True` reach the real pages; `data/catalog.json` was regenerated
+through it; and `live_timeout()` bounds any future blackholing host at a 5.0s connect budget instead
+of 30s. **15 of the 16 recover** — `freibad-zwischen-den-hoelzern` carries a stale WFS slug whose
+redirect target 404s, which remains a fast non-retriable, non-fatal miss (fixing it means overriding
+a WFS-sourced value: a different decision).
+
+The durable lessons, in order of how easily each could have shipped broken:
+
+1. **The roster `url` had zero test coverage.** The golden test projected it away and the API test
+   asserted only non-nullness, so this repair — or any future corruption of the field — would have
+   shipped green through the entire QA chain. S2 closed that.
+2. **The fixture asymmetry IS the pinning.** The WFS fixtures keep the raw `https` form while the
+   snapshot holds the repaired `http` form, so the golden test passes *only because the provider
+   normalizes*. A future contributor "fixing" the fixtures to match would silently dissolve it —
+   hence the caveat in `wfs_snapshot.py`.
+3. **An exact host match, never a substring.** `sportamt.ch.example.com` and `notsportamt.ch` must not
+   be rewritten; a substring match would have been security-adjacent.
+4. **Assert the seam, not the client.** `live_timeout()` exists as a factory precisely because the
+   live client sits under `# pragma: no cover - live` — the same trap that made a `--refresh` flag a
+   silent no-op in [[provider-http-disk-cache]].
+
+**Unverified**: no live `swimzh build` has been run against the repaired URLs. The evidence that 15
+recover is direct `curl`, not the pipeline. Carried debt: the `Timeout(after_s=…)` label still reports
+30.0s for a connect failure now bounded at 5.0s; `apps/web/main.py` still builds its own client on a
+flat timeout and should reuse `live_timeout()`.
+
+Distilled into [[roster-url-scheme-normalization]].
