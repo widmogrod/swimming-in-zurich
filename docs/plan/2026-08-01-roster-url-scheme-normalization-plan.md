@@ -284,8 +284,14 @@ The durable lessons, in order of how easily each could have shipped broken:
    live client sits under `# pragma: no cover - live` — the same trap that made a `--refresh` flag a
    silent no-op in [[provider-http-disk-cache]].
 
-**Unverified**: no live `swimzh build` has been run against the repaired URLs. The evidence that 15
-recover is direct `curl`, not the pipeline. Carried debt: the `Timeout(after_s=…)` label still reports
+**Verified end-to-end 2026-08-01** (live `swimzh build` in the plan worktree): `page discovery failed`
+dropped **16 → 1**, and the single survivor is exactly the predicted one —
+`freibad-zwischen-den-hoelzern <- http://www.sportamt.ch/freibad-zwischen-hoelzern: HTTP 404` — a
+fast, non-retried, non-fatal miss. Build exit 0, 57 facilities, 11.3s wall (10% CPU). The disk cache
+now holds **16 sportamt entries** where it previously held none, since those pages had never once
+been fetched successfully. Caveat on the 11.3s: that run was warm for the stadt-zuerich pages, so the
+clean attribution is the failure count and the ~4 minutes of TLS dead-wait that no longer happens —
+a true cold comparison would need `--refresh`. Carried debt: the `Timeout(after_s=…)` label still reports
 30.0s for a connect failure now bounded at 5.0s; `apps/web/main.py` still builds its own client on a
 flat timeout and should reuse `live_timeout()`.
 

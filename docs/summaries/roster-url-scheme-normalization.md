@@ -31,9 +31,15 @@ for all 16 at **~15.9s each** (5.1s EOF × 3 attempts, since `ConnectionFailed` 
 - **`cli.py`** — `live_timeout() -> httpx.Timeout` with `connect=5.0` and read/write/pool at 30.0.
 - **The roster `url` is under test for the first time** — the golden roster test now compares it.
 
-**Result: 15 of the 16 recover.** `freibad-zwischen-den-hoelzern` carries a stale WFS slug whose
-redirect target 404s; it stays a fast, non-retriable, non-fatal miss. Fixing that means overriding a
-WFS-sourced value — a different decision, deliberately not taken here.
+**Result: 15 of the 16 recover — verified by a live build**, not just by `curl`. `page discovery
+failed` went **16 → 1**, and the survivor is exactly the predicted one:
+`freibad-zwischen-den-hoelzern <- http://www.sportamt.ch/freibad-zwischen-hoelzern: HTTP 404`, a
+stale WFS slug whose redirect target 404s — a fast, non-retried, non-fatal miss. Build exit 0, 57
+facilities, 11.3s wall. The disk cache now holds **16 sportamt entries** where it previously held
+none, since those pages had never once been fetched successfully. (The 11.3s was warm for the
+stadt-zuerich pages; the clean attribution is the failure count and the ~4 minutes of TLS dead-wait
+that no longer happens.) Fixing the slug means overriding a WFS-sourced value — a different decision,
+deliberately not taken here.
 
 ## The four things worth remembering
 
@@ -69,8 +75,9 @@ downstream can report what the city actually published; `data/sources.md` carrie
 
 ## Boundaries and carried debt
 
-- **Unverified**: no live `swimzh build` has run against the repaired URLs. The evidence that 15
-  recover is direct `curl`, not the pipeline.
+- No **cold** (`--refresh`) build has been measured against the repaired URLs, so the wall-clock
+  saving is attributed from the failure count and the eliminated TLS dead-wait, not from a
+  like-for-like cold comparison.
 - The `Timeout(after_s=…)` label still reports 30.0s for a connect failure now bounded at 5.0s
   (`httpx.ConnectTimeout` is a `TimeoutException`). Accurate for reads, wide for connects.
 - `apps/web/main.py` still builds its own live client on a flat timeout — the obvious `live_timeout()`
