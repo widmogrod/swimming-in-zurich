@@ -1,8 +1,11 @@
 ---
 type: plan
-status: approved         # draft -> approved -> in-progress -> done
+status: in-progress      # draft -> approved -> in-progress -> done
 created: 2026-08-01
 feature: roster-url-scheme-normalization
+branch: plan/roster-url-scheme-normalization
+worktree: .claude/worktrees/plan-roster-url-scheme-normalization
+base_branch: feat/new-ui
 gates:
   qa: full               # ruff, ruff format, mypy strict, pytest+coverage, crap.py
   review: adversarial    # critic must find no blocking issues per slice
