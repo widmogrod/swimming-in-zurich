@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
+from urllib.parse import urlsplit, urlunsplit
 
 from pydantic import ValidationError
 
@@ -84,6 +85,31 @@ def _clean(text: str | None) -> str | None:
     return cleaned or None
 
 
+# The WFS publishes `https://www.sportamt.ch/<slug>` for 17 of the 19 outdoor/river/lake pools,
+# but that host has NO TLS listener: it accepts TCP on 443 and then sends nothing (clean EOF at
+# ~5.1s — verified 2026-08-01 across TLS 1.0-1.3, ±SNI, ±ALPN, by-IP, and independently by SSL
+# Labs). Port 80 is healthy and 302s to the real `www.stadt-zuerich.ch/<slug>` page, so we repair
+# the SCHEME on the way in and let `follow_redirects` traverse the city's own live slug mapping.
+# Rewriting the HOST instead would hardcode a copy of that mapping behind a user-visible
+# "Official" link. Targeted repair of one known-broken host — NOT a general scheme policy.
+_BROKEN_TLS_HOSTS = frozenset({"sportamt.ch", "www.sportamt.ch"})
+
+
+def _normalize_roster_url(raw: str | None) -> str | None:
+    """Repair the scheme of a roster URL on the known-broken host; every other URL is returned
+    byte-identical (an unparseable value included)."""
+    if raw is None:
+        return None
+    try:
+        parts = urlsplit(raw)
+        host = parts.hostname
+    except ValueError:
+        return raw
+    if parts.scheme != "https" or host is None or host.lower() not in _BROKEN_TLS_HOSTS:
+        return raw
+    return urlunsplit(("http", parts.netloc, parts.path, parts.query, parts.fragment))
+
+
 def _to_geo_pool(feature: FeatureDTO, kind: PoolKind) -> GeoPool:
     lon, lat = feature.geometry.coordinates[0], feature.geometry.coordinates[1]
     name = feature.properties.name
@@ -96,7 +122,7 @@ def _to_geo_pool(feature: FeatureDTO, kind: PoolKind) -> GeoPool:
         kind=kind,
         address=_address(feature),
         geo=GeoPoint(lat=lat, lon=lon),
-        url=feature.properties.www,
+        url=_normalize_roster_url(feature.properties.www),
         category=feature.properties.kategorie,
         description=_clean(feature.properties.infrastruktur),
         phone=feature.properties.tel,

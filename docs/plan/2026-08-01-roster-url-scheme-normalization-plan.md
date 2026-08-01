@@ -170,6 +170,7 @@ Appended by /dev:implement after each slice — never rewritten. Newest row last
 
 | date | slice | status | divergence from plan | tech debt created | human review? |
 |------|-------|--------|----------------------|-------------------|---------------|
+| 2026-08-01 | S1 | done | `_normalize_roster_url` also returns `raw` unchanged when `urlsplit`/`.hostname` raises `ValueError` (malformed URL) — unnamed in the plan, but `www` is untrusted upstream text and `parse_pools` maps only `JSONDecodeError`/`ValidationError`, so a raw `ValueError` would escape the provider boundary and break errors-as-values | none | yes |
 
 ## Decisions & divergences
 
@@ -218,6 +219,21 @@ Appended by /dev:implement after each slice — never rewritten. Newest row last
   date and holds because a discovered link that *fetches and parses* merely lands in the audited
   `UnboundPlan` stream — only a fetch/parse **failure** is fatal (`cli.py:417-423`). That exposure
   already exists for all 37 stadt-zuerich pages and belongs to the lane-discovery scope bug, not here.
+- 2026-08-01 (S1): the host match is **exact, against a frozenset of `urlsplit(...).hostname.lower()`**,
+  never a substring — verified that `sportamt.ch.example.com`, `notsportamt.ch`, `evil-sportamt.ch`,
+  a trailing-dot host and a schemeless URL are all left unchanged, while the apex and
+  `HTTPS://WWW.SportAmt.CH` are repaired. A userinfo form (`https://user@www.sportamt.ch/x`) matches
+  on host only and cannot be spoofed by an `@`-prefixed authority. A substring match here would have
+  been a security-adjacent defect.
+- 2026-08-01 (S1, obligation carried into S2): the committed WFS fixtures hold **16** `https` sportamt
+  entries + 1 already-`http` (`seebad-katzensee`) = 17, and the snapshot test pins that `16` as a
+  literal. S2's regeneration must keep the count consistent or update the assertion. The test's oracle
+  also branches on the `https://www.sportamt.ch/` prefix, so an apex or case-variant entry appearing
+  after regeneration fails **loudly**, not silently.
+- 2026-08-01 (S1, noted — pre-existing, not introduced): `field_sourcing.py`'s `facility.website` row
+  claims the WFS `www` as its source, but that field's only producer was the deleted curated tier;
+  the WFS `www` actually lands on `GeoPool.url` → the `pool.url` column. The row was already
+  inaccurate before this slice. Resolve when `Facility.website` is retired (out of scope here).
 - 2026-08-01: **the raw WFS value is discarded, deliberately.** `GeoPool` gains no
   raw-vs-repaired provenance field — a tri-state would be gold-plating in a plan that otherwise
   repairs one host. The consequence is that nothing downstream can report what the city actually

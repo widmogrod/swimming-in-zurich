@@ -212,7 +212,10 @@ _FACILITY: tuple[FieldSourcing, ...] = (
         ProducerKind.SOURCED,
         _ROSTER,
         "7/7",
-        "WFS `www` / official pool page URL.",
+        "WFS `www`, with the scheme repaired at the provider boundary for the one host that "
+        "publishes an `https` URL it serves no TLS on (`www.sportamt.ch` → `http`, which 302s to "
+        "the real page). So: the WFS link to the official pool page, made reachable — not "
+        "necessarily the URL the city published.",
     ),
     FieldSourcing(
         "facility.features",
