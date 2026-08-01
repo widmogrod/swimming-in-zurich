@@ -27,6 +27,7 @@ import {
   focusWeekOnPool,
   isStructuralUrlChange,
   isUnlisted,
+  rowFacilityName,
   type PoolMeta,
   type PoolOption,
 } from "./appdata.js";
@@ -258,12 +259,17 @@ async function main() {
       // The single Day→Pool continuity affordance: open Pool view on the SAME pool.
       // `selectedPool` is left untouched (it is already the clicked pool), so the week
       // renders for it — plannable or honestly closed/uncurated (plan item 3).
-      onOpenWeek: () => {
-        filter = merge(filter, { mode: "pool" });
-        buildToolbar(); // rebuild so VIEW shows Pool + the date stepper swaps to the pool picker + week stepper
-        render();
-        syncUrl(filter); // Day→Pool on the same pool is a VIEW change → pushState (Back returns)
-      },
+      // ...which is why it is a DAY-view affordance only: in Pool view that week is
+      // already on screen, so the button was a no-op that made the two panels differ.
+      onOpenWeek:
+        filter.mode === "pool"
+          ? null
+          : () => {
+              filter = merge(filter, { mode: "pool" });
+              buildToolbar(); // rebuild so VIEW shows Pool + the date stepper swaps to the pool picker + week stepper
+              render();
+              syncUrl(filter); // Day→Pool on the same pool is a VIEW change → pushState (Back returns)
+            },
     });
     // Align the shared board cursor to the panel's resolved cursor (only the lane
     // panel drives a cursor; the degraded states have none to align). Persist that
@@ -301,19 +307,40 @@ async function main() {
     // either way — `dayRows` — so the two cannot disagree about what a row is.
     const row = board ? board.rows[rowIndex] : phoneRows[rowIndex];
     if (!row) return;
+    // The pool this row is about — the row label in Day view, the SELECTION in Pool view
+    // (whose rows are days, not pools). Every by-name lookup below goes through it, so the
+    // two views' panels are built from the same facility identity.
+    // The row's own facility — options and statuses both carry it, in BOTH views — so a
+    // Pool-view row can name its pool even before /pools backfills the selection's label.
+    const rowFacility =
+      row.options.find((o) => o.facility)?.facility ??
+      row.statuses.find((s) => s.facility)?.facility ??
+      null;
+    const facilityName = rowFacilityName(
+      filter.mode,
+      row.label,
+      filter.selectedPool?.name ?? null,
+      rowFacility,
+    );
+    // The DAY this row is about. In Day view every row is the shown date; in Pool view the
+    // row IS the day, so the `/pools/{id}` day_view must be fetched for IT — otherwise
+    // clicking Wednesday opened the panel on the week anchor's lane plan.
+    const rowDate = row.date || filter.date || today;
     if (row.options.length > 0) {
       const opt = row.options[0];
       // Persist the selection into the SHARED filter BEFORE opening the panel, so it
       // survives re-renders and carries into Pool view (plan item 2).
       const poolId = String(opt.facility_id);
-      filter = merge(filter, { selectedPool: { id: poolId, name: row.label } });
+      filter = merge(filter, {
+        selectedPool: { id: poolId, name: facilityName },
+      });
       // Cursor: an explicit canvas click (min != null) places the cursor; otherwise a
       // pool change resets to best-public (cursorMin=null → the panel picks it) while a
       // same-pool open keeps the persisted cursor for continuity (plan item 8).
       let openAt: number | null = min;
       if (min == null) openAt = cursorPoolId === poolId ? cursorMin : null;
       cursorPoolId = poolId;
-      const detail = await fetchPoolDetail(poolId, filter.date || today);
+      const detail = await fetchPoolDetail(poolId, rowDate);
       const lanePanels = (detail?.lane_panels as LanePanel[]) ?? [];
       const lp = panelForBasin(
         lanePanels,
@@ -329,7 +356,7 @@ async function main() {
         distanceKm: opt.distance_km ?? null,
         basinName: opt.basin ? String(opt.basin) : null,
         accessTypes,
-        officialUrl: poolUrlByName.get(row.label) || null,
+        officialUrl: poolUrlByName.get(facilityName) || null,
       });
       if (fromUser) syncUrl(filter); // clicked pool → shareable URL (pool change → pushState)
       return;
@@ -337,9 +364,9 @@ async function main() {
     // Closed / uncurated row: no option to fetch by, so resolve the facility by name.
     // The selection still persists (an unplannable pool is a legitimate choice — it
     // opens an honest closed/uncurated week in Pool view; plan items 2 + 5).
-    const id = poolIdByName.get(row.label);
+    const id = poolIdByName.get(facilityName);
     filter = merge(filter, {
-      selectedPool: { id: id ?? null, name: row.label },
+      selectedPool: { id: id ?? null, name: facilityName },
     });
     cursorPoolId = id ?? null;
     cursorMin = null;
@@ -351,12 +378,12 @@ async function main() {
       closed ||
       row.statuses.find((s) => isUnlisted(s.status)) ||
       row.statuses[0];
-    const detail = id ? await fetchPoolDetail(id, filter.date || today) : null;
+    const detail = id ? await fetchPoolDetail(id, rowDate) : null;
     openPanel(detail, {
       state,
       reason: st ? closureLabel(st) : null,
       basinName: null,
-      officialUrl: poolUrlByName.get(row.label) || null,
+      officialUrl: poolUrlByName.get(facilityName) || null,
     });
     if (fromUser) syncUrl(filter); // clicked a closed/uncurated pool → still a shareable selection
   }
@@ -396,6 +423,21 @@ async function main() {
   // state and only falls the PANEL back — the selection is never silently cleared.
   async function autoOpenSelectedOrNearest() {
     if (!board) return;
+    // Pool view: the rows are DAYS of the one selected pool, so "the selected row" is the
+    // shown DATE — a pool name matches no row here. Without this the panel opened on the
+    // week's first plannable day, describing a different day than the header names.
+    if (filter.mode === "pool") {
+      const day = board.rows.findIndex(
+        (r) => r.date === (filter.date || today),
+      );
+      const idx =
+        day >= 0
+          ? day
+          : board.rows.findIndex((r) => r.options && r.options.length > 0);
+      if (idx < 0) return;
+      await onRowClick(idx, null, { fromUser: false });
+      return;
+    }
     if (filter.selectedPool && filter.selectedPool.name) {
       const sel = board.rows.findIndex(
         (r) => r.label === filter.selectedPool?.name,

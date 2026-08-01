@@ -6,6 +6,7 @@ import {
   classifyPools,
   focusWeekOnPool,
   isStructuralUrlChange,
+  rowFacilityName,
   type PoolMeta,
 } from "./appdata.js";
 
@@ -227,4 +228,48 @@ test("a plain filter toggle is NOT structural (no history spam)", () => {
 
 test("an absent mode is treated as day, not as a distinct view", () => {
   expect(isStructuralUrlChange({}, { mode: "day" })).toBe(false);
+});
+
+// --- rowFacilityName: the ONE row→pool identity both views' panels are built from ------
+
+test("a Day-view row IS a pool, so the row label names the facility", () => {
+  expect(rowFacilityName("day", "Hallenbad City", null)).toBe("Hallenbad City");
+  // even when another pool happens to be selected — the CLICKED row wins in Day view
+  expect(rowFacilityName("day", "Hallenbad City", "Hallenbad Oerlikon")).toBe(
+    "Hallenbad City",
+  );
+});
+
+test("a Pool-view row is a DAY, so the facility is the selection, not the label", () => {
+  expect(rowFacilityName("pool", "Mon · 20 Jul", "Hallenbad City")).toBe(
+    "Hallenbad City",
+  );
+});
+
+test("a URL-restored pool takes its name from the ROW, never from a weekday label", () => {
+  // `?view=pool&pool=<id>` arrives with an id and no name; /pools backfills the name only
+  // AFTER the first render's auto-open. Before this, the weekday label was written into
+  // `selectedPool.name` — and since backfillPoolName skips a filter that already has a
+  // name, the weekday stuck and every later render filtered the week down to nothing.
+  expect(
+    rowFacilityName("pool", "pon. \u00b7 3 sie", null, "Hallenbad Altstetten"),
+  ).toBe("Hallenbad Altstetten");
+  // An explicit selection still wins over the row's facility.
+  expect(
+    rowFacilityName(
+      "pool",
+      "pon. \u00b7 3 sie",
+      "Hallenbad City",
+      "Hallenbad Altstetten",
+    ),
+  ).toBe("Hallenbad City");
+});
+
+test("Pool view with no selection falls back to the row label, never null", () => {
+  expect(rowFacilityName("pool", "Hallenbad City", null)).toBe(
+    "Hallenbad City",
+  );
+  expect(rowFacilityName(undefined, "Hallenbad City", null)).toBe(
+    "Hallenbad City",
+  );
 });

@@ -33,6 +33,35 @@ export function unlistedLabelKey(
   return (status && UNLISTED_STATUS_LABEL[status]) || "status.uncurated";
 }
 
+/** The FACILITY a clicked board row belongs to.
+ *
+ *  The two modes label rows differently: in Day view a row IS a pool, so the row label is
+ *  the facility name; in Pool view the rows are the seven DAYS of the ONE selected pool,
+ *  so the row label is a date ("Mon · 20 Jul") and the facility is the selection. Reading
+ *  the row label in both modes is why the Pool-view panel lost its official-page link and
+ *  its facts (a date is in no pool→url / pool→id map) and why a Pool-view row click
+ *  overwrote `selectedPool.name` with a date, emptying the next week render.
+ *
+ *  Falls back to the ROW'S OWN facility (its options/statuses carry it in both views) and
+ *  only then to the row label, so a caller always gets a name rather than null.
+ *
+ *  That middle step is load-bearing. A URL-restored `?view=pool&pool=<id>` arrives with an
+ *  id and NO name (the name is backfilled from /pools, which resolves AFTER the first
+ *  render's auto-open). Falling straight through to the row label then wrote a WEEKDAY
+ *  into `selectedPool.name` — and because `backfillPoolName` skips a filter that already
+ *  has a name, the weekday stuck permanently. Every later render filtered the week to
+ *  options whose facility equalled "Monday", i.e. none: the pool rendered on first paint
+ *  and went empty on the next re-render. */
+export function rowFacilityName(
+  mode: string | null | undefined,
+  rowLabel: string,
+  selectedName: string | null | undefined,
+  rowFacility?: string | null,
+): string {
+  if (mode === "pool") return selectedName || rowFacility || rowLabel;
+  return rowLabel;
+}
+
 /** A `/pools` PoolOut row, read structurally. */
 export interface PoolMeta {
   pool_id: string;
