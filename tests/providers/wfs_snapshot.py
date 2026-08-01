@@ -8,6 +8,14 @@ catalog entry: name→`name`, address→`strasse`, description→`infrastruktur`
 phone→`tel`, geo→coordinates). Feeding these back through `geo_sport.fetch_all_pools` +
 `build_catalog` reproduces the committed catalog EXACTLY — the round-trip the golden test pins.
 
+**CAVEAT — do NOT re-derive `www` from `data/catalog.json`.** That round-trip is no longer
+symmetric: the snapshot holds the **repaired** url (`_normalize_roster_url` rewrites the dead-TLS
+`www.sportamt.ch` host `https`→`http` at the provider boundary), so reconstructing `www` from it
+would bake the repaired `http` form into the fixtures. These fixtures must keep the WFS's **raw**
+`https` values — that asymmetry IS the end-to-end pinning: with raw `https` in, the golden test
+fails the moment the normalizer is weakened; with `http` in, it would pass even if the normalizer
+were deleted.
+
 `recorded_wfs_client()` serves those fixtures via `httpx.MockTransport` (the project's
 established no-network adapter double, see `tests/providers/test_geo_sport.py`), keyed on the
 `TYPENAME` query param. `unreachable_wfs_client()` raises `httpx.ConnectError` for the

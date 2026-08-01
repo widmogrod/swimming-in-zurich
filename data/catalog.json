@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-07-19T00:11:28.832582+02:00",
+  "generated_at": "2026-08-01T14:13:11.989459+02:00",
   "count": 57,
   "entries": [
     {
@@ -86,7 +86,7 @@
       "address": "Edelweissstrasse 5, 8048 Zürich",
       "lat": 47.38025,
       "lon": 8.501339,
-      "url": "https://www.sportamt.ch/freibad-letzigraben",
+      "url": "http://www.sportamt.ch/freibad-letzigraben",
       "description": "NULL",
       "phone": "+41 44 413 57 00"
     },
@@ -97,7 +97,7 @@
       "address": "8102 Oberengstringen",
       "lat": 47.409527,
       "lon": 8.473779,
-      "url": "https://www.sportamt.ch/freibad-zwischen-hoelzern",
+      "url": "http://www.sportamt.ch/freibad-zwischen-hoelzern",
       "description": "NULL",
       "phone": "+41 44 413 57 70"
     },
@@ -108,7 +108,7 @@
       "address": "Luegislandstrasse 160, 8051 Zürich",
       "lat": 47.408675,
       "lon": 8.571325,
-      "url": "https://www.sportamt.ch/freibad-auhof",
+      "url": "http://www.sportamt.ch/freibad-auhof",
       "description": "NULL",
       "phone": "+41 44 413 57 40"
     },
@@ -119,7 +119,7 @@
       "address": "Ringstrasse 79, 8057 Zürich",
       "lat": 47.405524,
       "lon": 8.539021,
-      "url": "https://www.sportamt.ch/freibad-allenmoos",
+      "url": "http://www.sportamt.ch/freibad-allenmoos",
       "description": "NULL",
       "phone": "+41 44 413 57 30"
     },
@@ -141,7 +141,7 @@
       "address": "8055 Zürich",
       "lat": 47.36711,
       "lon": 8.505062,
-      "url": "https://www.sportamt.ch/freibad-heuried",
+      "url": "http://www.sportamt.ch/freibad-heuried",
       "description": "NULL",
       "phone": "+41 44 413 95 30"
     },
@@ -152,7 +152,7 @@
       "address": "Glatttalstrasse 43, 8052 Zürich",
       "lat": 47.423588,
       "lon": 8.548248,
-      "url": "https://www.sportamt.ch/freibad-seebach",
+      "url": "http://www.sportamt.ch/freibad-seebach",
       "description": "NULL",
       "phone": "+41 44 413 57 50"
     },
@@ -163,7 +163,7 @@
       "address": "Wasserwerkstrasse 131, 8037 Zürich",
       "lat": 47.389312,
       "lon": 8.529852,
-      "url": "https://www.sportamt.ch/flussbad-unterer-letten",
+      "url": "http://www.sportamt.ch/flussbad-unterer-letten",
       "description": "NULL",
       "phone": "+41 44 413 58 90"
     },
@@ -174,7 +174,7 @@
       "address": "Werdinsel 2, 8049 Zürich",
       "lat": 47.399169,
       "lon": 8.489277,
-      "url": "https://www.sportamt.ch/flussbad-au-hoengg",
+      "url": "http://www.sportamt.ch/flussbad-au-hoengg",
       "description": "NULL",
       "phone": "+41 44 413 58 60"
     },
@@ -185,7 +185,7 @@
       "address": "Wasserwerkstrasse 131, 8037 Zürich",
       "lat": 47.389312,
       "lon": 8.529852,
-      "url": "https://www.sportamt.ch/flussbad-unterer-letten",
+      "url": "http://www.sportamt.ch/flussbad-unterer-letten",
       "description": "NULL",
       "phone": "+41 44 413 58 90"
     },
@@ -196,7 +196,7 @@
       "address": "8001 Zürich",
       "lat": 47.371269,
       "lon": 8.532594,
-      "url": "https://www.sportamt.ch/maennerbad",
+      "url": "http://www.sportamt.ch/maennerbad",
       "description": "NULL",
       "phone": "+41 44 211 95 94"
     },
@@ -207,7 +207,7 @@
       "address": "Lettensteg 10, 8037 Zürich",
       "lat": 47.38569,
       "lon": 8.534268,
-      "url": "https://www.sportamt.ch/flussbad-oberer-letten",
+      "url": "http://www.sportamt.ch/flussbad-oberer-letten",
       "description": "NULL",
       "phone": "+41 44 413 58 80"
     },
@@ -218,7 +218,7 @@
       "address": "Stadthausquai 12, 8001 Zürich",
       "lat": 47.368463,
       "lon": 8.54199,
-      "url": "https://www.sportamt.ch/frauenbad",
+      "url": "http://www.sportamt.ch/frauenbad",
       "description": "NULL",
       "phone": "+41 44 413 58 70"
     },
@@ -229,7 +229,7 @@
       "address": "Bellerivestrasse 200, 8008 Zürich",
       "lat": 47.352401,
       "lon": 8.557555,
-      "url": "https://www.sportamt.ch/strandbad-tiefenbrunnen",
+      "url": "http://www.sportamt.ch/strandbad-tiefenbrunnen",
       "description": "Nichtschwimmerbereich im See, Kinderplanschbecken, Sprungplattform 1/3/5 m, 3 Flosse, Super-See-Rutschbahn 62m, Volleyballnetz",
       "phone": "+41 44 413 58 00"
     },
@@ -262,7 +262,7 @@
       "address": "Seestrasse 451, 8038 Zürich",
       "lat": 47.340955,
       "lon": 8.537319,
-      "url": "https://www.sportamt.ch/strandbad-wollishofen",
+      "url": "http://www.sportamt.ch/strandbad-wollishofen",
       "description": "Nichtschwimmerbereich im See mit Blasio Spielgeräten, Sprungplattform 1/3m, 2 Flosse",
       "phone": "+41 44 413 58 10"
     },
@@ -273,7 +273,7 @@
       "address": "Utoquai 50, 8008 Zürich",
       "lat": 47.361784,
       "lon": 8.5472,
-      "url": "https://www.sportamt.ch/seebad-utoquai",
+      "url": "http://www.sportamt.ch/seebad-utoquai",
       "description": "NULL",
       "phone": "+41 44 413 58 20"
     },
@@ -284,7 +284,7 @@
       "address": "Mythenquai 95, 8002 Zürich",
       "lat": 47.354951,
       "lon": 8.534629,
-      "url": "https://www.sportamt.ch/strandbad-mythenquai",
+      "url": "http://www.sportamt.ch/strandbad-mythenquai",
       "description": "Sandstrand, grosszügiger und moderner Kinderbereich mit Wasserspielen",
       "phone": "+41 44 413 58 30"
     },

@@ -1,8 +1,12 @@
 """S3 golden: the WFS-sourced roster (and the spine built from it) reproduces the committed
-catalog on the identity + geo fields.
+catalog on the identity + geo + url fields.
 
-`data/catalog.json` IS a WFS snapshot, so a cassette-built roster MUST match it. The happy path
-replays a VCR cassette (the reconstructed WFS layers); the WFS-down path uses `MockTransport`.
+`data/catalog.json` IS a WFS snapshot as the provider emits it — a **repaired** one: the roster
+`url` passes through `_normalize_roster_url`, which rewrites the dead-TLS `www.sportamt.ch` host
+from `https` to `http` (see `providers/geo_sport.py`). So the snapshot is not byte-for-byte what
+the WFS published; it is what the provider boundary yields, which is exactly what a cassette-built
+roster MUST match. The happy path replays a VCR cassette (the reconstructed WFS layers); the
+WFS-down path uses `MockTransport`.
 """
 
 from __future__ import annotations
@@ -32,6 +36,7 @@ def _committed_catalog() -> dict[str, tuple[object, ...]]:
             e.kind,
             e.geo.lat if e.geo else None,
             e.geo.lon if e.geo else None,
+            e.url,
         )
         for e in entries
     }
@@ -52,12 +57,21 @@ def test_roster_spine_matches_committed_catalog(tmp_path: Path) -> None:
             e.kind,
             e.geo.lat if e.geo else None,
             e.geo.lon if e.geo else None,
+            e.url,
         )
         for e in roster
     }
     committed = _committed_catalog()
-    # The full ~57-pool roster matches the committed catalog on pool_id, name, kind, lat, lon.
+    # The full ~57-pool roster matches the committed catalog on pool_id, name, kind, lat, lon, url.
     assert provider == committed
+
+    # `url` is in that comparison because it is user-visible (the "Official" chip) and was
+    # previously projected away — a rewrite of every roster URL would have shipped green. It also
+    # pins the sportamt repair end-to-end: the cassette carries the WFS's `https` form, so these
+    # entries only match the snapshot because the provider normalized them.
+    sportamt = [e.url for e in roster if "sportamt.ch" in (e.url or "")]
+    assert len(sportamt) == 17, sportamt
+    assert all(u is not None and u.startswith("http://") for u in sportamt), sportamt
 
     # …and the spine built from that provider roster carries the same geo onto every pool row.
     assert isinstance(build_store(DATA_DIR, tmp_path / "gold.sqlite", roster), Ok)
@@ -65,7 +79,7 @@ def test_roster_spine_matches_committed_catalog(tmp_path: Path) -> None:
     rows = conn.execute("SELECT id, name, lat, lon FROM pool").fetchall()
     assert len(rows) == 57
     spine = {r[0]: (r[1], r[2], r[3]) for r in rows}
-    for pool_id, (name, _kind, lat, lon) in committed.items():
+    for pool_id, (name, _kind, lat, lon, _url) in committed.items():
         assert spine[pool_id] == (name, lat, lon), pool_id
 
 

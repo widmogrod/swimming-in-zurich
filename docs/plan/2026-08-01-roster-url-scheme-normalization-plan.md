@@ -18,7 +18,8 @@ links: ["[[discovery-driven-providers]]", "[[data-layer-architecture]]", "[[sour
 
 ## Context
 
-The city's WFS roster publishes `url: https://www.sportamt.ch/<pool>` for **17 of 57** pools — 17 of
+The city's WFS roster carries a `www.sportamt.ch` URL for **17 of 57** pools — 16 on `https`, plus
+`seebad-katzensee` already on `http` (untouched by this repair). Those 17 are 17 of
 the 19 outdoor/lake/river ones (the other two, `freibad-dolder` and `seebad-enge`, are third-party
 hosts). That host **has no TLS listener**: it accepts TCP on 443 and then sends nothing (ClientHello
 written, 0 bytes read, clean EOF at ~5.1s). Verified 2026-08-01 across TLS 1.0–1.3, ±SNI, ±ALPN,
@@ -171,6 +172,7 @@ Appended by /dev:implement after each slice — never rewritten. Newest row last
 | date | slice | status | divergence from plan | tech debt created | human review? |
 |------|-------|--------|----------------------|-------------------|---------------|
 | 2026-08-01 | S1 | done | `_normalize_roster_url` also returns `raw` unchanged when `urlsplit`/`.hostname` raises `ValueError` (malformed URL) — unnamed in the plan, but `www` is untrusted upstream text and `parse_pools` maps only `JSONDecodeError`/`ValidationError`, so a raw `ValueError` would escape the provider boundary and break errors-as-values | none | yes |
+| 2026-08-01 | S2 | done | touched `tests/providers/wfs_snapshot.py` (outside the stated Touches) — its docstring told the reader to reconstruct fixture `www` values from `data/catalog.json`, which after this regeneration would inject the repaired `http` form into the fixtures and **silently dissolve the end-to-end pinning**; docstring-only caveat, no behaviour change | none | yes |
 
 ## Decisions & divergences
 
@@ -219,6 +221,16 @@ Appended by /dev:implement after each slice — never rewritten. Newest row last
   date and holds because a discovered link that *fetches and parses* merely lands in the audited
   `UnboundPlan` stream — only a fetch/parse **failure** is fatal (`cli.py:417-423`). That exposure
   already exists for all 37 stadt-zuerich pages and belongs to the lane-discovery scope bug, not here.
+- 2026-08-01 (S2): **the fixture asymmetry IS the pinning.** The WFS fixtures/cassette keep the raw
+  `https` form while `data/catalog.json` now holds the repaired `http` form, so the golden roster test
+  passes *only because the provider normalizes* — verified by mutation: neutering
+  `_normalize_roster_url` fails it with 16 differing entries, and flipping one committed url back to
+  `https` fails it too (so the sportamt assertion is not tautological — `provider == committed` is a
+  full dict equality including `url`, and runs first). The separate sportamt block earns its place by
+  catching the one case equality cannot: a **coordinated** regression where the normalizer is removed
+  *and* the snapshot regenerated from the broken provider. Consequence recorded in
+  `wfs_snapshot.py`'s docstring: fixture `www` values must never be re-derived from the repaired
+  snapshot, or the pinning silently dissolves.
 - 2026-08-01 (S1): the host match is **exact, against a frozenset of `urlsplit(...).hostname.lower()`**,
   never a substring — verified that `sportamt.ch.example.com`, `notsportamt.ch`, `evil-sportamt.ch`,
   a trailing-dot host and a schemeless URL are all left unchanged, while the apex and
