@@ -205,3 +205,52 @@ def test_the_qualifier_is_only_honoured_on_a_row_that_resolves_to_sunday() -> No
     result = parse_schedule(_row_page("Mittwoch (und Feiertage)"))
     assert isinstance(result, Ok)
     assert result.value.holiday_policy is None
+
+
+# --- table selection: by heading, not by position -------------------------------------
+#
+# bad-altstetten.ch ships two structurally identical footer tables, "Öffnungszeiten
+# Hallenbad" and "Öffnungszeiten Sauna". Taking the first that parsed made the right answer
+# depend on DOM order in a widget nobody promised us -- a reorder would have served sauna
+# hours as pool hours with no ParseError to notice.
+
+_SAUNA_TABLE = (
+    "<h2>Öffnungszeiten Sauna</h2><table><tr><td>Mo</td><td>09:00 – 22:00</td></tr></table>"
+)
+_POOL_TABLE = (
+    "<h2>Öffnungszeiten Hallenbad</h2><table><tr><td>Mo</td><td>06:00 – 21:00</td></tr></table>"
+)
+_UNLABELLED_TABLE = "<table><tr><td>Mo</td><td>07:00 – 19:00</td></tr></table>"
+
+
+def _only_range(page: str) -> tuple[time, time] | None:
+    result = parse_schedule(page)
+    if not isinstance(result, Ok):
+        return None
+    (rule,) = result.value.rules
+    return rule.time.start, rule.time.end
+
+
+def test_the_pool_table_wins_whatever_the_document_order() -> None:
+    assert _only_range(_SAUNA_TABLE + _POOL_TABLE) == (time(6, 0), time(21, 0))
+    assert _only_range(_POOL_TABLE + _SAUNA_TABLE) == (time(6, 0), time(21, 0))
+
+
+def test_an_unlabelled_table_is_still_used() -> None:
+    # The overwhelmingly common case: one table, no heading worth reading. Unchanged.
+    assert _only_range(_UNLABELLED_TABLE) == (time(7, 0), time(19, 0))
+    assert _only_range(_UNLABELLED_TABLE + _SAUNA_TABLE) == (time(7, 0), time(19, 0))
+
+
+def test_a_sauna_only_page_refuses_rather_than_serving_sauna_hours() -> None:
+    # Under the fail-fast contract a ParseError is a loud build abort; serving 09:00-22:00 as
+    # the pool's hours would be a plausible wrong number nobody would ever notice.
+    assert isinstance(parse_schedule(_SAUNA_TABLE), Err)
+
+
+def test_a_combined_heading_still_counts_as_the_pool() -> None:
+    combined = (
+        "<h2>Öffnungszeiten Hallenbad und Sauna</h2>"
+        "<table><tr><td>Mo</td><td>05:00 – 20:00</td></tr></table>"
+    )
+    assert _only_range(combined) == (time(5, 0), time(20, 0))

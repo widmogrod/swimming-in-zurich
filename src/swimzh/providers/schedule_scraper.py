@@ -210,15 +210,63 @@ def _text(cell_html: str) -> str:
     return re.sub(r"\s+", " ", re.sub(r"<[^>]+>", " ", cell_html)).strip()
 
 
+#: How much text before a `<table>` to read as its heading. The operators put the heading in
+#: the immediately preceding element, so a short window is both sufficient and safer than a
+#: long one (which would reach back into the previous section's heading).
+_HEADING_WINDOW = 400
+
+#: Headings that name the pool itself. Checked FIRST, so a combined heading ("Hallenbad und
+#: Sauna") is still read as the pool's. None of these is a substring of a non-pool word —
+#: "dampfbad" contains "bad", which is exactly why bare "bad" is not on this list.
+_POOL_HEADINGS = ("hallenbad", "schwimmbad", "freibad", "schwimm", "becken", "badi")
+#: Headings that mark a table as some OTHER facility's hours, when no pool word is present.
+_NOT_POOL_HEADINGS = ("sauna", "wellness", "dampfbad", "fitness", "solarium", "restaurant")
+
+#: Ranked table classes. `_NOT_POOL` is not merely deprioritised — it is never served: a
+#: table headed "Sauna" is not this pool's timetable under any ordering, and under the
+#: fail-fast contract a `ParseError` (a loud build abort) beats a plausible wrong number.
+_POOL_TABLE, _UNLABELLED_TABLE, _NOT_POOL_TABLE = 0, 1, 2
+
+
+def _table_priority(preceding_html: str) -> int:
+    """Rank a table by what its heading calls it.
+
+    bad-altstetten.ch ships two structurally IDENTICAL footer tables — "Öffnungszeiten
+    Hallenbad" then "Öffnungszeiten Sauna". Taking the first one that parsed meant the correct
+    answer depended on DOM order in a footer widget nobody promised us; a reordering would have
+    served sauna hours as pool hours silently, with no `ParseError` to notice.
+    """
+    heading = _text(preceding_html[-_HEADING_WINDOW:]).casefold()
+    if any(word in heading for word in _POOL_HEADINGS):
+        return _POOL_TABLE
+    if any(word in heading for word in _NOT_POOL_HEADINGS):
+        return _NOT_POOL_TABLE
+    return _UNLABELLED_TABLE
+
+
 def _parse_html_table(decoded_html: str) -> Result[ScrapedSchedule, ProviderError]:
-    for table in _TABLE_RE.findall(decoded_html):
-        rows = [[_text(td) for td in _TD_RE.findall(tr)] for tr in _TR_RE.findall(table)]
+    candidates: list[tuple[int, int, list[list[str]]]] = []
+    previous_end = 0
+    for order, match in enumerate(_TABLE_RE.finditer(decoded_html)):
+        rows = [[_text(td) for td in _TD_RE.findall(tr)] for tr in _TR_RE.findall(match.group(1))]
         # A schedule table: the day cell resolves AND a later cell holds a time range.
         hours_rows = [
             r for r in rows if len(r) >= 2 and _parse_days(r[0]) and _TIME_RE.search(r[1])
         ]
+        # A table's heading is the text since the PREVIOUS table ended — never further back.
+        # An unbounded window reaches over the previous table into ITS heading, so with the
+        # sauna table first both tables scored "sauna" and document order decided again.
+        heading_region = decoded_html[previous_end : match.start()]
+        previous_end = match.end()
+        priority = _table_priority(heading_region)
+        if hours_rows and priority != _NOT_POOL_TABLE:
+            candidates.append((priority, order, hours_rows))
+
+    # Best-labelled table wins; document order only breaks ties, so a page with one table
+    # (or none labelled) behaves exactly as before.
+    for _priority, _order, hours_rows in sorted(candidates, key=lambda c: (c[0], c[1])):
         rules = _rules_from_rows(hours_rows)
-        if rules:  # first schedule-like table wins
+        if rules:
             return Ok(
                 ScrapedSchedule(rules=tuple(rules), holiday_policy=_holiday_policy(hours_rows))
             )
