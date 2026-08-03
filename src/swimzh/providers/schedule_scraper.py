@@ -74,8 +74,35 @@ def _lookup_day(token: str) -> Weekday | None:
     return _DAYS_ABBR.get(key)
 
 
+#: A parenthetical qualifier in a day cell — "(und Feiertage)", "(und Feiertage<sup>3</sup>)".
+#: Stripped before weekday lookup; the holiday signal itself is read by `_holiday_policy`
+#: BEFORE this runs, so removing it here loses nothing.
+_DAY_QUALIFIER_RE = re.compile(r"\([^)]*\)")
+
+
+def _clean_day_cell(cell: str) -> str:
+    """Reduce a day cell to bare weekday tokens separated by commas.
+
+    The city writes real markup into this cell — a `<br>` before a qualifier
+    (`Sonntag<br>(und Feiertage)`), footnote markers on the weekday itself
+    (`Montag<sup>1</sup>`), and a non-breaking space instead of a normal one
+    (`Sonntag\xa0(und Feiertage)`). Each of those made the whole row fail to resolve, and a
+    row whose days do not resolve is silently dropped by `_rules_from_rows` — so four pools
+    lost their Sunday sessions and Bungertwies lost most of its week. `<br>` becomes a comma
+    because it separates day tokens (`Samstag, Sonntag<br>(...)`), not just noise.
+    """
+    text = cell.replace("\xa0", " ")
+    text = re.sub(r"<br\s*/?>", ",", text, flags=re.IGNORECASE)
+    text = _DAY_QUALIFIER_RE.sub(" ", text)
+    text = re.sub(r"<[^>]+>", " ", text)
+    # A footnote marker leaves its number behind once the <sup> tags are gone ("Montag 1").
+    # No German weekday token contains a digit, so dropping digits cannot eat a real day.
+    text = re.sub(r"\d+", " ", text)
+    return re.sub(r"\s+", " ", text).strip().lower()
+
+
 def _parse_days(cell: str) -> frozenset[Weekday]:
-    text = cell.strip().lower()
+    text = _clean_day_cell(cell)
     span = re.match(r"([a-zäöü]+)\s*[–-]\s*([a-zäöü]+)$", text)
     if span:
         start, end = _lookup_day(span.group(1)), _lookup_day(span.group(2))

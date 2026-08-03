@@ -99,3 +99,74 @@ def test_http_error_propagates() -> None:
     result = scrape_schedule(client, "https://example.test/city.html")
     assert isinstance(result, Err)
     assert isinstance(result.error, HttpStatus)
+
+
+# --- day-cell normalisation ---------------------------------------------------------
+#
+# The city writes markup INTO the weekday cell. Every form below made `_parse_days` return
+# an empty set, and `_rules_from_rows` silently drops a row whose days do not resolve — so
+# four pools lost their Sunday sessions and Bungertwies lost Monday and Wednesday too.
+
+
+def _row_page(day_cell: str, hours_cell: str = "9–16 Uhr") -> str:
+    """A minimal stadt-zuerich page carrying one timetable row."""
+    return f'<div>[{{"value":"{day_cell}"}},{{"value":"{hours_cell}"}}]</div>'
+
+
+def _days_of(day_cell: str) -> set[str]:
+    result = parse_schedule(_row_page(day_cell))
+    if not isinstance(result, Ok):
+        return set()
+    return {d.name for rule in result.value.rules for d in rule.weekdays}
+
+
+def test_holiday_qualifier_after_a_br_does_not_swallow_the_day() -> None:
+    # kaeferberg, leimbach (with a NBSP instead of the <br>), bungertwies (+ a footnote).
+    assert _days_of("Sonntag<br>(und Feiertage)") == {"SUNDAY"}
+    assert _days_of("Sonntag (und Feiertage)") == {"SUNDAY"}
+    assert _days_of("Sonntag<br>(und Feiertage<sup>3</sup>)") == {"SUNDAY"}
+
+
+def test_br_separates_days_so_a_paired_row_keeps_both() -> None:
+    # blaesi: `<br>` is a SEPARATOR here, not noise — dropping it silently lost the Sunday
+    # half of a Saturday+Sunday row while the Saturday half survived.
+    assert _days_of("Samstag, Sonntag<br>(und Feiertage)") == {"SATURDAY", "SUNDAY"}
+
+
+def test_footnote_marker_on_the_weekday_itself_is_ignored() -> None:
+    # bungertwies: `Montag<sup>1</sup>` / `Mittwoch<sup>2</sup>` dropped both rows entirely.
+    assert _days_of("Montag<sup>1</sup>") == {"MONDAY"}
+    assert _days_of("Mittwoch<sup>2</sup>") == {"WEDNESDAY"}
+
+
+def test_plain_and_span_day_cells_are_unchanged() -> None:
+    assert _days_of("Montag") == {"MONDAY"}
+    assert _days_of("Freitag–Sonntag") == {"FRIDAY", "SATURDAY", "SUNDAY"}
+    assert _days_of("Montag–Sonntag") == {
+        "MONDAY",
+        "TUESDAY",
+        "WEDNESDAY",
+        "THURSDAY",
+        "FRIDAY",
+        "SATURDAY",
+        "SUNDAY",
+    }
+
+
+def test_a_cell_with_no_weekday_still_resolves_to_nothing() -> None:
+    assert _days_of("(und Feiertage)") == set()
+    assert _days_of("Gilberte") == set()
+
+
+def test_bungertwies_and_leimbach_recover_their_lost_sessions() -> None:
+    # The regression, end to end on the real saved pages.
+    bungertwies = parse_schedule(
+        (FIXTURES / "hallenbad_bungertwies.html").read_text(encoding="utf-8")
+    )
+    assert isinstance(bungertwies, Ok)
+    days = {d.name for r in bungertwies.value.rules for d in r.weekdays}
+    assert {"MONDAY", "WEDNESDAY", "SUNDAY"} <= days
+
+    leimbach = parse_schedule((FIXTURES / "hallenbad_leimbach.html").read_text(encoding="utf-8"))
+    assert isinstance(leimbach, Ok)
+    assert "SUNDAY" in {d.name for r in leimbach.value.rules for d in r.weekdays}

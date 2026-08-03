@@ -22,7 +22,7 @@ source rules: 5 | curated (projected) rules: 0 | matched: 0 | source-poorer: 0 |
 
 ## hallenbad-bungertwies
 
-source rules: 3 | curated (projected) rules: 5 | matched: 0 | source-poorer: 5 | source-richer: 3
+source rules: 8 | curated (projected) rules: 5 | matched: 0 | source-poorer: 5 | source-richer: 8
 
 | class | weekdays | time | access |
 |-------|----------|------|--------|
@@ -31,9 +31,14 @@ source rules: 3 | curated (projected) rules: 5 | matched: 0 | source-poorer: 5 |
 | source-poorer | Wed | 13:30–16:30 | FamilyTime |
 | source-poorer | Wed | 16:30–21:00 | PublicSwim |
 | source-poorer | Sat/Sun | 08:00–18:00 | PublicSwim |
+| source-richer | Mon | 12:00–13:30 | PublicSwim |
+| source-richer | Mon | 16:00–19:00 | PublicSwim |
 | source-richer | Tue | 12:00–13:30 | PublicSwim |
 | source-richer | Tue | 16:00–19:00 | PublicSwim |
+| source-richer | Wed | 12:00–14:00 | PublicSwim |
+| source-richer | Wed | 16:00–19:00 | PublicSwim |
 | source-richer | Thu | 12:30–19:00 | PublicSwim |
+| source-richer | Sun | 09:00–16:00 | PublicSwim |
 
 ## hallenbad-city
 
@@ -61,7 +66,7 @@ source rules: 8 | curated (projected) rules: 9 | matched: 0 | source-poorer: 9 |
 
 ## hallenbad-leimbach
 
-source rules: 10 | curated (projected) rules: 0 | matched: 0 | source-poorer: 0 | source-richer: 10
+source rules: 11 | curated (projected) rules: 0 | matched: 0 | source-poorer: 0 | source-richer: 11
 
 | class | weekdays | time | access |
 |-------|----------|------|--------|
@@ -75,6 +80,7 @@ source rules: 10 | curated (projected) rules: 0 | matched: 0 | source-poorer: 0 
 | source-richer | Fri | 06:00–08:00 | PublicSwim |
 | source-richer | Fri | 12:00–21:00 | PublicSwim |
 | source-richer | Sat | 09:00–18:00 | PublicSwim |
+| source-richer | Sun | 09:00–18:00 | PublicSwim |
 
 ## hallenbad-oerlikon
 
