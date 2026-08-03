@@ -29,7 +29,7 @@ from swimzh.core.http import HttpClient
 from swimzh.core.result import Err, Ok, Result
 from swimzh.domain.access import PublicSwim, SchoolReserved, SeniorsOnly, SessionAccess, WomenOnly
 from swimzh.domain.models import Notice
-from swimzh.domain.schedule import ScheduleRule, TimeRange, Weekday
+from swimzh.domain.schedule import HolidayPolicy, ScheduleRule, TimeRange, Weekday
 
 _SOURCE = "schedule_scraper"
 
@@ -62,6 +62,10 @@ _TIME_RE = re.compile(r"\d{1,2}[.:]\d{2}\s*[–-]\s*\d{1,2}[.:]\d{2}")
 @dataclass(frozen=True, slots=True)
 class ScrapedSchedule:
     rules: tuple[ScheduleRule, ...]
+    #: `SUNDAY_SCHEDULE` when the timetable attaches holidays to a Sunday row
+    #: ("Sonntag (und Feiertage)"); `None` when the page says nothing — the honest unknown,
+    #: never assumed to be `NORMAL`.
+    holiday_policy: HolidayPolicy | None = None
 
 
 # --- shared cell parsers -----------------------------------------------------------
@@ -154,6 +158,22 @@ def _slots(hours_cell: str, category_cell: str | None) -> list[tuple[TimeRange, 
     return out
 
 
+def _holiday_policy(rows: list[list[str]]) -> HolidayPolicy | None:
+    """Read the facility's public-holiday behaviour off the timetable's day column.
+
+    Four pools write "(und Feiertage)" into a Sunday row — the city stating that holidays run
+    that row's hours, i.e. `SUNDAY_SCHEDULE`. Nothing else in the timetable speaks to holidays,
+    so every other pool yields `None` (unknown), never an assumed `NORMAL`.
+
+    The qualifier is only honoured on a row that actually resolves to Sunday: "(und Feiertage)"
+    on some other weekday would mean something we have not seen and must not guess at.
+    """
+    for row in rows:
+        if "feiertag" in row[0].casefold() and Weekday.SUNDAY in _parse_days(row[0]):
+            return HolidayPolicy.SUNDAY_SCHEDULE
+    return None
+
+
 def _rules_from_rows(rows: list[list[str]]) -> list[ScheduleRule]:
     rules: list[ScheduleRule] = []
     for row in rows:
@@ -180,7 +200,7 @@ def _parse_stadtzurich(decoded_html: str) -> Result[ScrapedSchedule, ProviderErr
     rules = _rules_from_rows(hours_rows)
     if not rules:
         return Err(ParseError(source=_SOURCE, detail="no stadt-zuerich timetable", raw_snippet=""))
-    return Ok(ScrapedSchedule(rules=tuple(rules)))
+    return Ok(ScrapedSchedule(rules=tuple(rules), holiday_policy=_holiday_policy(hours_rows)))
 
 
 # --- format 2: generic HTML <table> ------------------------------------------------
@@ -199,7 +219,9 @@ def _parse_html_table(decoded_html: str) -> Result[ScrapedSchedule, ProviderErro
         ]
         rules = _rules_from_rows(hours_rows)
         if rules:  # first schedule-like table wins
-            return Ok(ScrapedSchedule(rules=tuple(rules)))
+            return Ok(
+                ScrapedSchedule(rules=tuple(rules), holiday_policy=_holiday_policy(hours_rows))
+            )
     return Err(ParseError(source=_SOURCE, detail="no HTML schedule table", raw_snippet=""))
 
 

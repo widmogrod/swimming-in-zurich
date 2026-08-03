@@ -658,3 +658,37 @@ def test_staleness_is_derived_not_stored() -> None:
 def test_future_year_warns_about_calendar_coverage(dataset: Dataset) -> None:
     result = _query(dataset, datetime(2030, 3, 12, 18, 0, tzinfo=ZURICH))
     assert any("calendar data not available" in w for w in result.warnings)
+
+
+def test_holiday_with_no_published_policy_warns_instead_of_asserting_hours(
+    dataset: Dataset,
+) -> None:
+    """Karfreitag 2026-04-03. A pool whose source never states a holiday policy still shows
+    its weekday hours -- but the result says so, rather than presenting a guess as fact."""
+    # City publishes sunday_schedule; strip it to model a pool whose page is silent.
+    unknown = tuple(
+        dataclasses.replace(f, public_holiday_policy=None)
+        if f.identity.name == "Hallenbad City"
+        else f
+        for f in dataset.facilities
+    )
+    result = find_swim_options(
+        SwimQuery(person=ADULT, at=datetime(2026, 4, 3, 12, 0, tzinfo=ZURICH)),
+        unknown,
+        dataset.calendar,
+        _roster(dataset),
+    )
+
+    holiday_warnings = [w for w in result.warnings if "public holiday" in w]
+    assert len(holiday_warnings) == 1, result.warnings
+    assert "Hallenbad City" in holiday_warnings[0]
+    # Oerlikon STATES closed -- a known policy is never warned about.
+    assert "Hallenbad Oerlikon" not in holiday_warnings[0]
+    # The hours are still served: unknown must not hide an option.
+    assert any(o.facility_name == "Hallenbad City" for o in result.options)
+
+
+def test_no_holiday_warning_on_an_ordinary_day(dataset: Dataset) -> None:
+    result = _query(dataset, datetime(2026, 3, 10, 12, 0, tzinfo=ZURICH))
+
+    assert not [w for w in result.warnings if "public holiday" in w]

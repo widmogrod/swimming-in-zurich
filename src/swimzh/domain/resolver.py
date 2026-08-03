@@ -86,6 +86,9 @@ def resolve_hours(
 
     # 3. Public-holiday policy.
     effective_weekday = Weekday(d.weekday())
+    # A holiday we cannot vouch for: the pool states no policy, so we fall through to its
+    # ordinary weekday rules AND say so, rather than silently presenting them as confirmed.
+    unverified_holiday = ctx.is_public_holiday and facility.public_holiday_policy is None
     if ctx.is_public_holiday:
         match facility.public_holiday_policy:
             case HolidayPolicy.CLOSED:
@@ -104,12 +107,15 @@ def resolve_hours(
                 effective_weekday = Weekday.SUNDAY
             case HolidayPolicy.NORMAL:
                 pass
+            case None:
+                # Unknown policy: use the weekday rules, flagged (see `unverified_holiday`).
+                pass
 
     # 4. Recurring rules for the effective weekday and calendar scope.
     sessions = _sessions_for_weekday(rules, effective_weekday, ctx)
     if not sessions:
         return ClosedDay(code=ClosureCode.NO_SESSIONS)
-    return OpenDay(sessions=sessions)
+    return OpenDay(sessions=sessions, holiday_policy_unverified=unverified_holiday)
 
 
 def resolve_basin(

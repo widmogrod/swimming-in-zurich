@@ -388,7 +388,9 @@ class FacilityDTO(_Strict):
     valid_as_of: date | None = None
     geo: GeoDTO | None = None
     amenities: list[str] = Field(default_factory=list)
-    public_holiday_policy: _HolidayPolicy = "normal"
+    #: `None` (the default) == the author did not state it. Previously defaulted to "normal",
+    #: which turned silence into a positive claim that the resolver then acted on.
+    public_holiday_policy: _HolidayPolicy | None = None
     prices: PriceTableDTO | None = None
     closures: list[ClosureDTO] = []
     basins: list[BasinDTO]

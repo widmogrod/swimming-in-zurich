@@ -145,6 +145,14 @@ class OpenDay:
     """The facility/basin is open with these sessions (sorted by start time)."""
 
     sessions: tuple[ResolvedSession, ...]
+    #: True when this is a public holiday AND no source states the facility's holiday policy,
+    #: so the sessions are the ordinary weekday ones and we cannot confirm they hold today.
+    #:
+    #: Deliberately a flag on the OPEN day rather than a fourth `DaySchedule` member: the
+    #: sessions are real and the pool may well be open, so reporting the day as closed (or as
+    #: a new terminal "unknown" state) would trade one wrong answer for another. The caller
+    #: surfaces it as a warning alongside the hours — see `query.find_swim_options`.
+    holiday_policy_unverified: bool = False
 
 
 @dataclass(frozen=True, slots=True)

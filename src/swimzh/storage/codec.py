@@ -83,7 +83,10 @@ class StoredFacilityDTO(BaseModel):
     aliases: list[str]
     geo: GeoDTO | None
     amenities: list[str]
-    public_holiday_policy: _HolidayPolicy
+    # `None` == no source states this pool's public-holiday behaviour. Distinct from "normal",
+    # which is a positive claim. Defaulted so a pre-existing blob (whose value was the
+    # fabricated "normal") still validates; a rebuild replaces it with the honest unknown.
+    public_holiday_policy: _HolidayPolicy | None = None
     prices: PriceTableDTO | None
     closures: list[ClosureDTO]
     basins: list[BasinDTO]
@@ -119,7 +122,11 @@ def to_stored(facility: Facility) -> StoredFacilityDTO:
         aliases=list(ident.aliases),
         geo=mapping.geo_to_dto(facility.geo) if facility.geo is not None else None,
         amenities=sorted(facility.amenities),
-        public_holiday_policy=_POLICY_TO[facility.public_holiday_policy],
+        public_holiday_policy=(
+            _POLICY_TO[facility.public_holiday_policy]
+            if facility.public_holiday_policy is not None
+            else None
+        ),
         prices=mapping.price_table_to_dto(facility.prices) if facility.prices is not None else None,
         closures=[mapping.closure_to_dto(c) for c in facility.closures],
         basins=[mapping.basin_to_dto(b) for b in facility.basins],
@@ -158,7 +165,11 @@ def from_stored(stored: StoredFacilityDTO) -> Facility:
         geo=mapping.geo_from_dto(stored.geo) if stored.geo is not None else None,
         amenities=frozenset(stored.amenities),
         closures=tuple(mapping.closure_from_dto(c) for c in stored.closures),
-        public_holiday_policy=_POLICY_FROM[stored.public_holiday_policy],
+        public_holiday_policy=(
+            _POLICY_FROM[stored.public_holiday_policy]
+            if stored.public_holiday_policy is not None
+            else None
+        ),
         prices=mapping.price_table_from_dto(stored.prices) if stored.prices is not None else None,
         notices=tuple(
             Notice(text=n.text, active_from=n.active_from, active_to=n.active_to)

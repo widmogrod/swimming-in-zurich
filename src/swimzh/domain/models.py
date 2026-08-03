@@ -220,7 +220,13 @@ class Facility:
     geo: GeoPoint | None = None
     amenities: frozenset[str] = frozenset()
     closures: tuple[ClosureRange, ...] = field(default_factory=tuple)
-    public_holiday_policy: HolidayPolicy = HolidayPolicy.NORMAL
+    #: How the facility behaves on a public holiday, or `None` when **no source states it**.
+    #: `None` is not "normal": it is the honest unknown. The previous default asserted
+    #: `NORMAL` on all 57 pools without a single provider supplying it, and the resolver acts
+    #: on that — so every pool claimed ordinary weekday hours on Christmas Day and Good
+    #: Friday, contradicting (for Bungertwies) its own page. Only a pool whose timetable says
+    #: so (a `(und Feiertage)` row) carries a real policy.
+    public_holiday_policy: HolidayPolicy | None = None
     prices: PriceTable | None = None
     notices: tuple[Notice, ...] = field(default_factory=tuple)
     website: str | None = None  # static (WFS `www` / official pool page)

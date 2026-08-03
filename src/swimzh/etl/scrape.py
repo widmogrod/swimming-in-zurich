@@ -104,6 +104,7 @@ def _aspects(
         notices=notices,
         prices=prices,
         fetched_at=fetched_at,
+        public_holiday_policy=schedule.holiday_policy,
     )
 
 

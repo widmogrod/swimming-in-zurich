@@ -64,6 +64,9 @@ class ScrapedAspects:
     website: str | None = None
     amenities: frozenset[str] = frozenset()
     accessibility: str | None = None
+    #: Sourced from the timetable's "(und Feiertage)" Sunday row; `None` when the page is
+    #: silent. Never defaulted to `NORMAL` — that fabricated a fact on all 57 pools.
+    public_holiday_policy: HolidayPolicy | None = None
 
 
 class Source(Enum):
@@ -115,6 +118,7 @@ _ASPECTS: tuple[_Aspect, ...] = (
     _Aspect("website", _is_not_none, CURATED_WINS),
     _Aspect("amenities", _is_nonempty, CURATED_WINS),
     _Aspect("accessibility", _is_not_none, CURATED_WINS),
+    _Aspect("public_holiday_policy", _is_not_none, CURATED_WINS),
 )
 
 
@@ -140,7 +144,7 @@ def _scraped_facility(pool_id: PoolId, aspects: ScrapedAspects) -> Facility:
         basins=aspects.basins,
         geo=aspects.geo,
         closures=aspects.closures,
-        public_holiday_policy=HolidayPolicy.NORMAL,
+        public_holiday_policy=aspects.public_holiday_policy,
         prices=aspects.prices,
         notices=aspects.notices,
         website=aspects.website,

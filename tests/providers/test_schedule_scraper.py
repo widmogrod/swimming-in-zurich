@@ -13,7 +13,7 @@ from swimzh.core.errors import HttpStatus, ParseError
 from swimzh.core.http import HttpClient, RetryPolicy
 from swimzh.core.result import Err, Ok
 from swimzh.domain.access import PublicSwim, WomenOnly
-from swimzh.domain.schedule import TimeRange, Weekday
+from swimzh.domain.schedule import HolidayPolicy, TimeRange, Weekday
 from swimzh.providers.schedule_scraper import parse_notices, parse_schedule, scrape_schedule
 
 FIXTURES = Path(__file__).resolve().parent / "fixtures"
@@ -170,3 +170,38 @@ def test_bungertwies_and_leimbach_recover_their_lost_sessions() -> None:
     leimbach = parse_schedule((FIXTURES / "hallenbad_leimbach.html").read_text(encoding="utf-8"))
     assert isinstance(leimbach, Ok)
     assert "SUNDAY" in {d.name for r in leimbach.value.rules for d in r.weekdays}
+
+
+# --- public-holiday policy, sourced from the timetable --------------------------------
+
+
+def _policy_of(fixture: str) -> object:
+    result = parse_schedule((FIXTURES / fixture).read_text(encoding="utf-8"))
+    assert isinstance(result, Ok), result
+    return result.value.holiday_policy
+
+
+def test_und_feiertage_on_a_sunday_row_sources_a_sunday_schedule() -> None:
+    for fixture in (
+        "hallenbad_blaesi.html",
+        "hallenbad_bungertwies.html",
+        "hallenbad_leimbach.html",
+        "waermebad_kaeferberg.html",
+    ):
+        assert _policy_of(fixture) is HolidayPolicy.SUNDAY_SCHEDULE, fixture
+
+
+def test_a_page_that_says_nothing_about_holidays_yields_unknown_not_normal() -> None:
+    # The whole point: silence is `None`, never an assumed NORMAL. City and Oerlikon carry no
+    # holiday token at all.
+    assert _policy_of("hallenbad_city.html") is None
+    assert _policy_of("hallenbad_oerlikon.html") is None
+    assert _policy_of("hallenbad_altstetten.html") is None
+
+
+def test_the_qualifier_is_only_honoured_on_a_row_that_resolves_to_sunday() -> None:
+    # "(und Feiertage)" on some other weekday means something we have not seen; guessing
+    # SUNDAY_SCHEDULE from it would invent a fact.
+    result = parse_schedule(_row_page("Mittwoch (und Feiertage)"))
+    assert isinstance(result, Ok)
+    assert result.value.holiday_policy is None

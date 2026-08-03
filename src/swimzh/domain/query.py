@@ -364,6 +364,10 @@ def find_swim_options(
     options: list[SwimOption] = []
     statuses: list[FacilityStatus] = []
     notices: list[FacilityNotice] = []
+    # Pools showing ordinary weekday hours on a public holiday because no source states their
+    # holiday policy. The hours are real, so the option stands — but it is not confirmed for
+    # today, and saying nothing would present a guess as a fact.
+    unverified_holiday_pools: set[str] = set()
 
     for facility in facilities:
         distance = _distance_km(query, facility)
@@ -397,6 +401,8 @@ def find_swim_options(
                     facility_closed_reason = reason
                     facility_closed = schedule
                 case OpenDay(sessions):
+                    if schedule.holiday_policy_unverified:
+                        unverified_holiday_pools.add(facility.identity.name)
                     for session in sessions:
                         produced = True
                         # Clamp the point eval to the QUERIED moment (`now_time`, the queried
@@ -471,6 +477,13 @@ def find_swim_options(
             o.facility_name,
         )
     )
+    if unverified_holiday_pools:
+        named = ", ".join(sorted(unverified_holiday_pools))
+        warnings.append(
+            f"{day.isoformat()} is a public holiday and these pools do not publish their "
+            f"holiday hours; the times shown are their usual weekday hours and are "
+            f"unconfirmed: {named}"
+        )
     return QueryResult(
         options=tuple(options),
         statuses=tuple(statuses),
