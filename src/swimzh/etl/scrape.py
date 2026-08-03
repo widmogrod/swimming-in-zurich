@@ -15,6 +15,7 @@ posture is gone; the typed error *value* stays.
 
 from __future__ import annotations
 
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from datetime import datetime
 
@@ -27,6 +28,7 @@ from swimzh.domain.catalog import PoolCatalogEntry
 from swimzh.domain.models import Basin, BasinId, Notice, PoolKind
 from swimzh.domain.pricing import PriceTable
 from swimzh.domain.schedule import ClosureRange
+from swimzh.providers.operator_pages import parse_maintenance_closures
 from swimzh.providers.schedule_scraper import (
     ScrapedSchedule,
     fetch_page,
@@ -36,6 +38,18 @@ from swimzh.providers.schedule_scraper import (
 
 _CLOSURE_WORDS = ("geschlossen", "revision", "gesperrt", "betriebsferien")
 _CITY_HOST = "stadt-zuerich.ch"
+
+#: Per-pool extra closure extractors for pools whose page is a **private operator's**, not the
+#: city's. Keyed by `pool_id` — deliberately NOT by host: `freibad-dolder`'s operator changed
+#: domain (doldersports.com → doldereisundbad.ch) without notice, and a host-keyed table would
+#: have fallen through silently. `pool_id` is the identity spine and is the only stable key.
+#:
+#: This is a dispatch, not another entry in `schedule_scraper._PARSERS`: that chain is
+#: format-sniffing and pool-blind (first `Ok` wins, tried against all 57 pages), which on these
+#: sites is a wrong-answer generator rather than a fallback.
+_OPERATOR_CLOSURES: Mapping[str, Callable[[str], tuple[ClosureRange, ...]]] = {
+    "hallenbad-altstetten": parse_maintenance_closures,
+}
 
 # One scrape extract: a reference the reconcile seam resolves to a PoolId, plus its payload.
 Extract = tuple[SourceRef, ScrapedAspects]
@@ -118,11 +132,17 @@ def scrape_indoor_facilities(
             continue
         notices = parse_notices(page)
         pool_prices = prices if (prices is not None and _CITY_HOST in entry.url) else None
+        # City notices carry their own dates; an operator page states its shutdown in prose,
+        # so the two closure sources are additive, not alternatives.
+        operator = _OPERATOR_CLOSURES.get(entry.pool_id)
+        closures = _closures_from_notices(notices)
+        if operator is not None:
+            closures = closures + operator(page)
         aspects = _aspects(
             entry,
             schedule.value,
             notices,
-            _closures_from_notices(notices),
+            closures,
             pool_prices,
             fetched_at,
         )

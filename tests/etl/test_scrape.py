@@ -6,7 +6,7 @@ cannot fetch/parse is NOT skipped — its typed ``ProviderError`` is preserved i
 from __future__ import annotations
 
 from collections.abc import Callable
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 from pathlib import Path
 from zoneinfo import ZoneInfo
@@ -115,3 +115,55 @@ def test_unreachable_page_failure_preserves_the_transport_cause() -> None:
     assert report.extracts == ()
     assert len(report.failures) == 1
     assert isinstance(report.failures[0].cause, ConnectionFailed)
+
+
+# --- private-operator closures (bad-altstetten.ch) ------------------------------------
+
+FIXTURE_ALTSTETTEN = (
+    Path(__file__).resolve().parents[1] / "providers" / "fixtures" / "hallenbad_altstetten.html"
+)
+
+
+def test_operator_page_closure_is_attached_to_the_pool() -> None:
+    # The regression: altstetten's page is a private operator's (WordPress), so it carries no
+    # `stzh-disturber` markup and `parse_notices` finds nothing — the pool shipped with
+    # `closures: []` while its operator announced an 18-day Revision. The per-pool dispatch
+    # extracts it from the prose instead.
+    catalog = (
+        _entry(
+            "hallenbad-altstetten",
+            "Hallenbad Altstetten",
+            PoolKind.INDOOR,
+            "https://www.bad-altstetten.ch",
+        ),
+    )
+    body = FIXTURE_ALTSTETTEN.read_bytes()
+
+    report = scrape_indoor_facilities(
+        _client(lambda _r: httpx.Response(200, content=body)), catalog, FETCHED
+    )
+
+    assert report.failures == ()
+    (_ref, aspects) = report.extracts[0]
+    covering = [c for c in aspects.closures if c.contains(date(2026, 8, 2))]
+    assert len(covering) == 1, aspects.closures
+    assert covering[0].start == date(2026, 7, 30)
+    assert covering[0].end == date(2026, 8, 16)
+
+
+def test_operator_closures_are_keyed_by_pool_id_not_by_page_content() -> None:
+    # The dispatch must be pool-keyed: the SAME bytes served for a different pool contribute no
+    # closure. A content-sniffing fallback would fire on any page that merely mentions a date
+    # range near "Revision", which is exactly the wrong-answer mode this seam exists to avoid.
+    catalog = (
+        _entry("hallenbad-other", "Hallenbad Other", PoolKind.INDOOR, "https://x/other.html"),
+    )
+    body = FIXTURE_ALTSTETTEN.read_bytes()
+
+    report = scrape_indoor_facilities(
+        _client(lambda _r: httpx.Response(200, content=body)), catalog, FETCHED
+    )
+
+    assert report.failures == ()
+    (_ref, aspects) = report.extracts[0]
+    assert aspects.closures == ()
