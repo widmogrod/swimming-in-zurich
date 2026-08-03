@@ -12,7 +12,6 @@ address: "8003 Zürich"  # catalog states only the postal locality — no street
 source: "stadt-zuerich.ch/hallenbaeder/aemtler (curated, illustrative)"
 valid_as_of: "2026-07-19"
 geo: { lat: 47.374173, lon: 8.512659 }
-website: "https://www.stadt-zuerich.ch/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/hallenbaeder/aemtler.html"
 public_holiday_policy: "closed"
 
 basins:

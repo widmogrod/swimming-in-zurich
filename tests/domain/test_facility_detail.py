@@ -39,11 +39,9 @@ def city(dataset: Dataset) -> Facility:
     return next(f for f in dataset.facilities if str(f.identity.facility_id) == "hallenbad-city")
 
 
-def test_detail_surfaces_website_lockers_and_basins(dataset: Dataset, city: Facility) -> None:
+def test_detail_surfaces_lockers_and_basins(dataset: Dataset, city: Facility) -> None:
     detail = facility_detail(city, datetime(2026, 3, 10, 18, 0, tzinfo=ZURICH), dataset.calendar)
     assert detail.facility_name == "Hallenbad City"
-    assert detail.website is not None
-    assert detail.website.endswith("/hallenbaeder/city.html")
     assert detail.basins == city.basins  # per-basin physicals ride along unmodified
 
     by_category = {lo.category: lo for lo in detail.lockers}

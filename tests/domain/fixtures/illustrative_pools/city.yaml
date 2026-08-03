@@ -10,9 +10,7 @@ address: "Sihlstrasse 71, 8001 Zürich"
 source: "stadt-zuerich.ch/hallenbaeder/city (curated, illustrative)"
 valid_as_of: "2026-07-18"
 geo: { lat: 47.3739, lon: 8.5320 }
-amenities: ["50m", "sauna"]
 public_holiday_policy: "sunday_schedule"
-website: "https://www.stadt-zuerich.ch/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/hallenbaeder/city.html"
 
 # Non-swim amenities. The sauna hours/surcharge follow the WFS `infrastruktur` prose
 # ("gemischte Sauna 8-22 Uhr Eintritt Fr. 10.-"); hours reuse the schedule rules, so

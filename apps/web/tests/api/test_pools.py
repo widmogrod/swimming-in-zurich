@@ -237,7 +237,6 @@ def test_facility_detail_out_surfaces_temp_and_parsed_prose_caveat() -> None:
         facility_id=PoolId("prose-pool"),
         facility_name="Prose Pool",
         address="Somewhere 1",
-        website=None,
         basins=(basin,),
         features=(sauna,),
         lockers=(LockerOption(category=LockerCategory.WARDROBE, deposit_chf=Decimal("2")),),

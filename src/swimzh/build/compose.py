@@ -61,9 +61,6 @@ class ScrapedAspects:
     # existing scrape call-sites are unchanged and a curated pool keeps its curated values).
     features: tuple[Feature, ...] = ()
     lockers: tuple[LockerOption, ...] = ()
-    website: str | None = None
-    amenities: frozenset[str] = frozenset()
-    accessibility: str | None = None
     #: Sourced from the timetable's "(und Feiertage)" Sunday row; `None` when the page is
     #: silent. Never defaulted to `NORMAL` — that fabricated a fact on all 57 pools.
     public_holiday_policy: HolidayPolicy | None = None
@@ -115,9 +112,6 @@ _ASPECTS: tuple[_Aspect, ...] = (
     _Aspect("geo", _is_not_none, CURATED_WINS),
     _Aspect("features", _is_nonempty, CURATED_WINS),
     _Aspect("lockers", _is_nonempty, CURATED_WINS),
-    _Aspect("website", _is_not_none, CURATED_WINS),
-    _Aspect("amenities", _is_nonempty, CURATED_WINS),
-    _Aspect("accessibility", _is_not_none, CURATED_WINS),
     _Aspect("public_holiday_policy", _is_not_none, CURATED_WINS),
 )
 
@@ -147,11 +141,8 @@ def _scraped_facility(pool_id: PoolId, aspects: ScrapedAspects) -> Facility:
         public_holiday_policy=aspects.public_holiday_policy,
         prices=aspects.prices,
         notices=aspects.notices,
-        website=aspects.website,
         features=aspects.features,
         lockers=aspects.lockers,
-        amenities=aspects.amenities,
-        accessibility=aspects.accessibility,
     )
 
 

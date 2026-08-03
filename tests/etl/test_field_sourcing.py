@@ -77,15 +77,16 @@ def test_residue_and_crosswalk_are_recorded() -> None:
     assert geo_sport.producer is ProducerKind.SOURCED
     assert geo_sport.module == "etl.roster"
 
-    for drop_field in (
-        "facility.public_holiday_policy",
-        "facility.lockers",
-        "facility.accessibility",
-        "facility.last_admission_before",
-        "basin.exceptions",
-        "basin.measured_temp_c",
-    ):
+    for drop_field in ("basin.exceptions", "basin.measured_temp_c"):
         assert by_field[drop_field].producer is ProducerKind.DROP_CANDIDATE
+
+    # A source demonstrably exists but no provider reads it yet. Filing these as
+    # DROP_CANDIDATE (the old state) scheduled real, locatable data for deletion.
+    for unbuilt in ("facility.lockers", "facility.last_admission_before"):
+        assert by_field[unbuilt].producer is ProducerKind.SOURCEABLE_UNBUILT
+
+    # Sourced since 2026-08-04 from the timetable's "(und Feiertage)" Sunday row.
+    assert by_field["facility.public_holiday_policy"].producer is ProducerKind.SOURCED
 
     # The already-sourced claims S5a exists to ground-truth.
     assert by_field["facility.prices"].module == "providers.price_scraper"

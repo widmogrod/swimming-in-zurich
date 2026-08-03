@@ -459,7 +459,8 @@ built store. Every `coverage` string is also still `"x/7"` — a 7-pool-era deno
 | **0** | **`public_holiday_policy` → nullable** (§0) | removes a lie on 57 | small, compiler-enforced | — |
 | 1 | label-anchor `_parse_html_table` | trust on 1 | none | — |
 | 2 | Gap 8 deletions + `SOURCEABLE_UNBUILT` | −3 dead fields | deletions | — |
-| 3 | Gap 4 honesty fixes (`is_open: bool \| None`, derive uids) | 5 pools stop reading "closed" | none | — |
+| 3 | Gap 4 honesty fix (`is_open: bool \| None`) | 5 pools stop reading "closed" | none | — |
+| ~~3b~~ | ~~derive crowdmonitor uids~~ — **dropped, see below** | — | — | — |
 | 4 | Gap 1 school pools (URL predicate + continuation rows + access vocab) | +5 | `SessionAccess` member | — |
 | 5 | Gap 6 price discovery + age bands | +29 priced/free | none | — |
 | 6 | Gap 3 rentals (data only, no UI) | +15 | `Rental`, `Deposit`/`Fee` unions | per-aspect gate, or Gap 2 |
@@ -470,6 +471,15 @@ built store. Every `coverage` string is also still `"x/7"` — a 7-pool-era deno
 Items 0–5 need **no** seasonal domain model and together move schedule/price coverage from ~12% to
 roughly half the roster, while removing two active falsehoods. Gap 2 is the only genuine modelling
 decision and it gates the summer half of the city.
+
+**Dropped from rank 3 (2026-08-04): deriving the crowdmonitor uids.** The authored
+`registry.yaml crowdmonitor_keys` really are display names (`["City", "Hallenbad City"]`) where
+the protocol uses uids (`SSD-3`), so every one would miss — but they are wrong **and unused**.
+`data/sources.md:18` marks CrowdMonitor *"Deferred until vendor terms verified"*, `:52` keeps an
+open action to establish the endpoint and terms **before** consuming occupancy, and no
+`OccupancyProvider` is implemented (only the Protocol and an optional argument). Correcting the
+crosswalk now would build for a consumer that does not exist and would quietly advance an
+integration deferred on legal grounds. Revisit only once the terms question is closed.
 
 **Owner decisions (2026-08-02).** UI work is out of scope everywhere in this plan — the acceptance
 criterion for every gap is data landing correctly in the gold store and on the API. Gap 3 proceeds

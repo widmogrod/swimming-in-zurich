@@ -173,7 +173,6 @@ class FacilityDetailOut(BaseModel):
     facility_id: str
     facility_name: str
     address: str
-    website: str | None
     # The SAME derived three-state schedule freshness `/pools` rows carry (domain
     # `catalog.freshness_of` over this very facility) — so a detail panel and the list row beside
     # it can never disagree about whether a pool has a schedule. This, not `provenance.curated`,
@@ -190,8 +189,6 @@ class FacilityDetailOut(BaseModel):
     provenance: ProvenanceOut
     # One panel per basin that carries a parsed Belegungsplan; empty when none do.
     lane_panels: list[BasinLanePanelOut]
-    amenities: list[str]  # facility amenity tags (sorted); empty when none recorded
-    accessibility: str | None  # free-text accessibility note; None when unknown
     last_admission_before_min: int | None  # minutes before closing that admission stops
     # Facility-level LIVE water temperature (Baditicker), resolved at request time. Always
     # present — additive and labelled, it never overwrites a basin's `measured_temp_c`.

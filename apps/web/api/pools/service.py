@@ -267,7 +267,6 @@ def facility_detail_out(
         facility_id=str(detail.facility_id),
         facility_name=detail.facility_name,
         address=detail.address,
-        website=detail.website,
         freshness=freshness.value,
         basins=[_basin_out(b) for b in detail.basins],
         features=[_feature_status_out(f) for f in detail.features],
@@ -275,8 +274,6 @@ def facility_detail_out(
         prices=_price_table_out(prices) if prices is not None else None,
         provenance=_provenance_out(detail.provenance),
         lane_panels=[_basin_panel_out(p) for p in detail.lane_panels],
-        amenities=list(detail.amenities),
-        accessibility=detail.accessibility,
         last_admission_before_min=(
             int(detail.last_admission_before.total_seconds() // 60)
             if detail.last_admission_before is not None

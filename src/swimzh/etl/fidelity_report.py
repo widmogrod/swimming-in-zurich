@@ -26,7 +26,7 @@ from enum import Enum
 
 from swimzh.core.errors import ProviderError
 from swimzh.core.result import Err, Ok
-from swimzh.domain.models import Facility, FeatureKind
+from swimzh.domain.models import Facility
 from swimzh.domain.schedule import ScheduleRule, Weekday
 from swimzh.providers.infrastruktur import ParsedBasinPhysical, parse_infrastruktur
 from swimzh.providers.schedule_scraper import parse_notices, parse_schedule
@@ -303,29 +303,6 @@ def _lanes_entry(ms: tuple[PoolMeasurement, ...]) -> GapEntry:
     )
 
 
-def _derivable_amenities(m: PoolMeasurement) -> frozenset[str]:
-    """The curated amenity tags reconstructable from this pool's parsed prose: a length tag
-    (``"50m"``) from a parsed basin dimension, ``"sauna"`` from a parsed sauna feature."""
-    lengths = {f"{int(p.dimensions.length_m)}m" for p in m.physicals if p.dimensions is not None}
-    has_sauna = any(f.kind is FeatureKind.SAUNA for f in m.curated.features)
-    return frozenset(a for a in m.curated.amenities if a in lengths or (a == "sauna" and has_sauna))
-
-
-def _amenities_entry(ms: tuple[PoolMeasurement, ...]) -> GapEntry:
-    """Free-text amenity tags (``"50m"``, ``"sauna"``) are not stored verbatim by any provider,
-    but they are *derivable* from parsed physicals + features with a small rule."""
-    notes = [
-        f"{m.pool_id}: {sorted(derived)} derivable from prose"
-        for m in _prose_pools(ms)
-        if (derived := _derivable_amenities(m))
-    ]
-    return GapEntry(
-        "facility.amenities",
-        Sourcing.DERIVABLE_WITH_RULE if notes else Sourcing.NOT_IN_SOURCE,
-        "; ".join(notes) if notes else "no amenity tag derivable from parsed prose",
-    )
-
-
 def _access_category_entry(ms: tuple[PoolMeasurement, ...]) -> GapEntry:
     source_kinds = _source_access_kinds(ms)
     curated_public = _curated_pools_declaring(ms, "PublicSwim")
@@ -379,13 +356,12 @@ def _structural_entry(fact_class: str, evidence: str) -> GapEntry:
 
 def build_gap_report(measurements: tuple[PoolMeasurement, ...]) -> GapReport:
     """Classify every curated fact-class from the measurement. Verdicts for reproducible classes
-    (kind/dimensions/lanes/amenities/access/closures) are *derived*; structural residue classes
+    (kind/dimensions/lanes/access/closures) are *derived*; structural residue classes
     (basin-schedule-split, prices, holiday policy, scope) are fixed by the source format."""
     entries = (
         _kind_entry(measurements),
         _dimensions_entry(measurements),
         _lanes_entry(measurements),
-        _amenities_entry(measurements),
         _access_category_entry(measurements),
         _closures_entry(measurements),
         _absent_access_entry(measurements, "LaneSwim", "lane_swim"),

@@ -46,6 +46,12 @@ class ProducerKind(Enum):
     SOURCED = "sourced"  # a website provider already produces it
     CURATED_CROSSWALK = "curated-crosswalk"  # irreducible binding/correlation fact, on no website
     DROP_CANDIDATE = "drop-candidate"  # genuine residue: no website producer today
+    #: A source demonstrably EXISTS but no provider reads it yet. Distinct from
+    #: DROP_CANDIDATE, whose whole meaning is "nothing out there produces this". Without
+    #: this member every such field had to be filed as a drop candidate, which is how
+    #: `lockers` (a `Mietobjekt|Preis` table on 25 pages) and `last_admission_before`
+    #: (stated verbatim on 32) came to be listed as residue scheduled for deletion.
+    SOURCEABLE_UNBUILT = "sourceable-unbuilt"  # a source exists; no provider built yet
     BUILD_METADATA = "build-metadata"  # provenance/honesty tag, from the build not a provider
 
 
@@ -156,21 +162,14 @@ _FACILITY: tuple[FieldSourcing, ...] = (
         "WFS lat/lon (live WFS since S3; previously committed catalog.json).",
     ),
     FieldSourcing(
-        "facility.amenities",
-        ProducerKind.DROP_CANDIDATE,
-        None,
-        "0/7",
-        "Facility amenity string-set — curated-only; NO provider emits it. `infrastruktur` emits "
-        "structured `features`, not this free string-set. Residue → S5d drop unless folded into "
-        "features.",
-    ),
-    FieldSourcing(
         "facility.public_holiday_policy",
-        ProducerKind.DROP_CANDIDATE,
-        None,
-        "0/7",
-        "Not in any source (S1 residue). Recorded-drop candidate (S5d) unless a discovered signal "
-        "is found.",
+        ProducerKind.SOURCED,
+        _SCHEDULE,
+        "4/57 stated; 53 honestly unknown",
+        "FALSIFIED 2026-08-04: four pools write '(und Feiertage)' into a Sunday timetable row "
+        "(blaesi, bungertwies, leimbach, kaeferberg) — the city stating SUNDAY_SCHEDULE. Read by "
+        "schedule_scraper._holiday_policy. Every other pool is None (unknown); the field no longer "
+        "defaults to a fabricated NORMAL that the resolver then acted on.",
     ),
     FieldSourcing(
         "facility.prices",
@@ -208,16 +207,6 @@ _FACILITY: tuple[FieldSourcing, ...] = (
         "parse_notices over the pool page (alerts/notices).",
     ),
     FieldSourcing(
-        "facility.website",
-        ProducerKind.SOURCED,
-        _ROSTER,
-        "7/7",
-        "WFS `www`, with the scheme repaired at the provider boundary for the one host that "
-        "publishes an `https` URL it serves no TLS on (`www.sportamt.ch` → `http`, which 302s to "
-        "the real page). So: the WFS link to the official pool page, made reachable — not "
-        "necessarily the URL the city published.",
-    ),
-    FieldSourcing(
         "facility.features",
         ProducerKind.SOURCED,
         _INFRA,
@@ -229,24 +218,20 @@ _FACILITY: tuple[FieldSourcing, ...] = (
     ),
     FieldSourcing(
         "facility.lockers",
-        ProducerKind.DROP_CANDIDATE,
+        ProducerKind.SOURCEABLE_UNBUILT,
         None,
-        "0/7",
-        "Locker options — curated-only; no provider extracts them. Residue → S5d drop.",
-    ),
-    FieldSourcing(
-        "facility.accessibility",
-        ProducerKind.DROP_CANDIDATE,
-        None,
-        "0/7",
-        "Free-text accessibility note — curated-only; no provider. Residue → S5d drop.",
+        "0/57 written; 25 pages carry a source",
+        "FALSIFIED 2026-08-02 by live fetch: 25 stadt-zuerich.ch pool pages carry a "
+        "<stzh-datatable columns=[Mietobjekt, Preis]> (101 rows). No provider reads it YET, which "
+        "is a different statement from 'no source exists' — see Gap 3 of the coverage catalogue.",
     ),
     FieldSourcing(
         "facility.last_admission_before",
-        ProducerKind.DROP_CANDIDATE,
+        ProducerKind.SOURCEABLE_UNBUILT,
         None,
-        "0/7",
-        "Last-admission offset — curated-only; no provider. Residue → S5d drop.",
+        "0/57 written; 32 pages state it",
+        "FALSIFIED 2026-08-02: 'Der letzte Einlass erfolgt bis 30 Minuten vor Badschluss' appears "
+        "on 32 of 32 pool pages, value 30 with zero variance. A parser is unbuilt, not absent.",
     ),
 )
 

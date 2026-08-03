@@ -7,7 +7,6 @@ address: "Bungertwies 2, 8008 Zürich"
 source: "stadt-zuerich.ch/hallenbaeder/bungertwies (curated, illustrative)"
 valid_as_of: "2026-07-18"
 geo: { lat: 47.3670, lon: 8.5610 }
-amenities: ["25m"]
 public_holiday_policy: "normal"
 
 prices:

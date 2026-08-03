@@ -131,25 +131,19 @@ def test_scraped_only_pool_passes_through() -> None:
 
 
 def test_scraped_features_and_lockers_survive_compose_onto_non_curated_base() -> None:
-    # Slice F acceptance: the widened ScrapedAspects (features/lockers/website/amenities/
-    # accessibility) fold through compose onto a scraped-only (non-curated) base.
+    # Slice F acceptance: the widened ScrapedAspects (features/lockers) folds through
+    # compose onto a scraped-only (non-curated) base.
     sauna = Feature(kind=FeatureKind.SAUNA, name="Sauna", surcharge_chf=Decimal("10.00"))
     locker = LockerOption(category=LockerCategory.VALUABLES, fee_chf=Decimal("2.00"))
     scraped = replace(
         _scraped_city(prices=None),
         features=(sauna,),
         lockers=(locker,),
-        website="https://example.test/pool",
-        amenities=frozenset({"wifi"}),
-        accessibility="barrierefrei",
     )
     result = compose((), ((CITY, scraped),))
     merged = result.facilities[0]
     assert merged.features == (sauna,)
     assert merged.lockers == (locker,)
-    assert merged.website == "https://example.test/pool"
-    assert merged.amenities == frozenset({"wifi"})
-    assert merged.accessibility == "barrierefrei"
 
 
 def _stripped_curated_city() -> Facility:

@@ -82,7 +82,6 @@ class StoredFacilityDTO(BaseModel):
     baditicker_poiid: str | None = None
     aliases: list[str]
     geo: GeoDTO | None
-    amenities: list[str]
     # `None` == no source states this pool's public-holiday behaviour. Distinct from "normal",
     # which is a positive claim. Defaulted so a pre-existing blob (whose value was the
     # fabricated "normal") still validates; a rebuild replaces it with the honest unknown.
@@ -91,7 +90,6 @@ class StoredFacilityDTO(BaseModel):
     closures: list[ClosureDTO]
     basins: list[BasinDTO]
     notices: list[_NoticeDTO]
-    website: str | None
     features: list[FeatureDTO]
     lockers: list[LockerOptionDTO]
     # Slice F additive facility-level statics. Defaulted so a pre-Slice-F gold blob (which lacks
@@ -100,7 +98,6 @@ class StoredFacilityDTO(BaseModel):
     # keys (`website`, `prices`, …) — NOT popped when None. The Slice-D-style pop-when-default
     # serializer is applied only to the deeply-nested basin/lane-plan DTOs, whose byte-stability
     # the round-trip fixtures assert; facility-level keys carry no such byte-identity contract.
-    accessibility: str | None = None
     last_admission_before: timedelta | None = None
 
 
@@ -121,7 +118,6 @@ def to_stored(facility: Facility) -> StoredFacilityDTO:
         baditicker_poiid=ident.baditicker_poiid,
         aliases=list(ident.aliases),
         geo=mapping.geo_to_dto(facility.geo) if facility.geo is not None else None,
-        amenities=sorted(facility.amenities),
         public_holiday_policy=(
             _POLICY_TO[facility.public_holiday_policy]
             if facility.public_holiday_policy is not None
@@ -134,10 +130,8 @@ def to_stored(facility: Facility) -> StoredFacilityDTO:
             _NoticeDTO(text=n.text, active_from=n.active_from, active_to=n.active_to)
             for n in facility.notices
         ],
-        website=facility.website,
         features=[mapping.feature_to_dto(f) for f in facility.features],
         lockers=[mapping.locker_to_dto(lo) for lo in facility.lockers],
-        accessibility=facility.accessibility,
         last_admission_before=facility.last_admission_before,
     )
 
@@ -163,7 +157,6 @@ def from_stored(stored: StoredFacilityDTO) -> Facility:
         ),
         basins=tuple(mapping.basin_from_dto(b) for b in stored.basins),
         geo=mapping.geo_from_dto(stored.geo) if stored.geo is not None else None,
-        amenities=frozenset(stored.amenities),
         closures=tuple(mapping.closure_from_dto(c) for c in stored.closures),
         public_holiday_policy=(
             _POLICY_FROM[stored.public_holiday_policy]
@@ -175,10 +168,8 @@ def from_stored(stored: StoredFacilityDTO) -> Facility:
             Notice(text=n.text, active_from=n.active_from, active_to=n.active_to)
             for n in stored.notices
         ),
-        website=stored.website,
         features=tuple(mapping.feature_from_dto(f) for f in stored.features),
         lockers=tuple(mapping.locker_from_dto(lo) for lo in stored.lockers),
-        accessibility=stored.accessibility,
         last_admission_before=stored.last_admission_before,
     )
 

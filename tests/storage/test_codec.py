@@ -56,7 +56,7 @@ _RULE = ScheduleRule(
 
 def _rich_facility() -> Facility:
     """A fully-populated facility standing in for a composed store row: a ruled basin carrying
-    physicals + a lane binding, plus facility-level statics (website/features/lockers). Built
+    physicals + a lane binding, plus facility-level statics (features/lockers). Built
     in-memory because curated YAML no longer carries any of this (delete-curated-schedule-tier S3);
     the codec is a pure inverse, so a synthetic subject exercises it exactly as a real one did."""
     return Facility(
@@ -75,7 +75,6 @@ def _rich_facility() -> Facility:
                 physical_source=BasinSource.CURATED,
             ),
         ),
-        website="https://example.org/hallenbad-city",
         features=(
             Feature(
                 kind=FeatureKind.SAUNA,
@@ -169,14 +168,12 @@ def test_roundtrip_covers_slice_f_basin_and_facility_fields(
     facility = replace(
         base,
         basins=(basin, *base.basins[1:]),
-        accessibility="barrierefrei, Lift zum Becken",
         last_admission_before=timedelta(minutes=30),
     )
     back = codec.loads(codec.dumps(facility))
     assert back == facility
     assert back.basins[0].measured_temp_c == Decimal("26.5")
     assert back.basins[0].diving_platforms_m == (Decimal("1"), Decimal("3"), Decimal("5"))
-    assert back.accessibility == "barrierefrei, Lift zum Becken"
     assert back.last_admission_before == timedelta(minutes=30)
 
 
@@ -191,9 +188,8 @@ def test_basin_without_slice_f_fields_serializes_without_the_new_keys(
 
 
 def test_facility_level_statics_survive_the_codec(facilities: tuple[Facility, ...]) -> None:
-    # Facility-level statics (website/features/lockers) round-trip through the codec.
+    # Facility-level statics (features/lockers) round-trip through the codec.
     city = codec.loads(codec.dumps(facilities[0]))
-    assert city.website is not None
     assert {f.kind for f in city.features} == {FeatureKind.SAUNA}
     assert city.features[0].hours, "sauna hours should survive as ScheduleRules"
     assert {lo.category for lo in city.lockers} == set(LockerCategory)
@@ -207,7 +203,6 @@ def test_roundtrip_covers_every_facility_level_static_field(
     base = facilities[0]
     facility = replace(
         base,
-        website="https://example.org/hallenbad",
         features=(
             Feature(
                 kind=FeatureKind.STEAM_BATH,

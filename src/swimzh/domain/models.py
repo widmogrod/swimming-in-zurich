@@ -218,7 +218,6 @@ class Facility:
     provenance: Provenance
     basins: tuple[Basin, ...]
     geo: GeoPoint | None = None
-    amenities: frozenset[str] = frozenset()
     closures: tuple[ClosureRange, ...] = field(default_factory=tuple)
     #: How the facility behaves on a public holiday, or `None` when **no source states it**.
     #: `None` is not "normal": it is the honest unknown. The previous default asserted
@@ -229,11 +228,8 @@ class Facility:
     public_holiday_policy: HolidayPolicy | None = None
     prices: PriceTable | None = None
     notices: tuple[Notice, ...] = field(default_factory=tuple)
-    website: str | None = None  # static (WFS `www` / official pool page)
     features: tuple[Feature, ...] = field(default_factory=tuple)
     lockers: tuple[LockerOption, ...] = field(default_factory=tuple)
-    # Free-text accessibility note ("barrierefrei", "Lift zum Becken") — static, best-effort.
-    accessibility: str | None = None
     # How long before closing the last admission is (e.g. 30 min). `timedelta` so the UI can render
     # it against the resolved closing time rather than hard-coding a clock.
     last_admission_before: timedelta | None = None

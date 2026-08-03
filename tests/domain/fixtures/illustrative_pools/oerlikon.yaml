@@ -6,7 +6,6 @@ address: "Wallisellenstrasse 100, 8050 Zürich"
 source: "stadt-zuerich.ch/hallenbaeder/oerlikon (curated, illustrative)"
 valid_as_of: "2026-07-18"
 geo: { lat: 47.4106, lon: 8.5528 }
-amenities: ["50m", "diving"]
 public_holiday_policy: "closed"
 
 prices:

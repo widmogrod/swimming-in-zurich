@@ -183,12 +183,6 @@ def test_residue_classes_are_not_in_source(illustrative_data_dir: Path) -> None:
         assert gaps[residue] is Sourcing.NOT_IN_SOURCE, residue
 
 
-def test_amenities_are_derivable_with_a_rule(illustrative_data_dir: Path) -> None:
-    assert (
-        _gap_by_class(illustrative_data_dir)["facility.amenities"] is Sourcing.DERIVABLE_WITH_RULE
-    )
-
-
 def test_unparseable_page_is_a_source_error_not_a_missing_fixture(
     illustrative_data_dir: Path,
 ) -> None:

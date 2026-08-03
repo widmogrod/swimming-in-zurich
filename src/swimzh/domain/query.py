@@ -530,14 +530,11 @@ class FacilityDetail:
     facility_id: PoolId
     facility_name: str
     address: str
-    website: str | None
     basins: tuple[Basin, ...]
     features: tuple[FeatureStatus, ...]
     lockers: tuple[LockerOption, ...]
     provenance: Provenance
     lane_panels: tuple[BasinLanePanel, ...] = field(default_factory=tuple)
-    amenities: tuple[str, ...] = field(default_factory=tuple)
-    accessibility: str | None = None
     last_admission_before: timedelta | None = None
 
 
@@ -573,14 +570,11 @@ def facility_detail(facility: Facility, at: datetime, calendar: ZurichCalendar) 
         facility_id=facility.identity.facility_id,
         facility_name=facility.identity.name,
         address=facility.address,
-        website=facility.website,
         basins=facility.basins,
         features=tuple(_feature_status(facility, f, at_local, calendar) for f in facility.features),
         lockers=facility.lockers,
         provenance=facility.provenance,
         lane_panels=lane_panels,
-        amenities=tuple(sorted(facility.amenities)),
-        accessibility=facility.accessibility,
         last_admission_before=facility.last_admission_before,
     )
 

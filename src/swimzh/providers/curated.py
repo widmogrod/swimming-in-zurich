@@ -95,16 +95,13 @@ def _map_facility(dto: FacilityDTO, identity: PoolIdentity) -> Facility:
         ),
         basins=tuple(mapping.basin_from_dto(b) for b in dto.basins),
         geo=mapping.geo_from_dto(dto.geo) if dto.geo is not None else None,
-        amenities=frozenset(dto.amenities),
         closures=tuple(mapping.closure_from_dto(c) for c in dto.closures),
         public_holiday_policy=(
             _POLICIES[dto.public_holiday_policy] if dto.public_holiday_policy is not None else None
         ),
         prices=mapping.price_table_from_dto(dto.prices) if dto.prices is not None else None,
-        website=dto.website,
         features=tuple(mapping.feature_from_dto(f) for f in dto.features),
         lockers=tuple(mapping.locker_from_dto(lo) for lo in dto.lockers),
-        accessibility=dto.accessibility,
         last_admission_before=dto.last_admission_before,
     )
 

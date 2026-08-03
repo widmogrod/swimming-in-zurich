@@ -387,7 +387,6 @@ class FacilityDTO(_Strict):
     source: str | None = None
     valid_as_of: date | None = None
     geo: GeoDTO | None = None
-    amenities: list[str] = Field(default_factory=list)
     #: `None` (the default) == the author did not state it. Previously defaulted to "normal",
     #: which turned silence into a positive claim that the resolver then acted on.
     public_holiday_policy: _HolidayPolicy | None = None
@@ -397,7 +396,6 @@ class FacilityDTO(_Strict):
     website: str | None = None
     features: list[FeatureDTO] = []
     lockers: list[LockerOptionDTO] = []
-    accessibility: str | None = None
     last_admission_before: timedelta | None = None
 
 
