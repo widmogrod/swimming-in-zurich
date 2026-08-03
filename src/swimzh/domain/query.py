@@ -145,7 +145,11 @@ class TempReading:
 
     measured_at: datetime  # tz-aware Europe/Zurich (the feed's `dateModified`)
     celsius: Decimal | None  # None when the feed cell is empty (measured nothing yet)
-    is_open: bool  # from `openClosedTextPlain`
+    #: From `openClosedTextPlain`. `None` when the feed cell is EMPTY — absent is not closed.
+    #: 5 of the 25 feed rows ship an empty cell (4 Hallenbäder + Männerbad, with
+    #: `dateModified` 1–2.5 years stale); mapping that to `False` reported them as closed.
+    #: `celsius` above already models an empty cell as `None`; this now matches it.
+    is_open: bool | None
     source: str  # "baditicker"
 
     def __post_init__(self) -> None:

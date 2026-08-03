@@ -116,7 +116,9 @@ def _parse_bath(block: str) -> Result[tuple[str, TempReading], ProviderError]:
             )
         )
 
-    is_open = (_cell(block, _OPEN_RE) or "").lower() == "offen"
+    # An ABSENT or empty cell is unknown, not closed — see `TempReading.is_open`.
+    open_cell = (_cell(block, _OPEN_RE) or "").strip()
+    is_open = open_cell.lower() == "offen" if open_cell else None
     reading = TempReading(measured_at=measured_at, celsius=celsius, is_open=is_open, source=_SOURCE)
     return Ok((poiid_text, reading))
 

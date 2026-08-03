@@ -77,7 +77,11 @@ def test_parses_saved_feed_fixture() -> None:
     # NOT an error — the reading still carries open/closed + freshness.
     blaesi = readings["hb005"]
     assert blaesi.celsius is None
-    assert blaesi.is_open is False  # empty openClosedTextPlain -> not "offen"
+    # An empty <openClosedTextPlain> is UNKNOWN, not closed. This assertion previously read
+    # `is False` with the comment "empty -> not 'offen'", pinning the defect as if it were the
+    # contract: 5 of the feed's 25 rows ship an empty cell (4 Hallenbäder + Männerbad, with
+    # dateModified 1-2.5 years stale), so five pools were reported shut on no evidence.
+    assert blaesi.is_open is None
     # Käferberg: empty temp cell but "offen" — celsius None yet still a live open reading.
     assert readings["hb007"].celsius is None
     assert readings["hb007"].is_open is True
@@ -187,3 +191,19 @@ def test_ttl_cache_collapses_bursts_to_one_fetch() -> None:
     clock.now = clock.now + timedelta(seconds=121)
     assert isinstance(provider.read("fb012"), Ok)
     assert handler.calls == 2
+
+
+def test_absent_open_cell_is_unknown_not_closed() -> None:
+    """`celsius` has always modelled an empty cell as None; `is_open` was the odd one out,
+    collapsing "the feed says nothing" into the positive claim "this pool is shut"."""
+    body = FIXTURE.read_bytes()
+    result = parse(body)
+    assert isinstance(result, Ok), result
+
+    unknown = {k for k, r in result.value.items() if r.is_open is None}
+    closed = {k for k, r in result.value.items() if r.is_open is False}
+
+    assert unknown, "the fixture must still exercise the empty-cell path"
+    assert not (unknown & closed), "a reading is either unknown or closed, never both"
+    # And an explicit "geschlossen" still parses as a real False, not swept into unknown.
+    assert result.value["fb012"].is_open is False
