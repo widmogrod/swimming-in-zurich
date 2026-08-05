@@ -237,7 +237,14 @@ without public swimming are excluded and cannot become build-aborting failures.
 - **Touches**: `etl/scrape.py` (the conjunction predicate; rename
   `scrape_indoor_facilities` + its module and `ScrapeFailure` docstrings, which no longer
   describe what it does), `tests/etl/test_scrape.py`, `domain/catalog.py` +
-  `storage/codec.py` — **comments only**. `freshness_of`'s predicate MUST stay
+  `storage/codec.py` — **comments only**. Added during S2 as forced consequences:
+  `src/swimzh/cli.py` (the rename's call site + its stale "INDOOR catalog pool" docstring),
+  `tests/test_cli.py` (the cache-tier guard derives its URL set from the predicate),
+  `tests/providers/wfs_snapshot.py` (the offline build transport had a fixture for only 1 of
+  the 4 school pages, so every gold_db-backed suite aborted fail-fast),
+  `apps/web/tests/api/test_single_source_of_truth.py` (it asserted aemtler is `no_source` —
+  exactly what this slice inverts), `data/pools/aemtler.yaml` (its header named the deleted
+  `scrape_indoor_facilities` and claimed the pool is never scraped). `freshness_of`'s predicate MUST stay
   `kind in (INDOOR, THERMAL)`: adding `SCHOOL` flips all 14 rule-less school pools from
   `NO_SOURCE` to `AWAITING_SCRAPE`, violating this slice's own criterion below and failing
   `tests/storage/test_schedule_freshness.py:70-79`. The 4 scraped school pools carry rules
@@ -280,8 +287,20 @@ Appended by /dev:implement after each slice — never rewritten. Newest row last
 | date | slice | status | divergence from plan | tech debt created | human review? |
 |------|-------|--------|----------------------|-------------------|---------------|
 | 2026-08-05 | S1 | done | altweg is 2 rules not 3 (plan wrong; verified fixture + live); `field_sourcing.py` touched beyond Touches; `GenderDiverse` classified only when the cell states an age | trans/nb cell without a published age falls through to PublicSwim/AdultsOnly — the union has no "restricted, bound unknown" member; `source_text` persisted-but-unread, also rides `FeatureDTO.hours`; `GirlsOnly` denies `Gender.DIVERSE` while `WomenOnly` gives it a confirm | yes |
+| 2026-08-05 | S2 | done | `declared_sources` returns `DeclaredSource(entry, url)` pairs (narrows `url` once instead of re-asserting at 3 sites); 5 files touched beyond Touches, all forced consequences, each disclosed above | `freshness_of` still answers by kind alone, so its correctness rests on all 4 declared school pools happening to carry rules — a declared school source yielding no rule would report `no_source` rather than `awaiting_scrape`; the honest fix needs a URL or declared-source flag on `Facility`. `data/catalog.json` is stale vs live WFS (snapshot `isengrind`, live `wolfsblick`) — both are URL-sharers so no count moves. `schulschwimmanlage_borrweg.html` fixture is unreachable (borrweg shares the overview URL) | yes |
 
 ## Decisions & divergences
+
+- **2026-08-05, S2** — critic returned `revise` on one real stale claim:
+  `data/pools/aemtler.yaml`'s header named the deleted `scrape_indoor_facilities` and said
+  the pool is permanently `NO_SOURCE`. It was the last live reference to that symbol outside
+  archival docs and sat in the committed crosswalk, not a doc. Rewritten; the still-true
+  "no Belegungsplan" sentence kept. `grep -rn scrape_indoor_facilities src/ tests/ apps/
+  data/` now returns nothing.
+- **2026-08-05, S2** — `freshness_of` deliberately left answering by kind. Adding `SCHOOL`
+  would flip all 14 rule-less school pools to `AWAITING_SCRAPE`, breaking this slice's own
+  criterion and `tests/storage/test_schedule_freshness.py`. Confirmed byte-unchanged by the
+  critic; only the stale docstring moved. Recorded as tech debt rather than fixed.
 
 - **2026-08-05, S1** — the plan's "altweg 3" acceptance number was **wrong**. Adjudicated
   against the committed fixture and a live re-fetch: two rows, one weekday. Criterion

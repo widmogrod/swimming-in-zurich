@@ -188,12 +188,15 @@ def schedule_freshness(facility_doc: str | None) -> ScheduleFreshness:
     never disagree with the blob it describes. Replaced the `is_curated` boolean in S1.
 
     * `SCRAPED` — the decoded facility has ≥1 basin carrying ≥1 rule.
-    * `AWAITING_SCRAPE` — no rule yet, but the pool is scrapeable. The scrapeable set is what
-      `scrape_indoor_facilities` fetches: WFS-`indoor` stadt-zuerich pools. A `Wärmebad` (`THERMAL`)
+    * `AWAITING_SCRAPE` — no rule yet, but every pool of this kind is a declared source
+      (`etl.scrape.declared_sources`): WFS-`indoor` stadt-zuerich pools. A `Wärmebad` (`THERMAL`)
       like Käferberg is WFS-`indoor` but registry-overridden to `thermal` for display, so it IS
       scraped and must read `AWAITING_SCRAPE`, not `NO_SOURCE` — hence both kinds count here.
-    * `NO_SOURCE` — no rule and not a scrapeable kind (e.g. an `aemtler`-style `school` pool, or an
-      outdoor/lake/river pool), OR a NULL blob: no schedule source at all.
+      `SCHOOL` does NOT: only 4 of the 18 Schulschwimmanlagen have their own page, and those 4
+      carry rules, so they read `SCRAPED` from the blob without needing the kind test.
+    * `NO_SOURCE` — no rule and not such a kind (e.g. a `schulschwimmanlage-hardau`-style `school`
+      pool with no page of its own, or an outdoor/lake/river pool), OR a NULL blob: no schedule
+      source at all.
 
     Both the read path (``load_roster``) and any build-time consumer share this one function so
     the rule cannot diverge. This is the BLOB door onto it: the rule itself is

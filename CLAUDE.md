@@ -108,9 +108,20 @@ proxy mounts, so `HTTP(S)_PROXY` is no longer honoured. See
 derived at read from its `facility_doc` blob (`storage/codec.schedule_freshness`, replacing the old
 `is_curated` boolean): **`scraped`** (≥1 basin carries a rule), **`awaiting_scrape`** (scrapeable —
 a WFS-`indoor` stadt-zuerich pool, incl. a `thermal` display-override like Käferberg — but no
-schedule yet), **`no_source`** (not scrapeable, e.g. the `aemtler` school pool, or an outdoor/lake
-pool). A schedule-less pool is a first-class honest state on `/pools` (`freshness`), `/swim`
-(status), and the UI's three ghost states — **never rendered as "closed"**.
+schedule yet), **`no_source`** (not scrapeable, e.g. `schulschwimmanlage-hardau` — one of the 14
+Schulschwimmanlagen with no page of their own — or an outdoor/lake pool). A schedule-less pool is a
+first-class honest state on `/pools` (`freshness`), `/swim` (status), and the UI's three ghost
+states — **never rendered as "closed"**.
+
+**Which pools get scraped: `etl/scrape.declared_sources`** — a conjunction of `kind ∈ {indoor,
+thermal, school}`, having a URL, and **no other roster entry sharing that URL**. The last test is
+what makes school pools safe to admit: 14 entries (13 *"ohne öffentliches Schwimmen"* plus
+`schulschwimmanlage-borrweg`) all point at the generic `hallenbaeder.html`, and under fail-fast
+scraping that one unparseable overview would abort every build 14 times over. The predicate selects
+**11** pools (7 indoor/thermal + 4 school), pinned offline against `data/catalog.json`. Note
+`domain/catalog.freshness_of` deliberately does **not** include `school` in its kind test — only 4
+of 18 are declared sources, and `Facility` carries no URL to distinguish them; the 4 carry rules
+and so report `scraped` from the blob itself.
 
 Data sources — **everything authoritative is SOURCED**; `data/` carries no source-of-truth facts:
 - **Sourced (WFS roster + scrapers):** identity, geo, address, basin physicals, schedules, prices,

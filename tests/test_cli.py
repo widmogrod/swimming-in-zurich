@@ -46,6 +46,7 @@ from swimzh.domain.lane_plan import LanePlan
 from swimzh.domain.models import BasinId, Facility, PoolKind, reconstruct_pool_id
 from swimzh.domain.pricing import PriceCategory, PriceEntry, PriceTable
 from swimzh.etl.build import build_store
+from swimzh.etl.scrape import declared_sources
 from swimzh.providers.geo_sport import POOL_LAYERS
 from swimzh.providers.price_scraper import PRICES_URL
 from swimzh.storage import catalog_json
@@ -962,19 +963,20 @@ def test_build_stamps_each_provider_call_with_its_own_tier_and_ttl(tmp_path: Pat
     # …and the two pool-page sources must be stamped on the RIGHT pages. The triples above cannot
     # see a `schedules`↔`pages` swap (both fetch pool pages, so the URL class collapses them) —
     # yet a swap would give timetables a 7-day TTL and the discovery hop 12 hours. So pin the URL
-    # SET behind each stamp: the timetable scrape visits exactly the INDOOR pages, the discovery
-    # hop every roster page, and the tariff page rides the discovery hop's stamp (same policy).
-    # The timetable scrape selects on the FETCHED WFS roster (`_ROSTER`, the snapshot the transport
-    # replays); discovery selects on the STORED spine. They are not interchangeable — a
-    # registry.yaml kind override moves Käferberg from WFS-`indoor` to stored-`thermal` — so each
-    # expectation is derived from the source its own provider actually reads.
-    indoor_pages = {e.url for e in _ROSTER if e.kind is PoolKind.INDOOR and e.url}
+    # SET behind each stamp: the timetable scrape visits exactly the DECLARED SOURCES' pages, the
+    # discovery hop every roster page, and the tariff page rides the discovery hop's stamp (same
+    # policy). The timetable scrape selects on the FETCHED WFS roster (`_ROSTER`, the snapshot the
+    # transport replays) via `declared_sources`; discovery selects on the STORED spine. They are not
+    # interchangeable — a registry.yaml kind override moves Käferberg from WFS-`indoor` to
+    # stored-`thermal` — so each expectation is derived from the source its own provider reads.
+    declared_pages = {url for _entry, url in declared_sources(_ROSTER)}
     all_pages = {e.entry.url for e in load_roster(open_db(db)) if e.entry.url}
     fetched: dict[tuple[str, int], set[str]] = defaultdict(set)
     for url, tier, ttl in recorder.calls:
         fetched[(tier, ttl)].add(url)
 
-    assert fetched[("snapshot", 12 * _HOUR_S)] == indoor_pages
+    assert fetched[("snapshot", 12 * _HOUR_S)] == declared_pages
+    assert len(declared_pages) == 11  # 7 indoor/thermal + the 4 school pools admitted in S2
     # NB `price_scraper` and `page_provider` share BOTH tier and TTL (static/7d — the latent
     # overlap the plan records under its S3 decisions), so this one union cannot tell them apart:
     # binding `prices` to the page-provider client would still pass. Harmless while the two

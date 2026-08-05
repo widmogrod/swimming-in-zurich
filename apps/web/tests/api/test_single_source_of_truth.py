@@ -129,18 +129,20 @@ def test_pools_expose_the_derived_freshness(gold_db: Path) -> None:
     """`/pools` reads the one `pool` table and surfaces each pool's derived three-state
     `freshness`, so the UI reads schedule status from the API rather than guessing it by name.
 
-    Read against the shipping store (the atomic `build`): City's schedule is SCRAPED, the school
-    pool `aemtler` has no schedule source at all (`no_source`), and the ~50 non-indoor roster pins
-    are `no_source` too. The `awaiting_scrape` state (a scrapeable indoor pool not yet scraped) is
-    exercised by the pre-scrape store in the S1 acceptance tests; here the shipping mix is
-    scraped + no_source. (The autouse fixture already points the app at `gold_db`.)
+    Read against the shipping store (the atomic `build`): City's schedule is SCRAPED, and so is the
+    school pool `aemtler` since S2 admitted the four Schulschwimmanlagen that own their page. A
+    school pool without its own page (`hardau` shares the generic overview URL) is `no_source`, as
+    are the ~50 non-indoor roster pins. The `awaiting_scrape` state (a scrapeable indoor pool not
+    yet scraped) is exercised by the pre-scrape store in the S1 acceptance tests; here the shipping
+    mix is scraped + no_source. (The autouse fixture already points the app at `gold_db`.)
     """
     with TestClient(app) as client:
         response = client.get("/pools")
     pools = {p["pool_id"]: p for p in response.json()["pools"]}
     valid = {"scraped", "awaiting_scrape", "no_source"}
     assert all(p["freshness"] in valid for p in pools.values())
-    # City's schedule is scraped in the atomic build; the school pool aemtler stays no_source.
     assert pools["hallenbad-city"]["freshness"] == "scraped"
-    assert pools["schulschwimmanlage-aemtler"]["freshness"] == "no_source"
+    # A declared-source school pool IS scraped; one sharing the overview URL stays no_source.
+    assert pools["schulschwimmanlage-aemtler"]["freshness"] == "scraped"
+    assert pools["schulschwimmanlage-hardau"]["freshness"] == "no_source"
     assert sum(1 for p in pools.values() if p["freshness"] != "scraped") >= 40

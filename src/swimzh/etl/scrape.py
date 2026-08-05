@@ -1,4 +1,9 @@
-"""Scrape each indoor pool's official page into an identity-free ``(SourceRef, aspects)`` extract.
+"""Scrape each declared source's official page into an identity-free ``(SourceRef, aspects)``
+extract.
+
+A **declared source** is a roster entry that both plausibly has a timetable and owns the page it
+points at — see `declared_sources` for the predicate. Today that is the 7 indoor/thermal city
+pools plus the 4 Schulschwimmanlagen that publish public swimming on their own page.
 
 Per pool we scrape: the timetable (→ rules), notices/alerts (→ `Notice`s, and closure-type
 notices → `ClosureRange`s), and attach the shared scraped admission `PriceTable` for city-run
@@ -6,18 +11,20 @@ pools. The result is a ``ScrapedAspects`` payload paired with a ``Name`` ``Sourc
 display name) — **never a canonical id**. ``build.reconcile.resolve_all`` turns each ``Name``
 into a ``PoolId`` by lookup, and ``build.compose`` folds the aspects onto the matching pool.
 
-**Fail-fast (S4):** a declared source (an INDOOR catalog pool with a page URL) whose page fails
-to fetch or parse is **NOT skipped**. Its typed ``ProviderError`` is preserved in
-``ScrapeReport.failures`` so the ``scrape-gold`` command aborts the whole run non-zero carrying
-that cause (owner decision 2026-07-28: no green-exit-with-a-hole). The best-effort skip-and-report
+**Fail-fast (S4):** a declared source whose page fails to fetch or parse is **NOT skipped**. Its
+typed ``ProviderError`` is preserved in ``ScrapeReport.failures`` so the ``scrape-gold`` command
+aborts the whole run non-zero carrying that cause (owner decision 2026-07-28: no
+green-exit-with-a-hole). The best-effort skip-and-report
 posture is gone; the typed error *value* stays.
 """
 
 from __future__ import annotations
 
+from collections import Counter
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from datetime import datetime
+from typing import NamedTuple
 
 from swimzh.build.compose import ScrapedAspects
 from swimzh.build.reconcile import Name, SourceRef
@@ -39,6 +46,13 @@ from swimzh.providers.schedule_scraper import (
 _CLOSURE_WORDS = ("geschlossen", "revision", "gesperrt", "betriebsferien")
 _CITY_HOST = "stadt-zuerich.ch"
 
+#: The kinds whose pages this module's parsers understand. `THERMAL` is a WFS-`indoor` Wärmebad
+#: with a registry display-override; `SCHOOL` joined in 2026-08-05 (school-access-vocabulary S2).
+#: NOTE: `domain.catalog.freshness_of` deliberately does NOT include `SCHOOL` — only 4 of the 18
+#: Schulschwimmanlagen are declared sources, so a rule-less school pool is `NO_SOURCE`, not
+#: `AWAITING_SCRAPE`. `Facility` carries no URL, so it cannot apply the conjunction below.
+_SCRAPEABLE_KINDS = (PoolKind.INDOOR, PoolKind.THERMAL, PoolKind.SCHOOL)
+
 #: Per-pool extra closure extractors for pools whose page is a **private operator's**, not the
 #: city's. Keyed by `pool_id` — deliberately NOT by host: `freibad-dolder`'s operator changed
 #: domain (doldersports.com → doldereisundbad.ch) without notice, and a host-keyed table would
@@ -55,11 +69,19 @@ _OPERATOR_CLOSURES: Mapping[str, Callable[[str], tuple[ClosureRange, ...]]] = {
 Extract = tuple[SourceRef, ScrapedAspects]
 
 
+class DeclaredSource(NamedTuple):
+    """A roster entry that owns a scrapeable page, paired with that page's URL — non-optional,
+    because `declared_sources` has already established it."""
+
+    entry: PoolCatalogEntry
+    url: str
+
+
 @dataclass(frozen=True, slots=True)
 class ScrapeFailure:
-    """A declared source (INDOOR catalog pool) whose page failed to fetch or parse, keyed to its
-    **typed** ``ProviderError`` cause. Not a swallowed skip: ``scrape-gold`` aborts the whole run
-    on any of these, surfacing the cause (S4 fail-fast)."""
+    """A declared source (see `declared_sources`) whose page failed to fetch or parse, keyed to
+    its **typed** ``ProviderError`` cause. Not a swallowed skip: ``scrape-gold`` aborts the whole
+    run on any of these, surfacing the cause (S4 fail-fast)."""
 
     name: str
     url: str
@@ -108,7 +130,33 @@ def _aspects(
     )
 
 
-def scrape_indoor_facilities(
+def declared_sources(catalog: tuple[PoolCatalogEntry, ...]) -> tuple[DeclaredSource, ...]:
+    """The roster entries whose own page we scrape — a **conjunction** of three tests:
+
+    * the kind is one this module's parsers understand: `INDOOR`, its `THERMAL` display-override
+      (a WFS-`indoor` Wärmebad like Käferberg), or a `SCHOOL` pool;
+    * the entry carries a page URL at all;
+    * **no other roster entry carries the same URL.** A shared URL is an *overview* page, not this
+      pool's page: 14 entries (the 13 Schulschwimmanlagen *"ohne öffentliches Schwimmen"* plus
+      `schulschwimmanlage-borrweg`) all point at the generic `hallenbaeder.html`, which states no
+      pool's timetable. Under fail-fast, scraping it would turn one unparseable overview into 14
+      build-aborting failures.
+
+    The kind gate stays load-bearing: the unshared-URL test *alone* selects 28 entries, 21 of them
+    outdoor/lake/river pages that every parser here `ParseError`s on — each one aborting the build.
+    Pinned on the committed WFS snapshot by `tests/etl/test_scrape.py` (== 11). The URL is
+    returned alongside the entry rather than re-read from it, so the not-`None` test is done once
+    here instead of being re-asserted at every use.
+    """
+    seen = Counter(e.url for e in catalog if e.url)
+    return tuple(
+        DeclaredSource(entry=e, url=e.url)
+        for e in catalog
+        if e.kind in _SCRAPEABLE_KINDS and e.url is not None and seen[e.url] == 1
+    )
+
+
+def scrape_declared_sources(
     client: HttpClient,
     catalog: tuple[PoolCatalogEntry, ...],
     fetched_at: datetime,
@@ -117,22 +165,20 @@ def scrape_indoor_facilities(
 ) -> ScrapeReport:
     extracts: list[Extract] = []
     failures: list[ScrapeFailure] = []
-    for entry in catalog:
-        if entry.kind is not PoolKind.INDOOR or not entry.url:
-            continue
-        match fetch_page(client, entry.url):
+    for entry, url in declared_sources(catalog):
+        match fetch_page(client, url):
             case Err(cause):
-                failures.append(ScrapeFailure(name=entry.name, url=entry.url, cause=cause))
+                failures.append(ScrapeFailure(name=entry.name, url=url, cause=cause))
                 continue
             case Ok(raw):
                 page = raw.decode("utf-8", "replace")
 
         schedule = parse_schedule(page)
         if isinstance(schedule, Err):
-            failures.append(ScrapeFailure(name=entry.name, url=entry.url, cause=schedule.error))
+            failures.append(ScrapeFailure(name=entry.name, url=url, cause=schedule.error))
             continue
         notices = parse_notices(page)
-        pool_prices = prices if (prices is not None and _CITY_HOST in entry.url) else None
+        pool_prices = prices if (prices is not None and _CITY_HOST in url) else None
         # City notices carry their own dates; an operator page states its shutdown in prose,
         # so the two closure sources are additive, not alternatives.
         operator = _OPERATOR_CLOSURES.get(entry.pool_id)

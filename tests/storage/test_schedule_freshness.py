@@ -69,8 +69,11 @@ def test_indoor_schedule_less_pool_is_awaiting_scrape(scheduled_facility: Facili
 
 
 def test_school_schedule_less_pool_is_no_source(scheduled_facility: Facility) -> None:
-    # A `school` pool is not scraped by `scrape_indoor_facilities`, so a schedule-less school
-    # (e.g. `aemtler`) stays permanently no_source — never awaiting_scrape.
+    # Only 4 of the 18 Schulschwimmanlagen are declared sources (the other 14 share one overview
+    # URL, which `etl.scrape.declared_sources` excludes). Those 4 carry rules and so read
+    # `scraped` from the blob; a schedule-less school (e.g. `schulschwimmanlage-hardau`) stays
+    # permanently no_source — never awaiting_scrape, which would promise a scrape that will not
+    # come. This is why `freshness_of`'s kind test deliberately omits SCHOOL.
     school = _ruleless(
         replace(
             scheduled_facility,

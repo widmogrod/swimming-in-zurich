@@ -61,7 +61,7 @@ from swimzh.etl.lane_plans import (
     undiscovered_authored,
 )
 from swimzh.etl.roster import fetch_roster
-from swimzh.etl.scrape import scrape_indoor_facilities
+from swimzh.etl.scrape import scrape_declared_sources
 from swimzh.etl.silver import LanePlanAttachment, attach_lane_plans
 from swimzh.providers import geo_sport
 from swimzh.providers.page_provider import DiscoveryReport, discover_pages
@@ -282,14 +282,14 @@ def _compose_schedules(
     folds the scraped aspects onto the curated pool (curated-wins per aspect). Writes the composed
     facilities through the single ``write_schedules`` door.
 
-    Fail-fast: a declared source (an INDOOR catalog pool) whose page fails to fetch/parse aborts
-    the phase (``fatal``) carrying the typed cause. An unresolved WFS name (a scraped pool in no
-    alias) is a benign partial success — the resolved pools are written and the phase exits 1 with
-    the miss named (``fatal=False``), not a data hole.
+    Fail-fast: a declared source (`etl.scrape.declared_sources`) whose page fails to fetch or
+    parse aborts the phase (``fatal``) carrying the typed cause. An unresolved WFS name (a scraped
+    pool in no alias) is a benign partial success — the resolved pools are written and the phase
+    exits 1 with the miss named (``fatal=False``), not a data hole.
     """
     prices_result = scrape_prices(price_client, fetched_at.date())
     prices = prices_result.value if isinstance(prices_result, Ok) else None
-    report = scrape_indoor_facilities(schedule_client, catalog, fetched_at, prices=prices)
+    report = scrape_declared_sources(schedule_client, catalog, fetched_at, prices=prices)
     if report.failures:
         # A declared source failed to fetch/parse: abort, surfacing the typed cause.
         failure = report.failures[0]
@@ -316,7 +316,7 @@ def _compose_schedules(
                 conn,
                 tuple((f.identity.facility_id, f) for f in composition.facilities),
             )
-            msg = f"scraped {len(outcome.resolved)} indoor pools"
+            msg = f"scraped {len(outcome.resolved)} declared sources"
             msg += " (with prices)" if prices is not None else " (prices unavailable)"
             for note in composition.notes:
                 msg += f"; {note}"

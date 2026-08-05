@@ -1,7 +1,7 @@
-"""scrape_indoor_facilities emits identity-free ``(SourceRef, ScrapedAspects)`` extracts
-(indoor only), tagging each with a ``Name`` ref — never a canonical id. S4 fail-fast: a page it
-cannot fetch/parse is NOT skipped — its typed ``ProviderError`` is preserved in
-``ScrapeReport.failures`` so ``scrape-gold`` aborts the whole run."""
+"""scrape_declared_sources emits identity-free ``(SourceRef, ScrapedAspects)`` extracts for the
+pools that own their page, tagging each with a ``Name`` ref — never a canonical id.
+S4 fail-fast: a page it cannot fetch/parse is NOT skipped — its typed ``ProviderError`` is
+preserved in ``ScrapeReport.failures`` so ``scrape-gold`` aborts the whole run."""
 
 from __future__ import annotations
 
@@ -21,7 +21,7 @@ from swimzh.domain.catalog import PoolCatalogEntry
 from swimzh.domain.geo import GeoPoint
 from swimzh.domain.models import PoolKind
 from swimzh.domain.pricing import PriceCategory, PriceEntry, PriceTable
-from swimzh.etl.scrape import scrape_indoor_facilities
+from swimzh.etl.scrape import declared_sources, scrape_declared_sources
 from swimzh.storage import catalog_json
 
 FIXTURE = Path(__file__).resolve().parents[1] / "providers" / "fixtures" / "hallenbad_city.html"
@@ -52,7 +52,7 @@ def test_builds_indoor_extracts_with_real_rules() -> None:
         _entry("hallenbad-city", "Hallenbad City", PoolKind.INDOOR, "https://x/city.html"),
         _entry("strandbad-x", "Strandbad X", PoolKind.LAKE, "https://x/lake.html"),  # not indoor
     )
-    report = scrape_indoor_facilities(
+    report = scrape_declared_sources(
         _client(lambda _r: httpx.Response(200, content=body)), catalog, FETCHED
     )
 
@@ -81,7 +81,7 @@ def test_extracts_carry_notices_closures_and_prices() -> None:
         valid_as_of=FETCHED.date(),
         source_url="https://example.test/prices",
     )
-    report = scrape_indoor_facilities(
+    report = scrape_declared_sources(
         _client(lambda _r: httpx.Response(200, content=body)), catalog, FETCHED, prices=prices
     )
     _ref, aspects = report.extracts[0]
@@ -96,7 +96,7 @@ def test_unparseable_page_is_a_typed_failure_not_a_skip() -> None:
     # 200 but has no timetable), so `scrape-gold` can abort the whole run and surface the cause.
     catalog = (_entry("hallenbad-x", "Hallenbad X", PoolKind.INDOOR, "https://x/x.html"),)
     client = _client(lambda _r: httpx.Response(200, content=b"<html>no table</html>"))
-    report = scrape_indoor_facilities(client, catalog, FETCHED)
+    report = scrape_declared_sources(client, catalog, FETCHED)
     assert report.extracts == ()
     assert len(report.failures) == 1
     failure = report.failures[0]
@@ -112,7 +112,7 @@ def test_unreachable_page_failure_preserves_the_transport_cause() -> None:
     def boom(_r: httpx.Request) -> httpx.Response:
         raise httpx.ConnectError("dns")
 
-    report = scrape_indoor_facilities(_client(boom), catalog, FETCHED)
+    report = scrape_declared_sources(_client(boom), catalog, FETCHED)
     assert report.extracts == ()
     assert len(report.failures) == 1
     assert isinstance(report.failures[0].cause, ConnectionFailed)
@@ -140,7 +140,7 @@ def test_operator_page_closure_is_attached_to_the_pool() -> None:
     )
     body = FIXTURE_ALTSTETTEN.read_bytes()
 
-    report = scrape_indoor_facilities(
+    report = scrape_declared_sources(
         _client(lambda _r: httpx.Response(200, content=body)), catalog, FETCHED
     )
 
@@ -161,7 +161,7 @@ def test_operator_closures_are_keyed_by_pool_id_not_by_page_content() -> None:
     )
     body = FIXTURE_ALTSTETTEN.read_bytes()
 
-    report = scrape_indoor_facilities(
+    report = scrape_declared_sources(
         _client(lambda _r: httpx.Response(200, content=body)), catalog, FETCHED
     )
 
@@ -170,27 +170,65 @@ def test_operator_closures_are_keyed_by_pool_id_not_by_page_content() -> None:
     assert aspects.closures == ()
 
 
-# --- which roster entries are DECLARED SOURCES (pinned before S2 widens the gate) --------
+# --- which roster entries are DECLARED SOURCES ------------------------------------------
 #
-# The gate `scrape_indoor_facilities` applies today is `kind is INDOOR and url`. S2 widens it
-# to a CONJUNCTION: `kind in {INDOOR, THERMAL, SCHOOL}` AND the url is not shared with another
-# roster entry. This asserts what that predicate selects on the committed WFS snapshot, so the
-# blast radius is a number in a test rather than a surprise in a network build.
+# `scrape_declared_sources` gates on `etl.scrape.declared_sources`, a CONJUNCTION:
+# `kind in {INDOOR, THERMAL, SCHOOL}` AND a url AND that url shared with no other roster entry.
+# These assert what the PRODUCTION predicate selects on the committed WFS snapshot, so the blast
+# radius is a number in a test rather than a surprise in a network build.
 
 _CATALOG = Path(__file__).resolve().parents[2] / "data" / "catalog.json"
-_SCRAPEABLE_KINDS = (PoolKind.INDOOR, PoolKind.THERMAL, PoolKind.SCHOOL)
 
 
-def _declared_sources(entries: tuple[PoolCatalogEntry, ...]) -> set[str]:
-    shared = {e.url for e in entries if e.url and sum(1 for o in entries if o.url == e.url) > 1}
-    return {
-        e.pool_id for e in entries if e.kind in _SCRAPEABLE_KINDS and e.url and e.url not in shared
-    }
+def _declared_ids(entries: tuple[PoolCatalogEntry, ...]) -> set[str]:
+    return {source.entry.pool_id for source in declared_sources(entries)}
+
+
+def test_a_school_pool_with_its_own_page_is_scraped() -> None:
+    # The S2 behaviour change: a SCHOOL entry owning its URL is now fetched like an indoor pool.
+    catalog = (
+        _entry("schulschwimmanlage-x", "Schule X", PoolKind.SCHOOL, "https://x/school.html"),
+    )
+    report = scrape_declared_sources(
+        _client(lambda _r: httpx.Response(200, content=FIXTURE.read_bytes())), catalog, FETCHED
+    )
+    assert report.failures == ()
+    assert [ref for ref, _ in report.extracts] == [Name("Schule X")]
+
+
+def test_pools_sharing_one_overview_url_are_neither_scraped_nor_failures() -> None:
+    # The 14 hallenbaeder.html sharers: excluded by the predicate, so an unparseable overview
+    # page can never become 14 build-aborting failures under fail-fast.
+    overview = "https://x/hallenbaeder.html"
+    catalog = (
+        _entry("schulschwimmanlage-a", "Schule A", PoolKind.SCHOOL, overview),
+        _entry("schulschwimmanlage-b", "Schule B", PoolKind.SCHOOL, overview),
+    )
+    report = scrape_declared_sources(
+        _client(lambda _r: httpx.Response(200, content=b"<html>no table</html>")), catalog, FETCHED
+    )
+    assert report.extracts == ()
+    assert report.failures == ()
+
+
+def test_an_indoor_pool_sharing_its_url_is_also_excluded() -> None:
+    # The URL test is not school-specific: it is about owning the page, whatever the kind.
+    shared = "https://x/hallenbaeder.html"
+    catalog = (
+        _entry("hallenbad-a", "Hallenbad A", PoolKind.INDOOR, shared),
+        _entry("schulschwimmanlage-b", "Schule B", PoolKind.SCHOOL, shared),
+    )
+    assert declared_sources(catalog) == ()
+
+
+def test_an_entry_without_a_url_is_not_a_declared_source() -> None:
+    catalog = (_entry("hallenbad-a", "Hallenbad A", PoolKind.INDOOR, None),)
+    assert declared_sources(catalog) == ()
 
 
 def test_the_declared_sources_are_exactly_eleven_pools() -> None:
     entries = catalog_json.loads(_CATALOG.read_text(encoding="utf-8"))
-    declared = _declared_sources(entries)
+    declared = _declared_ids(entries)
     # 7 already scraped + the 4 school pools with their own page.
     assert len(declared) == 11, sorted(declared)
     assert {p for p in declared if p.startswith("schulschwimmanlage-")} == {
@@ -219,4 +257,4 @@ def test_the_school_pools_without_public_swimming_share_one_overview_url() -> No
     sharing = [e.pool_id for e in entries if e.url == overview]
     assert len(sharing) == 14
     assert "schulschwimmanlage-borrweg" in sharing
-    assert not _declared_sources(entries) & set(sharing)
+    assert not _declared_ids(entries) & set(sharing)

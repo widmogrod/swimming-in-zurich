@@ -35,10 +35,13 @@ from swimzh.core.http import HttpClient, RetryPolicy
 FIXTURES = Path(__file__).resolve().parent / "fixtures"
 WFS_FIXTURES = FIXTURES / "wfs"
 
-# The composite build client's page routing: each indoor pool's roster `url` (its filename, or the
-# third-party bad-altstetten host) → the saved page fixture whose timetable `_compose_schedules`
-# scrapes and whose Belegungsplan links `_attach_lanes` discovers. Every INDOOR pool the WFS roster
-# carries has a parseable fixture here, so the atomic `build`'s fail-fast scrape completes.
+# The composite build client's page routing: each declared source's roster `url` (its filename, or
+# the third-party bad-altstetten host) → the saved page fixture whose timetable `_compose_schedules`
+# scrapes and whose Belegungsplan links `_attach_lanes` discovers. Every pool
+# `etl.scrape.declared_sources` selects has a parseable fixture here, so the atomic `build`'s
+# fail-fast scrape completes — all 11: 7 indoor/thermal plus the 4 school pools admitted in S2.
+# `schulschwimmanlage_borrweg.html` is deliberately absent: borrweg carries the shared overview URL,
+# so it is not a declared source and is never fetched.
 _PAGE_BY_FILENAME: dict[str, str] = {
     "city.html": "hallenbad_city.html",
     "oerlikon.html": "hallenbad_oerlikon.html",
@@ -47,6 +50,9 @@ _PAGE_BY_FILENAME: dict[str, str] = {
     "leimbach.html": "hallenbad_leimbach.html",
     "kaeferberg.html": "waermebad_kaeferberg.html",
     "aemtler.html": "schulschwimmanlage_aemtler.html",
+    "altweg.html": "schulschwimmanlage_altweg.html",
+    "riedtli.html": "schulschwimmanlage_riedtli.html",
+    "tannenrauch.html": "schulschwimmanlage_tannenrauch.html",
 }
 # A valid single-basin Belegungsplan sheet; the URL-keyed lane join binds by URL, not by content,
 # so serving one good plan for every discovered PDF attaches each authored single-basin source.

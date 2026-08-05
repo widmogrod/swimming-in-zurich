@@ -47,10 +47,17 @@ class ScheduleFreshness(StrEnum):
     the three-state model that replaced the `is_curated` boolean (delete-curated-schedule-tier S1).
 
     * `SCRAPED` — the blob carries a real schedule (≥1 basin has ≥1 rule).
-    * `AWAITING_SCRAPE` — no rule yet AND the pool is scrapeable (an indoor stadt-zuerich pool),
-      so a schedule is expected once `scrape-gold` runs (`scrape_indoor_facilities` does indoor).
-    * `NO_SOURCE` — no rule AND not scrapeable (e.g. `aemtler`, a `school`): permanently
-      schedule-less, no website timetable source at all.
+    * `AWAITING_SCRAPE` — no rule yet AND *every* pool of this kind is a declared source (an
+      indoor stadt-zuerich pool, incl. its `thermal` display-override), so a schedule is expected
+      once `scrape-gold` runs.
+    * `NO_SOURCE` — no rule AND not in that set (e.g. `schulschwimmanlage-hardau`, a `school`):
+      permanently schedule-less, no website timetable source at all.
+
+    `SCHOOL` is deliberately absent from the kind test in `freshness_of`: only 4 of the 18
+    Schulschwimmanlagen are declared sources (`etl.scrape.declared_sources` — the other 14 share
+    one overview URL). Those 4 carry rules and so read `SCRAPED` from the blob itself; adding
+    `SCHOOL` here would flip the other 14 to a promise no scrape will ever keep. The URL-sharing
+    test that would decide it properly is unavailable here — `Facility` carries no URL.
 
     A non-`SCRAPED` pool is a first-class honest state, never "closed" and never a `/swim` option.
     """
@@ -86,7 +93,8 @@ def freshness_of(facility: Facility) -> ScheduleFreshness:
     if any(basin.rules for basin in facility.basins):
         return ScheduleFreshness.SCRAPED
     # A `Wärmebad` (THERMAL) is WFS-`indoor` but registry-overridden for display, so it IS
-    # scraped — both kinds are the scrapeable set (see ScheduleFreshness).
+    # scraped. These two kinds are the ones where EVERY pool is a declared source; `SCHOOL` is
+    # not (4 of 18) and must stay out — see ScheduleFreshness.
     if facility.identity.kind in (PoolKind.INDOOR, PoolKind.THERMAL):
         return ScheduleFreshness.AWAITING_SCRAPE
     return ScheduleFreshness.NO_SOURCE
