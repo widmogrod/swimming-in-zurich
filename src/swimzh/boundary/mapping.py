@@ -15,6 +15,7 @@ from typing import assert_never
 
 from swimzh.boundary.curated_dto import (
     AccessDTO,
+    AccompaniedChildrenDTO,
     AdultsOnlyDTO,
     BasinDTO,
     ClosureDTO,
@@ -25,7 +26,9 @@ from swimzh.boundary.curated_dto import (
     ExceptionDTO,
     FamilyDTO,
     FeatureDTO,
+    GenderDiverseDTO,
     GeoDTO,
+    GirlsOnlyDTO,
     HttpStatusDTO,
     LanePlanDTO,
     LanePlanSourceDTO,
@@ -74,9 +77,12 @@ from swimzh.core.errors import (
     TooLarge,
 )
 from swimzh.domain.access import (
+    AccompaniedChildren,
     AdultsOnly,
     ClubReserved,
     FamilyTime,
+    GenderDiverse,
+    GirlsOnly,
     LaneSwim,
     PublicSwim,
     SchoolReserved,
@@ -209,6 +215,12 @@ def access_from_dto(dto: AccessDTO) -> SessionAccess:
             return ClubReserved(club=club)
         case AdultsOnlyDTO(min_age=min_age, note=note):
             return AdultsOnly(min_age=min_age, note=note)
+        case GirlsOnlyDTO():
+            return GirlsOnly()
+        case GenderDiverseDTO(min_age=min_age):
+            return GenderDiverse(min_age=min_age)
+        case AccompaniedChildrenDTO():
+            return AccompaniedChildren()
         case _ as unreachable:
             assert_never(unreachable)
 
@@ -231,6 +243,12 @@ def access_to_dto(access: SessionAccess) -> AccessDTO:
             return ClubReservedDTO(type="club_reserved", club=club)
         case AdultsOnly(min_age, note):
             return AdultsOnlyDTO(type="adults_only", min_age=min_age, note=note)
+        case GirlsOnly():
+            return GirlsOnlyDTO(type="girls_only")
+        case GenderDiverse(min_age):
+            return GenderDiverseDTO(type="gender_diverse", min_age=min_age)
+        case AccompaniedChildren():
+            return AccompaniedChildrenDTO(type="accompanied_children")
         case _ as unreachable:
             assert_never(unreachable)
 
@@ -248,6 +266,7 @@ def rule_from_dto(dto: RuleDTO) -> ScheduleRule:
         time=time_range(dto.start, dto.end),
         access=access_from_dto(dto.access),
         scope=_SCOPE_FROM[dto.scope],
+        source_text=dto.source_text,
     )
 
 
@@ -258,6 +277,7 @@ def rule_to_dto(rule: ScheduleRule) -> RuleDTO:
         end=rule.time.end,
         access=access_to_dto(rule.access),
         scope=_SCOPE_TO[rule.scope],
+        source_text=rule.source_text,
     )
 
 

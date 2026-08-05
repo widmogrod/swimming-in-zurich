@@ -320,14 +320,24 @@ def _access_category_entry(ms: tuple[PoolMeasurement, ...]) -> GapEntry:
 
 
 def _absent_access_entry(ms: tuple[PoolMeasurement, ...], access: str, label: str) -> GapEntry:
+    """Is a curated-only access kind reproduced by the source, or not?
+
+    The verdict is DERIVED, not asserted: `AdultsOnly` was a not-in-source class only for as
+    long as the scraper folded ``"für\\xa0Erwachsene"`` into `PublicSwim`. Hard-coding
+    `NOT_IN_SOURCE` here would have kept printing that claim after it became false.
+    """
     declaring = _curated_pools_declaring(ms, access)
     source_kinds = _source_access_kinds(ms)
+    emitted = access in source_kinds
+    verdict = (
+        "the source timetable now emits it" if emitted else "the source timetable never emits it"
+    )
+    folds = "" if emitted else " — the scraper folds any unmarked category to PublicSwim"
     return GapEntry(
         f"access.{label}",
-        Sourcing.NOT_IN_SOURCE,
-        f"curated declares {access} in {list(declaring)}; the source timetable never emits it "
-        f"(observed source access kinds: {sorted(source_kinds)}) — the scraper folds any "
-        f"unmarked category to PublicSwim",
+        Sourcing.SOURCED_BY_SCHEDULE if emitted else Sourcing.NOT_IN_SOURCE,
+        f"curated declares {access} in {list(declaring)}; {verdict} "
+        f"(observed source access kinds: {sorted(source_kinds)}){folds}",
     )
 
 

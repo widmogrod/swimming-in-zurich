@@ -103,7 +103,7 @@ source rules: 7 | curated (projected) rules: 5 | matched: 0 | source-poorer: 5 |
 
 ## schulschwimmanlage-aemtler
 
-source rules: 3 | curated (projected) rules: 3 | matched: 0 | source-poorer: 3 | source-richer: 3
+source rules: 7 | curated (projected) rules: 3 | matched: 0 | source-poorer: 3 | source-richer: 7
 
 | class | weekdays | time | access |
 |-------|----------|------|--------|
@@ -111,8 +111,12 @@ source rules: 3 | curated (projected) rules: 3 | matched: 0 | source-poorer: 3 |
 | source-poorer | Mon/Tue/Wed/Thu/Fri | 09:00–17:00 | PublicSwim |
 | source-poorer | Mon/Wed | 18:00–21:00 | AdultsOnly |
 | source-richer | Mon | 18:45–19:30 | WomenOnly |
-| source-richer | Thu | 17:15–19:00 | PublicSwim |
+| source-richer | Mon | 19:30–20:15 | PublicSwim |
+| source-richer | Mon | 20:15–21:00 | AdultsOnly |
+| source-richer | Thu | 17:15–19:00 | GirlsOnly |
+| source-richer | Thu | 19:00–21:00 | WomenOnly |
 | source-richer | Fri | 16:00–19:00 | WomenOnly |
+| source-richer | Fri | 19:00–21:00 | WomenOnly |
 
 ## waermebad-kaeferberg
 

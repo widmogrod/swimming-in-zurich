@@ -7,9 +7,12 @@ from typing import get_args
 from swimzh.domain.access import (
     ACCESS_TYPES,
     REPRESENTATIVE_ACCESS,
+    AccompaniedChildren,
     AdultsOnly,
     ClubReserved,
     FamilyTime,
+    GenderDiverse,
+    GirlsOnly,
     LaneSwim,
     PublicSwim,
     ReasonCode,
@@ -191,3 +194,64 @@ def test_the_server_no_longer_decides_the_answers_language() -> None:
     got = eligibility(Person(gender=Gender.MALE, age=30), WomenOnly())
     assert got.code is ReasonCode.WOMEN_ONLY_EXCLUDED
     assert not hasattr(got, "reason")
+
+
+# --- the school-pool vocabulary ----------------------------------------------------------
+#
+# All three arms are `allowed=False` for EVERY person, which is the honest answer: the city
+# publishes no age cutoff for "Mädchen", accompaniment is not an attribute of `Person`, and
+# being trans is not a value of `Gender`. `allowed=False` here means "check with the pool"
+# in every case except the two the source actually decides.
+
+
+def test_girls_only_excludes_men_instead_of_welcoming_them() -> None:
+    """The bug this vocabulary fixes: "für Mädchen" used to classify as PublicSwim, so an
+    adult man was told ✓ for a girls-only session."""
+    excluded = eligibility(ADULT, GirlsOnly())
+    assert excluded.allowed is False
+    assert excluded.code is ReasonCode.GIRLS_ONLY_EXCLUDED
+    assert excluded.rule == "girls-only"
+
+
+def test_girls_only_does_not_welcome_a_woman_either() -> None:
+    """The city never states the cutoff, so an adult woman is *not determinable* — the same
+    shape as WOMEN_ONLY_CONFIRM, not a welcome and not an exclusion."""
+    woman = eligibility(WOMAN, GirlsOnly())
+    assert woman.allowed is False
+    assert woman.code is ReasonCode.GIRLS_ONLY_CONFIRM
+    child = eligibility(CHILD, GirlsOnly())
+    assert child.code is ReasonCode.GIRLS_ONLY_CONFIRM
+    unknown = eligibility(UNKNOWN, GirlsOnly())
+    assert unknown.code is ReasonCode.GIRLS_ONLY_NEEDS_GENDER
+
+
+def test_gender_diverse_denies_only_on_the_published_age() -> None:
+    too_young = eligibility(Person(gender=Gender.DIVERSE, age=14), GenderDiverse(min_age=16))
+    assert too_young.allowed is False
+    assert too_young.code is ReasonCode.GENDER_DIVERSE_TOO_YOUNG
+    assert too_young.params == {"min_age": 16}
+
+
+def test_gender_diverse_never_hard_denies_on_gender() -> None:
+    """A trans woman's gender is FEMALE, not DIVERSE. Deciding this session from the `Gender`
+    enum would wrongly exclude her, so above the published age every gender — including
+    unknown — lands on the same confirm-with-the-pool outcome."""
+    for gender in (*Gender, None):
+        got = eligibility(Person(gender=gender, age=30), GenderDiverse(min_age=16))
+        assert got.code is ReasonCode.GENDER_DIVERSE_CONFIRM, gender
+        assert got.rule == "gender-diverse"
+    # An unknown age is not "too young" — it is simply undecided.
+    assert (
+        eligibility(Person(gender=None), GenderDiverse(min_age=16)).code
+        is ReasonCode.GENDER_DIVERSE_CONFIRM
+    )
+
+
+def test_accompanied_children_is_never_decidable() -> None:
+    """`Person` carries no accompaniment attribute and the page states no adult threshold —
+    inventing one would repeat the unsourced `AdultsOnly.min_age = 18`."""
+    for person in (ADULT, WOMAN, CHILD, DIVERSE, UNKNOWN):
+        got = eligibility(person, AccompaniedChildren())
+        assert got.allowed is False
+        assert got.code is ReasonCode.ACCOMPANIED_CHILDREN_CONFIRM
+        assert got.rule == "accompanied-children"

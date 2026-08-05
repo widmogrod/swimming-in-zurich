@@ -169,12 +169,22 @@ def test_closures_are_sourced_by_the_notice_scraper(illustrative_data_dir: Path)
     assert _gap_by_class(illustrative_data_dir)["facility.closures"] is Sourcing.SOURCED_BY_SCHEDULE
 
 
+def test_adults_only_is_no_longer_a_gap(illustrative_data_dir: Path) -> None:
+    """It was a gap only while the scraper folded ``"für\\xa0Erwachsene"`` into `PublicSwim`.
+
+    The NBSP-aware category parser emits `AdultsOnly` from the aemtler timetable, so the
+    verdict — which is derived, not hard-coded — flips. The report must not keep printing
+    "the source timetable never emits it" once that is false.
+    """
+    gaps = _gap_by_class(illustrative_data_dir)
+    assert gaps["access.adults_only"] is Sourcing.SOURCED_BY_SCHEDULE
+
+
 def test_residue_classes_are_not_in_source(illustrative_data_dir: Path) -> None:
     gaps = _gap_by_class(illustrative_data_dir)
     for residue in (
         "access.lane_swim",
         "access.family",
-        "access.adults_only",
         "basin.schedule-split",
         "facility.prices (admission)",
         "facility.public_holiday_policy",

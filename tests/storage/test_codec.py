@@ -25,7 +25,7 @@ from swimzh.core.errors import (
     Timeout,
     TooLarge,
 )
-from swimzh.domain.access import ClubReserved, PublicSwim
+from swimzh.domain.access import ClubReserved, GirlsOnly, PublicSwim
 from swimzh.domain.lane_plan import LanePlan, LaneReservation, PlanConfidence, PlanCoverage
 from swimzh.domain.lockers import LockerCategory, LockerMechanism, LockerOption
 from swimzh.domain.models import (
@@ -185,6 +185,30 @@ def test_basin_without_slice_f_fields_serializes_without_the_new_keys(
     dumped = codec.dumps(facilities[0])
     assert '"measured_temp_c"' not in dumped
     assert '"diving_platforms_m"' not in dumped
+
+
+def test_a_default_source_text_adds_no_key_to_the_blob(
+    facilities: tuple[Facility, ...],
+) -> None:
+    # `ScheduleRule.source_text` rides on EVERY rule in every blob (including FeatureDTO.hours),
+    # so a rule that has none must serialise to exactly the same bytes as before the field. The
+    # round-trip equality assertions cannot see a new key; only this can.
+    dumped = codec.dumps(facilities[0])
+    assert '"source_text"' not in dumped
+
+
+def test_a_scraped_rules_source_text_round_trips(facilities: tuple[Facility, ...]) -> None:
+    # ...and when the source DID say something, it must survive the store verbatim.
+    cell = "Öffentliches Schwimmen (für\xa0Mädchen, Tiefe 125 cm)"
+    base = facilities[0]
+    basin = base.basins[0]
+    rule = replace(basin.rules[0], access=GirlsOnly(), source_text=cell)
+    facility = replace(
+        base, basins=(replace(basin, rules=(rule, *basin.rules[1:])), *base.basins[1:])
+    )
+    dumped = codec.dumps(facility)
+    assert '"source_text"' in dumped
+    assert codec.loads(dumped) == facility
 
 
 def test_facility_level_statics_survive_the_codec(facilities: tuple[Facility, ...]) -> None:

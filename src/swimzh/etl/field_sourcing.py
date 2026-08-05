@@ -261,10 +261,11 @@ _BASIN: tuple[FieldSourcing, ...] = (
         "7/7 facility-level",
         "parse_schedule → facility-level ScheduleRules (day/hours/access-category). Two residues "
         "ride this field: (a) PER-BASIN SPLIT — routing the flat timetable to basins → SOURCEABLE "
-        "from the per-basin Belegungsplan public windows (S5c); (b) RICHER ACCESS "
-        "(lane_swim/family/adults_only) — NOT sourceable: both the timetable's category vocabulary "
-        "(public/women/seniors/school) and the Belegungsplan legend vocabulary "
-        "(public/school/club) are closed and emit none of them → DROP (S5d).",
+        "from the per-basin Belegungsplan public windows (S5c); (b) RICHER ACCESS — "
+        "adults_only IS sourced (the school pages publish 'für Erwachsene'; the school-access "
+        "vocabulary slice added girls_only/gender_diverse/accompanied_children alongside it), "
+        "but lane_swim/family are emitted by neither the timetable vocabulary nor the "
+        "Belegungsplan legend (public/school/club) → DROP (S5d).",
     ),
     FieldSourcing(
         "basin.exceptions",

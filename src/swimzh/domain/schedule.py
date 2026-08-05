@@ -73,6 +73,12 @@ class ScheduleRule:
     time: TimeRange
     access: SessionAccess
     scope: DayScope = DayScope.ALWAYS
+    #: The verbatim source cell this rule was classified from (the timetable's *Angebot*
+    #: column), kept so classifying never destroys what the page said — it carries the
+    #: per-session depth ("Tiefe 135 cm") and any footnote the domain cannot express.
+    #: Defaulted, so every pre-existing construction stays equal; persisted but not yet read
+    #: by any query, API field or UI surface.
+    source_text: str = ""
 
 
 @dataclass(frozen=True, slots=True)

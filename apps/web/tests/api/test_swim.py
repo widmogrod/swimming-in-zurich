@@ -194,4 +194,9 @@ def test_access_types_key_is_sufficient_to_render_without_server_prose() -> None
         "school-reserved",
         "club-reserved",
         "adults-only",
+        # The school-pool vocabulary: sessions the timetable publishes but the domain could
+        # not express, so the client must be able to render them from its own catalog too.
+        "girls-only",
+        "gender-diverse",
+        "accompanied-children",
     }

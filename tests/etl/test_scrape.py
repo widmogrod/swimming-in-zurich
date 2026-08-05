@@ -22,6 +22,7 @@ from swimzh.domain.geo import GeoPoint
 from swimzh.domain.models import PoolKind
 from swimzh.domain.pricing import PriceCategory, PriceEntry, PriceTable
 from swimzh.etl.scrape import scrape_indoor_facilities
+from swimzh.storage import catalog_json
 
 FIXTURE = Path(__file__).resolve().parents[1] / "providers" / "fixtures" / "hallenbad_city.html"
 FETCHED = datetime(2026, 7, 19, 9, 0, tzinfo=ZoneInfo("Europe/Zurich"))
@@ -167,3 +168,55 @@ def test_operator_closures_are_keyed_by_pool_id_not_by_page_content() -> None:
     assert report.failures == ()
     (_ref, aspects) = report.extracts[0]
     assert aspects.closures == ()
+
+
+# --- which roster entries are DECLARED SOURCES (pinned before S2 widens the gate) --------
+#
+# The gate `scrape_indoor_facilities` applies today is `kind is INDOOR and url`. S2 widens it
+# to a CONJUNCTION: `kind in {INDOOR, THERMAL, SCHOOL}` AND the url is not shared with another
+# roster entry. This asserts what that predicate selects on the committed WFS snapshot, so the
+# blast radius is a number in a test rather than a surprise in a network build.
+
+_CATALOG = Path(__file__).resolve().parents[2] / "data" / "catalog.json"
+_SCRAPEABLE_KINDS = (PoolKind.INDOOR, PoolKind.THERMAL, PoolKind.SCHOOL)
+
+
+def _declared_sources(entries: tuple[PoolCatalogEntry, ...]) -> set[str]:
+    shared = {e.url for e in entries if e.url and sum(1 for o in entries if o.url == e.url) > 1}
+    return {
+        e.pool_id for e in entries if e.kind in _SCRAPEABLE_KINDS and e.url and e.url not in shared
+    }
+
+
+def test_the_declared_sources_are_exactly_eleven_pools() -> None:
+    entries = catalog_json.loads(_CATALOG.read_text(encoding="utf-8"))
+    declared = _declared_sources(entries)
+    # 7 already scraped + the 4 school pools with their own page.
+    assert len(declared) == 11, sorted(declared)
+    assert {p for p in declared if p.startswith("schulschwimmanlage-")} == {
+        "schulschwimmanlage-aemtler",
+        "schulschwimmanlage-altweg",
+        "schulschwimmanlage-riedtli",
+        "schulschwimmanlage-tannenrauch",
+    }
+
+
+def test_the_unshared_url_test_alone_would_select_far_more_than_eleven() -> None:
+    """Why the kind gate stays in the conjunction: dropping it selects outdoor/lake/river
+    pages that no parser here understands, and under fail-fast each one aborts the build."""
+    entries = catalog_json.loads(_CATALOG.read_text(encoding="utf-8"))
+    shared = {e.url for e in entries if e.url and sum(1 for o in entries if o.url == e.url) > 1}
+    unshared = {e.pool_id for e in entries if e.url and e.url not in shared}
+    assert len(unshared) > 11
+
+
+def test_the_school_pools_without_public_swimming_share_one_overview_url() -> None:
+    """The thirteen "ohne öffentliches Schwimmen" (plus borrweg) all carry the generic
+    hallenbaeder.html, so the unshared-url test excludes them and they can never become
+    build-aborting failures."""
+    entries = catalog_json.loads(_CATALOG.read_text(encoding="utf-8"))
+    overview = "https://www.stadt-zuerich.ch/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/hallenbaeder.html"
+    sharing = [e.pool_id for e in entries if e.url == overview]
+    assert len(sharing) == 14
+    assert "schulschwimmanlage-borrweg" in sharing
+    assert not _declared_sources(entries) & set(sharing)

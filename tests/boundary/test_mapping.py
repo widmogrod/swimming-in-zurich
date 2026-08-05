@@ -11,11 +11,17 @@ from __future__ import annotations
 from datetime import date, time
 from decimal import Decimal
 
+import pytest
+from pydantic import ValidationError
+
 from swimzh.boundary import mapping
 from swimzh.boundary.curated_dto import (
+    AccompaniedChildrenDTO,
     AdultsOnlyDTO,
     ClubReservedDTO,
     FeatureDTO,
+    GenderDiverseDTO,
+    GirlsOnlyDTO,
     LanePlanDTO,
     LaneReservationDTO,
     LockerOptionDTO,
@@ -23,7 +29,14 @@ from swimzh.boundary.curated_dto import (
     PublicDTO,
     RuleDTO,
 )
-from swimzh.domain.access import AdultsOnly, ClubReserved, PublicSwim
+from swimzh.domain.access import (
+    AccompaniedChildren,
+    AdultsOnly,
+    ClubReserved,
+    GenderDiverse,
+    GirlsOnly,
+    PublicSwim,
+)
 from swimzh.domain.lane_plan import LaneReservation, PlanConfidence
 from swimzh.domain.lockers import LockerCategory, LockerMechanism
 from swimzh.domain.models import BasinKind, BasinSource, FeatureKind
@@ -116,6 +129,39 @@ def test_adults_only_access_round_trips() -> None:
     access = mapping.access_from_dto(dto)
     assert access == AdultsOnly(min_age=18, note="Erwachsenenschwimmen")
     assert mapping.access_to_dto(access) == dto
+
+
+def test_the_school_pool_access_kinds_round_trip() -> None:
+    # The boundary must stay in one-to-one correspondence with the domain union, or a scraped
+    # school session cannot be persisted at all.
+    for dto, domain in (
+        (GirlsOnlyDTO(type="girls_only"), GirlsOnly()),
+        (GenderDiverseDTO(type="gender_diverse", min_age=16), GenderDiverse(min_age=16)),
+        (AccompaniedChildrenDTO(type="accompanied_children"), AccompaniedChildren()),
+    ):
+        access = mapping.access_from_dto(dto)
+        assert access == domain
+        assert mapping.access_to_dto(access) == dto
+
+
+def test_gender_diverse_min_age_is_required_at_the_boundary() -> None:
+    # Mirrors the domain: the page states the bound, so no default may invent one.
+    with pytest.raises(ValidationError):
+        GenderDiverseDTO(type="gender_diverse")  # type: ignore[call-arg]
+
+
+def test_a_rules_source_text_survives_the_boundary_both_ways() -> None:
+    cell = "Öffentliches Schwimmen (für\xa0Mädchen, Tiefe 125 cm)"
+    dto = RuleDTO(
+        weekdays=["thu"],
+        start=time(17, 15),
+        end=time(19, 0),
+        access=GirlsOnlyDTO(type="girls_only"),
+        source_text=cell,
+    )
+    rule = mapping.rule_from_dto(dto)
+    assert rule.source_text == cell
+    assert mapping.rule_to_dto(rule) == dto
 
 
 # --- lane reservations (Belegungsplan) ----------------------------------------------

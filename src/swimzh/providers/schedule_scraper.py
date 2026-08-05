@@ -27,7 +27,17 @@ from datetime import date, time
 from swimzh.core.errors import ParseError, ProviderError
 from swimzh.core.http import HttpClient
 from swimzh.core.result import Err, Ok, Result
-from swimzh.domain.access import PublicSwim, SchoolReserved, SeniorsOnly, SessionAccess, WomenOnly
+from swimzh.domain.access import (
+    AccompaniedChildren,
+    AdultsOnly,
+    GenderDiverse,
+    GirlsOnly,
+    PublicSwim,
+    SchoolReserved,
+    SeniorsOnly,
+    SessionAccess,
+    WomenOnly,
+)
 from swimzh.domain.models import Notice
 from swimzh.domain.schedule import HolidayPolicy, ScheduleRule, TimeRange, Weekday
 
@@ -134,27 +144,65 @@ def _parse_time_range(cell: str) -> TimeRange | None:
         return None
 
 
+#: The published age bound inside a category cell — "…Personen ab 16 Jahren".
+_MIN_AGE_RE = re.compile(r"\bab\s+(\d{1,2})\s*jahr", re.IGNORECASE)
+
+
 def _parse_category(cell: str) -> SessionAccess:
-    lowered = cell.strip().lower()
+    """Classify one *Angebot* cell into the access union.
+
+    Ordered LONGEST-FIRST, because the vocabulary nests: *"für Frauen und Mädchen"* must be
+    read as `WomenOnly` (the whole cell), not `GirlsOnly`, and *"für Kinder nur mit
+    Erwachsenen"* must not be read as `AdultsOnly` — which it literally contains.
+
+    The `\\xa0` normalisation is load-bearing, not cosmetic: the real cells write
+    ``"für\\xa0Erwachsene"`` with a non-breaking space, and matching the literal patterns
+    without it fails silently — every adults-only school session would fold to `PublicSwim`.
+    """
+    lowered = cell.replace("\xa0", " ").strip().lower()
     if "frau" in lowered:
         return WomenOnly()
     if "senior" in lowered:
         return SeniorsOnly()
     if "schul" in lowered:
         return SchoolReserved()
+    if "kinder nur mit erwachsenen" in lowered:
+        return AccompaniedChildren()
+    if "erwachsene und kinder" in lowered:
+        return PublicSwim()  # everyone, explicitly — NOT an adults-only window
+    if "mädchen" in lowered:
+        return GirlsOnly()
+    # `GenderDiverse.min_age` is required, so the age is part of what identifies this arm: a
+    # trans/non-binary cell WITHOUT a published bound (none exists today) would rather fall
+    # through than let the parser invent a threshold the city never wrote.
+    if "trans" in lowered or "nicht-binär" in lowered:
+        age = _MIN_AGE_RE.search(lowered)
+        if age is not None:
+            return GenderDiverse(min_age=int(age.group(1)))
+    if "erwachsene" in lowered:
+        return AdultsOnly()
     return PublicSwim()  # "gemischt" / unmarked → public
 
 
-def _slots(hours_cell: str, category_cell: str | None) -> list[tuple[TimeRange, SessionAccess]]:
+@dataclass(frozen=True, slots=True)
+class _Slot:
+    """One time block of a timetable row, with the verbatim cell its access came from."""
+
+    time: TimeRange
+    access: SessionAccess
+    source_text: str
+
+
+def _slots(hours_cell: str, category_cell: str | None) -> list[_Slot]:
     hours = [h for h in hours_cell.split("<br>") if h.strip()]
     categories = (category_cell or "").split("<br>")
-    out: list[tuple[TimeRange, SessionAccess]] = []
+    out: list[_Slot] = []
     for i, hour in enumerate(hours):
         time_range = _parse_time_range(hour)
         if time_range is None:
             continue
         category = categories[i] if i < len(categories) else (categories[-1] if categories else "")
-        out.append((time_range, _parse_category(category)))
+        out.append(_Slot(time_range, _parse_category(category), category))
     return out
 
 
@@ -175,14 +223,37 @@ def _holiday_policy(rows: list[list[str]]) -> HolidayPolicy | None:
 
 
 def _rules_from_rows(rows: list[list[str]]) -> list[ScheduleRule]:
+    """Turn timetable rows into rules, carrying the weekday down CONTINUATION rows.
+
+    A multi-session day is published as one row per session, and only the first names the
+    weekday — the rest write a bare ``\\xa0`` into the day cell. Dropping those (which is what
+    "no weekdays → skip" did) lost 4 of aemtler's 7 sessions. A blank day cell BEFORE any
+    weekday has resolved still drops: there is nothing to inherit.
+
+    This serves both page formats, but is inert for format 2, whose `_parse_html_table`
+    pre-filters rows on `_parse_days(r[0])` being truthy — a generic-table page with
+    continuation rows would not benefit.
+    """
     rules: list[ScheduleRule] = []
+    carried: frozenset[Weekday] = frozenset()
     for row in rows:
         days = _parse_days(row[0])
+        if days:
+            carried = days
+        else:
+            days = carried
         if not days:
             continue
         category_cell = row[2] if len(row) >= 3 else None
-        for time_range, access in _slots(row[1], category_cell):
-            rules.append(ScheduleRule(weekdays=days, time=time_range, access=access))
+        for slot in _slots(row[1], category_cell):
+            rules.append(
+                ScheduleRule(
+                    weekdays=days,
+                    time=slot.time,
+                    access=slot.access,
+                    source_text=slot.source_text,
+                )
+            )
     return rules
 
 

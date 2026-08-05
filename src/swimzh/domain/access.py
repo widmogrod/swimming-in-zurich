@@ -68,6 +68,37 @@ class AdultsOnly:
     note: str = ""
 
 
+@dataclass(frozen=True, slots=True)
+class GirlsOnly:
+    """Session published *"für Mädchen"* — girls only.
+
+    No `min_age`/`max_age`: the city states neither, and inventing one would repeat the
+    unsourced `AdultsOnly.min_age = 18`. A woman is therefore *not determinable* rather
+    than welcome; only "not female" is decidable.
+    """
+
+
+@dataclass(frozen=True, slots=True)
+class GenderDiverse:
+    """Session published *"offen für trans und nicht-binäre Personen ab N Jahren"*.
+
+    `min_age` is required: the one cell citywide that produces this arm states its age, and
+    it is the ONLY checkable fact here — being trans is not a value of `Person.gender` (a
+    trans woman's gender is *female*), so this arm never hard-denies on gender.
+    """
+
+    min_age: int
+
+
+@dataclass(frozen=True, slots=True)
+class AccompaniedChildren:
+    """Session published *"für Kinder nur mit Erwachsenen"* — children, accompanied by an adult.
+
+    Deliberately fieldless: accompaniment is not an attribute of `Person`, so this arm is
+    never decidable either way and invents no adult threshold.
+    """
+
+
 type SessionAccess = (
     PublicSwim
     | LaneSwim
@@ -77,6 +108,9 @@ type SessionAccess = (
     | SchoolReserved
     | ClubReserved
     | AdultsOnly
+    | GirlsOnly
+    | GenderDiverse
+    | AccompaniedChildren
 )
 
 
@@ -142,6 +176,25 @@ def access_info(access: SessionAccess) -> AccessInfo:
                 f"Adults-only public window — reserved for guests aged {min_age} and over "
                 "(typical for school-pool evening swims).",
             )
+        case GirlsOnly():
+            return AccessInfo(
+                "girls-only",
+                "Girls only",
+                "Girls-only session (für Mädchen) — the pool publishes no age cutoff, "
+                "so confirm with the venue.",
+            )
+        case GenderDiverse(min_age):
+            return AccessInfo(
+                "gender-diverse",
+                "Trans and non-binary",
+                f"Session open to trans and non-binary people aged {min_age} and over.",
+            )
+        case AccompaniedChildren():
+            return AccessInfo(
+                "accompanied-children",
+                "Children with an adult",
+                "For children only when accompanied by an adult (für Kinder nur mit Erwachsenen).",
+            )
         case _ as unreachable:
             assert_never(unreachable)
 
@@ -158,6 +211,10 @@ REPRESENTATIVE_ACCESS: tuple[SessionAccess, ...] = (
     SchoolReserved(),
     ClubReserved(),
     AdultsOnly(),
+    GirlsOnly(),
+    # The one bound the city publishes ("ab 16 Jahren"); the legend needs a concrete instance.
+    GenderDiverse(min_age=16),
+    AccompaniedChildren(),
 )
 
 ACCESS_TYPES: tuple[AccessInfo, ...] = tuple(access_info(a) for a in REPRESENTATIVE_ACCESS)
@@ -196,6 +253,15 @@ class ReasonCode(StrEnum):
 
     SCHOOL_RESERVED = "school_reserved"
     CLUB_RESERVED = "club_reserved"
+
+    GIRLS_ONLY_EXCLUDED = "girls_only_excluded"
+    GIRLS_ONLY_CONFIRM = "girls_only_confirm"
+    GIRLS_ONLY_NEEDS_GENDER = "girls_only_needs_gender"
+
+    GENDER_DIVERSE_TOO_YOUNG = "gender_diverse_too_young"
+    GENDER_DIVERSE_CONFIRM = "gender_diverse_confirm"
+
+    ACCOMPANIED_CHILDREN_CONFIRM = "accompanied_children_confirm"
 
 
 @dataclass(frozen=True, slots=True)
@@ -244,6 +310,18 @@ def eligibility(person: Person, access: SessionAccess) -> EligibilityResult:
             )
         case AdultsOnly(min_age):
             return _adults_only(person, min_age)
+        case GirlsOnly():
+            return _girls_only(person)
+        case GenderDiverse(min_age):
+            return _gender_diverse(person, min_age)
+        case AccompaniedChildren():
+            # Accompaniment is not an attribute of `Person`, so this is never decidable:
+            # `allowed=False` here means "check with the pool", never "you are excluded".
+            return EligibilityResult(
+                False,
+                "accompanied-children",
+                ReasonCode.ACCOMPANIED_CHILDREN_CONFIRM,
+            )
         case _ as unreachable:
             assert_never(unreachable)
 
@@ -267,6 +345,46 @@ def _women_only(person: Person) -> EligibilityResult:
                 rule,
                 ReasonCode.WOMEN_ONLY_NEEDS_GENDER,
             )
+
+
+def _girls_only(person: Person) -> EligibilityResult:
+    """A *"für Mädchen"* session. Only the exclusion is decidable.
+
+    A female guest is NOT welcomed: the city publishes no age cutoff for "Mädchen", so an
+    adult woman cannot be told she may attend — that is a `..._CONFIRM` (check with the
+    pool), the same shape as `WOMEN_ONLY_CONFIRM`.
+    """
+    rule = "girls-only"
+    match person.gender:
+        case Gender.FEMALE:
+            return EligibilityResult(False, rule, ReasonCode.GIRLS_ONLY_CONFIRM)
+        case Gender.MALE | Gender.DIVERSE:
+            return EligibilityResult(False, rule, ReasonCode.GIRLS_ONLY_EXCLUDED)
+        case None:
+            return EligibilityResult(False, rule, ReasonCode.GIRLS_ONLY_NEEDS_GENDER)
+
+
+def _gender_diverse(person: Person, min_age: int) -> EligibilityResult:
+    """A *"offen für trans und nicht-binäre Personen ab N Jahren"* session.
+
+    NEVER a hard deny on gender: being trans is not a value of `Person.gender` (a trans
+    woman's gender is *female*), so deciding this session from that enum would wrongly
+    exclude her. The published age is the one checkable fact.
+    """
+    rule = "gender-diverse"
+    if person.age is not None and person.age < min_age:
+        return EligibilityResult(
+            False,
+            rule,
+            ReasonCode.GENDER_DIVERSE_TOO_YOUNG,
+            {"min_age": min_age},
+        )
+    return EligibilityResult(
+        False,
+        rule,
+        ReasonCode.GENDER_DIVERSE_CONFIRM,
+        {"min_age": min_age},
+    )
 
 
 def _adults_only(person: Person, min_age: int) -> EligibilityResult:

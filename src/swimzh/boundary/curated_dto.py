@@ -84,6 +84,20 @@ class AdultsOnlyDTO(_Strict):
     note: str = ""
 
 
+class GirlsOnlyDTO(_Strict):
+    type: Literal["girls_only"]
+
+
+class GenderDiverseDTO(_Strict):
+    type: Literal["gender_diverse"]
+    #: Required, mirroring the domain: the page states the bound, so nothing may default it.
+    min_age: int
+
+
+class AccompaniedChildrenDTO(_Strict):
+    type: Literal["accompanied_children"]
+
+
 AccessDTO = Annotated[
     PublicDTO
     | LaneSwimDTO
@@ -92,7 +106,10 @@ AccessDTO = Annotated[
     | SeniorsOnlyDTO
     | SchoolReservedDTO
     | ClubReservedDTO
-    | AdultsOnlyDTO,
+    | AdultsOnlyDTO
+    | GirlsOnlyDTO
+    | GenderDiverseDTO
+    | AccompaniedChildrenDTO,
     Field(discriminator="type"),
 ]
 
@@ -106,6 +123,18 @@ class RuleDTO(_Strict):
     end: time
     access: AccessDTO
     scope: _Scope = "always"
+    #: The verbatim source cell the access was classified from. Empty for every rule that
+    #: came from a source without a category column (and for every hand-authored rule).
+    source_text: str = ""
+
+    @model_serializer(mode="wrap")
+    def _serialize(self, handler: SerializerFunctionWrapHandler) -> dict[str, Any]:
+        # Additive-and-invisible: an empty `source_text` must not appear in the payload, so a
+        # rule that predates this field serialises to exactly the same bytes as before it.
+        data: dict[str, Any] = handler(self)
+        if not self.source_text:
+            data.pop("source_text", None)
+        return data
 
 
 class ResolvedSessionDTO(_Strict):

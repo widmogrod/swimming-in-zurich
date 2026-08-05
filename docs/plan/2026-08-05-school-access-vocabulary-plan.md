@@ -200,6 +200,8 @@ without public swimming are excluded and cannot become build-aborting failures.
   `boundary/curated_dto.py` + `mapping.py` (`RuleDTO` + pop-when-default serializer),
   `storage/codec.py`, `providers/schedule_scraper.py` (category order, continuation rows,
   `source_text`), `etl/fidelity_report.py` (its `access.adults_only` prose becomes false),
+  `etl/field_sourcing.py` (its `basin.rules` note asserts adults_only is NOT sourceable —
+  same truth-maintenance class; added during S1),
   `tests/providers/fixtures/` (4 new school pages), `tests/etl/fidelity/*.golden.md`,
   `apps/web/tests/api/test_swim.py` (`:186-195` asserts an exact 8-key access set).
 - **Acceptance**:
@@ -207,7 +209,10 @@ without public swimming are excluded and cannot become build-aborting failures.
   - altweg 20:00–21:00 is `GenderDiverse(min_age=16)`; riedtli Monday 16:30 is
     `AccompaniedChildren`; `"für Erwachsene und Kinder"` is `PublicSwim`; aemtler Monday
     20:15–21:00 is `AdultsOnly` (the NBSP casualty — otherwise silently `PublicSwim`).
-  - Total rules: aemtler 7, altweg 3, riedtli 3, tannenrauch 6 (measured live 2026-08-05).
+  - Total rules: aemtler 7, altweg **2**, riedtli 3, tannenrauch 6. Corrected during S1:
+    altweg publishes two Tuesday sessions, not three — verified against the committed
+    fixture AND a live re-fetch (identical), on a page whose lead sentence says it offers
+    public swimming *am Dienstag*. The pre-approval measurement of 3 is unreproducible.
   - Every rule's `source_text` equals the verbatim `Angebot` cell, `Tiefe …` included.
   - The 7 currently-scraped pools are unchanged **on `(weekdays, time, access)`** — diffed
     against `tests/etl/fidelity/schedule_diff.golden.md`, which already prints exactly that
@@ -274,8 +279,22 @@ Appended by /dev:implement after each slice — never rewritten. Newest row last
 
 | date | slice | status | divergence from plan | tech debt created | human review? |
 |------|-------|--------|----------------------|-------------------|---------------|
+| 2026-08-05 | S1 | done | altweg is 2 rules not 3 (plan wrong; verified fixture + live); `field_sourcing.py` touched beyond Touches; `GenderDiverse` classified only when the cell states an age | trans/nb cell without a published age falls through to PublicSwim/AdultsOnly — the union has no "restricted, bound unknown" member; `source_text` persisted-but-unread, also rides `FeatureDTO.hours`; `GirlsOnly` denies `Gender.DIVERSE` while `WomenOnly` gives it a confirm | yes |
 
 ## Decisions & divergences
+
+- **2026-08-05, S1** — the plan's "altweg 3" acceptance number was **wrong**. Adjudicated
+  against the committed fixture and a live re-fetch: two rows, one weekday. Criterion
+  corrected. The other four pages match live exactly, so the fixtures are faithful captures
+  rather than parser-shaped.
+- **2026-08-05, S1** — `etl/field_sourcing.py` edited outside the listed Touches: its
+  `basin.rules` note claimed `adults_only` is not sourceable, which this slice falsifies —
+  the same stale-claim class the plan already gave `fidelity_report.py` a slice for.
+  Disclosed and added to Touches rather than reverted; that file is the machine-checkable
+  field->producer audit, so a silent edit there would matter.
+- **2026-08-05, S1** — critic returned `revise` with two blocking findings, both
+  disclosure-only ("the code as written should be kept"). Resolved by the orchestrator in
+  the plan file, which subagents may not edit; no re-review run because no code changed.
 
 - **2026-08-05, pre-approval review** — the declared-source predicate is a **conjunction**
   with the kind gate, not a replacement. The critic showed the unshared-URL test alone
