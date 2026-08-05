@@ -1,6 +1,6 @@
 ---
 type: plan
-status: in-progress
+status: done
 created: 2026-08-05
 feature: school-access-vocabulary
 gates:
@@ -366,5 +366,25 @@ Appended by /dev:implement after each slice — never rewritten. Newest row last
 
 ## Summary
 
-Written when the plan reaches `done`; then distilled into
-`docs/summaries/school-access-vocabulary.md` (what EXISTS now, not what was intended).
+Shipped in three slices. The store now scrapes **11** declared sources rather than 7, and
+the four Schulschwimmanlagen that run public swimming carry real timetables for the first
+time. `SessionAccess` gained `GirlsOnly`, `GenderDiverse(min_age)` and
+`AccompaniedChildren`, so the seven strings the city publishes stop collapsing into
+`PublicSwim`; citywide `WomenOnly` rules went 2 → 7. `ScheduleRule.source_text` keeps the
+verbatim `Angebot` cell — including the per-session depth the basin model cannot hold —
+which is how the intent's *"we shouldn't compress information"* landed inside the existing
+pipeline.
+
+The defect that motivated the plan is closed at both ends: aemtler's Thursday 17:15
+*"für Mädchen"* session no longer classifies as `PublicSwim`, and `eligibility.js` no
+longer renders an unknown access kind as open to everyone. Those two ends are held together
+by a generated 440-case contract that both chains replay, so the browser and the domain
+cannot drift apart silently.
+
+Three reviews returned `revise`; every finding was accepted. Two were false claims in
+load-bearing prose rather than broken code — `data/pools/aemtler.yaml` still said the pool
+is never scraped, and an `eligibility.js` comment promised a staleness guard that did not
+exist. One was a wrong number in this plan's own acceptance criteria (`altweg 3`, actually
+2), adjudicated against the fixture and a live re-fetch.
+
+Distilled into `docs/summaries/school-access-vocabulary.md`.
