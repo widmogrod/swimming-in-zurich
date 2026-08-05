@@ -145,8 +145,12 @@ export function closureLabel(status: {
 
 // Paint the row's terminal state ON the plot (plan FIX 1), the way the prototype's
 // drawClosed/drawGhost do — so state reads without a legend. Closed → a dashed rule +
-// dot + "Closed · <detail>" (its reason kept); uncurated → a dotted envelope +
-// "Hours not listed". The text is a token colour (pal.*), never a raw hex.
+// dot, and NO text: the row label already carries "Closed · <detail>" (rowStatusLine),
+// and the on-plot copy was painted centred on `mid` — i.e. its own dashed rule struck
+// through it, in the same pal.closed colour, so it read as scribble. Deleted rather
+// than nudged: the dot + rule already say "shut all day". Uncurated keeps its text —
+// a dotted envelope + "Hours not listed", centred INSIDE the box, nothing across it.
+// The text is a token colour (pal.*), never a raw hex.
 function drawStatusRibbon(
   ctx: Ctx2D,
   r: RenderRibbon,
@@ -172,19 +176,6 @@ function drawStatusRibbon(
     ctx.arc(x0, mid, 3.5, 0, Math.PI * 2);
     ctx.fillStyle = pal.closed;
     ctx.fill();
-    ctx.font = '600 12px system-ui, sans-serif';
-    ctx.textBaseline = 'middle';
-    ctx.textAlign = 'left';
-    const reason = closureLabel({
-      detail: r.detail,
-      closure_code: r.closure_code as string | null | undefined,
-      detail_params: r.detail_params as Record<string, string> | undefined,
-    });
-    ctx.fillText(
-      reason ? t('status.closed_reason', { reason }) : t('status.closed'),
-      x0 + 10,
-      mid,
-    );
   } else {
     const x0 = ts.X(7 * 60);
     const x1 = ts.X(21 * 60);

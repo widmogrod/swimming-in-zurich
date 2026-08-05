@@ -167,10 +167,11 @@ test("the axis paints its hour ticks as text", () => {
   expect(calls.some((c) => c.op === "fillText")).toBe(true);
 });
 
-test('the canvas ribbon and the label column render a closure the SAME way', () => {
-  // They diverged once: the label column was translated to "Summer break" while the
-  // ribbon still painted the curated German "Sommerpause" on the same row. Both now read
-  // the S4 closure code, so this pins that they cannot drift apart again.
+test('a closure is stated ONCE — in the label column, never on the canvas', () => {
+  // The plot used to repeat the label column's "Closed · <reason>" at the start of the
+  // dashed rule — centred on the same y as the rule, in the same colour, so the row's own
+  // dash struck the words through. The reason now lives only in the label column; the
+  // plot keeps the dot + dashed rule, which already read as "shut all day".
   const status = {
     facility: 'Shut',
     status: 'closed',
@@ -182,11 +183,8 @@ test('the canvas ribbon and the label column render a closure the SAME way', () 
 
   const calls: Call[] = [];
   mountBoard(calls, { day: answer([], [status]) });
-  const painted = calls
-    .filter((c) => c.op === 'fillText')
-    .map((c) => String(c.args[0]))
-    .filter((s) => s.startsWith('Closed'));
+  const painted = calls.filter((c) => c.op === 'fillText').map((c) => String(c.args[0]));
 
   expect(label?.text).toBe('Closed · Summer break');
-  expect(painted).toContain(label?.text);
+  expect(painted.some((s) => s.startsWith('Closed') || s.includes('Summer break'))).toBe(false);
 });
