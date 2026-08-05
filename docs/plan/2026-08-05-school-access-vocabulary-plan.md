@@ -1,6 +1,6 @@
 ---
 type: plan
-status: approved
+status: in-progress
 created: 2026-08-05
 feature: school-access-vocabulary
 gates:
@@ -8,6 +8,9 @@ gates:
   review: adversarial
   max_rounds: 2
 pause_after: ["S2"]
+branch: plan/school-access-vocabulary
+worktree: .claude/worktrees/plan-school-access-vocabulary
+base_branch: feat/new-ui
 links: ["[[session-access]]", "[[2026-08-02-gold-coverage-gaps]]"]
 ---
 
