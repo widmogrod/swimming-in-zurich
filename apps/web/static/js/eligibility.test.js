@@ -41,6 +41,36 @@ test('adults-only ≥18: <18 is no, ≥18 is in, unknown is chk', () => {
   assert.equal(eligForAccess('AdultsOnly', '', null), 'chk');
 });
 
+test('girls-only: male/diverse=no, female=chk (no published cutoff), unset=chk — never ✓', () => {
+  // Mirrors `_girls_only` (access.py). A woman is NOT welcomed: the city publishes no age
+  // cutoff for "Mädchen", so she gets ? rather than ✓.
+  assert.equal(eligForAccess('GirlsOnly', 'male', 40), 'no');
+  assert.equal(eligForAccess('GirlsOnly', 'diverse', 40), 'no');
+  assert.equal(eligForAccess('GirlsOnly', 'female', 12), 'chk');
+  assert.equal(eligForAccess('GirlsOnly', '', null), 'chk');
+});
+
+test('gender-diverse: only the published age denies; above it ? — NEVER ✓, never a gender deny', () => {
+  assert.equal(eligForAccess('GenderDiverse', '', 15), 'no'); // below "ab 16 Jahren"
+  assert.equal(eligForAccess('GenderDiverse', 'male', 40), 'chk');
+  assert.equal(eligForAccess('GenderDiverse', 'female', 40), 'chk'); // a trans woman is female
+  assert.equal(eligForAccess('GenderDiverse', 'diverse', null), 'chk');
+});
+
+test('accompanied-children is always ? — accompaniment is not a filter attribute', () => {
+  for (const g of ['', 'female', 'male', 'diverse']) {
+    for (const a of [null, 8, 40]) {
+      assert.equal(eligForAccess('AccompaniedChildren', g, a), 'chk');
+    }
+  }
+});
+
+test('an UNKNOWN access type is ? , never ✓ — the fallback may not invent permission', () => {
+  // The regression this suite exists for: the fallback used to return 'in', so the first
+  // new domain access kind (GirlsOnly) rendered ✓ on a session the server had refused.
+  assert.equal(eligForAccess('SomeFutureAccessKind', 'male', 40), 'chk');
+});
+
 test('never-public access (school/club) is always ✕', () => {
   assert.equal(eligForAccess('SchoolReserved', 'female', 40), 'no');
   assert.equal(eligForAccess('ClubReserved', 'male', 40), 'no');
@@ -55,9 +85,46 @@ test('every access family in the synthetic fixture maps to a valid state', () =>
     seen.add(o.access);
   }
   // the fixture exercises the branches the captured day/week fixtures lack
-  for (const a of ['WomenOnly', 'SeniorsOnly', 'AdultsOnly', 'SchoolReserved', 'ClubReserved']) {
+  for (const a of [
+    'WomenOnly',
+    'SeniorsOnly',
+    'AdultsOnly',
+    'SchoolReserved',
+    'ClubReserved',
+    'GirlsOnly',
+    'GenderDiverse',
+    'AccompaniedChildren',
+  ]) {
     assert.ok(seen.has(a), `fixture missing access ${a}`);
   }
+});
+
+test('this module agrees with the SERVER on every access type × gender × age', () => {
+  // The generated contract: every row is what `swimzh.domain.access.eligibility` actually
+  // decided, mapped to the UI's three marks by ONE documented rule (see
+  // apps/web/tests/test_eligibility_ui_contract.py). Two implementations of one rule drift;
+  // this is what stops them.
+  const { cases } = load('eligibility_contract.json');
+  assert.ok(cases.length > 0);
+  for (const c of cases) {
+    const got = eligForAccess(c.access, c.gender, c.age);
+    assert.equal(got, c.ui, `${c.access} gender=${c.gender || 'unset'} age=${c.age}: ` +
+      `server said ${c.code} (allowed=${c.allowed}) → ${c.ui}, UI drew ${got}`);
+  }
+  // The contract must actually exercise the kinds this plan added.
+  for (const a of ['GirlsOnly', 'GenderDiverse', 'AccompaniedChildren']) {
+    assert.ok(cases.some((c) => c.access === a), `contract missing access ${a}`);
+  }
+});
+
+test('the aemtler Thursday girls-only session never reads ✓ for an adult man', () => {
+  // The named harm, replayed from a REAL /swim round-trip (generated fixture).
+  const { viewer, option } = load('aemtler_girls_only.json');
+  assert.equal(option.access, 'GirlsOnly');
+  assert.equal(option.eligible, false); // what the server told poolrank
+  const state = eligForAccess(option.access, viewer.gender, viewer.age);
+  assert.notEqual(state, 'in'); // the badge may NEVER contradict the server's refusal
+  assert.equal(state, 'no');
 });
 
 test('dayEligibility priority is in > chk > no, and ? never collapses to ✕', () => {

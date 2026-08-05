@@ -35,6 +35,52 @@ describe("every locale is registered and complete", () => {
   });
 });
 
+describe("the access legend is fully translated in every locale", () => {
+  // The parity gates above only compare the catalogues WITH EACH OTHER: five catalogues that
+  // all lack a key are perfectly "in parity" and perfectly broken. So the access vocabulary
+  // is asserted BY NAME — a new domain access kind (school-access-vocabulary S1 added three)
+  // must reach the legend in all five languages, not just English.
+  const ACCESS_KEYS = [
+    "access.public",
+    "access.lane",
+    "access.family",
+    "access.women",
+    "access.seniors",
+    "access.adults",
+    "access.school",
+    "access.club",
+    "access.girls",
+    "access.genderDiverse",
+    "access.accompanied",
+  ];
+
+  test.each(LOCALES)("%s carries every access.* label, non-empty", (locale) => {
+    for (const key of ACCESS_KEYS) {
+      const entry = CATALOGS[locale][key];
+      expect(entry, `${locale} is missing ${key}`).toBeDefined();
+      expect(typeof entry, `${locale}/${key} must be a plain string`).toBe(
+        "string",
+      );
+      expect(
+        (entry as string).trim().length,
+        `${locale}/${key} is blank`,
+      ).toBeGreaterThan(0);
+    }
+  });
+
+  test.each(LOCALES)(
+    "%s does not reuse one word for two distinct access kinds",
+    (locale) => {
+      // A copy-paste placeholder ("Girls only" left as "Women only") is invisible to key
+      // parity and reads as a factual error about who the session is for.
+      const labels = ACCESS_KEYS.map((k) => CATALOGS[locale][k] as string);
+      expect(new Set(labels).size, `${locale}: duplicate access labels`).toBe(
+        ACCESS_KEYS.length,
+      );
+    },
+  );
+});
+
 describe("plural entries carry exactly the categories their locale uses", () => {
   test.each(LOCALES)("%s", (locale) => {
     const expected = [...PLURAL_CATEGORIES[locale]].sort();

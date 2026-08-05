@@ -31,10 +31,22 @@ test('accessFamily maps every domain access class to its colour family', () => {
   expect(accessFamily('AdultsOnly')).toBe('adults');
   expect(accessFamily('SchoolReserved')).toBe('school');
   expect(accessFamily('ClubReserved')).toBe('club');
+  expect(accessFamily('GirlsOnly')).toBe('girls');
+  expect(accessFamily('GenderDiverse')).toBe('diverse');
+  expect(accessFamily('AccompaniedChildren')).toBe('accompanied');
   expect(accessFamily('SomethingNew')).toBe('other');
 });
 
-test('the synthetic fixture exercises all eight colour families', () => {
+test('the school-pool kinds get their OWN family, never the public-swim fallback', () => {
+  // `accessFamily` falling to 'other' is not neutral: ribbonrender paints 'other' with
+  // `fam-public`, so a restricted session would be drawn in the open-to-all colour.
+  for (const a of ['GirlsOnly', 'GenderDiverse', 'AccompaniedChildren']) {
+    expect(accessFamily(a)).not.toBe('other');
+    expect(accessFamily(a)).not.toBe('public');
+  }
+});
+
+test('the synthetic fixture exercises every colour family', () => {
   const { options } = load<{ options: RibbonOption[] }>('access_families.json');
   const families = new Set(options.map((o: RibbonOption) => accessFamily(o.access ?? '')));
   for (const fam of Object.values(ACCESS_FAMILY)) {

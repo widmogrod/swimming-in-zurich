@@ -1,5 +1,5 @@
 {
-  "_note": "SYNTHETIC deterministic fixture (hand-authored, NOT captured). Its sole job is to exercise every ribbonmodel colour-family branch and every eligibility branch that the real captured day/week fixtures do not naturally contain (WomenOnly / SeniorsOnly / AdultsOnly / SchoolReserved / ClubReserved). Shapes match apps/web/api/swim/model.py.",
+  "_note": "SYNTHETIC deterministic fixture (hand-authored, NOT captured). Its sole job is to exercise every ribbonmodel colour-family branch and every eligibility branch that the real captured day/week fixtures do not naturally contain (WomenOnly / SeniorsOnly / AdultsOnly / SchoolReserved / ClubReserved / GirlsOnly / GenderDiverse / AccompaniedChildren). Shapes match apps/web/api/swim/model.py.",
   "options": [
     {
       "facility": "Synth Pool", "facility_id": "synth", "kind": "indoor", "basin": "Main",
@@ -73,6 +73,33 @@
       "facility": "Synth Pool", "facility_id": "synth", "kind": "indoor", "basin": "Main",
       "length_m": 25.0, "lanes": 8, "start": "16:00", "end": "17:00",
       "access": "ClubReserved", "eligible": false, "reason": "reserved for a club — not public",
+      "price": null, "distance_km": null, "open_now": true, "valid_as_of": null,
+      "source": "synthetic", "curated": true,
+      "lane_availability": null,
+      "lane_timeline": null
+    },
+    {
+      "facility": "Synth Pool", "facility_id": "synth", "kind": "school", "basin": "Main",
+      "length_m": 25.0, "lanes": 8, "start": "17:00", "end": "18:00",
+      "access": "GirlsOnly", "eligible": false, "reason": "girls-only session (für Mädchen)",
+      "price": null, "distance_km": null, "open_now": true, "valid_as_of": null,
+      "source": "synthetic", "curated": true,
+      "lane_availability": null,
+      "lane_timeline": null
+    },
+    {
+      "facility": "Synth Pool", "facility_id": "synth", "kind": "school", "basin": "Main",
+      "length_m": 25.0, "lanes": 8, "start": "18:00", "end": "19:00",
+      "access": "GenderDiverse", "eligible": false, "reason": "trans and non-binary, 16+",
+      "price": null, "distance_km": null, "open_now": true, "valid_as_of": null,
+      "source": "synthetic", "curated": true,
+      "lane_availability": null,
+      "lane_timeline": null
+    },
+    {
+      "facility": "Synth Pool", "facility_id": "synth", "kind": "school", "basin": "Main",
+      "length_m": 25.0, "lanes": 8, "start": "19:00", "end": "20:00",
+      "access": "AccompaniedChildren", "eligible": false, "reason": "children only with an adult",
       "price": null, "distance_km": null, "open_now": true, "valid_as_of": null,
       "source": "synthetic", "curated": true,
       "lane_availability": null,

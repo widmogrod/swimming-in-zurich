@@ -20,7 +20,7 @@ import { ELIG_IN, ELIG_CHK, ELIG_NO } from '../eligibility.js';
  *  does not exist. */
 export const HONESTY_NOTE = t('legend.honestyNote');
 
-// The eight access families (each maps to a `.fam-*` colour token) + their words.
+// The eleven access families (each maps to a `.fam-*` colour token) + their words.
 // Key-only: the label is resolved from the catalog at render, so the legend is
 // translatable without the model changing shape (legend.test asserts on KEYS).
 const FAMILIES = [
@@ -32,6 +32,9 @@ const FAMILIES = [
   { family: 'adults', label: t('access.adults') },
   { family: 'school', label: t('access.school') },
   { family: 'club', label: t('access.club') },
+  { family: 'girls', label: t('access.girls') },
+  { family: 'diverse', label: t('access.genderDiverse') },
+  { family: 'accompanied', label: t('access.accompanied') },
 ];
 
 // The three terminal states, each its own swatch class (never merged).

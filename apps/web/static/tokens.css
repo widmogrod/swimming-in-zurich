@@ -73,6 +73,14 @@
   --fam-adults: var(--best);
   --fam-school: var(--lane-res-ink);
   --fam-club: var(--lane-res-ink);
+  /* The school-pool vocabulary. Aliases again — no new raw hue. A girls-only session is
+     the same gendered restriction as a women-only one, so it takes the same violet;
+     gender-diverse deliberately does NOT (it is not a women's session) and takes the chip
+     slate; accompanied-children takes the reserved ink, like school/club, because
+     attendance depends on a condition we cannot check. Provisional, like the eight above. */
+  --fam-girls: var(--women);
+  --fam-diverse: var(--chip-ink);
+  --fam-accompanied: var(--lane-res-ink);
   --fam-closed: var(--closed);
   --fam-unknown: var(--unknown);
   --fam-sheath: var(--envfill);

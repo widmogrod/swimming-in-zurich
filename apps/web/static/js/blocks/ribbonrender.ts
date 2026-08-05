@@ -15,6 +15,7 @@
 // Timescale and height.
 
 import { hhmmToMin } from './cursor.js';
+import { ACCESS_FAMILY } from './ribbonmodel.js';
 import { unlistedLabelKey } from '../appdata.js';
 import { t, type MessageKey } from '../i18n.js';
 import type { Doc, El, WindowLike } from '../domtypes.js';
@@ -80,8 +81,11 @@ function setDashes(ctx: Ctx2D, style: string): void {
   else ctx.setLineDash([]);
 }
 
-/** The access families whose colours the renderer resolves. */
-const FAMILIES = ['public', 'lane', 'family', 'women', 'seniors', 'adults', 'school', 'club'];
+/** The access families whose colours the renderer resolves.
+ *
+ * DERIVED from `ACCESS_FAMILY`, not re-listed: a new access kind that got a family key but
+ * no probe here would silently paint `undefined` on the canvas. */
+const FAMILIES = [...new Set(Object.values(ACCESS_FAMILY))];
 
 /**
  * resolveFamilyPalette(doc, host) — probe each `.fam-*` class for its computed colour,

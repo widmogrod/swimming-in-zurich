@@ -288,8 +288,25 @@ Appended by /dev:implement after each slice — never rewritten. Newest row last
 |------|-------|--------|----------------------|-------------------|---------------|
 | 2026-08-05 | S1 | done | altweg is 2 rules not 3 (plan wrong; verified fixture + live); `field_sourcing.py` touched beyond Touches; `GenderDiverse` classified only when the cell states an age | trans/nb cell without a published age falls through to PublicSwim/AdultsOnly — the union has no "restricted, bound unknown" member; `source_text` persisted-but-unread, also rides `FeatureDTO.hours`; `GirlsOnly` denies `Gender.DIVERSE` while `WomenOnly` gives it a confirm | yes |
 | 2026-08-05 | S2 | done | `declared_sources` returns `DeclaredSource(entry, url)` pairs (narrows `url` once instead of re-asserting at 3 sites); 5 files touched beyond Touches, all forced consequences, each disclosed above | `freshness_of` still answers by kind alone, so its correctness rests on all 4 declared school pools happening to carry rules — a declared school source yielding no rule would report `no_source` rather than `awaiting_scrape`; the honest fix needs a URL or declared-source flag on `Facility`. `data/catalog.json` is stale vs live WFS (snapshot `isengrind`, live `wolfsblick`) — both are URL-sharers so no count moves. `schulschwimmanlage_borrweg.html` fixture is unreachable (borrweg shares the overview URL) | yes |
+| 2026-08-06 | S3 | done | unknown-access fallback changed `ELIG_IN` -> `ELIG_CHK` (beyond the plan's three named kinds — the fail-open default IS the defect's mechanism and would re-fire on the next domain arm; verified behaviour-neutral for all 8 pre-existing kinds); touched beyond Touches: `blocks/ribbonrender.ts`, `static/tokens.css`, `blocks/board.test.ts`, plus a new `apps/web/tests/test_eligibility_ui_contract.py` and two generated fixtures | the browser's `GENDER_DIVERSE_MIN_AGE` / `SENIORS_MIN_AGE` / `ADULTS_MIN_AGE` mirrors are UNGUARDED — the generated contract pins only `REPRESENTATIVE_ACCESS`'s hand-written instances, never a parsed bound, so a page publishing a different age would leave both chains green while the badge disagrees with the server; the fix is carrying `min_age` on `OptionOut`. `--fam-girls`/`--fam-accompanied` alias existing hues, so 3 legend rows are not colour-distinguishable (pre-existing collision; hues marked provisional). `blocks/poolrank.ts` still keys on `eligible === false`, so its mobile verdict does not follow the board's check state | yes |
 
 ## Decisions & divergences
+
+- **2026-08-06, S3** — critic returned `revise` on a **false safety claim**: a comment in
+  `eligibility.js` said the contract fixture would go red if a page published a different
+  `min_age`. It would not — `_matrix()` iterates `REPRESENTATIVE_ACCESS`, a hand-written
+  tuple holding `GenderDiverse(min_age=16)`, and never reads scraped rules. A page saying
+  "ab 14 Jahren" would leave both chains green while a 15-year-old was drawn EXCLUDED
+  against a server that said *check* — the mirror image of the harm this plan fixes.
+  Comment rewritten to state the mirror is unguarded; recorded as tech debt. Same class as
+  the S2 `aemtler.yaml` finding.
+- **2026-08-06, S3** — the JS<->Python agreement is mechanical, not asserted:
+  `test_eligibility_ui_contract.py` GENERATES a fixture from `domain.access.eligibility`
+  and `eligibility.test.js` replays it, bridged into pytest via `test_static_js.py`. The
+  critic mutation-tested it (flipped fixture rows, weakened a JS arm — both went red) and
+  independently brute-forced 572 cases with 0 mismatches. Grid widened 264 -> 440 cases
+  after review: no case sat ON a threshold, so a `>=` -> `>` off-by-one at 18 or 60 passed
+  the old matrix and fails the new one (verified by mutation).
 
 - **2026-08-05, S2** — critic returned `revise` on one real stale claim:
   `data/pools/aemtler.yaml`'s header named the deleted `scrape_indoor_facilities` and said

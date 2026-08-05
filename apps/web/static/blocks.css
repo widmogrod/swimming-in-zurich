@@ -236,6 +236,9 @@ body {
 .fam-adults { color: var(--fam-adults); }
 .fam-school { color: var(--fam-school); }
 .fam-club { color: var(--fam-club); }
+.fam-girls { color: var(--fam-girls); }
+.fam-diverse { color: var(--fam-diverse); }
+.fam-accompanied { color: var(--fam-accompanied); }
 .fam-closed { color: var(--fam-closed); }
 .fam-unknown { color: var(--fam-unknown); }
 .fam-sheath { color: var(--fam-sheath); }

@@ -22,6 +22,13 @@ export const ACCESS_FAMILY = Object.freeze({
   AdultsOnly: 'adults',
   SchoolReserved: 'school',
   ClubReserved: 'club',
+  // The school-pool vocabulary (school-access-vocabulary S1). Each gets its OWN key rather
+  // than falling to 'other': 'other' paints with the public-swim colour (ribbonrender's
+  // `pal.other = read('fam-public')`), which is exactly the "looks open to you" lie the
+  // eligibility fallback used to tell.
+  GirlsOnly: 'girls',
+  GenderDiverse: 'diverse',
+  AccompaniedChildren: 'accompanied',
 });
 
 /** A `/swim` option as the ribbon model reads it. */
