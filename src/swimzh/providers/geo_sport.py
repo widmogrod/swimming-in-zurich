@@ -15,6 +15,7 @@ Error mapping specific to this provider:
 from __future__ import annotations
 
 import json
+from collections.abc import Mapping
 from dataclasses import dataclass
 from urllib.parse import urlsplit, urlunsplit
 
@@ -94,10 +95,25 @@ def _clean(text: str | None) -> str | None:
 # "Official" link. Targeted repair of one known-broken host — NOT a general scheme policy.
 _BROKEN_TLS_HOSTS = frozenset({"sportamt.ch", "www.sportamt.ch"})
 
+# ONE sportamt slug is also dead, and the scheme repair alone cannot reach it: `/freibad-
+# zwischen-hoelzern` 302s to `www.stadt-zuerich.ch/freibad-zwischen-hoelzern`, which **404s** —
+# the city's live slug carries `-den-` (verified 2026-08-06: the `-den-` form answers 200, and so
+# does the pool's own id, `freibad-zwischen-den-hoelzern`). Harmless while the pool was never
+# fetched; once `OUTDOOR` entered `etl.scrape._SCRAPEABLE_KINDS` (seasonal-hours S3) the entry
+# became a declared source, and a declared source that 404s aborts the whole build.
+#
+# Keyed by the sportamt PATH and applied only on that host, so this stays one row of data rather
+# than a copy of the city's slug map: the 302 still does the host mapping, we only hand it a slug
+# that resolves. A general redirect-follower cannot fix it — the 404 IS the redirect target.
+_SPORTAMT_SLUG_REPAIRS: Mapping[str, str] = {
+    "/freibad-zwischen-hoelzern": "/freibad-zwischen-den-hoelzern",
+}
+
 
 def _normalize_roster_url(raw: str | None) -> str | None:
-    """Repair the scheme of a roster URL on the known-broken host; every other URL is returned
-    byte-identical (an unparseable value included)."""
+    """Repair a roster URL on the known-broken `sportamt.ch` host — its unusable `https` SCHEME
+    and, for one entry, its dead PATH. Every other URL is returned byte-identical (an unparseable
+    value included), as is a sportamt URL that needs neither repair."""
     if raw is None:
         return None
     try:
@@ -105,9 +121,13 @@ def _normalize_roster_url(raw: str | None) -> str | None:
         host = parts.hostname
     except ValueError:
         return raw
-    if parts.scheme != "https" or host is None or host.lower() not in _BROKEN_TLS_HOSTS:
+    if host is None or host.lower() not in _BROKEN_TLS_HOSTS:
         return raw
-    return urlunsplit(("http", parts.netloc, parts.path, parts.query, parts.fragment))
+    scheme = "http" if parts.scheme == "https" else parts.scheme
+    path = _SPORTAMT_SLUG_REPAIRS.get(parts.path, parts.path)
+    if (scheme, path) == (parts.scheme, parts.path):
+        return raw
+    return urlunsplit((scheme, parts.netloc, path, parts.query, parts.fragment))
 
 
 def _to_geo_pool(feature: FeatureDTO, kind: PoolKind) -> GeoPool:

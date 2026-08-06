@@ -625,6 +625,9 @@ _SEASONAL_FIXTURES = (
     "freibad_heuried.html",
     "freibad_letzigraben.html",
     "freibad_seebach.html",
+    # Harvested in S3, after the roster URL repair: this pool's stored slug 302s to a
+    # stadt-zuerich page that 404s, so S2's cache-harvested fixture set could not include it.
+    "freibad_zwischen_den_hoelzern.html",
     "maennerbad.html",
     "seebad_katzensee.html",
     "seebad_utoquai.html",
@@ -637,7 +640,7 @@ _SUMMER_2026 = AnnualWindow(MonthDay(5, 30), MonthDay(8, 16), DatePrecision.DAY)
 
 
 def test_every_zeitraum_header_shape_parses() -> None:
-    # Three shapes exist across the 15 saved pages: both weather columns (11), all-weather
+    # Three shapes exist across the 16 saved pages: both weather columns (12), all-weather
     # only (3: letzigraben, seebach, utoquai) and FAIR-WEATHER ONLY (1: maennerbad). A parser
     # that keyed on column *count* or assumed column 1 was unconditional would miss two of
     # them; the header text is the only honest signal.
@@ -668,6 +671,34 @@ def test_heuried_has_no_sessions_on_the_first_of_october() -> None:
     # Its last window ends 20 September, so 1 October is outside every rule it publishes.
     rules = _rules_of("freibad_heuried.html")
     assert not [r for r in rules if r.season is not None and r.season.contains(date(2026, 10, 1))]
+
+
+def test_zwischen_den_hoelzern_publishes_four_windows_over_the_summer() -> None:
+    # The pool the roster URL repair unlocked (its stored slug 404s; the live one carries
+    # `-den-`). Four consecutive date windows, each with an all-weather and a fair-weather block,
+    # and the fair-weather end MOVES with the season — the whole point of keeping the windows
+    # rather than flattening them to one set of hours.
+    rules = _rules_of("freibad_zwischen_den_hoelzern.html")
+    assert len(rules) == 8
+    by_season: dict[AnnualWindow, list[tuple[time, Weather]]] = {}
+    for rule in rules:
+        assert rule.season is not None
+        by_season.setdefault(rule.season, []).append((rule.time.end, rule.weather))
+    assert {s: sorted(v) for s, v in by_season.items()} == {
+        AnnualWindow(MonthDay(5, 9), MonthDay(5, 29), DatePrecision.DAY): [
+            (time(14), Weather.ANY),
+            (time(20), Weather.FAIR_ONLY),
+        ],
+        _SUMMER_2026: [(time(14), Weather.ANY), (time(21), Weather.FAIR_ONLY)],
+        AnnualWindow(MonthDay(8, 17), MonthDay(9, 6), DatePrecision.DAY): [
+            (time(14), Weather.ANY),
+            (time(20), Weather.FAIR_ONLY),
+        ],
+        AnnualWindow(MonthDay(9, 7), MonthDay(9, 20), DatePrecision.DAY): [
+            (time(14), Weather.ANY),
+            (time(19), Weather.FAIR_ONLY),
+        ],
+    }
 
 
 def test_a_footnote_marker_never_breaks_the_closing_time() -> None:
@@ -800,12 +831,12 @@ def test_the_four_school_fixtures_still_parse() -> None:
 
 
 def test_last_admission_is_read_from_the_sentence_not_the_footnote_marker() -> None:
-    # Three sets that must not be conflated: 13 of the 15 saved seasonal pages carry the
+    # Three sets that must not be conflated: 14 of the 16 saved seasonal pages carry the
     # sentence, only 11 of those inside footnote ¹. Frauenbad and Männerbad print it as
     # standalone prose with NO <sup> on the page (and Frauenbad words it "spätestens", not
     # "bis"), so an extractor anchored on the marker — or on the exact string — loses them.
     carriers = {f for f in _SEASONAL_FIXTURES if _schedule_of(f).last_admission_before is not None}
-    assert len(carriers) == 13
+    assert len(carriers) == 14
     assert {"frauenbad.html", "maennerbad.html"} <= carriers
     assert all(_schedule_of(f).last_admission_before == timedelta(minutes=30) for f in carriers)
 

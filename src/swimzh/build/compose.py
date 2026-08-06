@@ -16,7 +16,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field, replace
-from datetime import datetime
+from datetime import datetime, timedelta
 from enum import Enum
 from typing import Any
 
@@ -64,6 +64,9 @@ class ScrapedAspects:
     #: Sourced from the timetable's "(und Feiertage)" Sunday row; `None` when the page is
     #: silent. Never defaulted to `NORMAL` — that fabricated a fact on all 57 pools.
     public_holiday_policy: HolidayPolicy | None = None
+    #: Sourced from the page's last-admission sentence ("Der letzte Einlass erfolgt bis 30
+    #: Minuten vor Badschluss"); `None` when the page is silent, never an assumed zero.
+    last_admission_before: timedelta | None = None
 
 
 class Source(Enum):
@@ -113,6 +116,7 @@ _ASPECTS: tuple[_Aspect, ...] = (
     _Aspect("features", _is_nonempty, CURATED_WINS),
     _Aspect("lockers", _is_nonempty, CURATED_WINS),
     _Aspect("public_holiday_policy", _is_not_none, CURATED_WINS),
+    _Aspect("last_admission_before", _is_not_none, CURATED_WINS),
 )
 
 
@@ -139,6 +143,7 @@ def _scraped_facility(pool_id: PoolId, aspects: ScrapedAspects) -> Facility:
         geo=aspects.geo,
         closures=aspects.closures,
         public_holiday_policy=aspects.public_holiday_policy,
+        last_admission_before=aspects.last_admission_before,
         prices=aspects.prices,
         notices=aspects.notices,
         features=aspects.features,

@@ -94,9 +94,27 @@ def _urls(*raw: str | None) -> list[str | None]:
     return [p.url for p in result.value]
 
 
+# The one sportamt slug that needs a PATH repair as well as a scheme one: it 302s to a
+# stadt-zuerich page that 404s, and the city's live slug carries `-den-`.
+_DEAD_SLUG = "https://www.sportamt.ch/freibad-zwischen-hoelzern"
+
+
 @pytest.mark.parametrize(
     ("raw", "expected"),
     [
+        # the ONE dead slug: scheme AND path repaired (a 404 here aborts the whole build, since
+        # seasonal-hours S3 made this outdoor pool a declared source)
+        (_DEAD_SLUG, "http://www.sportamt.ch/freibad-zwischen-den-hoelzern"),
+        # …on the already-plaintext form too: the path repair is not conditional on the scheme
+        (
+            "http://www.sportamt.ch/freibad-zwischen-hoelzern",
+            "http://www.sportamt.ch/freibad-zwischen-den-hoelzern",
+        ),
+        # …and NOT on another host that happens to use the same slug
+        (
+            "https://www.stadt-zuerich.ch/freibad-zwischen-hoelzern",
+            "https://www.stadt-zuerich.ch/freibad-zwischen-hoelzern",
+        ),
         # the repair, with every URL component preserved
         (
             "https://www.sportamt.ch/freibad-letzigraben",
@@ -141,10 +159,12 @@ def test_normalization_is_per_feature() -> None:
 
 def test_committed_wfs_snapshot_urls_are_repaired_or_byte_identical() -> None:
     """Over the FULL committed per-layer snapshot (all ~57 pools, not a sample): every
-    sportamt.ch entry comes out on `http` with the rest of the URL untouched, and every other
-    entry comes out byte-identical to what the WFS published."""
+    sportamt.ch entry comes out on `http` with the rest of the URL untouched — except the ONE
+    dead slug, whose path is repaired too — and every other entry comes out byte-identical to
+    what the WFS published."""
     seen_sportamt = 0
     seen_other = 0
+    seen_slug_repair = 0
     for path in sorted(WFS_FIXTURES.glob("*.json")):
         raw = path.read_bytes()
         result = parse_pools(raw, POOL_LAYERS[path.stem])
@@ -152,11 +172,15 @@ def test_committed_wfs_snapshot_urls_are_repaired_or_byte_identical() -> None:
         published = [f["properties"].get("www") for f in json.loads(raw)["features"]]
         assert len(published) == len(result.value)
         for source, pool in zip(published, result.value, strict=True):
-            if source is not None and source.startswith("https://www.sportamt.ch/"):
+            if source == _DEAD_SLUG:
+                assert pool.url == "http://www.sportamt.ch/freibad-zwischen-den-hoelzern"
+                seen_slug_repair += 1
+            elif source is not None and source.startswith("https://www.sportamt.ch/"):
                 assert pool.url == "http://" + source.removeprefix("https://")
                 seen_sportamt += 1
             else:
                 assert pool.url == source
                 seen_other += 1
-    assert seen_sportamt == 16, seen_sportamt  # the 17th (katzensee) is published as http
+    assert seen_sportamt == 15, seen_sportamt  # 17 sportamt entries − katzensee (http) − the slug
+    assert seen_slug_repair == 1, seen_slug_repair
     assert seen_other > 0

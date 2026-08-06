@@ -53,11 +53,16 @@ class ScheduleFreshness(StrEnum):
     * `NO_SOURCE` — no rule AND not in that set (e.g. `schulschwimmanlage-hardau`, a `school`):
       permanently schedule-less, no website timetable source at all.
 
-    `SCHOOL` is deliberately absent from the kind test in `freshness_of`: only 4 of the 18
-    Schulschwimmanlagen are declared sources (`etl.scrape.declared_sources` — the other 14 share
-    one overview URL). Those 4 carry rules and so read `SCRAPED` from the blob itself; adding
-    `SCHOOL` here would flip the other 14 to a promise no scrape will ever keep. The URL-sharing
-    test that would decide it properly is unavailable here — `Facility` carries no URL.
+    `SCHOOL`, `OUTDOOR`, `LAKE` and `RIVER` are all deliberately absent from the kind test in
+    `freshness_of`, even though `etl.scrape.declared_sources` scrapes pools of every one of them.
+    `AWAITING_SCRAPE` promises a schedule is coming, and for these kinds only *some* pools are
+    declared sources: 4 of the 18 Schulschwimmanlagen (the other 14 share one overview URL),
+    and outdoor/lake/river all but `flussbad-unterer-letten` + `-flussteil` (which share a URL and
+    so can NEVER be declared sources) and `seebad-enge` + `freibad-dolder` (whose operator pages no
+    parser understands). A pool of these kinds that IS scraped carries rules and so reads `SCRAPED`
+    from the blob itself — the widening buys nothing and would flip the four exceptions to a
+    promise no scrape will ever keep. The URL-sharing test that would decide it properly is
+    unavailable here: `Facility` carries no URL.
 
     A non-`SCRAPED` pool is a first-class honest state, never "closed" and never a `/swim` option.
     """
@@ -93,8 +98,8 @@ def freshness_of(facility: Facility) -> ScheduleFreshness:
     if any(basin.rules for basin in facility.basins):
         return ScheduleFreshness.SCRAPED
     # A `Wärmebad` (THERMAL) is WFS-`indoor` but registry-overridden for display, so it IS
-    # scraped. These two kinds are the ones where EVERY pool is a declared source; `SCHOOL` is
-    # not (4 of 18) and must stay out — see ScheduleFreshness.
+    # scraped. These two kinds are the ONLY ones where EVERY pool is a declared source; `SCHOOL`
+    # (4 of 18) and `OUTDOOR`/`LAKE`/`RIVER` (15 of 19) must stay out — see ScheduleFreshness.
     if facility.identity.kind in (PoolKind.INDOOR, PoolKind.THERMAL):
         return ScheduleFreshness.AWAITING_SCRAPE
     return ScheduleFreshness.NO_SOURCE

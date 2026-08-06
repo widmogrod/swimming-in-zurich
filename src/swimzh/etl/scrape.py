@@ -2,14 +2,16 @@
 extract.
 
 A **declared source** is a roster entry that both plausibly has a timetable and owns the page it
-points at — see `declared_sources` for the predicate. Today that is the 7 indoor/thermal city
-pools plus the 4 Schulschwimmanlagen that publish public swimming on their own page.
+points at — see `declared_sources` for the predicate. Today that is 26 pools: the 7 indoor/thermal
+city pools, the 4 Schulschwimmanlagen that publish public swimming on their own page, and the 15
+outdoor/lake/river pools whose seasonal `Zeitraum` table the scraper reads (seasonal-hours S3).
 
-Per pool we scrape: the timetable (→ rules), notices/alerts (→ `Notice`s, and closure-type
-notices → `ClosureRange`s), and attach the shared scraped admission `PriceTable` for city-run
-pools. The result is a ``ScrapedAspects`` payload paired with a ``Name`` ``SourceRef`` (the WFS
-display name) — **never a canonical id**. ``build.reconcile.resolve_all`` turns each ``Name``
-into a ``PoolId`` by lookup, and ``build.compose`` folds the aspects onto the matching pool.
+Per pool we scrape: the timetable (→ rules and the page's last-admission rule), notices/alerts
+(→ `Notice`s, and closure-type notices → `ClosureRange`s), and attach the shared scraped admission
+`PriceTable` for city-run pools. The result is a ``ScrapedAspects`` payload paired with a ``Name``
+``SourceRef`` (the WFS display name) — **never a canonical id**. ``build.reconcile.resolve_all``
+turns each ``Name`` into a ``PoolId`` by lookup, and ``build.compose`` folds the aspects onto the
+matching pool.
 
 **Fail-fast (S4):** a declared source whose page fails to fetch or parse is **NOT skipped**. Its
 typed ``ProviderError`` is preserved in ``ScrapeReport.failures`` so the ``scrape-gold`` command
@@ -47,11 +49,34 @@ _CLOSURE_WORDS = ("geschlossen", "revision", "gesperrt", "betriebsferien")
 _CITY_HOST = "stadt-zuerich.ch"
 
 #: The kinds whose pages this module's parsers understand. `THERMAL` is a WFS-`indoor` Wärmebad
-#: with a registry display-override; `SCHOOL` joined in 2026-08-05 (school-access-vocabulary S2).
-#: NOTE: `domain.catalog.freshness_of` deliberately does NOT include `SCHOOL` — only 4 of the 18
-#: Schulschwimmanlagen are declared sources, so a rule-less school pool is `NO_SOURCE`, not
-#: `AWAITING_SCRAPE`. `Facility` carries no URL, so it cannot apply the conjunction below.
-_SCRAPEABLE_KINDS = (PoolKind.INDOOR, PoolKind.THERMAL, PoolKind.SCHOOL)
+#: with a registry display-override; `SCHOOL` joined in 2026-08-05 (school-access-vocabulary S2);
+#: `OUTDOOR`/`LAKE`/`RIVER` in 2026-08-06, once the `Zeitraum` parser (seasonal-hours S2) could
+#: read the seasonal tables those pages publish.
+#: NOTE: `domain.catalog.freshness_of` deliberately does NOT include `SCHOOL`, nor these three —
+#: only 4 of the 18 Schulschwimmanlagen are declared sources, and the two `flussbad-unterer-letten`
+#: entries share one URL, so a rule-less pool of those kinds is `NO_SOURCE`, not `AWAITING_SCRAPE`.
+#: `Facility` carries no URL, so it cannot apply the conjunction below.
+_SCRAPEABLE_KINDS = (
+    PoolKind.INDOOR,
+    PoolKind.THERMAL,
+    PoolKind.SCHOOL,
+    PoolKind.OUTDOOR,
+    PoolKind.LAKE,
+    PoolKind.RIVER,
+)
+
+#: The two pools the kind gate admits but no parser here understands — excluded BY ID, with the
+#: reason, rather than left to fail the build. Both hold *unshared* URLs on a private operator's
+#: site, so neither the kind test nor the shared-URL test excludes them, and both return
+#: `ParseError('no HTML schedule table')` — which under fail-fast aborts the whole run.
+#:
+#: * `seebad-enge` (tonttu.ch) publishes a guaranteed core window nested inside a conditional one;
+#: * `freibad-dolder` (doldersports.com) publishes date-range exceptions.
+#:
+#: Neither shape exists in the domain model yet (2026-08-06 Gap 7), so admitting them would mean
+#: inventing facts. Keyed by `pool_id` — the identity spine — for the same reason
+#: `_OPERATOR_CLOSURES` is: dolder's operator has already changed domain once without notice.
+_UNPARSEABLE_OPERATOR_PAGES = frozenset({"seebad-enge", "freibad-dolder"})
 
 #: Per-pool extra closure extractors for pools whose page is a **private operator's**, not the
 #: city's. Keyed by `pool_id` — deliberately NOT by host: `freibad-dolder`'s operator changed
@@ -127,14 +152,18 @@ def _aspects(
         prices=prices,
         fetched_at=fetched_at,
         public_holiday_policy=schedule.holiday_policy,
+        last_admission_before=schedule.last_admission_before,
     )
 
 
 def declared_sources(catalog: tuple[PoolCatalogEntry, ...]) -> tuple[DeclaredSource, ...]:
-    """The roster entries whose own page we scrape — a **conjunction** of three tests:
+    """The roster entries whose own page we scrape — a **conjunction** of four tests:
 
     * the kind is one this module's parsers understand: `INDOOR`, its `THERMAL` display-override
-      (a WFS-`indoor` Wärmebad like Käferberg), or a `SCHOOL` pool;
+      (a WFS-`indoor` Wärmebad like Käferberg), a `SCHOOL` pool, or an `OUTDOOR`/`LAKE`/`RIVER`
+      pool (whose seasonal `Zeitraum` table the scraper reads since seasonal-hours S2);
+    * the pool is not one of the two whose operator page no parser here understands
+      (`_UNPARSEABLE_OPERATOR_PAGES`);
     * the entry carries a page URL at all;
     * **no other roster entry carries the same URL.** A shared URL is an *overview* page, not this
       pool's page: 14 entries (the 13 Schulschwimmanlagen *"ohne öffentliches Schwimmen"* plus
@@ -142,17 +171,20 @@ def declared_sources(catalog: tuple[PoolCatalogEntry, ...]) -> tuple[DeclaredSou
       pool's timetable. Under fail-fast, scraping it would turn one unparseable overview into 14
       build-aborting failures.
 
-    The kind gate stays load-bearing: the unshared-URL test *alone* selects 28 entries, 21 of them
-    outdoor/lake/river pages that every parser here `ParseError`s on — each one aborting the build.
-    Pinned on the committed WFS snapshot by `tests/etl/test_scrape.py` (== 11). The URL is
-    returned alongside the entry rather than re-read from it, so the not-`None` test is done once
-    here instead of being re-asserted at every use.
+    The kind gate stays load-bearing even now: the unshared-URL test *alone* selects 28 entries,
+    17 of them outdoor/lake/river, and the 2 the kind gate can no longer exclude are named
+    explicitly above. Pinned on the committed WFS snapshot by `tests/etl/test_scrape.py` (== 26).
+    The URL is returned alongside the entry rather than re-read from it, so the not-`None` test is
+    done once here instead of being re-asserted at every use.
     """
     seen = Counter(e.url for e in catalog if e.url)
     return tuple(
         DeclaredSource(entry=e, url=e.url)
         for e in catalog
-        if e.kind in _SCRAPEABLE_KINDS and e.url is not None and seen[e.url] == 1
+        if e.kind in _SCRAPEABLE_KINDS
+        and e.pool_id not in _UNPARSEABLE_OPERATOR_PAGES
+        and e.url is not None
+        and seen[e.url] == 1
     )
 
 

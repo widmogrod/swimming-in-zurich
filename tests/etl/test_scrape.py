@@ -51,13 +51,15 @@ def test_builds_indoor_extracts_with_real_rules() -> None:
     body = FIXTURE.read_bytes()
     catalog = (
         _entry("hallenbad-city", "Hallenbad City", PoolKind.INDOOR, "https://x/city.html"),
-        _entry("strandbad-x", "Strandbad X", PoolKind.LAKE, "https://x/lake.html"),  # not indoor
+        # A `PADDLING` pool: 13 of them share one month-granular overview page, so the kind is
+        # still outside the gate even after outdoor/lake/river joined it.
+        _entry("planschbecken-x", "Planschbecken X", PoolKind.PADDLING, "https://x/paddling.html"),
     )
     report = scrape_declared_sources(
         _client(lambda _r: httpx.Response(200, content=body)), catalog, FETCHED
     )
 
-    assert len(report.extracts) == 1  # only the indoor pool
+    assert len(report.extracts) == 1  # only the scrapeable-kind pool
     ref, aspects = report.extracts[0]
     # The provider emits a Name SourceRef (the WFS display name) — never a canonical id.
     assert ref == Name("Hallenbad City")
@@ -179,9 +181,11 @@ def test_operator_closures_are_keyed_by_pool_id_not_by_page_content() -> None:
 # --- which roster entries are DECLARED SOURCES ------------------------------------------
 #
 # `scrape_declared_sources` gates on `etl.scrape.declared_sources`, a CONJUNCTION:
-# `kind in {INDOOR, THERMAL, SCHOOL}` AND a url AND that url shared with no other roster entry.
-# These assert what the PRODUCTION predicate selects on the committed WFS snapshot, so the blast
-# radius is a number in a test rather than a surprise in a network build.
+# `kind in {INDOOR, THERMAL, SCHOOL, OUTDOOR, LAKE, RIVER}` AND not one of the two unparseable
+# operator pages AND a url AND that url shared with no other roster entry. These assert what the
+# PRODUCTION predicate selects on the committed WFS snapshot, so the blast radius is a number in a
+# test rather than a surprise in a network build — which for these is the difference between a
+# green build and a fail-fast abort.
 
 _CATALOG = Path(__file__).resolve().parents[2] / "data" / "catalog.json"
 
@@ -232,26 +236,80 @@ def test_an_entry_without_a_url_is_not_a_declared_source() -> None:
     assert declared_sources(catalog) == ()
 
 
-def test_the_declared_sources_are_exactly_eleven_pools() -> None:
+def test_the_declared_sources_are_exactly_twenty_six_pools() -> None:
     entries = catalog_json.loads(_CATALOG.read_text(encoding="utf-8"))
     declared = _declared_ids(entries)
-    # 7 already scraped + the 4 school pools with their own page.
-    assert len(declared) == 11, sorted(declared)
+    # 7 indoor/thermal + the 4 school pools with their own page + the 15 outdoor/lake/river pools
+    # admitted in seasonal-hours S3. Pinned OFFLINE against the committed snapshot: the same
+    # number a live `swimzh build` fetches, one page at a time, aborting on the first miss.
+    assert len(declared) == 26, sorted(declared)
     assert {p for p in declared if p.startswith("schulschwimmanlage-")} == {
         "schulschwimmanlage-aemtler",
         "schulschwimmanlage-altweg",
         "schulschwimmanlage-riedtli",
         "schulschwimmanlage-tannenrauch",
     }
+    by_kind = {e.pool_id: e.kind for e in entries}
+    seasonal = {PoolKind.OUTDOOR, PoolKind.LAKE, PoolKind.RIVER}
+    assert {p for p in declared if by_kind[p] in seasonal} == {
+        "freibad-allenmoos",
+        "freibad-auhof",
+        "freibad-heuried",
+        "freibad-letzigraben",
+        "freibad-seebach",
+        "freibad-zwischen-den-hoelzern",
+        "seebad-katzensee",
+        "seebad-utoquai",
+        "strandbad-mythenquai",
+        "strandbad-tiefenbrunnen",
+        "strandbad-wollishofen",
+        "flussbad-au-hoengg",
+        "flussbad-oberer-letten",
+        "frauenbad-stadthausquai",
+        "maennerbad-schanzengraben",
+    }
 
 
-def test_the_unshared_url_test_alone_would_select_far_more_than_eleven() -> None:
-    """Why the kind gate stays in the conjunction: dropping it selects outdoor/lake/river
-    pages that no parser here understands, and under fail-fast each one aborts the build."""
+def test_the_two_unparseable_operator_pages_are_excluded_by_id() -> None:
+    """`seebad-enge` (tonttu.ch) and `freibad-dolder` (doldersports.com) are `LAKE`/`OUTDOOR` and
+    hold UNSHARED urls, so neither the kind test nor the url test excludes them — only the
+    explicit id list does. Both `ParseError('no HTML schedule table')`, and under fail-fast that
+    aborts the whole build, so this is the one test standing between a green build and an abort."""
+    entries = catalog_json.loads(_CATALOG.read_text(encoding="utf-8"))
+    excluded = {e for e in entries if e.pool_id in {"seebad-enge", "freibad-dolder"}}
+    assert len(excluded) == 2
+    # They pass every OTHER conjunct — that is why the id list has to exist.
+    for entry in excluded:
+        assert entry.kind in (PoolKind.LAKE, PoolKind.OUTDOOR), entry
+        assert entry.url is not None and "stadt-zuerich" not in entry.url, entry
+        assert sum(1 for o in entries if o.url == entry.url) == 1, entry
+    assert not _declared_ids(entries) & {"seebad-enge", "freibad-dolder"}
+
+
+def test_an_excluded_operator_page_is_not_even_fetched_so_it_cannot_fail() -> None:
+    """Excluded means excluded, not "fetched and tolerated": no extract AND no `ScrapeFailure`.
+    A tolerated failure would still abort the build (`cli._compose_schedules` aborts on the first
+    entry in `failures`), so a test that only asserted "no extract" would assert nothing."""
+    catalog = (
+        _entry("seebad-enge", "Seebad Enge", PoolKind.LAKE, "https://www.tonttu.ch/"),
+        _entry("freibad-dolder", "Freibad Dolder", PoolKind.OUTDOOR, "https://x/dolder/"),
+    )
+    report = scrape_declared_sources(
+        _client(lambda _r: httpx.Response(200, content=b"<html>no table</html>")), catalog, FETCHED
+    )
+    assert report.extracts == ()
+    assert report.failures == ()
+
+
+def test_the_unshared_url_test_alone_would_select_more_than_the_predicate_does() -> None:
+    """Why the kind gate stays in the conjunction even after the widening: it still excludes the
+    13 paddling pools, and the 28 it leaves include the 2 unparseable operator pages that the
+    explicit id list — not the kind gate — has to remove."""
     entries = catalog_json.loads(_CATALOG.read_text(encoding="utf-8"))
     shared = {e.url for e in entries if e.url and sum(1 for o in entries if o.url == e.url) > 1}
     unshared = {e.pool_id for e in entries if e.url and e.url not in shared}
-    assert len(unshared) > 11
+    assert len(unshared) == 28
+    assert unshared - _declared_ids(entries) == {"seebad-enge", "freibad-dolder"}
 
 
 def test_the_school_pools_without_public_swimming_share_one_overview_url() -> None:

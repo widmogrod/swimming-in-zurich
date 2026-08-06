@@ -80,13 +80,18 @@ def test_residue_and_crosswalk_are_recorded() -> None:
     for drop_field in ("basin.exceptions", "basin.measured_temp_c"):
         assert by_field[drop_field].producer is ProducerKind.DROP_CANDIDATE
 
-    # A source demonstrably exists but no provider reads it yet. Filing these as
+    # A source demonstrably exists but no provider reads it yet. Filing this as
     # DROP_CANDIDATE (the old state) scheduled real, locatable data for deletion.
-    for unbuilt in ("facility.lockers", "facility.last_admission_before"):
-        assert by_field[unbuilt].producer is ProducerKind.SOURCEABLE_UNBUILT
+    assert by_field["facility.lockers"].producer is ProducerKind.SOURCEABLE_UNBUILT
 
     # Sourced since 2026-08-04 from the timetable's "(und Feiertage)" Sunday row.
     assert by_field["facility.public_holiday_policy"].producer is ProducerKind.SOURCED
+
+    # `last_admission_before` LEFT the unbuilt bucket in seasonal-hours S3: the scraper reads the
+    # sentence and `compose` folds it onto the facility, so it is SOURCED and names its provider.
+    last_admission = by_field["facility.last_admission_before"]
+    assert last_admission.producer is ProducerKind.SOURCED
+    assert last_admission.module == "providers.schedule_scraper"
 
     # The already-sourced claims S5a exists to ground-truth.
     assert by_field["facility.prices"].module == "providers.price_scraper"

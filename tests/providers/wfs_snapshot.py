@@ -35,13 +35,19 @@ from swimzh.core.http import HttpClient, RetryPolicy
 FIXTURES = Path(__file__).resolve().parent / "fixtures"
 WFS_FIXTURES = FIXTURES / "wfs"
 
-# The composite build client's page routing: each declared source's roster `url` (its filename, or
-# the third-party bad-altstetten host) → the saved page fixture whose timetable `_compose_schedules`
-# scrapes and whose Belegungsplan links `_attach_lanes` discovers. Every pool
+# The composite build client's page routing: each declared source's roster `url` (its last path
+# segment, or the third-party bad-altstetten host) → the saved page fixture whose timetable
+# `_compose_schedules` scrapes and whose Belegungsplan links `_attach_lanes` discovers. Every pool
 # `etl.scrape.declared_sources` selects has a parseable fixture here, so the atomic `build`'s
-# fail-fast scrape completes — all 11: 7 indoor/thermal plus the 4 school pools admitted in S2.
-# `schulschwimmanlage_borrweg.html` is deliberately absent: borrweg carries the shared overview URL,
-# so it is not a declared source and is never fetched.
+# fail-fast scrape completes — all 26: 7 indoor/thermal, the 4 school pools admitted in S2 of the
+# school-access-vocabulary plan, and the 15 outdoor/lake/river pools admitted in seasonal-hours S3.
+# The sportamt.ch entries are extension-less slugs, so the key is the segment, not a filename.
+#
+# Deliberately absent, and each absence is a real exclusion rather than an oversight:
+# `schulschwimmanlage_borrweg.html` (borrweg carries the shared overview URL) and
+# `flussbad_unterer_letten.html` (unterer-letten shares one URL with its `-flussteil` twin) —
+# neither is a declared source, so neither is ever fetched. `seebad-enge` and `freibad-dolder` are
+# excluded by `etl.scrape._UNPARSEABLE_OPERATOR_PAGES` and have no fixture at all.
 _PAGE_BY_FILENAME: dict[str, str] = {
     "city.html": "hallenbad_city.html",
     "oerlikon.html": "hallenbad_oerlikon.html",
@@ -53,6 +59,22 @@ _PAGE_BY_FILENAME: dict[str, str] = {
     "altweg.html": "schulschwimmanlage_altweg.html",
     "riedtli.html": "schulschwimmanlage_riedtli.html",
     "tannenrauch.html": "schulschwimmanlage_tannenrauch.html",
+    "freibad-allenmoos": "freibad_allenmoos.html",
+    "freibad-auhof": "freibad_auhof.html",
+    "freibad-heuried": "freibad_heuried.html",
+    "freibad-letzigraben": "freibad_letzigraben.html",
+    "freibad-seebach": "freibad_seebach.html",
+    # the repaired slug (`-den-`): the raw WFS value 302s to a stadt-zuerich page that 404s.
+    "freibad-zwischen-den-hoelzern": "freibad_zwischen_den_hoelzern.html",
+    "seebad-katzensee": "seebad_katzensee.html",
+    "seebad-utoquai": "seebad_utoquai.html",
+    "strandbad-mythenquai": "strandbad_mythenquai.html",
+    "strandbad-tiefenbrunnen": "strandbad_tiefenbrunnen.html",
+    "strandbad-wollishofen": "strandbad_wollishofen.html",
+    "flussbad-au-hoengg": "flussbad_au_hoengg.html",
+    "flussbad-oberer-letten": "flussbad_oberer_letten.html",
+    "frauenbad": "frauenbad.html",
+    "maennerbad": "maennerbad.html",
 }
 # A valid single-basin Belegungsplan sheet; the URL-keyed lane join binds by URL, not by content,
 # so serving one good plan for every discovered PDF attaches each authored single-basin source.

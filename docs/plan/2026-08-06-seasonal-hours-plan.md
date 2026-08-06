@@ -318,6 +318,7 @@ Appended by /dev:implement after each slice — never rewritten. Newest row last
 |------|-------|--------|----------------------|-------------------|---------------|
 | 2026-08-06 | S1 | done | per-table attribution for format 1 pulled forward from S2 (the page-wide `_ROW_RE` widening exposed Leimbach's sauna table, which contributed a WomenOnly rule as POOL hours); attribution keys on the nearest heading ELEMENT, not `_table_priority`'s text window (the window is filled by the table's own `columns=` attribute); `_parse_time_range` strips tags (kaeferberg's Monday cell is `<p>11–15 Uhr</p>`); `_split_season` also accepts day numbers, giving `precision=DAY` a producer; `storage/codec.py` needed no change after all (it reuses `BasinDTO`) | `_row_groups` infers table boundaries from source adjacency — a heuristic over a flat regex, correct on all 13 fixtures but element-scoping is the real answer; 4 school fixtures are parsed by NO test, so a future `_ROW_RE` change could move them silently; `hallenbad-city` ships sauna hours as POOL hours (PRE-EXISTING, not this slice) because its sauna heading is emitted AFTER the table's rows attribute | yes |
 | 2026-08-06 | S2 | done | **hallenbad-city 8 rules → 1**: its sauna table is a `Wochentag` table, so the column gate alone did not exclude it — heading attribution was made SECTION-scoped, fixing a PRE-EXISTING leak in which the sauna's hours (incl. both citywide `WomenOnly` slots) shipped as POOL hours; the `Zeitraum` parser lives inside `_parse_stadtzurich` rather than as a new `_PARSERS` entry; format 1 now parses the RAW page (attribute quotes must stay entity-encoded); `_ROW_RE`/`_row_groups`/`_CELL` DELETED rather than extended; 15 city fixtures not 16 (`zwischen-hoelzern`'s cached response is the 404 shell — S3 owns that repair); `<sup>` stripping scoped to the seasonal path only | `last_admission_before` is extracted but not yet wired to `Facility` (S3 owns it); a stadt-zuerich table with a renamed or absent `columns` attribute is now silently inert, or a fail-fast `ParseError` if it was the only table — intended contract, new brittleness; mythenquai's per-area hours still dropped with nothing recorded (the plan's accepted loss) | yes |
+| 2026-08-06 | S3 | done | `data/catalog.json` hand-edited (one url) rather than regenerated — `build-catalog` was unavailable because live WFS has drifted, and `test_roster.py:70` compares provider-vs-committed on `url`, so the snapshot MUST carry the repaired form; the slug repair joins `_normalize_roster_url` (scheme repair) as a second data-driven row on the same known-broken host; `apps/web/tests/api/*` edited outside Touches (forced — heuried is scraped now, so the location-only subject moved to `seebad-enge`); `etl/field_sourcing.py` reclassified `last_admission_before` SOURCEABLE_UNBUILT → SOURCED; `last_admission_before` is SENTENCE-anchored, and carriers are **23** not the 13 the criterion implied (S2's 13 was scoped to the seasonal fixtures; indoor/school pages state it too); the fidelity goldens and `test_schedule_freshness.py` needed no change after all | **WFS drift observed and deliberately NOT absorbed**: `schulschwimmanlage-isengrind` is renamed `Wolfsblick` (a pool_id change) and `maennerbad-schanzengraben`'s url moved off sportamt.ch — the live build tolerates both, but the next re-snapshot must decide them. `_UNPARSEABLE_OPERATOR_PAGES` is a permanent unexpiring denylist: nothing notices if enge or dolder start publishing a parseable table. The slug repair is pinned only against fixtures, not against the live slug still 404ing. mythenquai's per-area hours still dropped | yes |
 
 ## Decisions & divergences
 
@@ -398,6 +399,29 @@ Appended by /dev:implement after each slice — never rewritten. Newest row last
   `Mietobjekt|Preis`), and mutation-proved: gate removed → fails, gate restored → 59 pass.
   General lesson recorded: any "table X is inert" test must use a first cell that WOULD
   resolve, or it asserts nothing.
+
+- **2026-08-06, S3** — critic **approved**, having run its own cold `--refresh` build and
+  reproduced every acceptance criterion independently (exit 0, 26 scheduled, heuried
+  `OUT_OF_SEASON` in October and both blocks in July, zero ScrapeFailures), then
+  mutation-tested the denylist, the aspect row and the slug repair.
+- **2026-08-06, S3** — the slug repair does **not** reverse the 2026-08-01 roster-url
+  decision. That decision rejected a **host** rewrite ("the 302 IS the city's live slug
+  mapping") and filed the slug repair under *Out of scope* as a separate, deferred decision.
+  This keeps the host, still lets the 302 map it, and the repaired URL is live-verified —
+  the critic's build fetched the real 57 KB page from it.
+- **2026-08-06, S3** — **the plan's Out-of-scope claim about prices is falsified in live
+  builds.** It said `_CITY_HOST in url` yields `prices=None` for the sportamt hosts "so
+  nothing leaks in by accident". WFS has since moved `maennerbad-schanzengraben`'s url to
+  `stadt-zuerich.ch`, so in a live store Männerbad alone among the 15 newly-admitted pools
+  carries the shared tariff while its city-run siblings carry `None`. The value is right
+  (Sportamt-run, one city-wide tariff row) — this is arbitrary inconsistency, not a
+  fabricated fact — and it is invisible offline because the committed catalog still has the
+  old url. Hand to plan B (prices).
+- **2026-08-06, S3** — doc drift to fix outside this plan: `docs/entities/facility-field-sourcing.md:58` still calls `last_admission_before` a
+  drop-candidate with no provider, and `docs/2026-08-02-gold-coverage-gaps.md` still claims
+  "32/32 pages" and that footnote ¹ is *not* last-admission. Both falsified by measurement
+  (26 declared sources, 23 carriers). The machine-checked record was updated; the prose was
+  not.
 
 ## Summary
 

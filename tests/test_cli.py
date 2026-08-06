@@ -7,7 +7,7 @@ import sqlite3
 from collections import defaultdict
 from collections.abc import Callable
 from dataclasses import replace
-from datetime import datetime
+from datetime import date, datetime, time, timedelta
 from decimal import Decimal
 from pathlib import Path
 from zoneinfo import ZoneInfo
@@ -40,11 +40,14 @@ from swimzh.core.httpcache import (
     request_ttl_s,
 )
 from swimzh.core.result import Err, Ok
-from swimzh.domain.catalog import PoolCatalogEntry
+from swimzh.domain.catalog import PoolCatalogEntry, ScheduleFreshness
+from swimzh.domain.closure import ClosureCode
 from swimzh.domain.geo import GeoPoint
 from swimzh.domain.lane_plan import LanePlan
 from swimzh.domain.models import BasinId, Facility, PoolKind, reconstruct_pool_id
 from swimzh.domain.pricing import PriceCategory, PriceEntry, PriceTable
+from swimzh.domain.resolver import resolve_basin
+from swimzh.domain.schedule import ClosedDay, OpenDay, Weather
 from swimzh.etl.build import build_store
 from swimzh.etl.scrape import declared_sources
 from swimzh.providers.geo_sport import POOL_LAYERS
@@ -693,6 +696,83 @@ def test_build_produces_complete_store(tmp_path: Path) -> None:
     assert stored > scheduled
 
 
+def test_build_admits_the_seasonal_pools_with_real_hours(tmp_path: Path) -> None:
+    """seasonal-hours S3 acceptance, offline: the atomic build exits 0 and 26 pools carry schedule
+    rules — the 11 that already did plus the 15 outdoor/lake/river pools whose own page publishes a
+    `Zeitraum` table. Every one of them is a page the build FETCHES, so a parse regression on any
+    of them is a fail-fast abort, not a quiet hole; this pins the number the live build produced.
+    """
+    db = tmp_path / "gold.sqlite"
+    assert build(db_path=db, data_dir=DATA_DIR, clients=_build_clients()) == 0
+
+    facilities = GoldRepository(open_db(db)).load_all()
+    scheduled = {str(f.identity.facility_id) for f in facilities if any(b.rules for b in f.basins)}
+    assert len(scheduled) == 26, sorted(scheduled)
+    assert {"freibad-heuried", "seebad-utoquai", "maennerbad-schanzengraben"} <= scheduled
+    # The zwischen-hoelzern roster URL repair is load-bearing: without it the entry's page 404s
+    # and the whole build aborts, so this pool being SCHEDULED is the repair's proof.
+    assert "freibad-zwischen-den-hoelzern" in scheduled
+    # The two operator pages no parser understands are excluded, not failed: schedule-less, and
+    # `no_source` rather than a promise (`freshness_of` deliberately did not widen its kind test).
+    for excluded in ("seebad-enge", "freibad-dolder"):
+        assert excluded not in scheduled
+    freshness = {str(e.entry.pool_id): e.freshness for e in load_roster(open_db(db))}
+    assert freshness["seebad-enge"] is ScheduleFreshness.NO_SOURCE
+    assert freshness["freibad-dolder"] is ScheduleFreshness.NO_SOURCE
+    assert freshness["freibad-heuried"] is ScheduleFreshness.SCRAPED
+    # The two river pools that SHARE one URL can never be declared sources — and must therefore
+    # never read `awaiting_scrape`, the state the `freshness_of` widening would have given them.
+    for shared in ("flussbad-unterer-letten", "flussbad-unterer-letten-flussteil"):
+        assert freshness[shared] is ScheduleFreshness.NO_SOURCE
+
+
+def test_build_persists_the_season_and_the_last_admission_rule(tmp_path: Path) -> None:
+    """The season survives the whole pipeline — scrape → compose → codec → SQLite → read — so a
+    lido resolves `OUT_OF_SEASON` in October and open in July FROM THE STORE, not just from the
+    saved page. And `last_admission_before`, extracted in S2 with no reader, is now folded onto the
+    facility by `compose` and persisted (it was `None` on all 57 pools before this slice).
+    """
+    db = tmp_path / "gold.sqlite"
+    assert build(db_path=db, data_dir=DATA_DIR, clients=_build_clients()) == 0
+    conn = open_db(db)
+    repo = GoldRepository(conn)
+    calendar = load_calendar(conn)
+
+    heuried = repo.get(reconstruct_pool_id("freibad-heuried"))
+    assert heuried is not None
+    basin = next(b for b in heuried.basins if b.rules)
+    # 1 October is outside every window Heuried publishes → closed FOR THE SEASON, never
+    # `NO_SESSIONS` ("No sessions scheduled" is a lie for a lido in autumn).
+    assert resolve_basin(heuried, basin, date(2026, 10, 1), calendar) == ClosedDay(
+        code=ClosureCode.OUT_OF_SEASON
+    )
+    # …and in season it is open with BOTH blocks, the guaranteed one and the fair-weather one.
+    july = resolve_basin(heuried, basin, date(2026, 7, 15), calendar)
+    assert isinstance(july, OpenDay)
+    assert [(s.time.start, s.time.end, s.weather) for s in july.sessions] == [
+        (time(9), time(14), Weather.ANY),
+        (time(14), time(21), Weather.FAIR_ONLY),
+    ]
+
+    # `last_admission_before` is persisted for the pools whose page carries the sentence, and
+    # stays `None` — never an assumed zero — for a page that does not (au-hoengg's footnote is a
+    # daylight caveat with no admission rule at all).
+    admissions = {
+        str(f.identity.facility_id): f.last_admission_before
+        for f in repo.load_all()
+        if f.last_admission_before is not None
+    }
+    carriers = set(admissions)
+    # 23 of the 26 declared sources print the sentence; the 3 that do not are `flussbad-au-hoengg`
+    # (its footnote is a daylight caveat), `seebad-katzensee`, and the third-party
+    # `hallenbad-altstetten` — each `None`, the honest silence, never an assumed zero.
+    assert len(carriers) == 23, sorted(carriers)
+    assert set(admissions.values()) == {timedelta(minutes=30)}
+    assert "freibad-heuried" in carriers  # a newly admitted lido
+    assert "hallenbad-city" in carriers  # …and a pool we already scraped, previously None
+    assert not carriers & {"flussbad-au-hoengg", "seebad-katzensee", "hallenbad-altstetten"}
+
+
 def test_atomic_build_carries_lane_bindings_so_lane_plans_still_attach(tmp_path: Path) -> None:
     # delete-curated-schedule-tier S3 crux: with the curated schedule stripped, the scraped
     # timetable wins the `basins` aspect — but `compose` CARRIES each curated basin's
@@ -976,7 +1056,9 @@ def test_build_stamps_each_provider_call_with_its_own_tier_and_ttl(tmp_path: Pat
         fetched[(tier, ttl)].add(url)
 
     assert fetched[("snapshot", 12 * _HOUR_S)] == declared_pages
-    assert len(declared_pages) == 11  # 7 indoor/thermal + the 4 school pools admitted in S2
+    # 7 indoor/thermal + the 4 school pools (school-access-vocabulary S2) + the 15
+    # outdoor/lake/river pools admitted in seasonal-hours S3.
+    assert len(declared_pages) == 26
     # NB `price_scraper` and `page_provider` share BOTH tier and TTL (static/7d — the latent
     # overlap the plan records under its S3 decisions), so this one union cannot tell them apart:
     # binding `prices` to the page-provider client would still pass. Harmless while the two

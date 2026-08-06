@@ -25,9 +25,10 @@ Producer kinds
   ``aliases``). The retained thin crosswalk (S3/S6 checkpoint). ``geo_sport_id`` LEFT this bucket
   in S5b — it is now ``SOURCED`` from the WFS ``poi_id``.
 * ``DROP_CANDIDATE`` — genuine residue: a curated fact with **no** website producer today
-  (``public_holiday_policy``, ``lockers``, ``accessibility``, ``last_admission_before``,
-  ``amenities``, schedule ``exceptions``, basin physicals for the 5 NULL-prose pools, richer access
-  vocabulary). Source-or-drop is decided by S5c (attempt) / S5d (recorded drop).
+  (``accessibility``, ``amenities``, schedule ``exceptions``, basin physicals for the 5 NULL-prose
+  pools, richer access vocabulary). Source-or-drop is decided by S5c (attempt) / S5d (recorded
+  drop). ``public_holiday_policy`` LEFT this bucket in 2026-08-04 and ``last_admission_before`` in
+  2026-08-06 — both are ``SOURCED`` from the pool page now; ``lockers`` is ``SOURCEABLE_UNBUILT``.
 * ``BUILD_METADATA`` — provenance / honesty tags produced by the build itself, not by a data
   provider (``source``, ``curated``, ``valid_as_of``, ``fetched_at``, basin ``physical_source``).
   A fourth bucket beyond the plan's three because forcing provenance fields into a data-provider
@@ -227,11 +228,13 @@ _FACILITY: tuple[FieldSourcing, ...] = (
     ),
     FieldSourcing(
         "facility.last_admission_before",
-        ProducerKind.SOURCEABLE_UNBUILT,
-        None,
-        "0/57 written; 32 pages state it",
-        "FALSIFIED 2026-08-02: 'Der letzte Einlass erfolgt bis 30 Minuten vor Badschluss' appears "
-        "on 32 of 32 pool pages, value 30 with zero variance. A parser is unbuilt, not absent.",
+        ProducerKind.SOURCED,
+        _SCHEDULE,
+        "23/26 declared sources",
+        "BUILT 2026-08-06 (seasonal-hours S2/S3): read from the sentence itself ('Der letzte "
+        "Einlass erfolgt bis/spätestens 30 Minuten vor Badschluss'), NOT from the <sup>1</sup> "
+        "marker — 2 pages print it as standalone prose with no marker, and au-hoengg's marker is a "
+        "daylight caveat carrying no admission rule. `None` stays the honest silence.",
     ),
 )
 

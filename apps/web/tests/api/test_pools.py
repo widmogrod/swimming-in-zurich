@@ -78,33 +78,41 @@ def test_pool_detail_unknown_facility_is_404() -> None:
 
 
 def test_pool_detail_location_only_pool_is_viewable() -> None:
-    """S1 acceptance: Freibad Heuried — an outdoor pin with no curated/prose facility — now
-    returns a location-only detail (200) instead of a 404. Name + location come back on the
-    detail; its `kind` + coordinates are served by the `/pools` listing (`PoolOut`), and its
-    `basins` list is empty (location-only, zero basins)."""
+    """S1 acceptance: an outdoor pin with no facility of its own still returns a location-only
+    detail (200) rather than a 404. Name + location come back on the detail; its `kind` +
+    coordinates are served by the `/pools` listing (`PoolOut`), and its `basins` list is empty.
+
+    The subject is `seebad-enge`, not Heuried: seasonal-hours S3 admitted the outdoor/lake/river
+    pools that publish a seasonal table, and Heuried is scraped now. Enge's page is a private
+    operator's that no parser here understands (`etl.scrape._UNPARSEABLE_OPERATOR_PAGES`), so it
+    stays the honest location-only case — an open-air pin, schedule-less, zero basins."""
     with TestClient(app) as client:
-        detail = client.get("/pools/freibad-heuried")
+        detail = client.get("/pools/seebad-enge")
         listing = client.get("/pools").json()
     assert detail.status_code == 200  # was 404 before S1
     body = detail.json()
-    assert body["facility_id"] == "freibad-heuried"
-    assert body["facility_name"] == "Freibad Heuried"  # name
+    assert body["facility_id"] == "seebad-enge"
+    assert body["facility_name"] == "Seebad Enge"  # name
     assert body["address"]  # location (the catalog address is present)
     assert body["basins"] == []  # location-only: zero basins, rendered without error
     assert body["lane_panels"] == [] and body["features"] == []
     assert body["provenance"]["curated"] is False  # never flipped to curated
     # kind + geo (location) are on the listing entry for the same pool.
+    enge = next(p for p in listing["pools"] if p["pool_id"] == "seebad-enge")
+    assert enge["kind"] == "lake"
+    assert enge["lat"] is not None and enge["lon"] is not None
+    # Excluded from the scrape → `no_source`, never `scraped` and never `awaiting_scrape`.
+    assert enge["freshness"] == "no_source"
+    # …and a lake/outdoor pool that IS scraped reads differently, so this is not just "not indoor".
     heuried = next(p for p in listing["pools"] if p["pool_id"] == "freibad-heuried")
-    assert heuried["kind"] == "outdoor"
-    assert heuried["lat"] is not None and heuried["lon"] is not None
-    # Outdoor + schedule-less → `no_source` (not indoor, so not scrapeable), never `scraped`.
-    assert heuried["freshness"] == "no_source"
+    assert heuried["freshness"] == "scraped"
 
 
 def test_location_only_pool_is_never_a_swim_option_nor_closed() -> None:
-    """S1 schedule-less invariant: a location-only pool (Heuried) produces NO `/swim` option and no
-    spurious `closed` status — it is reported with its freshness status (`no_source`, identity
-    known, schedule not), never conflated with a real session or a stated closure."""
+    """S1 schedule-less invariant: a location-only pool (Enge, see above for why not Heuried)
+    produces NO `/swim` option and no spurious `closed` status — it is reported with its freshness
+    status (`no_source`, identity known, schedule not), never conflated with a real session or a
+    stated closure."""
     swim_params = {
         "at": "2026-09-15T09:00",
         "gender": "female",
@@ -113,13 +121,13 @@ def test_location_only_pool_is_never_a_swim_option_nor_closed() -> None:
     }
     with TestClient(app) as client:
         swim = client.get("/swim", params=swim_params).json()
-    assert "Freibad Heuried" not in {o["facility"] for o in swim["options"]}
+    assert "Seebad Enge" not in {o["facility"] for o in swim["options"]}
     closed = {s["facility"] for s in swim["statuses"] if s["status"] == "closed"}
-    assert "Freibad Heuried" not in closed  # no spurious "closed" for a rule-less facility
+    assert "Seebad Enge" not in closed  # no spurious "closed" for a rule-less facility
     schedule_less = {
         s["facility"] for s in swim["statuses"] if s["status"] in {"awaiting_scrape", "no_source"}
     }
-    assert "Freibad Heuried" in schedule_less
+    assert "Seebad Enge" in schedule_less
 
 
 def test_pool_detail_has_no_lane_panels_without_a_plan(
