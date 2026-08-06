@@ -1,6 +1,6 @@
 ---
 type: plan
-status: approved
+status: in-progress
 created: 2026-08-06
 feature: seasonal-hours
 gates:
@@ -8,6 +8,9 @@ gates:
   review: adversarial
   max_rounds: 2
 pause_after: ["S3"]
+branch: plan/seasonal-hours
+worktree: .claude/worktrees/plan-seasonal-hours
+base_branch: feat/new-ui
 links: ["[[annual-window]]", "[[session-access]]", "[[2026-08-02-gold-coverage-gaps]]"]
 ---
 
