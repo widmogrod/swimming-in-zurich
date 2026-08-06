@@ -139,6 +139,11 @@ export const en = {
   // Fail-safe: an unrecognised name rides through verbatim.
   "holiday.unknown": "{holiday}",
   "closure.no_sessions": "No sessions scheduled",
+  // Derived by the resolver from the pool's OWN annual window, so it cannot know which
+  // season it is outside — an outdoor pool is out of season in WINTER. Keep every
+  // translation season-neutral; `closure.seasonal_break` above is the curated "Sommerpause"
+  // and stays summer-specific.
+  "closure.out_of_season": "Closed for the season",
   "closure.special": "Closed",
   "closure.unmapped": "{text}",
 

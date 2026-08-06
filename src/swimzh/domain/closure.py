@@ -41,6 +41,12 @@ class ClosureCode(StrEnum):
     PUBLIC_HOLIDAY = "public_holiday"
     #: Open in principle, but nothing is scheduled for this weekday.
     NO_SESSIONS = "no_sessions"
+    #: Outside the facility's own published season — every rule it has is seasonal and none
+    #: of them runs today. Deliberately NOT `SEASONAL_BREAK`: that one is the curated
+    #: "Sommerpause", a *summer* shutdown of a pool that is otherwise open. This one is
+    #: derived from the pool's own annual window and cannot know which season it is outside
+    #: — a lido is out of season in January — so its wording must stay season-neutral.
+    OUT_OF_SEASON = "out_of_season"
     #: A dated exception marked closed with no stated reason.
     SPECIAL = "special"
 

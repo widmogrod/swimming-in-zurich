@@ -105,6 +105,8 @@ export const fr = {
   "holiday.st_stephens": "Saint-Étienne",
   "holiday.unknown": "{holiday}",
   "closure.no_sessions": "Aucune séance programmée",
+  // Neutre quant à la saison — jamais « pause hivernale ».
+  "closure.out_of_season": "Fermé hors saison",
   "closure.special": "Fermé",
   "closure.unmapped": "{text}",
   "elig.in": "Vous pouvez entrer",

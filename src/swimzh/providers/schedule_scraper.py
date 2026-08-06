@@ -3,8 +3,12 @@
 Two page formats are supported, tried in order (a parser registry — add a format, no host
 branching):
 
-  1. **stadt-zuerich.ch** — the timetable is an HTML-entity-encoded JSON table of rows
-     ``[day, hours, category]`` (e.g. ``["Dienstag", "8–14 Uhr<br>14–22 Uhr", "Frauen"]``).
+  1. **stadt-zuerich.ch** — every table is a ``<stzh-datatable>`` element carrying two
+     HTML-entity-encoded JSON attributes, ``columns`` (the headers) and ``rows``. Two
+     timetable shapes share that element: a WEEKLY one headed ``Wochentag | Zeit [| Angebot]``
+     (the indoor and school pools) and a SEASONAL one headed
+     ``Zeitraum | Öffnungszeiten bei jedem Wetter | Öffnungszeiten nur bei schönem Wetter``
+     (the outdoor, lake and river pools).
   2. **generic HTML `<table>`** — a plain ``<tr><td>day</td><td>time</td></tr>`` schedule
      (e.g. bad-altstetten.ch: ``<td>Mo/Mi/Fr</td><td>06:00 – 21:00</td>``). No category column,
      so sessions are public.
@@ -22,7 +26,8 @@ import json
 import re
 from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import date, time
+from datetime import date, time, timedelta
+from itertools import pairwise
 
 from swimzh.core.errors import ParseError, ProviderError
 from swimzh.core.http import HttpClient
@@ -46,6 +51,7 @@ from swimzh.domain.schedule import (
     MonthDay,
     ScheduleRule,
     TimeRange,
+    Weather,
     Weekday,
 )
 
@@ -70,24 +76,6 @@ _DAYS_ABBR: dict[str, Weekday] = {
     "so": Weekday.SUNDAY,
 }
 
-#: A JSON string literal, escapes included.
-_JSON_STR = r'"(?:[^"\\]|\\.)*"'
-#: One timetable cell. `value` comes first (the city's serialiser always emits it first), but a
-#: cell may carry PRESENTATION keys after it — Käferberg's Monday cell is
-#: `{"value":"<p>11–15 Uhr</p>","style":{"width":"200"},"valign":"auto"}`. The original pattern
-#: accepted `{"value":"…"}` and nothing else, so that row was invisible to the parser *before*
-#: any time parsing and no amount of season work could restore it. One level of nested object is
-#: enough for `style`; anything deeper is not a shape the city emits.
-_CELL = (
-    r'\{"value":'
-    + _JSON_STR
-    + r"(?:,"
-    + _JSON_STR
-    + r":(?:"
-    + _JSON_STR
-    + r"|\{[^{}]*\}|[-\w.]+))*\}"
-)
-_ROW_RE = re.compile(r"\[" + _CELL + r"(?:," + _CELL + r")*\]")
 _TABLE_RE = re.compile(r"<table[^>]*>(.*?)</table>", re.IGNORECASE | re.DOTALL)
 _TR_RE = re.compile(r"<tr[^>]*>(.*?)</tr>", re.IGNORECASE | re.DOTALL)
 _TD_RE = re.compile(r"<t[dh][^>]*>(.*?)</t[dh]>", re.IGNORECASE | re.DOTALL)
@@ -101,6 +89,10 @@ class ScrapedSchedule:
     #: ("Sonntag (und Feiertage)"); `None` when the page says nothing — the honest unknown,
     #: never assumed to be `NORMAL`.
     holiday_policy: HolidayPolicy | None = None
+    #: How long before closing the last swimmer is let in, when the page publishes the rule
+    #: ("Der letzte Einlass erfolgt bis 30 Minuten vor Badschluss"). `None` == the page is
+    #: silent, never an assumed zero.
+    last_admission_before: timedelta | None = None
 
 
 # --- shared cell parsers -----------------------------------------------------------
@@ -140,13 +132,24 @@ def _clean_day_cell(cell: str) -> str:
     return re.sub(r"\s+", " ", text).strip().lower()
 
 
+def _span_days(start: Weekday, end: Weekday) -> frozenset[Weekday]:
+    """Every weekday from `start` to `end`, WRAPPING past Sunday when the span reads backwards.
+
+    Männerbad publishes "(Sonntag–Freitag)" — Sunday through Friday, i.e. every day but
+    Saturday. Read as a forward span it is empty, and an empty day set silently drops the row.
+    """
+    if start <= end:
+        return frozenset(w for w in Weekday if start <= w <= end)
+    return frozenset(w for w in Weekday if w >= start or w <= end)
+
+
 def _parse_days(cell: str) -> frozenset[Weekday]:
     text = _clean_day_cell(cell)
     span = re.match(r"([a-zäöü]+)\s*[–-]\s*([a-zäöü]+)$", text)
     if span:
         start, end = _lookup_day(span.group(1)), _lookup_day(span.group(2))
-        if start is not None and end is not None and start <= end:
-            return frozenset(w for w in Weekday if start <= w <= end)
+        if start is not None and end is not None:
+            return _span_days(start, end)
     days = {d for part in re.split(r"[,/]", text) if (d := _lookup_day(part)) is not None}
     return frozenset(days)
 
@@ -209,6 +212,57 @@ def _split_season(cell: str) -> tuple[str, AnnualWindow | None]:
         end=MonthDay(month=end, day=int(end_day)),
         precision=DatePrecision.DAY,
     )
+
+
+#: A whole `Zeitraum` cell, in BOTH published grammars: "9.–29. Mai" (the month stated once,
+#: for both ends) and "30. Mai–16. August" (both stated). Anchored to the whole cell, unlike
+#: `_SEASON_RE` which peels a season off the TAIL of an hours cell — a `Zeitraum` cell holds
+#: nothing else, and matching the whole of it is what keeps a stray "Mai" out.
+_ZEITRAUM_RE = re.compile(
+    r"^(\d{1,2})\.\s*(?:(" + _MONTH_ALT + r")\s*)?[–-]\s*(\d{1,2})\.\s*(" + _MONTH_ALT + r")$",
+    re.IGNORECASE,
+)
+
+
+def _parse_zeitraum(cell: str) -> AnnualWindow | None:
+    """Read a seasonal table's `Zeitraum` cell as a day-precise annual window.
+
+    `None` means the cell states no range — which for these tables is the CONTINUATION marker
+    (Männerbad's second row writes a bare `\\xa0`), not "all year": the caller inherits the
+    window above rather than inventing one.
+    """
+    match = _ZEITRAUM_RE.match(_text(cell))
+    if match is None:
+        return None
+    start_day, start_month, end_day, end_month = match.groups()
+    end = _MONTHS[end_month.lower()]
+    start = _MONTHS[start_month.lower()] if start_month else end
+    return AnnualWindow(
+        start=MonthDay(month=start, day=int(start_day)),
+        end=MonthDay(month=end, day=int(end_day)),
+        precision=DatePrecision.DAY,
+    )
+
+
+#: A trailing parenthetical in an HOURS cell — Männerbad splits its two weekday groups there
+#: ("11–18.30 Uhr (Sonntag–Freitag)" / "11–18 Uhr (Samstag)") because the seasonal table has no
+#: weekday column at all.
+_TRAILING_PAREN_RE = re.compile(r"\(([^()]*)\)$")
+_ALL_WEEKDAYS = frozenset(Weekday)
+
+
+def _split_weekdays(cell: str) -> tuple[str, frozenset[Weekday]]:
+    """Peel a trailing weekday qualifier off an hours cell.
+
+    Absent one, a seasonal row runs EVERY day: the table's only other axis is the `Zeitraum`,
+    so "9–14 Uhr" against "30. Mai–16. August" is the city saying *daily*, all summer.
+    """
+    text = cell.strip()
+    match = _TRAILING_PAREN_RE.search(text)
+    if match is None:
+        return text, _ALL_WEEKDAYS
+    days = _parse_days(match.group(1))
+    return (text[: match.start()], days) if days else (text, _ALL_WEEKDAYS)
 
 
 def _parse_time_range(cell: str) -> TimeRange | None:
@@ -342,6 +396,91 @@ def _rules_from_rows(rows: list[list[str]]) -> list[ScheduleRule]:
     return rules
 
 
+# --- seasonal tables (Zeitraum × weather) ------------------------------------------
+
+#: The fair-weather column's header. The city writes two: "Öffnungszeiten bei jedem Wetter"
+#: (unconditional) and "Öffnungszeiten nur bei schönem Wetter" (conditional). Matched on the
+#: DISTINGUISHING words, so a page with only the fair-weather column (Männerbad) is still read
+#: as conditional rather than defaulting to guaranteed.
+_FAIR_WEATHER_HEADER = "schönem wetter"
+#: A footnote marker inside an hours cell — "14–21 Uhr<sup>1</sup>", "<sup>1,2</sup>". Removed
+#: WITH its body: the bare number left behind by tag-stripping runs straight into the closing
+#: time ("14–21 1") and makes the whole cell unparseable. Scoped to the seasonal path on
+#: purpose — Käferberg's weekly cells nest a `<br>` INSIDE a `<sup>`, so removing the element
+#: there would glue two sessions into one and lose a rule.
+_SUP_RE = re.compile(r"<sup\b[^>]*>.*?</sup>", re.IGNORECASE | re.DOTALL)
+
+
+def _weather_of(header: str) -> Weather:
+    return Weather.FAIR_ONLY if _FAIR_WEATHER_HEADER in header.casefold() else Weather.ANY
+
+
+def _season_rules_from_cell(
+    cell: str, season: AnnualWindow, weather: Weather
+) -> list[ScheduleRule]:
+    rules: list[ScheduleRule] = []
+    for part in _SUP_RE.sub("", cell).split("<br>"):
+        if not part.strip():
+            continue
+        hours, weekdays = _split_weekdays(part)
+        time_range = _parse_time_range(hours)
+        if time_range is None:
+            continue
+        rules.append(
+            ScheduleRule(
+                weekdays=weekdays,
+                time=time_range,
+                access=PublicSwim(),
+                source_text=part.strip(),
+                season=season,
+                weather=weather,
+            )
+        )
+    return rules
+
+
+def _rules_from_season_rows(
+    columns: tuple[str, ...], rows: tuple[tuple[str, ...], ...]
+) -> list[ScheduleRule]:
+    """Turn a `Zeitraum` table into rules, carrying the WINDOW down continuation rows.
+
+    The weekly tables carry the weekday down a blank day cell; a seasonal table carries the
+    `Zeitraum` the same way, and for the same reason — Männerbad publishes its Saturday hours
+    as a second row under a bare `\\xa0`. A blank cell BEFORE any window has resolved drops:
+    there is nothing to inherit, and a rule with no season would run all year.
+
+    Access is `PublicSwim` for every one of these tables: they have no category column, and
+    the one page whose hours differ by audience (Frauenbad, Männerbad) says so by being a
+    women's/men's bath, which is facility-level and not this parser's to invent.
+    """
+    weathers = [_weather_of(header) for header in columns[1:]]
+    rules: list[ScheduleRule] = []
+    carried: AnnualWindow | None = None
+    for row in rows:
+        carried = (_parse_zeitraum(row[0]) if row else None) or carried
+        if carried is None:
+            continue
+        for index, weather in enumerate(weathers, start=1):
+            if index < len(row):
+                rules.extend(_season_rules_from_cell(row[index], carried, weather))
+    return rules
+
+
+#: The published last-admission rule. Anchored on the SENTENCE, never on the footnote marker:
+#: 13 city pages carry it, only 11 of them inside footnote ¹ (Frauenbad and Männerbad print it
+#: as standalone prose with no `<sup>` anywhere on the page), while Au-Höngg's ¹ is a daylight
+#: caveat with no last admission at all. The wording varies too — "erfolgt bis 30 Minuten" and
+#: Frauenbad's "erfolgt spätestens 30 Minuten" — and Hallenbad City drops "letzte" entirely.
+_LAST_ADMISSION_RE = re.compile(
+    r"Einlass\s+erfolgt\s+(?:bis|spätestens)\s+(\d{1,3})\s*Minuten\s+vor", re.IGNORECASE
+)
+
+
+def _last_admission(decoded_html: str) -> timedelta | None:
+    match = _LAST_ADMISSION_RE.search(_text(decoded_html))
+    return timedelta(minutes=int(match.group(1))) if match else None
+
+
 # --- table identification (shared by both formats) ---------------------------------
 
 
@@ -349,9 +488,10 @@ def _text(cell_html: str) -> str:
     return re.sub(r"\s+", " ", re.sub(r"<[^>]+>", " ", cell_html)).strip()
 
 
-#: How much text before a `<table>` to read as its heading. The operators put the heading in
-#: the immediately preceding element, so a short window is both sufficient and safer than a
-#: long one (which would reach back into the previous section's heading).
+#: How much text before a `<table>` to read as its heading — **format 2 only**. Third-party
+#: operator pages (bad-altstetten.ch) put the heading in the immediately preceding element, so
+#: a short window is both sufficient and safer than a long one (which would reach back into the
+#: previous section's heading). Format 1 does NOT use a text window: see `_heading_bound`.
 _HEADING_WINDOW = 400
 
 #: Headings that name the pool itself. Checked FIRST, so a combined heading ("Hallenbad und
@@ -393,76 +533,153 @@ _HEADING_TAG_RE = re.compile(r"<(h[1-6]|stzh-heading)\b[^>]*>(.*?)</\1>", re.IGN
 
 
 def _nearest_heading(preceding_html: str) -> str:
-    """The LAST heading element before a table — format 1's labelling signal.
+    """The LAST heading element in a region — format 1's labelling signal.
 
     A text window cannot work on these pages: the table lives inside an attribute whose
     `columns` JSON is hundreds of characters long, and the prose that does precede it is a
     Revision notice ("Bad und Sauna geschlossen") that would mislabel Leimbach's *pool*
-    timetable as the sauna's. The heading element says exactly what the city calls the table.
+    timetable as the sauna's.
+
+    The region is chosen by the CALLER, and it is not "everything before the table":
+    `_heading_bound` extends it to the end of the table's own `<stzh-section>`, because
+    Hallenbad City emits its sauna heading after the sauna table's `rows=` attribute.
     Nothing found == unlabelled, which is admitted.
     """
     matches = _HEADING_TAG_RE.findall(preceding_html)
     return _text(matches[-1][1]) if matches else ""
 
 
-# --- format 1: stadt-zuerich.ch embedded JSON --------------------------------------
+# --- format 1: stadt-zuerich.ch <stzh-datatable> elements ---------------------------
+
+#: The city's table element. Its `columns`/`rows` attributes are read from the RAW page, before
+#: `html.unescape`: inside the attribute every quote is `&#34;`, so `[^"]*` delimits the value
+#: exactly. Decoding first is what forced the old parser to scan for row LITERALS page-wide and
+#: guess table boundaries from source adjacency; the element is the real boundary.
+_DATATABLE_RE = re.compile(r"<stzh-datatable\b", re.IGNORECASE)
+_COLUMNS_ATTR_RE = re.compile(r'columns="(\[\{[^"]*)"')
+_ROWS_ATTR_RE = re.compile(r'rows="(\[\[[^"]*)"')
+#: Opening or closing `<stzh-section>`. Sections are the page's structural unit and they NEST.
+_SECTION_TOKEN_RE = re.compile(r"</?stzh-section\b", re.IGNORECASE)
+
+#: What a timetable's first column header says. Anything else is not a timetable at all —
+#: Mythenquai's `Badbereich | Zeit`, every page's `Mietobjekt | Preis`, the live `Auslastung`
+#: widget — and must contribute no rule, whatever its cells happen to look like.
+_WEEKLY_HEADER = "wochentag"
+_SEASONAL_HEADER = "zeitraum"
 
 
-@dataclass(slots=True)
-class _RowGroup:
-    """One embedded table: where it sits in the page, and its parsed rows."""
+@dataclass(frozen=True, slots=True)
+class _DataTable:
+    columns: tuple[str, ...]
+    rows: tuple[tuple[str, ...], ...]
+    #: End offset of the enclosing `<stzh-section>` — the bound within which this table's
+    #: heading must be sought. See `_heading_bound`.
+    heading_bound: int
 
-    start: int
-    end: int
-    rows: list[list[str]]
+
+def _attr_json(region: str, pattern: re.Pattern[str]) -> object | None:
+    match = pattern.search(region)
+    if match is None:
+        return None
+    try:
+        parsed: object = json.loads(html.unescape(match.group(1)))
+    except json.JSONDecodeError:
+        return None
+    return parsed
 
 
-def _row_groups(decoded_html: str) -> list[_RowGroup]:
-    """Split the flat page-wide row scan into per-TABLE groups.
+def _headers(parsed: object) -> tuple[str, ...]:
+    if not isinstance(parsed, list):
+        return ()
+    return tuple(str(c.get("text", "")) if isinstance(c, dict) else "" for c in parsed)
 
-    `_ROW_RE` is table-blind, so before this every embedded table's rows landed in one bucket.
-    That was harmless only while the pattern accepted nothing but `{"value":"…"}` cells: the
-    city renders its *secondary* tables (Leimbach's "Öffnungszeiten Sauna und Dampfbad") with
-    `style`/`valign` keys, so widening the cell shape to recover Käferberg's Monday made SAUNA
-    hours visible as pool hours — the exact confusion `_table_priority` exists to prevent.
 
-    A table's rows are ADJACENT in the source (`[…],[…]`); anything further apart starts a new
-    table. That is the only boundary a flat regex leaves us.
+def _cells(parsed: object) -> tuple[tuple[str, ...], ...]:
+    if not isinstance(parsed, list):
+        return ()
+    return tuple(
+        tuple(str(c.get("value", "")) if isinstance(c, dict) else "" for c in row)
+        for row in parsed
+        if isinstance(row, list)
+    )
+
+
+def _heading_bound(page_html: str, pos: int) -> int | None:
+    """Where the innermost `<stzh-section>` containing `pos` ends, or `None` if there is none.
+
+    A table's heading is NOT reliably before it. Hallenbad City emits "Öffnungszeiten Sauna"
+    *after* its sauna table's `rows=` attribute (Leimbach emits the same heading before its
+    own), so "last heading before the element" reads the sauna table as the pool's and has
+    been shipping sauna hours as pool hours. Both layouts keep the heading inside the same
+    section as — or in a section before — the table it labels, so the section end is the
+    bound that works for both.
     """
-    groups: list[_RowGroup] = []
-    for match in _ROW_RE.finditer(decoded_html):
-        if groups and match.start() - groups[-1].end <= 1:
-            groups[-1].end = match.end()
-        else:
-            groups.append(_RowGroup(start=match.start(), end=match.end(), rows=[]))
-        try:
-            groups[-1].rows.append([c["value"] for c in json.loads(match.group(0))])
-        except json.JSONDecodeError:
+    depth, target = 0, None
+    for token in _SECTION_TOKEN_RE.finditer(page_html):
+        opening = not token.group(0).startswith("</")
+        if token.start() < pos:
+            depth += 1 if opening else -1
             continue
-    return groups
+        if target is None:
+            if depth <= 0:
+                return None
+            target = depth
+        depth += 1 if opening else -1
+        if depth < target:
+            return token.end()
+    return None
 
 
-def _parse_stadtzurich(decoded_html: str) -> Result[ScrapedSchedule, ProviderError]:
-    rows: list[list[str]] = []
-    previous_end = 0
-    for group in _row_groups(decoded_html):
-        # A table's heading is looked for only since the PREVIOUS table ended, so one section's
-        # heading can never be read as the next one's (the same bound `_parse_html_table` uses).
-        heading = _nearest_heading(decoded_html[previous_end : group.start])
-        previous_end = group.end
-        if _classify_heading(heading) != _NOT_POOL_TABLE:
-            rows.extend(group.rows)
-    hours_rows = [r for r in rows if len(r) >= 2 and "Uhr" in r[1]]
-    rules = _rules_from_rows(hours_rows)
+def _data_tables(page_html: str) -> list[_DataTable]:
+    # Each element's region runs to the NEXT element (the last one to the end of the page):
+    # attributes live in the opening tag, and a tag regex cannot bound it — the city writes
+    # `&lt;sup>1&lt;/sup>` into `rows=`, whose literal `>` closes the tag early.
+    boundaries = [m.start() for m in _DATATABLE_RE.finditer(page_html)] + [len(page_html)]
+    tables: list[_DataTable] = []
+    for start, region_end in pairwise(boundaries):
+        region = page_html[start:region_end]
+        columns = _headers(_attr_json(region, _COLUMNS_ATTR_RE))
+        rows = _cells(_attr_json(region, _ROWS_ATTR_RE))
+        if not columns or not rows:
+            continue
+        tables.append(_DataTable(columns, rows, _heading_bound(page_html, start) or region_end))
+    return tables
+
+
+def _parse_stadtzurich(page_html: str) -> Result[ScrapedSchedule, ProviderError]:
+    rules: list[ScheduleRule] = []
+    weekly_rows: list[list[str]] = []
+    previous_bound = 0
+    for table in _data_tables(page_html):
+        # A table's heading is sought only since the PREVIOUS table's section ended, so one
+        # section's heading can never be read as the next one's.
+        heading = _nearest_heading(page_html[previous_bound : table.heading_bound])
+        previous_bound = table.heading_bound
+        if _classify_heading(heading) == _NOT_POOL_TABLE:
+            continue
+        kind = table.columns[0].strip().casefold()
+        if kind == _WEEKLY_HEADER:
+            hours_rows = [list(r) for r in table.rows if len(r) >= 2 and "Uhr" in r[1]]
+            weekly_rows.extend(hours_rows)
+            rules.extend(_rules_from_rows(hours_rows))
+        elif kind == _SEASONAL_HEADER:
+            rules.extend(_rules_from_season_rows(table.columns, table.rows))
     if not rules:
         return Err(ParseError(source=_SOURCE, detail="no stadt-zuerich timetable", raw_snippet=""))
-    return Ok(ScrapedSchedule(rules=tuple(rules), holiday_policy=_holiday_policy(hours_rows)))
+    return Ok(
+        ScrapedSchedule(
+            rules=tuple(rules),
+            holiday_policy=_holiday_policy(weekly_rows),
+            last_admission_before=_last_admission(html.unescape(page_html)),
+        )
+    )
 
 
 # --- format 2: generic HTML <table> ------------------------------------------------
 
 
-def _parse_html_table(decoded_html: str) -> Result[ScrapedSchedule, ProviderError]:
+def _parse_html_table(page_html: str) -> Result[ScrapedSchedule, ProviderError]:
+    decoded_html = html.unescape(page_html)
     candidates: list[tuple[int, int, list[list[str]]]] = []
     previous_end = 0
     for order, match in enumerate(_TABLE_RE.finditer(decoded_html)):
@@ -498,13 +715,19 @@ _PARSERS: tuple[Callable[[str], Result[ScrapedSchedule, ProviderError]], ...] = 
 
 
 def parse_schedule(page_html: str) -> Result[ScrapedSchedule, ProviderError]:
-    """Parse a pool page into schedule rules, trying each supported format in order."""
-    decoded = html.unescape(page_html)
+    """Parse a pool page into schedule rules, trying each supported format in order.
+
+    Parsers receive the RAW page: format 1 reads JSON out of HTML attributes, which is only
+    unambiguous while the attribute's own quotes are still entity-encoded. Format 2 decodes
+    for itself.
+    """
     last: Result[ScrapedSchedule, ProviderError] = Err(
-        ParseError(source=_SOURCE, detail="no parser matched", raw_snippet=decoded[:200])
+        ParseError(
+            source=_SOURCE, detail="no parser matched", raw_snippet=html.unescape(page_html)[:200]
+        )
     )
     for parser in _PARSERS:
-        result = parser(decoded)
+        result = parser(page_html)
         if isinstance(result, Ok):
             return result
         last = result

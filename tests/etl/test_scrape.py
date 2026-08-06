@@ -6,7 +6,7 @@ preserved in ``ScrapeReport.failures`` so ``scrape-gold`` aborts the whole run."
 from __future__ import annotations
 
 from collections.abc import Callable
-from datetime import date, datetime
+from datetime import date, datetime, time
 from decimal import Decimal
 from pathlib import Path
 from zoneinfo import ZoneInfo
@@ -21,6 +21,7 @@ from swimzh.domain.catalog import PoolCatalogEntry
 from swimzh.domain.geo import GeoPoint
 from swimzh.domain.models import PoolKind
 from swimzh.domain.pricing import PriceCategory, PriceEntry, PriceTable
+from swimzh.domain.schedule import TimeRange, Weekday
 from swimzh.etl.scrape import declared_sources, scrape_declared_sources
 from swimzh.storage import catalog_json
 
@@ -62,7 +63,12 @@ def test_builds_indoor_extracts_with_real_rules() -> None:
     assert ref == Name("Hallenbad City")
     assert aspects.name == "Hallenbad City"
     rules = aspects.basins[0].rules
-    assert any(isinstance(r.access, WomenOnly) for r in rules)
+    # The one row the City page publishes as POOL hours: "Montag–Sonntag | 6–22 Uhr". Its
+    # women-only slots sit in the table headed "Öffnungszeiten Sauna" and are not pool hours.
+    assert [(sorted(d.name for d in r.weekdays), r.time) for r in rules] == [
+        (sorted(d.name for d in Weekday), TimeRange(time(6), time(22)))
+    ]
+    assert not any(isinstance(r.access, WomenOnly) for r in rules)
 
 
 def test_extracts_carry_notices_closures_and_prices() -> None:

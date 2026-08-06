@@ -92,6 +92,9 @@ export const de = {
   "closure.public_holiday": "Feiertag",
   "closure.public_holiday_named": "{holiday}",
   "closure.no_sessions": "Keine Zeiten angesetzt",
+  // Season-NEUTRAL: "Ausserhalb der Saison", never "Winterpause" — the code is derived from
+  // the pool's own window and a Hallenbad's off-season is the summer.
+  "closure.out_of_season": "Ausserhalb der Saison",
   "closure.special": "Geschlossen",
   "closure.unmapped": "{text}",
 

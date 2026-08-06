@@ -74,7 +74,7 @@ def test_an_unseasoned_rule_runs_all_year() -> None:
         assert isinstance(_resolve(facility, d), OpenDay), d
 
 
-def test_all_rules_out_of_season_is_a_seasonal_break_not_no_sessions() -> None:
+def test_all_rules_out_of_season_is_out_of_season_not_no_sessions() -> None:
     # A lido: it publishes summer hours only. On 1 October it is not "unscheduled", it is shut
     # for the season — and `NO_SESSIONS` renders as "No sessions scheduled", which is a lie.
     lido = _facility(
@@ -83,7 +83,25 @@ def test_all_rules_out_of_season_is_a_seasonal_break_not_no_sessions() -> None:
 
     result = _resolve(lido, date(2026, 10, 1))
     assert isinstance(result, ClosedDay)
-    assert result.code is ClosureCode.SEASONAL_BREAK
+    assert result.code is ClosureCode.OUT_OF_SEASON
+
+
+def test_out_of_season_is_never_the_curated_summer_break_code() -> None:
+    """`SEASONAL_BREAK` reads as *Summer break* in all five locales.
+
+    That is right for the curated "Sommerpause" — an indoor pool shut over the summer — and
+    exactly wrong here: this code is derived from the pool's OWN annual window, so for a lido
+    it fires in January. The two facts are different and the app must be able to state each.
+    """
+    lido = _facility(
+        ScheduleRule(ALL_DAYS, TimeRange(time(9), time(20)), PublicSwim(), season=SUMMER)
+    )
+
+    for winter_day in (date(2026, 1, 17), date(2026, 12, 3)):
+        result = _resolve(lido, winter_day)
+        assert isinstance(result, ClosedDay)
+        assert result.code is not ClosureCode.SEASONAL_BREAK
+        assert result.code is ClosureCode.OUT_OF_SEASON
 
 
 def test_a_closed_weekday_inside_the_season_is_still_no_sessions() -> None:
@@ -103,7 +121,7 @@ def test_a_closed_weekday_inside_the_season_is_still_no_sessions() -> None:
     assert result.code is ClosureCode.NO_SESSIONS
 
 
-def test_a_mixed_timetable_never_reports_a_seasonal_break() -> None:
+def test_a_mixed_timetable_never_reports_out_of_season() -> None:
     # One unseasoned rule (on another weekday) means the facility is NOT seasonal, so an empty
     # day is an ordinary empty day.
     facility = _facility(

@@ -287,7 +287,8 @@ the Intent forbids — it is extracted, anchored on the sentence rather than the
     outcome.
   - `declared_sources` selects 26, pinned offline against `data/catalog.json`.
   - enge and dolder are excluded, produce no `ScrapeFailure`, and stay `no_source`.
-  - Heuried on 2026-10-01 resolves `ClosedDay(SEASONAL_BREAK)` from the built store.
+  - Heuried on 2026-10-01 resolves `ClosedDay(OUT_OF_SEASON)` from the built store (the
+    owner decision of 2026-08-06 supersedes the `SEASONAL_BREAK` this line first named).
   - `last_admission_before` is persisted for the pools whose page carries footnote ¹.
 - **Depends on**: S2
 
@@ -316,12 +317,15 @@ Appended by /dev:implement after each slice — never rewritten. Newest row last
 | date | slice | status | divergence from plan | tech debt created | human review? |
 |------|-------|--------|----------------------|-------------------|---------------|
 | 2026-08-06 | S1 | done | per-table attribution for format 1 pulled forward from S2 (the page-wide `_ROW_RE` widening exposed Leimbach's sauna table, which contributed a WomenOnly rule as POOL hours); attribution keys on the nearest heading ELEMENT, not `_table_priority`'s text window (the window is filled by the table's own `columns=` attribute); `_parse_time_range` strips tags (kaeferberg's Monday cell is `<p>11–15 Uhr</p>`); `_split_season` also accepts day numbers, giving `precision=DAY` a producer; `storage/codec.py` needed no change after all (it reuses `BasinDTO`) | `_row_groups` infers table boundaries from source adjacency — a heuristic over a flat regex, correct on all 13 fixtures but element-scoping is the real answer; 4 school fixtures are parsed by NO test, so a future `_ROW_RE` change could move them silently; `hallenbad-city` ships sauna hours as POOL hours (PRE-EXISTING, not this slice) because its sauna heading is emitted AFTER the table's rows attribute | yes |
+| 2026-08-06 | S2 | done | **hallenbad-city 8 rules → 1**: its sauna table is a `Wochentag` table, so the column gate alone did not exclude it — heading attribution was made SECTION-scoped, fixing a PRE-EXISTING leak in which the sauna's hours (incl. both citywide `WomenOnly` slots) shipped as POOL hours; the `Zeitraum` parser lives inside `_parse_stadtzurich` rather than as a new `_PARSERS` entry; format 1 now parses the RAW page (attribute quotes must stay entity-encoded); `_ROW_RE`/`_row_groups`/`_CELL` DELETED rather than extended; 15 city fixtures not 16 (`zwischen-hoelzern`'s cached response is the 404 shell — S3 owns that repair); `<sup>` stripping scoped to the seasonal path only | `last_admission_before` is extracted but not yet wired to `Facility` (S3 owns it); a stadt-zuerich table with a renamed or absent `columns` attribute is now silently inert, or a fail-fast `ParseError` if it was the only table — intended contract, new brittleness; mythenquai's per-area hours still dropped with nothing recorded (the plan's accepted loss) | yes |
 
 ## Decisions & divergences
 
-- **2026-08-06, pre-approval** — `ClosureCode.SEASONAL_BREAK` reused rather than adding
+- **2026-08-06, pre-approval** — ~~`ClosureCode.SEASONAL_BREAK` reused rather than adding
   `OUT_OF_SEASON`: it exists, is translated in five locales, and the critic confirmed it has
-  no producer today.
+  no producer today.~~ **SUPERSEDED 2026-08-06 by the owner decision below** — the reuse
+  rested on those five translations, and S1 showed they all say *summer*, which is the
+  wrong season for a lido.
 - **2026-08-06, pre-approval** — `Facility.operating_season` deferred. Verified by review
   that no in-scope pool has a season without hours, so shipping it here would persist a field
   no producer fills.
@@ -378,6 +382,22 @@ Appended by /dev:implement after each slice — never rewritten. Newest row last
   not "winter": the code derives from the pool's own window and does not know which season
   it is outside, so hardcoding winter would repeat the bug being fixed. Folded into S2 so it
   lands before S3 makes it visible.
+
+- **2026-08-06, S2** — the pre-existing `hallenbad-city` sauna leak is FIXED as a side effect,
+  and it is the largest data change in this plan. Its page carries two `Wochentag` tables —
+  the pool (`Montag–Sonntag 6–22 Uhr`, one row) and the sauna (five rows, `Anspruchsgruppe`
+  column) — and the sauna's heading is emitted AFTER its own table, inside the same section.
+  Heading-position attribution therefore labelled it pool; section-scoped attribution does
+  not. City's pool has **no women-only session at all**; the two the store carried were the
+  sauna's. Verified independently by the orchestrator and the critic against the raw page,
+  and every other one of the 27 fixtures is byte-identical.
+- **2026-08-06, S2** — critic returned `revise` on a **tautological test**: the only test
+  pinning the column-header gate used a first cell (`Garderobenkasten`) that dies on the
+  day-cell filter anyway, so deleting the gate left all 28 module tests green and all 27
+  fixtures byte-identical. Replaced with rows that WOULD parse (`Montag | 9–16 Uhr` under
+  `Mietobjekt|Preis`), and mutation-proved: gate removed → fails, gate restored → 59 pass.
+  General lesson recorded: any "table X is inert" test must use a first cell that WOULD
+  resolve, or it asserts nothing.
 
 ## Summary
 

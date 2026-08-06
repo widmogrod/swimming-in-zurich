@@ -102,6 +102,8 @@ export const it = {
   "holiday.st_stephens": "Santo Stefano",
   "holiday.unknown": "{holiday}",
   "closure.no_sessions": "Nessuna sessione in programma",
+  // Neutro rispetto alla stagione — mai «pausa invernale».
+  "closure.out_of_season": "Chiuso fuori stagione",
   "closure.special": "Chiuso",
   "closure.unmapped": "{text}",
   "elig.in": "Puoi entrare",

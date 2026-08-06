@@ -81,6 +81,74 @@ describe("the access legend is fully translated in every locale", () => {
   );
 });
 
+describe("every closure code the resolver can emit is translated", () => {
+  // Same reasoning as the access legend: parity alone is green when all five catalogues lack
+  // a key. `closure.out_of_season` is a NEW resolver-generated code (seasonal-hours S2) and
+  // must be worded SEASON-NEUTRALLY — it is derived from a pool's own annual window and does
+  // not know which season it is outside, so a lido is out of season in winter.
+  const CLOSURE_KEYS = [
+    "closure.seasonal_break",
+    "closure.seasonal_break_maintenance",
+    "closure.maintenance",
+    "closure.operational_break",
+    "closure.christmas_eve",
+    "closure.public_holiday",
+    "closure.no_sessions",
+    "closure.out_of_season",
+    "closure.special",
+  ];
+
+  test.each(LOCALES)(
+    "%s carries every closure.* label, non-empty",
+    (locale) => {
+      for (const key of CLOSURE_KEYS) {
+        const entry = CATALOGS[locale][key];
+        expect(entry, `${locale} is missing ${key}`).toBeDefined();
+        expect(typeof entry, `${locale}/${key} must be a plain string`).toBe(
+          "string",
+        );
+        expect(
+          (entry as string).trim().length,
+          `${locale}/${key} is blank`,
+        ).toBeGreaterThan(0);
+      }
+    },
+  );
+
+  test.each(LOCALES)(
+    "%s does not word out_of_season as the summer break",
+    (locale) => {
+      // The bug this code exists to fix: reusing `seasonal_break` rendered a lido's January
+      // closure as "Summer break". Sharing the string would reintroduce it verbatim.
+      expect(CATALOGS[locale]["closure.out_of_season"]).not.toBe(
+        CATALOGS[locale]["closure.seasonal_break"],
+      );
+    },
+  );
+
+  test.each(LOCALES)("%s names no season in out_of_season", (locale) => {
+    // "winter" in any of the five languages would be a guess the code cannot support.
+    const label = (
+      CATALOGS[locale]["closure.out_of_season"] as string
+    ).toLocaleLowerCase();
+    for (const season of [
+      "winter",
+      "hiver",
+      "invern",
+      "zim",
+      "summer",
+      "sommer",
+      "estiv",
+      "été",
+      "letni",
+    ]) {
+      expect(label, `${locale}: out_of_season names a season`).not.toContain(
+        season,
+      );
+    }
+  });
+});
+
 describe("plural entries carry exactly the categories their locale uses", () => {
   test.each(LOCALES)("%s", (locale) => {
     const expected = [...PLURAL_CATEGORIES[locale]].sort();

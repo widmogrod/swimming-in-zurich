@@ -67,16 +67,21 @@ def _sessions_for_weekday(
 def _empty_day(rules: tuple[ScheduleRule, ...], d: date) -> ClosedDay:
     """Why a day resolved to no sessions.
 
-    `SEASONAL_BREAK` only when the facility's whole timetable is seasonal AND no part of it is
+    `OUT_OF_SEASON` only when the facility's whole timetable is seasonal AND no part of it is
     running today — a lido in October. Anything else stays `NO_SESSIONS`: a pool that is open
-    this season but shut on Mondays is not on a seasonal break.
+    this season but shut on Mondays is not out of season.
+
+    NOT `SEASONAL_BREAK`, which is the curated "Sommerpause" — a *summer* shutdown — and is
+    translated as such in all five locales. The code here is derived from the pool's own
+    annual window and has no idea which season it is outside; for an outdoor pool it fires in
+    January, and "Summer break" would be exactly the lie this whole filter exists to remove.
     """
     if (
         rules
         and all(rule.season is not None for rule in rules)
         and not any(_in_season(rule, d) for rule in rules)
     ):
-        return ClosedDay(code=ClosureCode.SEASONAL_BREAK)
+        return ClosedDay(code=ClosureCode.OUT_OF_SEASON)
     return ClosedDay(code=ClosureCode.NO_SESSIONS)
 
 

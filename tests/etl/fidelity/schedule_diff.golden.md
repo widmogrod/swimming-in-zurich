@@ -44,7 +44,7 @@ source rules: 8 | curated (projected) rules: 5 | matched: 0 | source-poorer: 5 |
 
 ## hallenbad-city
 
-source rules: 8 | curated (projected) rules: 9 | matched: 0 | source-poorer: 9 | source-richer: 8
+source rules: 1 | curated (projected) rules: 9 | matched: 0 | source-poorer: 9 | source-richer: 1
 
 | class | weekdays | time | access |
 |-------|----------|------|--------|
@@ -57,14 +57,7 @@ source rules: 8 | curated (projected) rules: 9 | matched: 0 | source-poorer: 9 |
 | source-poorer | Mon/Tue/Wed/Thu/Fri | 11:00–22:00 | PublicSwim |
 | source-poorer | Mon/Tue/Wed/Thu/Fri | 16:00–20:00 | PublicSwim |
 | source-poorer | Sat/Sun | 08:00–20:00 | PublicSwim |
-| source-richer | Mon | 08:00–22:00 | PublicSwim |
 | source-richer | Mon/Tue/Wed/Thu/Fri/Sat/Sun | 06:00–22:00 | PublicSwim |
-| source-richer | Tue | 08:00–14:00 | WomenOnly |
-| source-richer | Tue | 14:00–22:00 | PublicSwim |
-| source-richer | Wed | 08:00–22:00 | PublicSwim |
-| source-richer | Thu | 08:00–18:00 | PublicSwim |
-| source-richer | Thu | 18:00–22:00 | WomenOnly |
-| source-richer | Fri/Sat/Sun | 08:00–22:00 | PublicSwim |
 
 ## hallenbad-leimbach
 

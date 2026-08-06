@@ -114,6 +114,8 @@ export const pl = {
   "closure.public_holiday": "Dzień świąteczny",
   "closure.public_holiday_named": "{holiday}",
   "closure.no_sessions": "Brak zaplanowanych zajęć",
+  // Neutralne sezonowo — nigdy „przerwa zimowa”.
+  "closure.out_of_season": "Nieczynne poza sezonem",
   "closure.special": "Zamknięte",
   "closure.unmapped": "{text}",
 

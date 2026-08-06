@@ -3,8 +3,10 @@ the fetch seam via MockTransport."""
 
 from __future__ import annotations
 
+import html
+import json
 from collections.abc import Callable
-from datetime import date, time
+from datetime import date, time, timedelta
 from pathlib import Path
 
 import httpx
@@ -21,6 +23,7 @@ from swimzh.domain.access import (
     WomenOnly,
 )
 from swimzh.domain.calendar import ZurichCalendar
+from swimzh.domain.closure import ClosureCode
 from swimzh.domain.models import (
     Basin,
     BasinId,
@@ -33,15 +36,18 @@ from swimzh.domain.models import (
 from swimzh.domain.resolver import resolve_basin
 from swimzh.domain.schedule import (
     AnnualWindow,
+    ClosedDay,
     DatePrecision,
     HolidayPolicy,
     MonthDay,
     OpenDay,
     ScheduleRule,
     TimeRange,
+    Weather,
     Weekday,
 )
 from swimzh.providers.schedule_scraper import (
+    ScrapedSchedule,
     _split_season,
     parse_notices,
     parse_schedule,
@@ -54,24 +60,17 @@ FIXTURE_ALTSTETTEN = FIXTURES / "hallenbad_altstetten.html"
 
 
 def test_parses_real_city_page() -> None:
+    # Hallenbad City publishes exactly ONE pool row — "Montag–Sonntag | 6–22 Uhr" — and a day
+    # range expands to every day it spans. The women-only slots on this page belong to the
+    # table headed "Öffnungszeiten Sauna"; see the sauna test below for why they are gone.
     result = parse_schedule(FIXTURE.read_text(encoding="utf-8"))
     assert isinstance(result, Ok), result
     rules = result.value.rules
-    assert rules
 
-    # The women-only Variobecken slots the city actually publishes:
-    women = {(r.time, min(r.weekdays)) for r in rules if isinstance(r.access, WomenOnly)}
-    assert (TimeRange(time(8, 0), time(14, 0)), Weekday.TUESDAY) in women
-    assert (TimeRange(time(18, 0), time(22, 0)), Weekday.THURSDAY) in women
-
-    # A day-range row (Freitag–Sonntag) expands to all three days, public.
-    fri_sun = next(
-        r
-        for r in rules
-        if isinstance(r.access, PublicSwim)
-        and r.weekdays == frozenset({Weekday.FRIDAY, Weekday.SATURDAY, Weekday.SUNDAY})
-    )
-    assert fri_sun.time == TimeRange(time(8, 0), time(22, 0))
+    assert len(rules) == 1
+    assert rules[0].weekdays == frozenset(Weekday)
+    assert rules[0].time == TimeRange(time(6, 0), time(22, 0))
+    assert isinstance(rules[0].access, PublicSwim)
 
 
 def test_parses_altstetten_html_table() -> None:
@@ -140,9 +139,32 @@ def test_http_error_propagates() -> None:
 # four pools lost their Sunday sessions and Bungertwies lost Monday and Wednesday too.
 
 
+def _datatable_page(columns: tuple[str, ...], rows: tuple[tuple[str, ...], ...]) -> str:
+    """A minimal stadt-zuerich page carrying one `<stzh-datatable>`.
+
+    The real element shape: `columns` and `rows` are entity-encoded JSON ATTRIBUTES. The
+    column headers are load-bearing — they are how the parser tells a `Wochentag` timetable
+    from a `Zeitraum` one, and both from the `Mietobjekt | Preis` table on every page.
+    """
+
+    def attr(payload: object) -> str:
+        return html.escape(json.dumps(payload, ensure_ascii=False))
+
+    header = attr([{"key": f"k{i}", "text": c} for i, c in enumerate(columns)])
+    body = attr([[{"value": cell} for cell in row] for row in rows])
+    return f'<div><stzh-datatable columns="{header}" rows="{body}" hide-search></div>'
+
+
 def _row_page(day_cell: str, hours_cell: str = "9–16 Uhr") -> str:
-    """A minimal stadt-zuerich page carrying one timetable row."""
-    return f'<div>[{{"value":"{day_cell}"}},{{"value":"{hours_cell}"}}]</div>'
+    """A minimal stadt-zuerich page carrying one weekly (`Wochentag | Zeit`) timetable row."""
+    return _datatable_page(("Wochentag", "Zeit"), ((day_cell, hours_cell),))
+
+
+def _season_page(rows: tuple[tuple[str, ...], ...], *, fair_only: bool = False) -> str:
+    """A minimal seasonal (`Zeitraum`) table, in either the both-weather or fair-only shape."""
+    fair = "Öffnungszeiten nur bei schönem Wetter"
+    columns = ("Zeitraum", fair) if fair_only else ("Zeitraum", "Öffnungszeiten bei jedem Wetter")
+    return _datatable_page(columns, rows)
 
 
 def _days_of(day_cell: str) -> set[str]:
@@ -296,8 +318,18 @@ def test_a_combined_heading_still_counts_as_the_pool() -> None:
 # whole, and `"für\xa0Erwachsene"` never matched `"für Erwachsene"`.
 
 
-def _rules_of(fixture: str) -> tuple[ScheduleRule, ...]:
+def _schedule_of(fixture: str) -> ScrapedSchedule:
     result = parse_schedule((FIXTURES / fixture).read_text(encoding="utf-8"))
+    assert isinstance(result, Ok), result
+    return result.value
+
+
+def _rules_of(fixture: str) -> tuple[ScheduleRule, ...]:
+    return _schedule_of(fixture).rules
+
+
+def _rules_from_page(page_html: str) -> tuple[ScheduleRule, ...]:
+    result = parse_schedule(page_html)
     assert isinstance(result, Ok), result
     return result.value.rules
 
@@ -484,8 +516,10 @@ def test_kaeferberg_recovers_its_weekend_from_the_PARENTHESISED_season_grammar()
 
 
 def test_kaeferbergs_monday_row_returns_once_the_richer_cell_shape_is_accepted() -> None:
-    # `{"value":"<p>11–15 Uhr</p>","style":{"width":"200"},"valign":"auto"}` — the row was
-    # invisible to `_ROW_RE` itself, BEFORE any time parsing, so no season work could restore it.
+    # Its Monday cell is `{"value":"<p>11–15 Uhr</p>","style":{"width":"200"},"valign":"auto"}`
+    # — richer than the bare `{"value":"…"}` the row scan used to accept, so the row was
+    # invisible BEFORE any time parsing and no season work could have restored it. The parser
+    # now reads whole `rows=` attributes as JSON, so cell shape cannot hide a row at all.
     rules = _rules_of("waermebad_kaeferberg.html")
     assert {d.name for r in rules for d in r.weekdays} == {
         "MONDAY",
@@ -545,9 +579,10 @@ def test_a_trailing_non_season_qualifier_still_drops_the_slot() -> None:
 
 
 def test_a_sauna_table_on_the_same_page_contributes_no_pool_rule() -> None:
-    # Leimbach publishes "Öffnungszeiten Sauna und Dampfbad" as a SECOND embedded table, in the
-    # richer cell shape — so widening `_ROW_RE` made it visible to a table-blind parser. Its
-    # Wednesday women-only sauna slot must not surface as pool hours.
+    # Leimbach publishes "Öffnungszeiten Sauna und Dampfbad" as a SECOND `<stzh-datatable>`,
+    # headed by its own `Wochentag | Zeit | Anspruchsgruppe` — so the column gate cannot
+    # exclude it and only the heading can. Its Wednesday women-only sauna slot must not
+    # surface as pool hours.
     rules = _rules_of("hallenbad_leimbach.html")
     assert not [r for r in rules if isinstance(r.access, WomenOnly)]
     wednesday = [r for r in rules if Weekday.WEDNESDAY in r.weekdays]
@@ -572,3 +607,246 @@ def test_blaesis_scraped_weekend_resolves_to_the_published_hours() -> None:
 
     assert hours(date(2026, 7, 18)) == [TimeRange(time(9), time(16))]  # Mai–September
     assert hours(date(2026, 1, 17)) == [TimeRange(time(9), time(18))]  # Oktober–April
+
+
+# --- the Zeitraum tables: outdoor, lake and river pools --------------------------------
+#
+# These pages publish a SEASON × WEATHER grid instead of a weekly one: `Zeitraum` down the
+# left, one or two `Öffnungszeiten …` columns across. Every fixture below is a saved real
+# page, harvested from the provider disk cache.
+
+_SEASONAL_FIXTURES = (
+    "flussbad_au_hoengg.html",
+    "flussbad_oberer_letten.html",
+    "flussbad_unterer_letten.html",
+    "frauenbad.html",
+    "freibad_allenmoos.html",
+    "freibad_auhof.html",
+    "freibad_heuried.html",
+    "freibad_letzigraben.html",
+    "freibad_seebach.html",
+    "maennerbad.html",
+    "seebad_katzensee.html",
+    "seebad_utoquai.html",
+    "strandbad_mythenquai.html",
+    "strandbad_tiefenbrunnen.html",
+    "strandbad_wollishofen.html",
+)
+
+_SUMMER_2026 = AnnualWindow(MonthDay(5, 30), MonthDay(8, 16), DatePrecision.DAY)
+
+
+def test_every_zeitraum_header_shape_parses() -> None:
+    # Three shapes exist across the 15 saved pages: both weather columns (11), all-weather
+    # only (3: letzigraben, seebach, utoquai) and FAIR-WEATHER ONLY (1: maennerbad). A parser
+    # that keyed on column *count* or assumed column 1 was unconditional would miss two of
+    # them; the header text is the only honest signal.
+    for fixture in _SEASONAL_FIXTURES:
+        rules = _rules_of(fixture)
+        assert rules, fixture
+        assert all(r.season is not None for r in rules), fixture
+
+    weathers = {f: {r.weather for r in _rules_of(f)} for f in _SEASONAL_FIXTURES}
+    assert weathers["freibad_heuried.html"] == {Weather.ANY, Weather.FAIR_ONLY}
+    assert weathers["seebad_utoquai.html"] == {Weather.ANY}
+    assert weathers["maennerbad.html"] == {Weather.FAIR_ONLY}
+
+
+def test_heuried_publishes_a_guaranteed_and_a_conditional_block() -> None:
+    # The fair-weather window is ADDITIVE: the all-weather block ends exactly where the
+    # fair-weather one starts, so a July afternoon is *certainly* open until 14:00 and
+    # *conditionally* open after it. Both are real rules; neither is a day-level "maybe".
+    summer = [r for r in _rules_of("freibad_heuried.html") if r.season == _SUMMER_2026]
+    assert sorted((r.time.start, r.time.end, r.weather.value) for r in summer) == [
+        (time(9), time(14), "any"),
+        (time(14), time(21), "fair_only"),
+    ]
+    assert all(r.weekdays == frozenset(Weekday) for r in summer)
+
+
+def test_heuried_has_no_sessions_on_the_first_of_october() -> None:
+    # Its last window ends 20 September, so 1 October is outside every rule it publishes.
+    rules = _rules_of("freibad_heuried.html")
+    assert not [r for r in rules if r.season is not None and r.season.contains(date(2026, 10, 1))]
+
+
+def test_a_footnote_marker_never_breaks_the_closing_time() -> None:
+    # "14–21 Uhr<sup>1</sup>" — stripping only the TAGS leaves "14–21 1", which parses as
+    # nothing and would drop the busiest window of the year. The three marker delimiters the
+    # city uses (`1`, `1,2`, `1, 2`) all appear across these pages.
+    ends = {r.time.end for r in _rules_of("flussbad_unterer_letten.html")}  # carries `1,2`
+    assert time(21) in ends
+    assert time(18) in {r.time.end for r in _rules_of("freibad_seebach.html")}  # carries `1, 2`
+
+
+def test_maennerbads_continuation_row_inherits_the_range_above() -> None:
+    # Männerbad's second row writes a bare `\xa0` into the Zeitraum cell — the same
+    # continuation idiom the weekly tables use for the weekday. Read as "no season" the
+    # Saturday rule would run all year; dropped, Saturday would vanish.
+    rules = sorted(_rules_of("maennerbad.html"), key=lambda r: r.time.end)
+    assert [r.season for r in rules] == [
+        AnnualWindow(MonthDay(5, 17), MonthDay(9, 11), DatePrecision.DAY)
+    ] * 2
+
+
+def test_maennerbads_weekday_in_cell_forms_split_the_week() -> None:
+    # No weekday column at all: "11–18.30 Uhr (Sonntag–Freitag)" and "11–18 Uhr (Samstag)".
+    # Sunday->Friday WRAPS past Sunday; read as a forward span it is empty and the row dies.
+    rules = sorted(_rules_of("maennerbad.html"), key=lambda r: r.time.end)
+    assert [(r.time.end, sorted(d.name for d in r.weekdays)) for r in rules] == [
+        (time(18), ["SATURDAY"]),
+        (
+            time(18, 30),
+            ["FRIDAY", "MONDAY", "SUNDAY", "THURSDAY", "TUESDAY", "WEDNESDAY"],
+        ),
+    ]
+
+
+def test_an_hours_cell_with_no_weekday_qualifier_runs_every_day() -> None:
+    # The seasonal tables have no weekday axis: "9–14 Uhr" against "30. Mai–16. August" is
+    # the city saying DAILY. Defaulting to anything narrower would invent a closed day.
+    assert all(r.weekdays == frozenset(Weekday) for r in _rules_of("freibad_allenmoos.html"))
+
+
+def test_both_zeitraum_grammars_yield_the_same_kind_of_window() -> None:
+    # "9.–29. Mai" states the month once, for both ends; "30. Mai–16. August" states both.
+    may = [
+        r
+        for r in _rules_of("freibad_heuried.html")
+        if r.season == AnnualWindow(MonthDay(5, 9), MonthDay(5, 29), DatePrecision.DAY)
+    ]
+    assert may
+    assert [r for r in _rules_of("freibad_heuried.html") if r.season == _SUMMER_2026]
+
+
+def test_a_zeitraum_table_that_never_names_a_window_yields_nothing() -> None:
+    # A continuation marker BEFORE any window has resolved has nothing to inherit. Emitting an
+    # unseasoned rule instead would silently make a lido open all year.
+    assert isinstance(parse_schedule(_season_page((("\xa0", "9–16 Uhr"),))), Err)
+
+
+# --- table gating: only Zeitraum and Wochentag tables are timetables -------------------
+
+
+def test_no_non_timetable_table_contributes_a_rule() -> None:
+    # Every one of these pages ships a `Mietobjekt | Preis` table whose cells carry style
+    # keys, and Mythenquai adds a `Badbereich | Zeit` one ("Täglich ab 7 Uhr geöffnet"). The
+    # parser reads the column HEADER, so none of them can leak in whatever their cells hold.
+    for fixture in _SEASONAL_FIXTURES:
+        assert all(isinstance(r.access, PublicSwim) for r in _rules_of(fixture)), fixture
+    # Mythenquai's per-area table is open-ended ("ab 7 Uhr") and produces nothing at all.
+    assert {(r.time.start, r.time.end) for r in _rules_of("strandbad_mythenquai.html")} == {
+        (time(7), time(14)),
+        (time(14), time(19)),
+        (time(14), time(20)),
+        (time(14), time(21)),
+    }
+
+
+def test_a_non_timetable_table_is_inert_even_when_its_ROWS_would_parse() -> None:
+    # The gate must be the column HEADER, and this is what discriminates: both rows below are
+    # perfectly well-formed timetable rows — "Montag | 9–16 Uhr" and "30. Mai–16. August |
+    # 9–16 Uhr" each yield a rule the moment they reach a row parser. Only the header stops
+    # them. A fixture whose first cell is "Garderobenkasten" proves nothing: it dies on the
+    # day-cell filter with the gate removed, so the assertion holds either way.
+    priced = _datatable_page(("Mietobjekt", "Preis"), (("Montag", "9–16 Uhr"),))
+    assert isinstance(parse_schedule(priced), Err)
+
+    # Mythenquai's second table, `Badbereich | Zeit`, with a Zeitraum-shaped first cell.
+    areas = _datatable_page(("Badbereich", "Zeit"), (("30. Mai–16. August", "9–16 Uhr"),))
+    assert isinstance(parse_schedule(areas), Err)
+
+    # …and the same rows under a header the city DOES use are read, so the fixtures above are
+    # inert because of their header and nothing else.
+    assert len(_rules_from_page(_row_page("Montag", "9–16 Uhr"))) == 1
+    assert len(_rules_from_page(_season_page((("30. Mai–16. August", "9–16 Uhr"),)))) == 1
+
+
+def test_hallenbad_citys_sauna_table_contributes_no_pool_rule() -> None:
+    # City emits "Öffnungszeiten Sauna" AFTER its sauna table's `rows=` attribute (Leimbach
+    # emits the same heading before its own), so "last heading before the element" read the
+    # sauna table as the pool's — and the app shipped `Tue 08:00–14:00 WomenOnly` and
+    # `Thu 18:00–22:00 WomenOnly` as POOL hours. The heading is now sought within the table's
+    # enclosing `<stzh-section>`, which both layouts respect.
+    rules = _rules_of("hallenbad_city.html")
+    assert not [r for r in rules if isinstance(r.access, WomenOnly)]
+    assert [(sorted(d.name for d in r.weekdays), r.time) for r in rules] == [
+        (sorted(d.name for d in Weekday), TimeRange(time(6), time(22)))
+    ]
+
+
+def test_the_four_school_fixtures_still_parse() -> None:
+    # Parsed by NO test before this slice, so a change to the page-wide machinery could move
+    # them silently. These are the counts and the earliest session on each page.
+    parsed = {
+        f: _rules_of(f)
+        for f in (
+            "schulschwimmanlage_altweg.html",
+            "schulschwimmanlage_borrweg.html",
+            "schulschwimmanlage_riedtli.html",
+            "schulschwimmanlage_tannenrauch.html",
+        )
+    }
+    assert {f: len(r) for f, r in parsed.items()} == {
+        "schulschwimmanlage_altweg.html": 2,
+        "schulschwimmanlage_borrweg.html": 2,
+        "schulschwimmanlage_riedtli.html": 3,
+        "schulschwimmanlage_tannenrauch.html": 6,
+    }
+    assert all(r.season is None and r.weather is Weather.ANY for rs in parsed.values() for r in rs)
+
+
+# --- last admission -------------------------------------------------------------------
+
+
+def test_last_admission_is_read_from_the_sentence_not_the_footnote_marker() -> None:
+    # Three sets that must not be conflated: 13 of the 15 saved seasonal pages carry the
+    # sentence, only 11 of those inside footnote ¹. Frauenbad and Männerbad print it as
+    # standalone prose with NO <sup> on the page (and Frauenbad words it "spätestens", not
+    # "bis"), so an extractor anchored on the marker — or on the exact string — loses them.
+    carriers = {f for f in _SEASONAL_FIXTURES if _schedule_of(f).last_admission_before is not None}
+    assert len(carriers) == 13
+    assert {"frauenbad.html", "maennerbad.html"} <= carriers
+    assert all(_schedule_of(f).last_admission_before == timedelta(minutes=30) for f in carriers)
+
+
+def test_au_hoenggs_footnote_is_a_daylight_caveat_and_yields_no_last_admission() -> None:
+    # Its ¹ reads "Schwimmbetrieb ab August nur solange die Aufsicht aufgrund der
+    # Lichtverhältnisse gewährleistet werden kann" — a marker, and no last admission at all.
+    assert _schedule_of("flussbad_au_hoengg.html").last_admission_before is None
+    assert _schedule_of("seebad_katzensee.html").last_admission_before is None
+
+
+def test_a_page_that_says_nothing_about_admission_yields_none() -> None:
+    # Never an assumed zero: bad-altstetten.ch publishes no such rule.
+    assert _schedule_of("hallenbad_altstetten.html").last_admission_before is None
+
+
+def test_heuried_resolves_out_of_season_in_october_and_open_in_july() -> None:
+    # End to end: saved page -> rules -> resolver. Every rule Heuried publishes is seasonal
+    # and none runs on 1 October, so the day is `OUT_OF_SEASON` — NOT `NO_SESSIONS` ("No
+    # sessions scheduled" is a lie for a lido in autumn) and NOT `SEASONAL_BREAK`, which the
+    # UI renders as *Summer break* in all five locales.
+    facility = Facility(
+        identity=PoolIdentity(PoolId("freibad-heuried"), "Heuried", PoolKind.OUTDOOR),
+        address="",
+        provenance=Provenance(source="schedule_scraper", curated=False),
+        basins=(
+            Basin(
+                basin_id=BasinId("b"),
+                name="Hauptbecken",
+                rules=_rules_of("freibad_heuried.html"),
+            ),
+        ),
+    )
+    calendar = ZurichCalendar(public_holidays={}, school_holidays=[], known_years=[2026])
+
+    october = resolve_basin(facility, facility.basins[0], date(2026, 10, 1), calendar)
+    assert october == ClosedDay(code=ClosureCode.OUT_OF_SEASON)
+
+    july = resolve_basin(facility, facility.basins[0], date(2026, 7, 15), calendar)
+    assert isinstance(july, OpenDay)
+    assert [(s.time.start, s.time.end, s.weather.value) for s in july.sessions] == [
+        (time(9), time(14), "any"),
+        (time(14), time(21), "fair_only"),
+    ]
