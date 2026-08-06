@@ -221,13 +221,15 @@ the Intent forbids — it is extracted, anchored on the sentence rather than the
     `precision=MONTH` (whole months inclusive).
 - **Depends on**: —
 
-### S2 — the Zeitraum parser, offline
+### S2 — the Zeitraum parser, offline (+ the out-of-season code)
 
 - **Goal**: every published table shape parses correctly from saved fixtures. No pool is
   admitted yet, so this slice needs no network and cannot abort a build.
-- **Touches**: `providers/schedule_scraper.py` (a `Zeitraum` parser in `_PARSERS`; table
-  attribution so mythenquai's per-area rows cannot inherit carried weekdays; footnote →
-  `last_admission_before`), `tests/providers/fixtures/` (the 16 city pages), tests.
+- **Touches**: `providers/schedule_scraper.py` (a `Zeitraum` parser in `_PARSERS`; **column-header**
+  awareness — heading position alone cannot do it, see the S1 finding on `hallenbad-city`;
+  footnote → `last_admission_before`), `domain/closure.py` + `domain/resolver.py`
+  (`ClosureCode.OUT_OF_SEASON`), `apps/web/static/js/locales/*.ts` (5),
+  `tests/providers/fixtures/` (the 16 city pages), tests.
 - **Acceptance**:
   - All three Zeitraum header shapes parse, including maennerbad (**fair-weather only**) and
     its `\xa0` continuation row inheriting the range above.
@@ -243,6 +245,12 @@ the Intent forbids — it is extracted, anchored on the sentence rather than the
     caveat alone. `source_text` keeps the cell verbatim.
   - The 11 currently-scraped pools are unchanged on `(weekdays, time, access)` **relative to
     their post-S1 output** — S1 deliberately changes 2 of the 11.
+  - An out-of-season day resolves `ClosedDay(OUT_OF_SEASON)`, **not** `SEASONAL_BREAK`.
+    Each of `en/de/fr/it/pl` carries the new key by name, worded season-neutrally
+    ("Closed for the season"); `closure.seasonal_break` still says *Summer break* for the
+    curated/notice path.
+  - The four school fixtures (altweg, borrweg, riedtli, tannenrauch) gain a parse test, so a
+    future `_ROW_RE`/attribution change cannot move them silently.
   - Fixtures may be harvested from `.cache/swimzh/static/www.stadt-zuerich.ch/*.json`
     (`response.body` is plain HTML) rather than re-fetched — 15 of the 16 pages are there.
 - **Depends on**: S1
@@ -362,6 +370,14 @@ Appended by /dev:implement after each slice — never rewritten. Newest row last
   is pre-existing and unchanged by S1, but it means **S2's criterion "no non-Zeitraum table
   contributes a rule" cannot be met by heading position alone** — S2 needs column-header
   awareness.
+
+- **2026-08-06, owner decision** — mint `ClosureCode.OUT_OF_SEASON` rather than reword
+  `SEASONAL_BREAK`. Closed-in-summer (an indoor Revision) and closed-outside-its-season (a
+  lido in January) are different facts and the app can state each correctly; the plan's
+  original reuse assumed one concept. Wording is season-NEUTRAL ("Closed for the season"),
+  not "winter": the code derives from the pool's own window and does not know which season
+  it is outside, so hardcoding winter would repeat the bug being fixed. Folded into S2 so it
+  lands before S3 makes it visible.
 
 ## Summary
 
