@@ -84,6 +84,9 @@ export const de = {
   "status.awaiting_scrape": "Öffnungszeiten noch nicht veröffentlicht",
   "status.no_source": "Öffnungszeiten nicht angegeben",
 
+  // seasonal-hours S4: per-SESSION fair-weather marker; {spans} are the conditional clock spans.
+  "session.fairWeather": "Nur bei schönem Wetter · {spans}",
+
   "closure.seasonal_break": "Sommerpause",
   "closure.seasonal_break_maintenance": "Sommerpause / Revision",
   "closure.maintenance": "Revision",

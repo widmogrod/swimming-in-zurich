@@ -149,6 +149,40 @@ describe("every closure code the resolver can emit is translated", () => {
   });
 });
 
+describe("the fair-weather session marker is translated everywhere", () => {
+  // Same reasoning as the access legend and the closure codes: `parity.test.ts` only
+  // cross-compares the five catalogues, so five catalogues that ALL lack this key are
+  // perfectly in parity and perfectly broken. Asserted BY NAME (seasonal-hours S4).
+  const FAIR_WEATHER_KEY = "session.fairWeather";
+
+  test.each(LOCALES)("%s carries %s, non-empty", (locale) => {
+    const entry = CATALOGS[locale][FAIR_WEATHER_KEY];
+    expect(entry, `${locale} is missing ${FAIR_WEATHER_KEY}`).toBeDefined();
+    expect(
+      typeof entry,
+      `${locale}/${FAIR_WEATHER_KEY} must be a plain string`,
+    ).toBe("string");
+    expect(
+      (entry as string).trim().length,
+      `${locale}/${FAIR_WEATHER_KEY} is blank`,
+    ).toBeGreaterThan(0);
+  });
+
+  test.each(LOCALES)("%s keeps the {spans} placeholder", (locale) => {
+    // The marker's whole point is naming WHICH block is conditional. A translation that
+    // drops {spans} reads as "this pool is weather-dependent" — the day-level claim the
+    // domain model exists to avoid.
+    expect(CATALOGS[locale][FAIR_WEATHER_KEY] as string).toContain("{spans}");
+  });
+
+  test.each(LOCALES.filter((l) => l !== "en"))(
+    "%s is actually translated, not left as English",
+    (locale) => {
+      expect(CATALOGS[locale][FAIR_WEATHER_KEY]).not.toBe(en[FAIR_WEATHER_KEY]);
+    },
+  );
+});
+
 describe("plural entries carry exactly the categories their locale uses", () => {
   test.each(LOCALES)("%s", (locale) => {
     const expected = [...PLURAL_CATEGORIES[locale]].sort();

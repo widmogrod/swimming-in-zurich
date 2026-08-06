@@ -6,7 +6,7 @@
 // pure function of its arguments: no fetch, no document, no history.
 
 import type { Answer, SwimOption, SwimStatus, Week, WeekDay } from "./api.js";
-import type { MessageKey } from "./i18n.js";
+import { t, type MessageKey } from "./i18n.js";
 
 type SwimAnswer = Answer;
 type WeekData = Week;
@@ -31,6 +31,52 @@ export function unlistedLabelKey(
   status: string | null | undefined,
 ): MessageKey {
   return (status && UNLISTED_STATUS_LABEL[status]) || "status.uncurated";
+}
+
+// The `/swim` OptionOut.weather value that means "the city publishes this block only for
+// fair weather". Anything else (including a missing field, from an older payload) is
+// unconditional — an unknown must never be rendered as a caveat.
+const FAIR_ONLY = "fair_only";
+
+/** The slice of a `/swim` option the fair-weather marker reads. */
+export interface WeatherOption {
+  start?: string;
+  end?: string;
+  weather?: string;
+  [k: string]: unknown;
+}
+
+/**
+ * The `HH:MM–HH:MM` spans of a row's FAIR-WEATHER-ONLY sessions, in payload order and
+ * de-duplicated (two basins may publish the same conditional block).
+ *
+ * Per-SESSION by construction, never per-row: the caller renders the returned spans, so a
+ * pool that is certainly open 09:00–14:00 and conditionally open 14:00–21:00 says exactly
+ * that. Collapsing this to a boolean "this pool is weather-dependent" would launder the
+ * guaranteed half of the day into an unknown — the thing the domain model refuses to do.
+ *
+ * Empty (so the marker is omitted entirely) when every session is unconditional.
+ */
+export function fairWeatherSpans(
+  options: readonly WeatherOption[] | null | undefined,
+): string[] {
+  const spans: string[] = [];
+  for (const o of options ?? []) {
+    if (o.weather !== FAIR_ONLY || !o.start || !o.end) continue;
+    // eslint-disable-next-line i18next/no-literal-string -- an en dash between two clock times, not copy
+    const span = `${o.start}–${o.end}`;
+    if (!spans.includes(span)) spans.push(span);
+  }
+  return spans;
+}
+
+/** The rendered fair-weather span list, or `null` when there is nothing conditional to say. */
+export function fairWeatherText(
+  options: readonly WeatherOption[] | null | undefined,
+): string | null {
+  const spans = fairWeatherSpans(options);
+  if (spans.length === 0) return null;
+  return t("session.fairWeather", { spans: spans.join(", ") });
 }
 
 /** The FACILITY a clicked board row belongs to.

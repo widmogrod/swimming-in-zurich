@@ -86,6 +86,9 @@ export const fr = {
   "status.uncurated": "Horaires non publiés",
   "status.awaiting_scrape": "Horaires pas encore publiés",
   "status.no_source": "Horaires non publiés",
+
+  // seasonal-hours S4: per-SESSION fair-weather marker; {spans} are the conditional clock spans.
+  "session.fairWeather": "Uniquement par beau temps · {spans}",
   "closure.seasonal_break": "Pause estivale",
   "closure.seasonal_break_maintenance": "Pause estivale / révision",
   "closure.maintenance": "Révision",

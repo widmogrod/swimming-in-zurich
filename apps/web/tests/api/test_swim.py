@@ -200,3 +200,38 @@ def test_access_types_key_is_sufficient_to_render_without_server_prose() -> None
         "gender-diverse",
         "accompanied-children",
     }
+
+
+# Wednesday 2026-07-15 15:00 — inside Heuried's published `30. Mai–16. August` window, and
+# inside its FAIR-WEATHER-only afternoon block. The city publishes 09:00–14:00 under
+# "Öffnungszeiten bei jedem Wetter" and 14:00–21:00 under "bei schönem Wetter".
+JULY_AFTERNOON = "2026-07-15T15:00"
+
+
+def test_heuried_returns_both_blocks_and_marks_only_the_conditional_one() -> None:
+    """seasonal-hours S4: a fair-weather session is REAL but conditional, and the
+    guaranteed one alongside it must stay unqualified.
+
+    Weather rides on the SESSION, never the day: rendering the whole pool as
+    weather-dependent would launder the certainly-open morning into an unknown, and
+    dropping the marker would present 14:00–21:00 as a promise the city never made."""
+    with TestClient(app) as client:
+        response = client.get("/swim", params={"at": JULY_AFTERNOON, "eligible_only": "false"})
+    assert response.status_code == 200
+    heuried = [o for o in response.json()["options"] if o["facility"] == "Freibad Heuried"]
+    blocks = {(o["start"], o["end"]): o["weather"] for o in heuried}
+    assert blocks == {("09:00", "14:00"): "any", ("14:00", "21:00"): "fair_only"}
+
+
+def test_every_option_carries_a_weather_value_from_the_closed_set() -> None:
+    """The field is required on the wire (no `None`, no missing key): a client that has to
+    guess whether a session is conditional will guess "guaranteed"."""
+    with TestClient(app) as client:
+        response = client.get("/swim", params={"at": JULY_AFTERNOON, "eligible_only": "false"})
+    options = response.json()["options"]
+    assert options
+    assert {o["weather"] for o in options} <= {"any", "fair_only"}
+    # An INDOOR pool has no weather condition at all — the marker must not spread.
+    indoor = [o for o in options if o["kind"] == "indoor"]
+    assert indoor
+    assert all(o["weather"] == "any" for o in indoor)

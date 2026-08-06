@@ -45,6 +45,12 @@ class OptionOut(BaseModel):
     start: str
     end: str
     access: str
+    # Whether this BLOCK is published unconditionally ("any") or only for fair weather
+    # ("fair_only"). Read off `SwimOption.session.weather` — deliberately NOT a new
+    # `query.py` field, and deliberately PER-SESSION: on a summer day Heuried is certainly
+    # open 09:00–14:00 and conditionally open 14:00–21:00, so a day-level flag would launder
+    # a known fact into an unknown.
+    weather: str
     eligible: bool
     # --- i18n ------------------------------------------------------------------------
     # The message key for the eligibility outcome + its interpolation values. The English

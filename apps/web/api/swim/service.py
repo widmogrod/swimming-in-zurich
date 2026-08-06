@@ -69,6 +69,7 @@ def _option_out(option: SwimOption) -> OptionOut:
         start=option.session.time.start.strftime("%H:%M"),
         end=option.session.time.end.strftime("%H:%M"),
         access=type(option.session.access).__name__,
+        weather=option.session.weather.value,
         eligible=option.eligibility.allowed,
         reason_code=option.eligibility.code.value,
         reason_params=dict(option.eligibility.params),

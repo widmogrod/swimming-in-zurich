@@ -14,6 +14,7 @@
 // from the `.fam-*` classes exactly as the board does.
 
 import { asDoc, type Doc, type El } from '../domtypes.js';
+import { fairWeatherText } from '../appdata.js';
 import { t } from '../i18n.js';
 import { formatKm } from '../datefmt.js';
 import { locale } from '../i18n.js';
@@ -133,6 +134,16 @@ export function createPoolList<T extends El>(el: T, opts: PoolListOpts = {}) {
       verdict.appendChild(tail);
     }
     text.appendChild(verdict);
+
+    // Fair-weather marker (seasonal-hours S4) — the same fact the desktop board's label
+    // column carries, so the phone never presents a conditional block as a promise. It
+    // names the conditional SPANS and leaves the card's tier/verdict alone: the pool really
+    // is open, and only part of its published day depends on the weather.
+    const fair = fairWeatherText(ranked.row.options);
+    if (fair) {
+      text.appendChild(newEl(doc, 'p', 'plist__fair', fair));
+    }
+
     head.appendChild(text);
     btn.appendChild(head);
 

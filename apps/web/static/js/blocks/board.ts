@@ -32,7 +32,7 @@ import {
   type Timescale,
 } from './ribbonrender.js';
 import { cursorX as sharedCursorX, hhmmToMin } from './cursor.js';
-import { isUnlisted, unlistedLabelKey } from '../appdata.js';
+import { fairWeatherText, isUnlisted, unlistedLabelKey } from '../appdata.js';
 import { createEligibilityBadge } from '../components/eligibilitybadge.js';
 import { dayParts } from '../datefmt.js';
 import { asDoc, type El } from '../domtypes.js';
@@ -48,6 +48,10 @@ export interface BoardOption {
   basin?: string;
   access?: string;
   distance_km?: number | null;
+  start?: string;
+  end?: string;
+  /** 'any' | 'fair_only' — whether the city publishes this block unconditionally. */
+  weather?: string;
   [k: string]: unknown;
 }
 
@@ -440,6 +444,18 @@ export function createBoard<T extends El>(el: T, opts: BoardOpts = {}) {
         sub.className = `board__rowsub board__rowsub--${statusLine.kind}`;
         sub.textContent = statusLine.text;
         meta.appendChild(sub);
+      }
+
+      // Fair-weather marker (seasonal-hours S4). The city publishes an outdoor pool's late
+      // block only for good weather; without this the ribbon reads as a promise. It is a
+      // SEPARATE line from the status sub-line and it does NOT change the row's dot or its
+      // terminal state: the row is genuinely open, and only the NAMED spans are conditional.
+      const fair = fairWeatherText(row.options);
+      if (fair) {
+        const cond = doc.createElement('span');
+        cond.className = 'board__rowfair';
+        cond.textContent = fair;
+        meta.appendChild(cond);
       }
       label.appendChild(meta);
 

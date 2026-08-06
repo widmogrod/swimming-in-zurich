@@ -40,6 +40,8 @@ export interface RankOption {
   facility?: string;
   distance_km?: number | null;
   eligible?: boolean;
+  /** 'any' | 'fair_only' — whether the city publishes this block unconditionally. */
+  weather?: string;
   lane_timeline?: { segments?: RankLaneSegment[] } | null;
   [k: string]: unknown;
 }

@@ -103,6 +103,14 @@ export const en = {
   "status.awaiting_scrape": "Hours not published yet",
   "status.no_source": "Hours not listed",
 
+  // --- Fair-weather sessions (seasonal-hours S4) -------------------------------------
+  //
+  // Per SESSION, never per day: the city publishes an outdoor pool's late block only for
+  // good weather, and the earlier block unconditionally. The marker therefore NAMES the
+  // conditional spans ("14:00–21:00") instead of flagging the whole pool — a day-level
+  // "maybe" would turn the guaranteed morning into an unknown.
+  "session.fairWeather": "Fair weather only · {spans}",
+
   // --- Closure codes (S4) -----------------------------------------------------------
   //
   // The curated German is now CLASSIFIED at build time, so these are translatable words

@@ -159,6 +159,18 @@ body {
   color: var(--unknown);
 }
 
+/* The fair-weather marker (seasonal-hours S4): the city publishes these spans only for
+   good weather. Muted like the status sub-line — it qualifies part of an OPEN row, so it
+   must not read as a terminal state of its own. */
+.board__rowfair {
+  font-size: var(--fs-micro);
+  line-height: 1.15;
+  color: var(--unknown);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .board__rowlabel--head {
   box-shadow: none;
   align-items: flex-end;
@@ -1054,6 +1066,12 @@ body {
 .plist__verdict { margin: 2px 0 0; font-size: var(--fs-body); color: var(--ink-2); }
 .plist__verdict b { color: var(--ink); }
 .plist__vtail { color: var(--muted); }
+/* The fair-weather marker (seasonal-hours S4) — the phone twin of `.board__rowfair`. */
+.plist__fair {
+  margin: 2px 0 0;
+  font-size: var(--fs-caption);
+  color: var(--unknown);
+}
 .plist__meta {
   margin: var(--s2) 0 0;
   display: flex;
