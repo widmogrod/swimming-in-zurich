@@ -44,7 +44,16 @@ from swimzh.domain.models import (
     PoolKind,
     Provenance,
 )
-from swimzh.domain.schedule import ScheduleRule, TimeRange, Weekday
+from swimzh.domain.schedule import (
+    AnnualWindow,
+    MonthDay,
+    ResolvedSession,
+    ScheduleException,
+    ScheduleRule,
+    TimeRange,
+    Weather,
+    Weekday,
+)
 from swimzh.storage import codec
 
 _RULE = ScheduleRule(
@@ -504,3 +513,83 @@ def test_legacy_basin_level_length_m_is_rejected(facilities: tuple[Facility, ...
     payload["basins"][0]["length_m"] = 50
     with pytest.raises(ValidationError):
         codec.loads(json.dumps(payload))
+
+
+# --- seasonal hours: additive AND invisible -------------------------------------------
+
+
+def test_default_season_and_weather_add_no_key_to_the_blob(
+    facilities: tuple[Facility, ...],
+) -> None:
+    # `season`/`weather` ride on EVERY rule in every blob (including `FeatureDTO.hours`), so an
+    # all-year rule must serialise to exactly the same bytes as before the fields existed.
+    # `RuleDTO._serialize` pops BY NAME, so a new defaulted field is invisible only if added there.
+    dumped = codec.dumps(facilities[0])
+    assert '"season"' not in dumped
+    assert '"weather"' not in dumped
+
+
+def test_default_weather_adds_no_key_to_an_exception_bearing_blob(
+    facilities: tuple[Facility, ...],
+) -> None:
+    # The `ResolvedSessionDTO` path, reached via `ExceptionDTO.sessions`. That DTO had NO
+    # serializer at all, so a bare additive `weather` field would have added a key to every
+    # blob carrying a `ScheduleException` with sessions.
+    base = facilities[0]
+    basin = base.basins[0]
+    exception = ScheduleException(
+        date=date(2026, 5, 1),
+        reason="Gala",
+        sessions=(ResolvedSession(TimeRange(time(9), time(12)), PublicSwim()),),
+    )
+    facility = replace(base, basins=(replace(basin, exceptions=(exception,)), *base.basins[1:]))
+
+    dumped = codec.dumps(facility)
+    assert '"sessions":[{' in dumped, "the exception path must actually be exercised"
+    assert '"weather"' not in dumped
+    assert codec.loads(dumped) == facility
+
+
+def test_a_seasoned_rule_round_trips(facilities: tuple[Facility, ...]) -> None:
+    base = facilities[0]
+    basin = base.basins[0]
+    rules = (
+        replace(basin.rules[0], season=AnnualWindow.whole_months(5, 9)),
+        replace(
+            basin.rules[0],
+            time=TimeRange(start=time(14, 0), end=time(21, 0)),
+            season=AnnualWindow(start=MonthDay(5, 30), end=MonthDay(8, 16)),
+            weather=Weather.FAIR_ONLY,
+        ),
+    )
+    facility = replace(base, basins=(replace(basin, rules=rules), *base.basins[1:]))
+
+    dumped = codec.dumps(facility)
+    assert '"season"' in dumped
+    assert '"weather":"fair_only"' in dumped
+    back = codec.loads(dumped)
+    assert back == facility
+    # `precision` is what makes "Mai–September" mean WHOLE months; losing it would silently
+    # narrow the window to 1 May – 1 September.
+    assert back.basins[0].rules[0].season == AnnualWindow.whole_months(5, 9)
+    assert back.basins[0].rules[0].season is not None
+    assert back.basins[0].rules[1].weather is Weather.FAIR_ONLY
+
+
+def test_a_fair_weather_exception_session_round_trips(
+    facilities: tuple[Facility, ...],
+) -> None:
+    base = facilities[0]
+    basin = base.basins[0]
+    exception = ScheduleException(
+        date=date(2026, 5, 1),
+        reason="Gala",
+        sessions=(
+            ResolvedSession(TimeRange(time(14), time(21)), PublicSwim(), weather=Weather.FAIR_ONLY),
+        ),
+    )
+    facility = replace(base, basins=(replace(basin, exceptions=(exception,)), *base.basins[1:]))
+
+    dumped = codec.dumps(facility)
+    assert '"weather":"fair_only"' in dumped
+    assert codec.loads(dumped) == facility

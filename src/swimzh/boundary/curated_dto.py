@@ -24,6 +24,8 @@ from swimzh.core.errors import JsonValue
 _Weekday = Literal["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
 _Scope = Literal["always", "school_term", "school_holiday"]
 _HolidayPolicy = Literal["normal", "sunday_schedule", "closed"]
+_Weather = Literal["any", "fair_only"]
+_DatePrecision = Literal["day", "month"]
 _PoolKind = Literal["indoor", "outdoor", "river", "lake", "school", "paddling", "thermal"]
 _PriceCategory = Literal["child", "youth", "adult", "senior"]
 _BasinKind = Literal[
@@ -117,6 +119,22 @@ AccessDTO = Annotated[
 # --- schedule ---------------------------------------------------------------------
 
 
+class SeasonDTO(_Strict):
+    """A year-free part of the year. `start_*` > `end_*` wraps New Year.
+
+    The day fields are always present and always meaningful; `precision` decides whether they
+    are *read*. `"month"` means whole months inclusive, so the days carry the natural bounds
+    (1st and last of the month) and a consumer that ignored `precision` would still be close
+    rather than wrong.
+    """
+
+    start_month: int = Field(ge=1, le=12)
+    start_day: int = Field(ge=1, le=31)
+    end_month: int = Field(ge=1, le=12)
+    end_day: int = Field(ge=1, le=31)
+    precision: _DatePrecision = "day"
+
+
 class RuleDTO(_Strict):
     weekdays: list[_Weekday]
     start: time
@@ -126,14 +144,22 @@ class RuleDTO(_Strict):
     #: The verbatim source cell the access was classified from. Empty for every rule that
     #: came from a source without a category column (and for every hand-authored rule).
     source_text: str = ""
+    #: The part of the year this rule applies to; `None` == all year round.
+    season: SeasonDTO | None = None
+    weather: _Weather = "any"
 
     @model_serializer(mode="wrap")
     def _serialize(self, handler: SerializerFunctionWrapHandler) -> dict[str, Any]:
-        # Additive-and-invisible: an empty `source_text` must not appear in the payload, so a
-        # rule that predates this field serialises to exactly the same bytes as before it.
+        # Additive-and-invisible: a defaulted field must not appear in the payload, so a rule
+        # that predates it serialises to exactly the same bytes as before it. Note this pops BY
+        # NAME — every new defaulted field has to be added here, or it leaks into every blob.
         data: dict[str, Any] = handler(self)
         if not self.source_text:
             data.pop("source_text", None)
+        if self.season is None:
+            data.pop("season", None)
+        if self.weather == "any":
+            data.pop("weather", None)
         return data
 
 
@@ -141,6 +167,16 @@ class ResolvedSessionDTO(_Strict):
     start: time
     end: time
     access: AccessDTO
+    weather: _Weather = "any"
+
+    @model_serializer(mode="wrap")
+    def _serialize(self, handler: SerializerFunctionWrapHandler) -> dict[str, Any]:
+        # This DTO had NO serializer before `weather`: it is reached via `ExceptionDTO.sessions`,
+        # so a bare additive field would have added a key to every exception-bearing blob.
+        data: dict[str, Any] = handler(self)
+        if self.weather == "any":
+            data.pop("weather", None)
+        return data
 
 
 class ExceptionDTO(_Strict):

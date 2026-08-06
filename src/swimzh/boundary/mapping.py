@@ -49,18 +49,21 @@ from swimzh.boundary.curated_dto import (
     RuleDTO,
     SchemaMismatchDTO,
     SchoolReservedDTO,
+    SeasonDTO,
     SeniorsOnlyDTO,
     TimeoutDTO,
     TooLargeDTO,
     WomenOnlyDTO,
     _BasinKind,
     _BasinSource,
+    _DatePrecision,
     _FeatureKind,
     _LockerCategory,
     _LockerMechanism,
     _PlanConfidence,
     _PriceCategory,
     _Scope,
+    _Weather,
     _Weekday,
 )
 from swimzh.core.errors import (
@@ -111,12 +114,16 @@ from swimzh.domain.models import (
 )
 from swimzh.domain.pricing import PriceCategory, PriceEntry, PriceTable
 from swimzh.domain.schedule import (
+    AnnualWindow,
     ClosureRange,
+    DatePrecision,
     DayScope,
+    MonthDay,
     ResolvedSession,
     ScheduleException,
     ScheduleRule,
     TimeRange,
+    Weather,
     Weekday,
 )
 
@@ -139,6 +146,13 @@ _SCOPE_TO: dict[DayScope, _Scope] = {
     DayScope.SCHOOL_TERM: "school_term",
     DayScope.SCHOOL_HOLIDAY: "school_holiday",
 }
+_PRECISION_FROM: dict[str, DatePrecision] = {p.value: p for p in DatePrecision}
+_PRECISION_TO: dict[DatePrecision, _DatePrecision] = {
+    DatePrecision.DAY: "day",
+    DatePrecision.MONTH: "month",
+}
+_WEATHER_FROM: dict[str, Weather] = {w.value: w for w in Weather}
+_WEATHER_TO: dict[Weather, _Weather] = {Weather.ANY: "any", Weather.FAIR_ONLY: "fair_only"}
 _CATEGORY_FROM: dict[str, PriceCategory] = {c.value: c for c in PriceCategory}
 _CATEGORY_TO: dict[PriceCategory, _PriceCategory] = {
     PriceCategory.CHILD: "child",
@@ -260,6 +274,24 @@ def time_range(start: time, end: time) -> TimeRange:
     return TimeRange(start=start, end=end)
 
 
+def season_from_dto(dto: SeasonDTO) -> AnnualWindow:
+    return AnnualWindow(
+        start=MonthDay(month=dto.start_month, day=dto.start_day),
+        end=MonthDay(month=dto.end_month, day=dto.end_day),
+        precision=_PRECISION_FROM[dto.precision],
+    )
+
+
+def season_to_dto(window: AnnualWindow) -> SeasonDTO:
+    return SeasonDTO(
+        start_month=window.start.month,
+        start_day=window.start.day,
+        end_month=window.end.month,
+        end_day=window.end.day,
+        precision=_PRECISION_TO[window.precision],
+    )
+
+
 def rule_from_dto(dto: RuleDTO) -> ScheduleRule:
     return ScheduleRule(
         weekdays=frozenset(_WEEKDAY_FROM[w] for w in dto.weekdays),
@@ -267,6 +299,8 @@ def rule_from_dto(dto: RuleDTO) -> ScheduleRule:
         access=access_from_dto(dto.access),
         scope=_SCOPE_FROM[dto.scope],
         source_text=dto.source_text,
+        season=season_from_dto(dto.season) if dto.season is not None else None,
+        weather=_WEATHER_FROM[dto.weather],
     )
 
 
@@ -278,16 +312,25 @@ def rule_to_dto(rule: ScheduleRule) -> RuleDTO:
         access=access_to_dto(rule.access),
         scope=_SCOPE_TO[rule.scope],
         source_text=rule.source_text,
+        season=season_to_dto(rule.season) if rule.season is not None else None,
+        weather=_WEATHER_TO[rule.weather],
     )
 
 
 def resolved_from_dto(dto: ResolvedSessionDTO) -> ResolvedSession:
-    return ResolvedSession(time=time_range(dto.start, dto.end), access=access_from_dto(dto.access))
+    return ResolvedSession(
+        time=time_range(dto.start, dto.end),
+        access=access_from_dto(dto.access),
+        weather=_WEATHER_FROM[dto.weather],
+    )
 
 
 def resolved_to_dto(session: ResolvedSession) -> ResolvedSessionDTO:
     return ResolvedSessionDTO(
-        start=session.time.start, end=session.time.end, access=access_to_dto(session.access)
+        start=session.time.start,
+        end=session.time.end,
+        access=access_to_dto(session.access),
+        weather=_WEATHER_TO[session.weather],
     )
 
 

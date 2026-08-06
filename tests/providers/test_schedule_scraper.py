@@ -20,8 +20,33 @@ from swimzh.domain.access import (
     PublicSwim,
     WomenOnly,
 )
-from swimzh.domain.schedule import HolidayPolicy, ScheduleRule, TimeRange, Weekday
-from swimzh.providers.schedule_scraper import parse_notices, parse_schedule, scrape_schedule
+from swimzh.domain.calendar import ZurichCalendar
+from swimzh.domain.models import (
+    Basin,
+    BasinId,
+    Facility,
+    PoolId,
+    PoolIdentity,
+    PoolKind,
+    Provenance,
+)
+from swimzh.domain.resolver import resolve_basin
+from swimzh.domain.schedule import (
+    AnnualWindow,
+    DatePrecision,
+    HolidayPolicy,
+    MonthDay,
+    OpenDay,
+    ScheduleRule,
+    TimeRange,
+    Weekday,
+)
+from swimzh.providers.schedule_scraper import (
+    _split_season,
+    parse_notices,
+    parse_schedule,
+    scrape_schedule,
+)
 
 FIXTURES = Path(__file__).resolve().parent / "fixtures"
 FIXTURE = FIXTURES / "hallenbad_city.html"
@@ -416,3 +441,134 @@ def test_a_continuation_row_before_any_weekday_is_still_dropped() -> None:
     # Inheriting means inheriting a RESOLVED day — there is nothing to carry into the first row.
     result = parse_schedule(_row_page("\xa0", "9–16 Uhr"))
     assert isinstance(result, Err)
+
+
+# --- seasonal hours (Bläsi + Käferberg regain their weekends) --------------------------
+
+
+def test_blaesi_recovers_its_weekend_from_the_BARE_season_grammar() -> None:
+    # The cell is `9–16 Uhr Mai–September<br>9–18 Uhr Oktober–April` — NO parentheses. Both
+    # halves used to fail `_parse_time_range` outright, so Bläsi resolved Mon–Fri only.
+    rules = _rules_of("hallenbad_blaesi.html")
+    assert {d.name for r in rules for d in r.weekdays} == {
+        "MONDAY",
+        "TUESDAY",
+        "WEDNESDAY",
+        "THURSDAY",
+        "FRIDAY",
+        "SATURDAY",
+        "SUNDAY",
+    }
+
+    weekend = sorted((r for r in rules if Weekday.SATURDAY in r.weekdays), key=lambda r: r.time.end)
+    assert [(r.time, r.season) for r in weekend] == [
+        (TimeRange(time(9), time(16)), AnnualWindow.whole_months(5, 9)),
+        (TimeRange(time(9), time(18)), AnnualWindow.whole_months(10, 4)),
+    ]
+    # The Saturday row names both days, so Sunday carries the identical seasons.
+    assert all(Weekday.SUNDAY in r.weekdays for r in weekend)
+
+
+def test_kaeferberg_recovers_its_weekend_from_the_PARENTHESISED_season_grammar() -> None:
+    # `9–16 Uhr (Mai–September)` — the same fact, different punctuation, on a page in the same
+    # family. A rule anchored on the parentheses would fix this page and miss Bläsi.
+    rules = _rules_of("waermebad_kaeferberg.html")
+    saturday = sorted(
+        (r for r in rules if r.weekdays == frozenset({Weekday.SATURDAY})), key=lambda r: r.time.end
+    )
+    assert [(r.time, r.season) for r in saturday] == [
+        (TimeRange(time(9), time(16)), AnnualWindow.whole_months(5, 9)),
+        (TimeRange(time(9), time(18)), AnnualWindow.whole_months(10, 4)),
+    ]
+    assert len([r for r in rules if r.weekdays == frozenset({Weekday.SUNDAY})]) == 2
+
+
+def test_kaeferbergs_monday_row_returns_once_the_richer_cell_shape_is_accepted() -> None:
+    # `{"value":"<p>11–15 Uhr</p>","style":{"width":"200"},"valign":"auto"}` — the row was
+    # invisible to `_ROW_RE` itself, BEFORE any time parsing, so no season work could restore it.
+    rules = _rules_of("waermebad_kaeferberg.html")
+    assert {d.name for r in rules for d in r.weekdays} == {
+        "MONDAY",
+        "TUESDAY",
+        "WEDNESDAY",
+        "THURSDAY",
+        "FRIDAY",
+        "SATURDAY",
+        "SUNDAY",
+    }
+    monday = [r for r in rules if r.weekdays == frozenset({Weekday.MONDAY})]
+    assert [r.time for r in monday] == [TimeRange(time(11), time(15))]
+
+
+def test_an_unseasoned_row_carries_no_season() -> None:
+    assert all(
+        r.season is None
+        for r in _rules_of("hallenbad_blaesi.html")
+        if Weekday.SATURDAY not in r.weekdays
+    )
+
+
+def test_a_weekday_qualifier_in_parentheses_is_never_read_as_a_season() -> None:
+    # The same page family writes `(Sonntag–Freitag)` and `(Samstag)` into the HOURS cell as a
+    # weekday qualifier. The season rule matches MONTH NAMES, never parentheses, so these are
+    # left entirely alone — a `(…)`-anchored rule would have eaten them.
+    assert _split_season("11–18.30 Uhr (Sonntag–Freitag)") == (
+        "11–18.30 Uhr (Sonntag–Freitag)",
+        None,
+    )
+    assert _split_season("11–18.30 Uhr (Samstag)") == ("11–18.30 Uhr (Samstag)", None)
+
+
+def test_both_season_grammars_peel_to_the_same_window() -> None:
+    bare, parenthesised = (
+        _split_season("9–16 Uhr Mai–September"),
+        _split_season("9–16 Uhr (Mai–September)"),
+    )
+    assert bare[1] == parenthesised[1] == AnnualWindow.whole_months(5, 9)
+    # …and both leave a cell that `_parse_time_range` can read.
+    assert bare[0].strip() == parenthesised[0].strip() == "9–16 Uhr"
+
+
+def test_a_day_numbered_season_keeps_day_precision() -> None:
+    # The outdoor grammar: "30. Mai–16. August" names days, so the window is not whole months.
+    assert _split_season("9–20 Uhr (30. Mai–16. August)")[1] == AnnualWindow(
+        start=MonthDay(5, 30), end=MonthDay(8, 16), precision=DatePrecision.DAY
+    )
+
+
+def test_a_trailing_non_season_qualifier_still_drops_the_slot() -> None:
+    # Bläsi's "14–16.30 Uhr Kinderspielnachmittag" is not a season and must not become one;
+    # it stays an unparsed cell (recorded loss), so nothing is invented.
+    result = parse_schedule(_row_page("Mittwoch", "9–19 Uhr<br>14–16.30 Uhr Kinderspielnachmittag"))
+    assert isinstance(result, Ok)
+    assert [r.time for r in result.value.rules] == [TimeRange(time(9), time(19))]
+
+
+def test_a_sauna_table_on_the_same_page_contributes_no_pool_rule() -> None:
+    # Leimbach publishes "Öffnungszeiten Sauna und Dampfbad" as a SECOND embedded table, in the
+    # richer cell shape — so widening `_ROW_RE` made it visible to a table-blind parser. Its
+    # Wednesday women-only sauna slot must not surface as pool hours.
+    rules = _rules_of("hallenbad_leimbach.html")
+    assert not [r for r in rules if isinstance(r.access, WomenOnly)]
+    wednesday = [r for r in rules if Weekday.WEDNESDAY in r.weekdays]
+    assert [r.time for r in wednesday] == [TimeRange(time(6), time(21))]
+
+
+def test_blaesis_scraped_weekend_resolves_to_the_published_hours() -> None:
+    # End to end: page -> rules -> resolver. Both dates are SATURDAYS, one in each window.
+    rules = _rules_of("hallenbad_blaesi.html")
+    facility = Facility(
+        identity=PoolIdentity(PoolId("hallenbad-blaesi"), "Bläsi", PoolKind.INDOOR),
+        address="",
+        provenance=Provenance(source="schedule_scraper", curated=False),
+        basins=(Basin(basin_id=BasinId("b"), name="Hauptbecken", rules=rules),),
+    )
+    calendar = ZurichCalendar(public_holidays={}, school_holidays=[], known_years=[2026])
+
+    def hours(d: date) -> list[TimeRange]:
+        day = resolve_basin(facility, facility.basins[0], d, calendar)
+        assert isinstance(day, OpenDay), day
+        return [s.time for s in day.sessions]
+
+    assert hours(date(2026, 7, 18)) == [TimeRange(time(9), time(16))]  # Mai–September
+    assert hours(date(2026, 1, 17)) == [TimeRange(time(9), time(18))]  # Oktober–April

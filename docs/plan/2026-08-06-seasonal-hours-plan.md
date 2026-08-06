@@ -307,6 +307,7 @@ Appended by /dev:implement after each slice — never rewritten. Newest row last
 
 | date | slice | status | divergence from plan | tech debt created | human review? |
 |------|-------|--------|----------------------|-------------------|---------------|
+| 2026-08-06 | S1 | done | per-table attribution for format 1 pulled forward from S2 (the page-wide `_ROW_RE` widening exposed Leimbach's sauna table, which contributed a WomenOnly rule as POOL hours); attribution keys on the nearest heading ELEMENT, not `_table_priority`'s text window (the window is filled by the table's own `columns=` attribute); `_parse_time_range` strips tags (kaeferberg's Monday cell is `<p>11–15 Uhr</p>`); `_split_season` also accepts day numbers, giving `precision=DAY` a producer; `storage/codec.py` needed no change after all (it reuses `BasinDTO`) | `_row_groups` infers table boundaries from source adjacency — a heuristic over a flat regex, correct on all 13 fixtures but element-scoping is the real answer; 4 school fixtures are parsed by NO test, so a future `_ROW_RE` change could move them silently; `hallenbad-city` ships sauna hours as POOL hours (PRE-EXISTING, not this slice) because its sauna heading is emitted AFTER the table's rows attribute | yes |
 
 ## Decisions & divergences
 
@@ -342,6 +343,25 @@ Appended by /dev:implement after each slice — never rewritten. Newest row last
 - **2026-08-06, pre-approval review (round 2)** — S1 was changing what
   `schedule_diff.golden.md` pins (blaesi 5 → 7 source rules) while the golden was assigned to
   S3; moved into S1. S4's "never presented as guaranteed" replaced with a mechanical check.
+
+- **2026-08-06, S1** — critic **approved** with no blocking findings, having mutation-tested
+  five assertions (season filter, `_empty_day`, `_ROW_RE`, the sauna guard, the serializer pops)
+  and proved byte-invisibility by `cmp` against `HEAD` rather than by assertion.
+- **2026-08-06, S1** — **`SEASONAL_BREAK`'s translations are wrong for this use, and must be
+  fixed before S3 admits the lidos.** All five locales render it as *summer* break
+  ("Summer break" / "Sommerpause" / "Pausa estiva" / "Przerwa letnia" / "Pause estivale"), but
+  the resolver now emits it for an out-of-season day — which for an outdoor pool is
+  October–April, the **winter**. The plan's stated justification for reuse was that the code was
+  "already translated in five locales"; that justification is void. No defect ships in S1
+  (blaesi and kaeferberg have mixed timetables, so `_empty_day`'s all-seasoned guard cannot
+  fire). Decide in S3: reword the five strings to season-neutral, or mint the distinct code the
+  plan declined. OWNER INPUT WANTED.
+- **2026-08-06, S1** — `_nearest_heading`'s docstring overclaims ("the heading element says
+  exactly what the city calls the table"). `hallenbad_city.html` emits its sauna heading AFTER
+  the datatable's `rows=` attribute, so the heuristic returns `''` and admits the table. That
+  is pre-existing and unchanged by S1, but it means **S2's criterion "no non-Zeitraum table
+  contributes a rule" cannot be met by heading position alone** — S2 needs column-header
+  awareness.
 
 ## Summary
 

@@ -6,7 +6,7 @@ basin's sessions?* It composes, in priority order:
   1. facility closures (maintenance "Revision" / seasonal)  -> ClosedDay
   2. a one-off ScheduleException for the date                -> its override (closed or sessions)
   3. public-holiday policy (closed / Sunday schedule / normal)
-  4. recurring rules filtered by weekday and school-calendar scope
+  4. recurring rules filtered by weekday, school-calendar scope and SEASON
 
 This is what makes future-date answers correct: the same weekday yields different sessions
 in term vs holiday, and holidays alter or close the day.
@@ -47,16 +47,37 @@ def _scope_applies(scope: DayScope, ctx: DayContext) -> bool:
             return ctx.is_school_holiday
 
 
+def _in_season(rule: ScheduleRule, d: date) -> bool:
+    """A rule with no season runs all year; a seasoned one only inside its window."""
+    return rule.season is None or rule.season.contains(d)
+
+
 def _sessions_for_weekday(
-    rules: tuple[ScheduleRule, ...], weekday: Weekday, ctx: DayContext
+    rules: tuple[ScheduleRule, ...], weekday: Weekday, ctx: DayContext, d: date
 ) -> tuple[ResolvedSession, ...]:
     matched = [
-        ResolvedSession(time=rule.time, access=rule.access)
+        ResolvedSession(time=rule.time, access=rule.access, weather=rule.weather)
         for rule in rules
-        if weekday in rule.weekdays and _scope_applies(rule.scope, ctx)
+        if weekday in rule.weekdays and _scope_applies(rule.scope, ctx) and _in_season(rule, d)
     ]
     matched.sort(key=lambda s: s.time.start)
     return tuple(matched)
+
+
+def _empty_day(rules: tuple[ScheduleRule, ...], d: date) -> ClosedDay:
+    """Why a day resolved to no sessions.
+
+    `SEASONAL_BREAK` only when the facility's whole timetable is seasonal AND no part of it is
+    running today — a lido in October. Anything else stays `NO_SESSIONS`: a pool that is open
+    this season but shut on Mondays is not on a seasonal break.
+    """
+    if (
+        rules
+        and all(rule.season is not None for rule in rules)
+        and not any(_in_season(rule, d) for rule in rules)
+    ):
+        return ClosedDay(code=ClosureCode.SEASONAL_BREAK)
+    return ClosedDay(code=ClosureCode.NO_SESSIONS)
 
 
 def resolve_hours(
@@ -111,10 +132,10 @@ def resolve_hours(
                 # Unknown policy: use the weekday rules, flagged (see `unverified_holiday`).
                 pass
 
-    # 4. Recurring rules for the effective weekday and calendar scope.
-    sessions = _sessions_for_weekday(rules, effective_weekday, ctx)
+    # 4. Recurring rules for the effective weekday, calendar scope and season.
+    sessions = _sessions_for_weekday(rules, effective_weekday, ctx, d)
     if not sessions:
-        return ClosedDay(code=ClosureCode.NO_SESSIONS)
+        return _empty_day(rules, d)
     return OpenDay(sessions=sessions, holiday_policy_unverified=unverified_holiday)
 
 
