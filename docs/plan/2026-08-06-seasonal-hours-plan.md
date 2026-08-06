@@ -1,6 +1,6 @@
 ---
 type: plan
-status: in-progress
+status: done
 created: 2026-08-06
 feature: seasonal-hours
 gates:
@@ -440,5 +440,28 @@ Appended by /dev:implement after each slice — never rewritten. Newest row last
 
 ## Summary
 
-Written when the plan reaches `done`; then distilled into
-`docs/summaries/seasonal-hours.md` (what EXISTS now, not what was intended).
+Four slices. Schedule coverage went **11 → 26 pools**: every Freibad, Seebad and Flussbad
+with its own page now returns real hours, and the two indoor pools whose weekends were dead
+(`blaesi`, `kaeferberg`) resolve all seven days. Heuried resolves
+`ClosedDay(OUT_OF_SEASON)` on 2026-10-01 and, in July, a guaranteed 09:00–14:00 block plus a
+fair-weather 14:00–21:00 one — verified on cold `--refresh` builds by both the implementer
+and the reviewer.
+
+`AnnualWindow` is year-free by construction: the city states the year once per page, in a
+heading, never in a `Zeitraum` cell, so a year-bound range would expire silently. Weather
+rides on the session, never the day, because the two windows are adjacent and additive —
+part of the day stays certain even when the rest is not.
+
+Two fixes nobody planned. **Hallenbad City had been serving its sauna's timetable as pool
+hours** (8 rules → 1): the sauna heading is emitted *after* its own table, so
+heading-position attribution labelled it pool. Its pool has no women-only session at all —
+the two the store carried were the sauna's. And `last_admission_before` gained its first
+producer: 23 carriers, all 30 minutes, sentence-anchored rather than keyed on the footnote
+marker that only 11 of them use.
+
+Four reviews, three approvals and one revision. The revision was a **tautological test**: the
+only test pinning S2's column-header gate used a cell that failed the day filter anyway, so
+deleting the whole gate left every test green. The general lesson — an "inert table" test
+needs a first cell that would otherwise resolve — is recorded above.
+
+Distilled into `docs/summaries/seasonal-hours.md`.
