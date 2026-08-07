@@ -176,9 +176,11 @@ _FACILITY: tuple[FieldSourcing, ...] = (
         "facility.prices",
         ProducerKind.SOURCED,
         _PRICE,
-        "city-run pools",
-        "Central city-wide admission tariff scraped by price_scraper and attached to stadt-"
-        "zuerich.ch pools in the scrape-gold layer (NOT the base `build`). Compose precedence is "
+        "21/26 declared sources",
+        "Central city-wide admission tariff scraped by price_scraper and attached to every pool "
+        "whose OWN PAGE LINKS that tariff page. The atomic `build` folds the schedule phase in, so "
+        "a plain `build` produces all 21 priced rows; `scrape-gold` re-runs the same phase. "
+        "Compose precedence is "
         "curated-wins today, so a curated `prices:` block still shadows the scrape until S6 "
         "deletes the authoritative curated payload; the producer is nonetheless the website "
         "scrape. FALSIFIED 2026-08-06: the age BANDS were domain constants (<=5/<=15/>=65 plus an "
@@ -190,7 +192,13 @@ _FACILITY: tuple[FieldSourcing, ...] = (
         "read — the 4 Schulschwimmanlagen were served the Hallenbad rate (Fr. 8.–/6.–/4.–) where "
         "the city prints 'Eintritte Schulschwimmanlagen' Fr. 5.–/5.–/2.50. `parse_prices` now "
         "returns both (`CityTariffs`, section-anchored within the one table carrying that "
-        "section) and `etl.scrape.tariff_for` picks by pool kind.",
+        "section) and `etl.scrape.tariff_for` picks by pool kind. FALSIFIED 2026-08-07: the "
+        "fan-out gated on the literal host `stadt-zuerich.ch`, so 15 of the 26 declared sources — "
+        "the ones the city publishes on sportamt.ch — were unpriced. The gate is now the tariff "
+        "LINK the pool's own page emits (`price_scraper.states_city_tariff`), which prices 21 and "
+        "correctly withholds a rate from the 4 pools the city states are free plus the privately "
+        "run maennerbad-schanzengraben; free-ness itself is still unrecorded (Gap: `prices=None` "
+        "conflates free with unknown), so those 5 ride a build note instead.",
     ),
     FieldSourcing(
         "facility.closures",

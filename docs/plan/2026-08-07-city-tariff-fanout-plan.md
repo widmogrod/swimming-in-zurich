@@ -230,6 +230,7 @@ Appended by /dev:implement after each slice — never rewritten. Newest row last
 | date | slice | status | divergence from plan | tech debt created | human review? |
 |------|-------|--------|----------------------|-------------------|---------------|
 | 2026-08-07 | S1 | done | orchestrator finished the slice after the implementer subagent died twice on API errors; `apps/web/tests/fixtures/aemtler_girls_only.json` regenerated (outside Touches, forced by the slice); the SQL priced-count gate landed in `apps/web/tests/test_gold_store.py` (not named in Touches) | a failed `scrape_prices` still degrades silently to `tariffs=None` (`cli.py:290-292`), and the stricter parser widens that blast radius — one dropped heading now unprices all 10 pools with exit 0 | no |
+| 2026-08-08 | S2 | done | notes are emitted only when a tariff WAS scraped (with `tariffs is None` all 26 are unpriced for one already-reported cause); `etl/field_sourcing.py`, `apps/web/tests/test_gold_store.py` and `apps/web/tests/api/test_swim.py` touched though outside Touches — the last two host S2's own acceptance criteria | free-ness still unrecorded: the 4 pools the city publishes as free carry `prices=None`, indistinguishable from unknown; the build note is the only place the fact survives. S1's `tariffs=None` silent degradation now unprices 21 rather than 10 | yes |
 
 ## Decisions & divergences
 
@@ -295,6 +296,23 @@ own section, so any anchoring break yields `Err`, caught elsewhere) — the same
 had already dropped as tautological before approval, re-added as a test. Replaced with
 `test_an_unreadable_school_amount_fails_rather_than_serving_the_general_rate`, which covers the
 previously-unexecuted `school` error branch at `price_scraper.py:221`.
+
+**2026-08-08 — S2 review: the discriminator was mutation-tested in both directions.** Forcing
+`states_city_tariff` to `True` fails 8 tests; forcing it to `False` fails 12, including the
+store-level and HTTP-level ones. The critic also rebuilt the store independently and confirmed
+`declared − priced` is exactly the five free/private pools. Verdict **approve**, no blocking
+findings.
+
+**2026-08-08 — two hardening suggestions taken.** `_TARIFF_PATH_TAIL` gained a leading slash, so a
+glued segment (`/foo/xsport-und-badeanlagen/preise-abos.html`) can no longer match; and the
+`facility.prices` sourcing entry's claim that prices attach "in the scrape-gold layer (NOT the base
+`build`)" was false — a plain atomic `build` produces all 21 priced rows — and was corrected. The
+unquoted-`href` hardening was NOT taken: no fixture emits one and the regex change is speculative.
+
+**2026-08-08 — recorded, not fixed: a total link outage stays green.** If every page dropped the
+tariff link, the build would emit 26 notes, price 0 pools, and exit 0. The offline ratchet catches
+it in CI; a live build would not. Belongs with the `tariffs=None` debt S1 recorded, not with this
+slice.
 
 ## Summary
 

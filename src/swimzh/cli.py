@@ -282,6 +282,10 @@ def _compose_schedules(
     folds the scraped aspects onto the curated pool (curated-wins per aspect). Writes the composed
     facilities through the single ``write_schedules`` door.
 
+    A declared source whose page states no city tariff is neither priced nor a failure: it emits
+    one ``ScrapeReport.notes`` line on stderr and the phase still exits 0 — four of those pools are
+    published free and one is privately run.
+
     Fail-fast: a declared source (`etl.scrape.declared_sources`) whose page fails to fetch or
     parse aborts the phase (``fatal``) carrying the typed cause. An unresolved WFS name (a scraped
     pool in no alias) is a benign partial success — the resolved pools are written and the phase
@@ -302,6 +306,11 @@ def _compose_schedules(
     if not report.extracts:
         print("no schedules could be scraped", file=sys.stderr)
         return _PhaseResult(code=1, fatal=True)
+    for note in report.notes:
+        # Non-fatal audit: a declared source whose page states no city tariff (free or privately
+        # run) ships unpriced ON PURPOSE. Printed, never counted as a failure — but printed, so a
+        # WFS url drift that silently unprices a pool leaves a trace in the build output.
+        print(note, file=sys.stderr)
 
     curated = GoldRepository(conn).load_all()
     crosswalk = crosswalk_from_rows(load_alias_rows(conn), load_xref_rows(conn))

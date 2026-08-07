@@ -696,6 +696,31 @@ def test_build_produces_complete_store(tmp_path: Path) -> None:
     assert stored > scheduled
 
 
+def test_build_reports_the_pools_that_state_no_city_tariff_and_still_exits_zero(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A pool whose page links no city tariff is unpriced ON PURPOSE — four state "Der Eintritt …
+    ist gratis" and the Männerbad "wird privat betrieben". That is not a build failure, so the
+    build exits 0; but it is not silence either, because the LIVE build reads `fetch_roster`, not
+    the committed `catalog.json`, so a WFS url drift that quietly unprices a pool would leave no
+    other trace. Gated on the committed fixtures rather than a manual build."""
+    db = tmp_path / "gold.sqlite"
+    assert build(db_path=db, data_dir=DATA_DIR, clients=_build_clients()) == 0
+
+    noted = {
+        line.split(": ", 1)[1].split(" (", 1)[0]
+        for line in capsys.readouterr().err.splitlines()
+        if line.startswith("no city tariff stated: ")
+    }
+    assert noted == {
+        "hallenbad-altstetten",
+        "flussbad-au-hoengg",
+        "flussbad-oberer-letten",
+        "seebad-katzensee",
+        "maennerbad-schanzengraben",
+    }
+
+
 def test_build_admits_the_seasonal_pools_with_real_hours(tmp_path: Path) -> None:
     """seasonal-hours S3 acceptance, offline: the atomic build exits 0 and 26 pools carry schedule
     rules — the 11 that already did plus the 15 outdoor/lake/river pools whose own page publishes a

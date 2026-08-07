@@ -223,6 +223,35 @@ def test_heuried_returns_both_blocks_and_marks_only_the_conditional_one() -> Non
     assert blocks == {("09:00", "14:00"): "any", ("14:00", "21:00"): "fair_only"}
 
 
+# Thursday 2026-08-13 10:00 — inside Heuried's season and inside its any-weather morning block,
+# and inside Oberer Letten's published summer hours. One instant, two pools, opposite prices.
+AUGUST_MORNING = "2026-08-13T10:00"
+
+
+def _options_for(facility_id: str, at: str, age: int) -> list[dict[str, object]]:
+    with TestClient(app) as client:
+        response = client.get("/swim", params={"at": at, "age": age, "eligible_only": "false"})
+    assert response.status_code == 200, response.text
+    return [o for o in response.json()["options"] if o["facility_id"] == facility_id]
+
+
+def test_an_outdoor_pool_that_links_the_tariff_now_carries_the_city_price() -> None:
+    """The fan-out gated on the literal host `stadt-zuerich.ch`, so the 15 pools the city
+    publishes on sportamt.ch — Heuried among them — served no price at all. It links the tariff
+    page, so it is served the general rate the city prints."""
+    options = _options_for("freibad-heuried", AUGUST_MORNING, age=30)
+    assert options, "Freibad Heuried has no option at its own August morning"
+    assert all(str(o["price"]).startswith("Erwachsene (ab 20 J.) Fr. 8.00") for o in options)
+
+
+def test_a_pool_the_city_publishes_as_free_is_never_assigned_a_rate() -> None:
+    """*"Der Eintritt ins Flussbad Oberer Letten ist gratis."* Its page links no tariff, so it
+    carries none — the invariant a host-keyed widening would have broken at four pools."""
+    options = _options_for("flussbad-oberer-letten", AUGUST_MORNING, age=30)
+    assert options, "Flussbad Oberer Letten has no option at its own August morning"
+    assert all(o["price"] is None for o in options)
+
+
 def test_every_option_carries_a_weather_value_from_the_closed_set() -> None:
     """The field is required on the wire (no `None`, no missing key): a client that has to
     guess whether a session is conditional will guess "guaranteed"."""

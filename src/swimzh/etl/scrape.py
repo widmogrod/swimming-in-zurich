@@ -8,8 +8,9 @@ outdoor/lake/river pools whose seasonal `Zeitraum` table the scraper reads (seas
 
 Per pool we scrape: the timetable (→ rules and the page's last-admission rule), notices/alerts
 (→ `Notice`s, and closure-type notices → `ClosureRange`s), and attach the city admission tariff the
-pool is served (`tariff_for`: the Schulschwimmanlage rate for a `SCHOOL` pool, the general rate for
-the other city-run ones). The result is a ``ScrapedAspects`` payload paired with a ``Name``
+pool is served (`tariff_for`: only if the page LINKS the tariff — the Schulschwimmanlage rate for a
+`SCHOOL` pool, the general rate otherwise; a page that links no tariff yields no price and one
+``ScrapeReport.notes`` line). The result is a ``ScrapedAspects`` payload paired with a ``Name``
 ``SourceRef`` (the WFS display name) — **never a canonical id**. ``build.reconcile.resolve_all``
 turns each ``Name`` into a ``PoolId`` by lookup, and ``build.compose`` folds the aspects onto the
 matching pool.
@@ -39,7 +40,7 @@ from swimzh.domain.models import Basin, BasinId, Notice, PoolKind
 from swimzh.domain.pricing import PriceTable
 from swimzh.domain.schedule import ClosureRange
 from swimzh.providers.operator_pages import parse_maintenance_closures
-from swimzh.providers.price_scraper import CityTariffs
+from swimzh.providers.price_scraper import CityTariffs, states_city_tariff
 from swimzh.providers.schedule_scraper import (
     ScrapedSchedule,
     fetch_page,
@@ -48,7 +49,6 @@ from swimzh.providers.schedule_scraper import (
 )
 
 _CLOSURE_WORDS = ("geschlossen", "revision", "gesperrt", "betriebsferien")
-_CITY_HOST = "stadt-zuerich.ch"
 
 #: The kinds whose pages this module's parsers understand. `THERMAL` is a WFS-`indoor` Wärmebad
 #: with a registry display-override; `SCHOOL` joined in 2026-08-05 (school-access-vocabulary S2);
@@ -119,6 +119,13 @@ class ScrapeFailure:
 class ScrapeReport:
     extracts: tuple[Extract, ...]  # (SourceRef, ScrapedAspects) — no canonical id minted here
     failures: tuple[ScrapeFailure, ...]  # declared sources that failed (typed cause preserved)
+    #: Non-fatal build notes: one per declared source whose page states NO city tariff, so the
+    #: pool ships unpriced on purpose. Not a failure — four of these pools publish *"Der Eintritt
+    #: … ist gratis"* and one *"wird privat betrieben"* — but not silence either: the live build
+    #: reads `fetch_roster`, not the committed `catalog.json`, so a WFS URL drift that silently
+    #: unprices a pool would otherwise leave no trace. Free-ness itself is still unrecorded
+    #: (`prices=None` conflates *free* with *unknown*); the note is where the fact stays visible.
+    notes: tuple[str, ...] = ()
 
 
 def _closures_from_notices(notices: tuple[Notice, ...]) -> tuple[ClosureRange, ...]:
@@ -190,19 +197,24 @@ def declared_sources(catalog: tuple[PoolCatalogEntry, ...]) -> tuple[DeclaredSou
     )
 
 
-def tariff_for(source: DeclaredSource, tariffs: CityTariffs | None) -> PriceTable | None:
-    """Which of the city's two published single-admission tariffs this pool is served.
+def tariff_for(
+    source: DeclaredSource, page_html: str, tariffs: CityTariffs | None
+) -> PriceTable | None:
+    """Which of the city's two published single-admission tariffs this pool is served, if any.
 
-    The city prints a separate `Eintritte Schulschwimmanlagen` rate (Fr. 5.– / 5.– / 2.50) that a
-    Schulschwimmanlage charges instead of the Hallenbad rate; serving the general row to all four
-    overcharged every school-pool visitor. The kind is the discriminator, and it comes from the WFS
-    roster (with the registry's display overrides) — not from the URL.
+    Two page-stated facts decide it, and neither is a hostname:
 
-    The host test is retained here for now: only a `stadt-zuerich.ch` page is known to be governed
-    by the city tariff at all. Replacing it with the tariff LINK the pool's own page publishes is
-    S2 of this plan; until then a `sportamt.ch` pool stays unpriced rather than being guessed at.
+    * **whether** the city tariff governs the pool — its own page links the tariff page
+      (`price_scraper.states_city_tariff`). A page that does not link it gets **no** price: 21 of
+      the 26 declared sources link it, and the 5 that do not are exactly the four the city
+      publishes as free plus the privately-run Männerbad. The old `stadt-zuerich.ch` host test
+      dropped 15 priced pools; widening it to `sportamt.ch` would have invented a Fr. 8.00 charge
+      at four free ones. The link is right where the host test was wrong in both directions.
+    * **which** tariff — the city prints a separate `Eintritte Schulschwimmanlagen` rate
+      (Fr. 5.– / 5.– / 2.50) that a Schulschwimmanlage charges instead of the Hallenbad rate. The
+      kind is the discriminator, from the WFS roster (with the registry's display overrides).
     """
-    if tariffs is None or _CITY_HOST not in source.url:
+    if tariffs is None or not states_city_tariff(page_html):
         return None
     return tariffs.school if source.entry.kind is PoolKind.SCHOOL else tariffs.general
 
@@ -216,6 +228,7 @@ def scrape_declared_sources(
 ) -> ScrapeReport:
     extracts: list[Extract] = []
     failures: list[ScrapeFailure] = []
+    notes: list[str] = []
     for source in declared_sources(catalog):
         entry, url = source
         match fetch_page(client, url):
@@ -230,7 +243,12 @@ def scrape_declared_sources(
             failures.append(ScrapeFailure(name=entry.name, url=url, cause=schedule.error))
             continue
         notices = parse_notices(page)
-        pool_prices = tariff_for(source, tariffs)
+        pool_prices = tariff_for(source, page, tariffs)
+        if tariffs is not None and pool_prices is None:
+            # A page-stated absence, not a failure: the pool ships unpriced on purpose. Noted only
+            # when a tariff WAS scraped — with `tariffs is None` every pool is unpriced for one
+            # already-reported reason, and 26 identical notes would say nothing.
+            notes.append(f"no city tariff stated: {entry.pool_id} ({url})")
         # City notices carry their own dates; an operator page states its shutdown in prose,
         # so the two closure sources are additive, not alternatives.
         operator = _OPERATOR_CLOSURES.get(entry.pool_id)
@@ -246,4 +264,4 @@ def scrape_declared_sources(
             fetched_at,
         )
         extracts.append((Name(entry.name), aspects))
-    return ScrapeReport(extracts=tuple(extracts), failures=tuple(failures))
+    return ScrapeReport(extracts=tuple(extracts), failures=tuple(failures), notes=tuple(notes))

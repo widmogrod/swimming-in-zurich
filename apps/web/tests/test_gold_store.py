@@ -88,9 +88,10 @@ def test_empty_store_fails_fast(tmp_path: Path) -> None:
 def test_the_priced_pool_count_is_the_coverage_ratchet(gold_db: Path) -> None:
     """The literal gate the city-tariff plan states, against a fully-built store.
 
-    Price coverage is a number the next slice moves deliberately (10 -> 21, once the fan-out stops
-    keying on a hostname). Pinning it here makes a coverage change a line someone edits on
-    purpose, never a side effect nobody noticed.
+    Price coverage moved 10 -> 21 when the fan-out stopped keying on a hostname and started
+    following the tariff link each pool's page publishes. The remaining 5 declared sources link
+    no tariff (4 published free, 1 privately run) and must stay unpriced. Pinning the number here
+    makes a coverage change a line someone edits on purpose, never a side effect nobody noticed.
     """
     count = (
         open_db(gold_db)
@@ -99,7 +100,39 @@ def test_the_priced_pool_count_is_the_coverage_ratchet(gold_db: Path) -> None:
         )
         .fetchone()[0]
     )
-    assert count == 10
+    assert count == 21
+
+    # No regression: the widening ADDS pools, it never drops one. These 10 were the whole of
+    # price coverage under the deleted host gate (6 city-host indoor/thermal + the 4 school pools).
+    priced = {
+        str(f.identity.facility_id)
+        for f in GoldSwimStore.open(gold_db).facilities()
+        if f.prices is not None
+    }
+    assert {
+        "hallenbad-city",
+        "hallenbad-oerlikon",
+        "hallenbad-bungertwies",
+        "hallenbad-blaesi",
+        "hallenbad-leimbach",
+        "waermebad-kaeferberg",
+        "schulschwimmanlage-aemtler",
+        "schulschwimmanlage-altweg",
+        "schulschwimmanlage-riedtli",
+        "schulschwimmanlage-tannenrauch",
+    } <= priced
+    # …and the five the city publishes as free / privately run stay unpriced.
+    assert (
+        priced
+        & {
+            "hallenbad-altstetten",
+            "flussbad-au-hoengg",
+            "flussbad-oberer-letten",
+            "seebad-katzensee",
+            "maennerbad-schanzengraben",
+        }
+        == set()
+    )
 
 
 def test_the_school_pools_are_served_the_school_tariff(gold_db: Path) -> None:

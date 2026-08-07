@@ -6,6 +6,9 @@ Zürich pool admission is published once for the whole city (not per pool), and 
 a Schulschwimmanlage. `parse_prices` returns both as a `CityTariffs` pair; `etl.scrape.tariff_for`
 picks the one a given pool is served.
 
+*Whether* the city tariff governs a pool at all is likewise a page-stated fact, not a hostname:
+`states_city_tariff` reports whether a pool's own page links this tariff page.
+
 Both rows are taken from the **same** `<stzh-datatable>` element — the one carrying the
 `Eintritte Schulschwimmanlagen` section — because a row means nothing without the column headers
 printed above it, and the page carries two elements (summer + winter) whose leading
@@ -27,6 +30,7 @@ from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
 from typing import NamedTuple
+from urllib.parse import urlsplit
 
 from swimzh.core.errors import ParseError, ProviderError
 from swimzh.core.http import HttpClient
@@ -54,6 +58,17 @@ _MIN_AGE_RE = re.compile(r"\bab\s+(\d{1,2})\s*J", re.IGNORECASE)
 # every age bound is read from the header, never assumed here.
 _COLUMN_CATEGORIES = (PriceCategory.ADULT, PriceCategory.YOUTH, PriceCategory.CHILD)
 
+#: The tariff page's own path tail — the tail, never the whole URL. Across the committed pool-page
+#: fixtures the link is written 22× RELATIVE (`/web/de/stadtleben/…/preise-abos.html`) and once
+#: ABSOLUTE (`https://www.stadt-zuerich.ch/de/stadtleben/…/preise-abos.html`): the two disagree on
+#: `web/de/` vs `de/`, so equality with `PRICES_URL` would recognise neither reliably.
+#: Leading slash included deliberately: a bare tail would also match a GLUED segment such as
+#: `/foo/xsport-und-badeanlagen/preise-abos.html`, which is a different page.
+_TARIFF_PATH_TAIL = "/sport-und-badeanlagen/preise-abos.html"
+#: Any `href`, single- or double-quoted. Matched on the RAW page for the same reason the table
+#: attributes are: the document's own attribute boundaries are what delimit a URL.
+_HREF_RE = re.compile(r"""href\s*=\s*["']([^"']+)["']""", re.IGNORECASE)
+
 #: The section heading (a grouping row) under which the city prints the Schulschwimmanlage rate.
 _SCHOOL_SECTION = "eintritte schulschwimmanlagen"
 #: Both tariff rows are labelled `Einzeleintritte` / `Einzeleintritt`.
@@ -71,6 +86,26 @@ class CityTariffs:
 
     general: PriceTable
     school: PriceTable
+
+
+def states_city_tariff(page_html: str) -> bool:
+    """Does this pool's own page state that the city tariff governs it — by LINKING that tariff?
+
+    The binding is a link the upstream page emits and we re-derive every run, not a curated host
+    list that rots when a WFS URL drifts ([[discovery-driven-providers]] rule 2). It is also the
+    only correct discriminator: 4 of the pools on the city's own `sportamt.ch` pages publish *"Der
+    Eintritt … ist gratis"* and `maennerbad-schanzengraben` *"wird privat betrieben"*, so a
+    host-keyed fan-out would invent a Fr. 8.00 charge at pools the city publishes as free.
+
+    Matched on the URL's **path tail** (`_TARIFF_PATH_TAIL`), not on a substring of the whole href:
+    `hallenbad-altstetten` (a private operator) carries 9 hrefs containing `preise` across 3
+    targets of its own (`/schwimmen-2#preise`, `/schwimmen-2#schwimmpreise`, `/sauna#saunapreise`)
+    and states no city tariff.
+    """
+    return any(
+        urlsplit(html.unescape(match.group(1))).path.endswith(_TARIFF_PATH_TAIL)
+        for match in _HREF_RE.finditer(page_html)
+    )
 
 
 def _text(cell_html: str) -> str:

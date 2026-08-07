@@ -5,6 +5,7 @@ preserved in ``ScrapeReport.failures`` so ``scrape-gold`` aborts the whole run."
 
 from __future__ import annotations
 
+import re
 from collections.abc import Callable
 from datetime import date, datetime, time
 from decimal import Decimal
@@ -23,7 +24,7 @@ from swimzh.domain.models import PoolKind
 from swimzh.domain.pricing import PriceCategory, PriceEntry, PriceTable
 from swimzh.domain.schedule import TimeRange, Weekday
 from swimzh.etl.scrape import declared_sources, scrape_declared_sources, tariff_for
-from swimzh.providers.price_scraper import CityTariffs
+from swimzh.providers.price_scraper import PRICES_URL, CityTariffs, states_city_tariff
 from swimzh.storage import catalog_json
 
 FIXTURE = Path(__file__).resolve().parents[1] / "providers" / "fixtures" / "hallenbad_city.html"
@@ -93,8 +94,7 @@ def test_builds_indoor_extracts_with_real_rules() -> None:
 
 
 def test_extracts_carry_notices_closures_and_prices() -> None:
-    body = FIXTURE.read_bytes()  # City page: has a Revision closure notice
-    # A stadt-zuerich.ch URL so the shared price table is applied.
+    body = FIXTURE.read_bytes()  # City page: has a Revision closure notice, and links the tariff
     catalog = (
         _entry(
             "hallenbad-city",
@@ -109,7 +109,7 @@ def test_extracts_carry_notices_closures_and_prices() -> None:
     _ref, aspects = report.extracts[0]
     assert aspects.notices and "Revision" in aspects.notices[0].text
     assert aspects.closures  # derived from the closure notice
-    assert aspects.prices is not None  # stadt-zuerich host → shared tariff applied
+    assert aspects.prices is not None  # its page links the tariff → the shared tariff applied
 
 
 def test_unparseable_page_is_a_typed_failure_not_a_skip() -> None:
@@ -352,14 +352,14 @@ def test_a_school_pool_is_served_the_school_tariff_not_the_hallenbad_one() -> No
     indoor = next(s for s in declared_sources(entries) if s.entry.pool_id == "hallenbad-city")
 
     assert by_id["schulschwimmanlage-aemtler"].kind is PoolKind.SCHOOL
-    school_table = tariff_for(school, _TARIFFS)
+    school_table = tariff_for(school, _page_of("schulschwimmanlage-aemtler"), _TARIFFS)
     assert school_table is not None
     assert [e.amount_chf for e in school_table.entries] == [
         Decimal("5.00"),
         Decimal("5.00"),
         Decimal("2.50"),
     ]
-    general_table = tariff_for(indoor, _TARIFFS)
+    general_table = tariff_for(indoor, _page_of("hallenbad-city"), _TARIFFS)
     assert general_table is not None
     assert [e.amount_chf for e in general_table.entries] == [
         Decimal("8.00"),
@@ -368,15 +368,108 @@ def test_a_school_pool_is_served_the_school_tariff_not_the_hallenbad_one() -> No
     ]
 
 
-def test_tariff_for_splits_the_declared_sources_four_six_sixteen() -> None:
-    """S1 keeps the host test: only a `stadt-zuerich.ch` page is known to be governed by the city
-    tariff at all. A `sportamt.ch` pool stays unpriced rather than guessed at — widening that is
-    S2. Pinned offline against the committed snapshot.
-    """
+# --- the tariff follows the LINK the page publishes (S2) --------------------------------------
+#
+# The fan-out gated on the literal host `stadt-zuerich.ch` and so dropped the 15 declared sources
+# the city publishes on sportamt.ch. Widening the host set was the obvious fix and the wrong one:
+# 4 of those pools state "Der Eintritt … ist gratis" and one "wird privat betrieben", so a host
+# rule would have invented a Fr. 8.00 charge at five pools that charge nothing. The page's own
+# tariff LINK is the discriminator, and these pin it against the committed page fixtures.
+
+_FIXTURES = Path(__file__).resolve().parents[1] / "providers" / "fixtures"
+
+#: `pool_id` → its committed page fixture. Two fixtures are named for the pool's short name rather
+#: than its roster id (`maennerbad.html`, `frauenbad.html`), so the mapping cannot be derived.
+_PAGE_FIXTURES = {
+    "hallenbad-city": "hallenbad_city.html",
+    "hallenbad-oerlikon": "hallenbad_oerlikon.html",
+    "hallenbad-bungertwies": "hallenbad_bungertwies.html",
+    "hallenbad-blaesi": "hallenbad_blaesi.html",
+    "hallenbad-leimbach": "hallenbad_leimbach.html",
+    "hallenbad-altstetten": "hallenbad_altstetten.html",
+    "waermebad-kaeferberg": "waermebad_kaeferberg.html",
+    "schulschwimmanlage-aemtler": "schulschwimmanlage_aemtler.html",
+    "schulschwimmanlage-altweg": "schulschwimmanlage_altweg.html",
+    "schulschwimmanlage-riedtli": "schulschwimmanlage_riedtli.html",
+    "schulschwimmanlage-tannenrauch": "schulschwimmanlage_tannenrauch.html",
+    "freibad-allenmoos": "freibad_allenmoos.html",
+    "freibad-auhof": "freibad_auhof.html",
+    "freibad-heuried": "freibad_heuried.html",
+    "freibad-letzigraben": "freibad_letzigraben.html",
+    "freibad-seebach": "freibad_seebach.html",
+    "freibad-zwischen-den-hoelzern": "freibad_zwischen_den_hoelzern.html",
+    "seebad-katzensee": "seebad_katzensee.html",
+    "seebad-utoquai": "seebad_utoquai.html",
+    "strandbad-mythenquai": "strandbad_mythenquai.html",
+    "strandbad-tiefenbrunnen": "strandbad_tiefenbrunnen.html",
+    "strandbad-wollishofen": "strandbad_wollishofen.html",
+    "flussbad-au-hoengg": "flussbad_au_hoengg.html",
+    "flussbad-oberer-letten": "flussbad_oberer_letten.html",
+    "frauenbad-stadthausquai": "frauenbad.html",
+    "maennerbad-schanzengraben": "maennerbad.html",
+}
+
+#: The pools whose page links NO city tariff. Four of them the city publishes as FREE
+#: ("Der Eintritt ins … ist gratis"), and the Männerbad "wird privat betrieben … ein Gratisbad";
+#: altstetten is a private operator with its own price page. None may be charged a city rate.
+_NO_TARIFF = {
+    "hallenbad-altstetten",
+    "flussbad-au-hoengg",
+    "flussbad-oberer-letten",
+    "seebad-katzensee",
+    "maennerbad-schanzengraben",
+}
+
+
+def _page_of(pool_id: str) -> str:
+    return (_FIXTURES / _PAGE_FIXTURES[pool_id]).read_text(encoding="utf-8")
+
+
+def test_states_city_tariff_over_every_declared_sources_committed_page() -> None:
+    """21 of the 26 declared sources link the tariff page; exactly 5 do not. Offline, against the
+    committed page fixtures — one per declared source, so this is the whole population."""
+    entries = catalog_json.loads(_CATALOG.read_text(encoding="utf-8"))
+    declared = _declared_ids(entries)
+    assert declared == set(_PAGE_FIXTURES), sorted(declared ^ set(_PAGE_FIXTURES))
+
+    stated = {pool_id for pool_id in declared if states_city_tariff(_page_of(pool_id))}
+    assert declared - stated == _NO_TARIFF
+    assert len(stated) == 21
+
+
+def test_a_private_operators_own_price_anchors_are_not_the_city_tariff() -> None:
+    """`hallenbad-altstetten` carries 9 hrefs containing `preise` across 3 targets of its OWN
+    (`/schwimmen-2#preise`, `/schwimmen-2#schwimmpreise`, `/sauna#saunapreise`). A substring test
+    on `preise` would price it at the city rate; the match is on the tariff page's PATH."""
+    page = _page_of("hallenbad-altstetten")
+    hrefs = re.findall(r'href="([^"]*preise[^"]*)"', page)
+    assert len(hrefs) == 9, hrefs
+    assert len({h.split("://")[-1] for h in hrefs}) == 3, sorted(set(hrefs))
+    assert states_city_tariff(page) is False
+
+
+def test_the_link_is_matched_by_path_not_by_equality_with_the_prices_url() -> None:
+    """The pool pages write the link RELATIVE (`/web/de/…`) while the tariff page itself writes it
+    ABSOLUTE (`https://www.stadt-zuerich.ch/de/…`) — the two disagree on `web/de/` vs `de/`, so
+    equality with `PRICES_URL` recognises neither reliably. Both forms must match."""
+    tail = "stadtleben/sport-und-erholung/sport-und-badeanlagen/preise-abos.html"
+    relative = f'<a href="/web/de/{tail}">Preise</a>'
+    absolute = f'<a href="https://www.stadt-zuerich.ch/de/{tail}">Preise</a>'
+    assert states_city_tariff(relative)
+    assert states_city_tariff(absolute)
+    assert PRICES_URL not in relative  # the literal URL appears in neither form
+    # A different page under the same section is not the tariff page.
+    assert not states_city_tariff('<a href="/web/de/stadtleben/sport-und-badeanlagen/sauna.html">')
+
+
+def test_tariff_for_splits_the_declared_sources_four_seventeen_five() -> None:
+    """S2 deletes the host test: the pool's page states whether the city tariff governs it, by
+    linking it. 4 school + 17 general + 5 unpriced, against the committed page fixtures — where
+    the S1 host test scored 4 / 6 / 16 and left 11 city-run pools unpriced."""
     entries = catalog_json.loads(_CATALOG.read_text(encoding="utf-8"))
     school, general, none = [], [], []
     for source in declared_sources(entries):
-        table = tariff_for(source, _TARIFFS)
+        table = tariff_for(source, _page_of(source.entry.pool_id), _TARIFFS)
         if table is None:
             none.append(source.entry.pool_id)
         elif table is _TARIFFS.school:
@@ -390,12 +483,62 @@ def test_tariff_for_splits_the_declared_sources_four_six_sixteen() -> None:
         "schulschwimmanlage-riedtli",
         "schulschwimmanlage-tannenrauch",
     ]
-    assert len(general) == 6, sorted(general)
-    assert len(none) == 16, sorted(none)
+    assert len(general) == 17, sorted(general)
+    assert set(none) == _NO_TARIFF
     assert len(school) + len(general) + len(none) == 26
 
 
-def test_no_tariffs_scraped_means_no_pool_is_priced() -> None:
-    """A failed price scrape leaves every pool unpriced — never a stale or invented rate."""
+def test_the_city_host_gate_is_gone_from_the_source_tree() -> None:
+    """A hostname is not a fact about pricing — `_CITY_HOST` must exist nowhere in `src/`, so the
+    deleted gate cannot quietly come back as a second discriminator."""
+    src = Path(__file__).resolve().parents[2] / "src"
+    offenders = [p for p in src.rglob("*.py") if "_CITY_HOST" in p.read_text(encoding="utf-8")]
+    assert offenders == []
+
+
+def test_a_pool_whose_page_states_no_tariff_yields_a_note_not_a_failure() -> None:
+    """Free and privately-run pools ship unpriced ON PURPOSE — a note, never a `ScrapeFailure`
+    (which would abort the build) and never a silent drop."""
+    catalog = (
+        _entry("flussbad-oberer-letten", "Flussbad Oberer Letten", PoolKind.RIVER, "https://x/l"),
+    )
+    body = _page_of("hallenbad-city").replace(
+        "/web/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/preise-abos.html", "/x.html"
+    )
+    report = scrape_declared_sources(
+        _client(lambda _r: httpx.Response(200, content=body.encode("utf-8"))),
+        catalog,
+        FETCHED,
+        tariffs=_TARIFFS,
+    )
+    assert report.failures == ()
+    (_ref, aspects) = report.extracts[0]
+    assert aspects.prices is None
+    assert report.notes == ("no city tariff stated: flussbad-oberer-letten (https://x/l)",)
+
+
+def test_a_priced_pool_produces_no_note() -> None:
+    catalog = (_entry("hallenbad-city", "Hallenbad City", PoolKind.INDOOR, "https://x/c"),)
+    body = _page_of("hallenbad-city").encode("utf-8")
+    report = scrape_declared_sources(
+        _client(lambda _r: httpx.Response(200, content=body)), catalog, FETCHED, tariffs=_TARIFFS
+    )
+    (_ref, aspects) = report.extracts[0]
+    assert aspects.prices is not None
+    assert report.notes == ()
+
+
+def test_no_tariffs_scraped_means_no_pool_is_priced_and_emits_no_notes() -> None:
+    """A failed price scrape leaves every pool unpriced — never a stale or invented rate. It emits
+    NO notes either: every pool is unpriced for one already-reported reason, and 26 identical
+    lines would drown the five that state a real fact about the pool."""
     entries = catalog_json.loads(_CATALOG.read_text(encoding="utf-8"))
-    assert all(tariff_for(s, None) is None for s in declared_sources(entries))
+    sources = declared_sources(entries)
+    assert all(tariff_for(s, _page_of(s.entry.pool_id), None) is None for s in sources)
+
+    catalog = (_entry("hallenbad-city", "Hallenbad City", PoolKind.INDOOR, "https://x/c"),)
+    body = _page_of("hallenbad-city").encode("utf-8")
+    report = scrape_declared_sources(
+        _client(lambda _r: httpx.Response(200, content=body)), catalog, FETCHED, tariffs=None
+    )
+    assert report.notes == ()
