@@ -185,7 +185,12 @@ _FACILITY: tuple[FieldSourcing, ...] = (
         "invented SENIOR rate) while the page prints its own — 'Erwachsene (ab 20 J.)', "
         "'Jugendliche (ab 16 J.)', 'Kinder (ab 6 J.)'. `PriceEntry.min_age` now carries the "
         "published bound; a 15-year-old was overcharged and a 70-year-old undercharged. Under-6 "
-        "is unpriced on the page and resolves to None, never to the adult rate.",
+        "is unpriced on the page and resolves to None, never to the adult rate. FALSIFIED "
+        "2026-08-07: the page publishes TWO single-admission rates and only the general one was "
+        "read — the 4 Schulschwimmanlagen were served the Hallenbad rate (Fr. 8.–/6.–/4.–) where "
+        "the city prints 'Eintritte Schulschwimmanlagen' Fr. 5.–/5.–/2.50. `parse_prices` now "
+        "returns both (`CityTariffs`, section-anchored within the one table carrying that "
+        "section) and `etl.scrape.tariff_for` picks by pool kind.",
     ),
     FieldSourcing(
         "facility.closures",

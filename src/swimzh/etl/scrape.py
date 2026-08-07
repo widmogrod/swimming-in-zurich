@@ -7,8 +7,9 @@ city pools, the 4 Schulschwimmanlagen that publish public swimming on their own 
 outdoor/lake/river pools whose seasonal `Zeitraum` table the scraper reads (seasonal-hours S3).
 
 Per pool we scrape: the timetable (→ rules and the page's last-admission rule), notices/alerts
-(→ `Notice`s, and closure-type notices → `ClosureRange`s), and attach the shared scraped admission
-`PriceTable` for city-run pools. The result is a ``ScrapedAspects`` payload paired with a ``Name``
+(→ `Notice`s, and closure-type notices → `ClosureRange`s), and attach the city admission tariff the
+pool is served (`tariff_for`: the Schulschwimmanlage rate for a `SCHOOL` pool, the general rate for
+the other city-run ones). The result is a ``ScrapedAspects`` payload paired with a ``Name``
 ``SourceRef`` (the WFS display name) — **never a canonical id**. ``build.reconcile.resolve_all``
 turns each ``Name`` into a ``PoolId`` by lookup, and ``build.compose`` folds the aspects onto the
 matching pool.
@@ -38,6 +39,7 @@ from swimzh.domain.models import Basin, BasinId, Notice, PoolKind
 from swimzh.domain.pricing import PriceTable
 from swimzh.domain.schedule import ClosureRange
 from swimzh.providers.operator_pages import parse_maintenance_closures
+from swimzh.providers.price_scraper import CityTariffs
 from swimzh.providers.schedule_scraper import (
     ScrapedSchedule,
     fetch_page,
@@ -188,16 +190,34 @@ def declared_sources(catalog: tuple[PoolCatalogEntry, ...]) -> tuple[DeclaredSou
     )
 
 
+def tariff_for(source: DeclaredSource, tariffs: CityTariffs | None) -> PriceTable | None:
+    """Which of the city's two published single-admission tariffs this pool is served.
+
+    The city prints a separate `Eintritte Schulschwimmanlagen` rate (Fr. 5.– / 5.– / 2.50) that a
+    Schulschwimmanlage charges instead of the Hallenbad rate; serving the general row to all four
+    overcharged every school-pool visitor. The kind is the discriminator, and it comes from the WFS
+    roster (with the registry's display overrides) — not from the URL.
+
+    The host test is retained here for now: only a `stadt-zuerich.ch` page is known to be governed
+    by the city tariff at all. Replacing it with the tariff LINK the pool's own page publishes is
+    S2 of this plan; until then a `sportamt.ch` pool stays unpriced rather than being guessed at.
+    """
+    if tariffs is None or _CITY_HOST not in source.url:
+        return None
+    return tariffs.school if source.entry.kind is PoolKind.SCHOOL else tariffs.general
+
+
 def scrape_declared_sources(
     client: HttpClient,
     catalog: tuple[PoolCatalogEntry, ...],
     fetched_at: datetime,
     *,
-    prices: PriceTable | None = None,
+    tariffs: CityTariffs | None = None,
 ) -> ScrapeReport:
     extracts: list[Extract] = []
     failures: list[ScrapeFailure] = []
-    for entry, url in declared_sources(catalog):
+    for source in declared_sources(catalog):
+        entry, url = source
         match fetch_page(client, url):
             case Err(cause):
                 failures.append(ScrapeFailure(name=entry.name, url=url, cause=cause))
@@ -210,7 +230,7 @@ def scrape_declared_sources(
             failures.append(ScrapeFailure(name=entry.name, url=url, cause=schedule.error))
             continue
         notices = parse_notices(page)
-        pool_prices = prices if (prices is not None and _CITY_HOST in url) else None
+        pool_prices = tariff_for(source, tariffs)
         # City notices carry their own dates; an operator page states its shutdown in prose,
         # so the two closure sources are additive, not alternatives.
         operator = _OPERATOR_CLOSURES.get(entry.pool_id)

@@ -22,7 +22,8 @@ from swimzh.domain.geo import GeoPoint
 from swimzh.domain.models import PoolKind
 from swimzh.domain.pricing import PriceCategory, PriceEntry, PriceTable
 from swimzh.domain.schedule import TimeRange, Weekday
-from swimzh.etl.scrape import declared_sources, scrape_declared_sources
+from swimzh.etl.scrape import declared_sources, scrape_declared_sources, tariff_for
+from swimzh.providers.price_scraper import CityTariffs
 from swimzh.storage import catalog_json
 
 FIXTURE = Path(__file__).resolve().parents[1] / "providers" / "fixtures" / "hallenbad_city.html"
@@ -45,6 +46,24 @@ def _entry(pool_id: str, name: str, kind: PoolKind, url: str | None) -> PoolCata
         description=None,
         phone=None,
     )
+
+
+def _table(adult: str, youth: str, child: str) -> PriceTable:
+    return PriceTable(
+        entries=(
+            PriceEntry(PriceCategory.ADULT, Decimal(adult), f"Erwachsene Fr. {adult}", 20),
+            PriceEntry(PriceCategory.YOUTH, Decimal(youth), f"Jugendliche Fr. {youth}", 16),
+            PriceEntry(PriceCategory.CHILD, Decimal(child), f"Kinder Fr. {child}", 6),
+        ),
+        valid_as_of=FETCHED.date(),
+        source_url="https://example.test/prices",
+    )
+
+
+#: What the city actually prints: the general rate, and the separate Schulschwimmanlage one.
+_TARIFFS = CityTariffs(
+    general=_table("8.00", "6.00", "4.00"), school=_table("5.00", "5.00", "2.50")
+)
 
 
 def test_builds_indoor_extracts_with_real_rules() -> None:
@@ -84,13 +103,8 @@ def test_extracts_carry_notices_closures_and_prices() -> None:
             "https://www.stadt-zuerich.ch/.../city.html",
         ),
     )
-    prices = PriceTable(
-        entries=(PriceEntry(PriceCategory.ADULT, Decimal("8.00"), "Erwachsene Fr. 8.00"),),
-        valid_as_of=FETCHED.date(),
-        source_url="https://example.test/prices",
-    )
     report = scrape_declared_sources(
-        _client(lambda _r: httpx.Response(200, content=body)), catalog, FETCHED, prices=prices
+        _client(lambda _r: httpx.Response(200, content=body)), catalog, FETCHED, tariffs=_TARIFFS
     )
     _ref, aspects = report.extracts[0]
     assert aspects.notices and "Revision" in aspects.notices[0].text
@@ -322,3 +336,66 @@ def test_the_school_pools_without_public_swimming_share_one_overview_url() -> No
     assert len(sharing) == 14
     assert "schulschwimmanlage-borrweg" in sharing
     assert not _declared_ids(entries) & set(sharing)
+
+
+def test_a_school_pool_is_served_the_school_tariff_not_the_hallenbad_one() -> None:
+    """The city prints `Eintritte Schulschwimmanlagen` Fr. 5.–/5.–/2.50 separately.
+
+    Serving the general row to all four overcharged every school-pool visitor by Fr. 3.00 (and a
+    child by Fr. 1.50) — the amounts were right and the pool they were attached to was wrong.
+    """
+    entries = catalog_json.loads(_CATALOG.read_text(encoding="utf-8"))
+    by_id = {e.pool_id: e for e in entries}
+    school = next(
+        s for s in declared_sources(entries) if s.entry.pool_id == "schulschwimmanlage-aemtler"
+    )
+    indoor = next(s for s in declared_sources(entries) if s.entry.pool_id == "hallenbad-city")
+
+    assert by_id["schulschwimmanlage-aemtler"].kind is PoolKind.SCHOOL
+    school_table = tariff_for(school, _TARIFFS)
+    assert school_table is not None
+    assert [e.amount_chf for e in school_table.entries] == [
+        Decimal("5.00"),
+        Decimal("5.00"),
+        Decimal("2.50"),
+    ]
+    general_table = tariff_for(indoor, _TARIFFS)
+    assert general_table is not None
+    assert [e.amount_chf for e in general_table.entries] == [
+        Decimal("8.00"),
+        Decimal("6.00"),
+        Decimal("4.00"),
+    ]
+
+
+def test_tariff_for_splits_the_declared_sources_four_six_sixteen() -> None:
+    """S1 keeps the host test: only a `stadt-zuerich.ch` page is known to be governed by the city
+    tariff at all. A `sportamt.ch` pool stays unpriced rather than guessed at — widening that is
+    S2. Pinned offline against the committed snapshot.
+    """
+    entries = catalog_json.loads(_CATALOG.read_text(encoding="utf-8"))
+    school, general, none = [], [], []
+    for source in declared_sources(entries):
+        table = tariff_for(source, _TARIFFS)
+        if table is None:
+            none.append(source.entry.pool_id)
+        elif table is _TARIFFS.school:
+            school.append(source.entry.pool_id)
+        else:
+            general.append(source.entry.pool_id)
+
+    assert sorted(school) == [
+        "schulschwimmanlage-aemtler",
+        "schulschwimmanlage-altweg",
+        "schulschwimmanlage-riedtli",
+        "schulschwimmanlage-tannenrauch",
+    ]
+    assert len(general) == 6, sorted(general)
+    assert len(none) == 16, sorted(none)
+    assert len(school) + len(general) + len(none) == 26
+
+
+def test_no_tariffs_scraped_means_no_pool_is_priced() -> None:
+    """A failed price scrape leaves every pool unpriced — never a stale or invented rate."""
+    entries = catalog_json.loads(_CATALOG.read_text(encoding="utf-8"))
+    assert all(tariff_for(s, None) is None for s in declared_sources(entries))

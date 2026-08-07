@@ -229,6 +229,7 @@ Appended by /dev:implement after each slice — never rewritten. Newest row last
 
 | date | slice | status | divergence from plan | tech debt created | human review? |
 |------|-------|--------|----------------------|-------------------|---------------|
+| 2026-08-07 | S1 | done | orchestrator finished the slice after the implementer subagent died twice on API errors; `apps/web/tests/fixtures/aemtler_girls_only.json` regenerated (outside Touches, forced by the slice); the SQL priced-count gate landed in `apps/web/tests/test_gold_store.py` (not named in Touches) | a failed `scrape_prices` still degrades silently to `tariffs=None` (`cli.py:290-292`), and the stricter parser widens that blast radius — one dropped heading now unprices all 10 pools with exit 0 | no |
 
 ## Decisions & divergences
 
@@ -273,6 +274,27 @@ no-regression clause on S2, and the literal SQL for the "still 10" gate.
 
 **Suggestion not taken**: replacing the substring host test with a `urlparse` netloc-suffix
 comparison. The host test is **deleted** rather than hardened, so there is nothing to harden.
+
+**2026-08-07 — S1: the implementer subagent died twice mid-slice on API errors.** Its partial
+work landed correctly in the worktree (the absolute-path guard held; nothing leaked to the main
+checkout) and was resumed once from transcript, then finished by the orchestrator: the
+`tests/etl/test_scrape.py` cases and one leftover rename (`cli.py:320` still referenced the
+removed `prices`, which `ruff` caught as F821). Both gates ran normally on the result.
+
+**2026-08-07 — S1 review: the critic mutation-tested the section anchoring.** It reverted
+`_single_entry_row` to first-match-wins and confirmed three tests fail, so the anchoring is
+load-bearing rather than passing by row order. Its one blocking finding — the plan's literal
+priced-count SQL gate existed in no test — was fixed by adding
+`test_the_priced_pool_count_is_the_coverage_ratchet` and
+`test_the_school_pools_are_served_the_school_tariff` to `apps/web/tests/test_gold_store.py`,
+asserted on the fully-built `gold_db` so they cover scrape → compose → codec.
+
+**2026-08-07 — the tautological sauna test was replaced.** The critic found
+`test_the_sauna_row_is_never_mistaken_for_a_tariff` unfalsifiable (the sauna row sits under its
+own section, so any anchoring break yields `Err`, caught elsewhere) — the same criterion this plan
+had already dropped as tautological before approval, re-added as a test. Replaced with
+`test_an_unreadable_school_amount_fails_rather_than_serving_the_general_rate`, which covers the
+previously-unexecuted `school` error branch at `price_scraper.py:221`.
 
 ## Summary
 

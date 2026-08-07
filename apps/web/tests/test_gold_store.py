@@ -4,6 +4,7 @@ fails fast when the store is empty. No curated `data/` tree is read at runtime."
 from __future__ import annotations
 
 from datetime import date
+from decimal import Decimal
 from pathlib import Path
 
 import pytest
@@ -82,3 +83,48 @@ def test_empty_store_fails_fast(tmp_path: Path) -> None:
     open_db(db)  # creates the schema but no rows
     with pytest.raises(RuntimeError, match="empty"):
         GoldSwimStore.open(db)
+
+
+def test_the_priced_pool_count_is_the_coverage_ratchet(gold_db: Path) -> None:
+    """The literal gate the city-tariff plan states, against a fully-built store.
+
+    Price coverage is a number the next slice moves deliberately (10 -> 21, once the fan-out stops
+    keying on a hostname). Pinning it here makes a coverage change a line someone edits on
+    purpose, never a side effect nobody noticed.
+    """
+    count = (
+        open_db(gold_db)
+        .execute(
+            "select count(*) from pool where json_extract(facility_doc,'$.prices') is not null"
+        )
+        .fetchone()[0]
+    )
+    assert count == 10
+
+
+def test_the_school_pools_are_served_the_school_tariff(gold_db: Path) -> None:
+    """The city prints `Eintritte Schulschwimmanlagen` at 5.-/5.-/2.50, not the Hallenbad
+    8.-/6.-/4.-. Asserted on the STORE, so it covers scrape -> compose -> codec end to end."""
+    priced = {
+        str(f.identity.facility_id): f.prices
+        for f in GoldSwimStore.open(gold_db).facilities()
+        if f.prices is not None
+    }
+    school = {k: v for k, v in priced.items() if k.startswith("schulschwimmanlage-")}
+    assert len(school) == 4, sorted(school)
+    for pool_id, table in school.items():
+        assert [e.amount_chf for e in table.entries] == [
+            Decimal("5.00"),
+            Decimal("5.00"),
+            Decimal("2.50"),
+        ], pool_id
+        # Both rows share the table's column headers, so the bounds are the same published ones.
+        assert [e.min_age for e in table.entries] == [20, 16, 6], pool_id
+    for pool_id, table in priced.items():
+        if pool_id.startswith("schulschwimmanlage-"):
+            continue
+        assert [e.amount_chf for e in table.entries] == [
+            Decimal("8.00"),
+            Decimal("6.00"),
+            Decimal("4.00"),
+        ], pool_id

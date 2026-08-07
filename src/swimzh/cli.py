@@ -287,9 +287,9 @@ def _compose_schedules(
     pool in no alias) is a benign partial success — the resolved pools are written and the phase
     exits 1 with the miss named (``fatal=False``), not a data hole.
     """
-    prices_result = scrape_prices(price_client, fetched_at.date())
-    prices = prices_result.value if isinstance(prices_result, Ok) else None
-    report = scrape_declared_sources(schedule_client, catalog, fetched_at, prices=prices)
+    tariffs_result = scrape_prices(price_client, fetched_at.date())
+    tariffs = tariffs_result.value if isinstance(tariffs_result, Ok) else None
+    report = scrape_declared_sources(schedule_client, catalog, fetched_at, tariffs=tariffs)
     if report.failures:
         # A declared source failed to fetch/parse: abort, surfacing the typed cause.
         failure = report.failures[0]
@@ -317,7 +317,7 @@ def _compose_schedules(
                 tuple((f.identity.facility_id, f) for f in composition.facilities),
             )
             msg = f"scraped {len(outcome.resolved)} declared sources"
-            msg += " (with prices)" if prices is not None else " (prices unavailable)"
+            msg += " (with tariffs)" if tariffs is not None else " (tariffs unavailable)"
             for note in composition.notes:
                 msg += f"; {note}"
             print(msg)
