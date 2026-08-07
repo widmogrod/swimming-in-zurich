@@ -1,8 +1,11 @@
 ---
 type: plan
-status: approved
+status: in-progress
 created: 2026-08-07
 feature: city-tariff-fanout
+branch: plan/city-tariff-fanout
+worktree: .claude/worktrees/plan-city-tariff-fanout
+base_branch: feat/new-ui
 prerequisite: the price-age-bands work (S1 of [[2026-08-06-data-coverage-first-plan]]) must be COMMITTED — see S1 Depends on
 gates:
   qa: full
