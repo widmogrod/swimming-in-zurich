@@ -187,7 +187,10 @@ def _price_table_out(table: PriceTable) -> PriceTableOut:
     return PriceTableOut(
         entries=[
             PriceEntryOut(
-                category=e.category.value, amount_chf=float(e.amount_chf), display=e.display
+                category=e.category.value,
+                amount_chf=float(e.amount_chf),
+                display=e.display,
+                min_age=e.min_age,
             )
             for e in table.entries
         ],

@@ -27,7 +27,7 @@ _HolidayPolicy = Literal["normal", "sunday_schedule", "closed"]
 _Weather = Literal["any", "fair_only"]
 _DatePrecision = Literal["day", "month"]
 _PoolKind = Literal["indoor", "outdoor", "river", "lake", "school", "paddling", "thermal"]
-_PriceCategory = Literal["child", "youth", "adult", "senior"]
+_PriceCategory = Literal["child", "youth", "adult"]
 _BasinKind = Literal[
     "lap", "non_swimmer", "diving", "vario", "teaching", "children", "outdoor", "other"
 ]
@@ -423,6 +423,16 @@ class PriceEntryDTO(_Strict):
     category: _PriceCategory
     amount_chf: Decimal
     display: str
+    min_age: int | None = None
+
+    @model_serializer(mode="wrap")
+    def _serialize(self, handler: SerializerFunctionWrapHandler) -> dict[str, Any]:
+        # Additive-and-invisible: an entry with no published bound serialises to exactly the
+        # bytes it did before `min_age` existed.
+        data: dict[str, Any] = handler(self)
+        if self.min_age is None:
+            data.pop("min_age", None)
+        return data
 
 
 class PriceTableDTO(_Strict):

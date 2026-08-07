@@ -25,7 +25,19 @@ PRICES_URL = (
     "sport-und-badeanlagen/preise-abos.html"
 )
 
-_ROW_RE = re.compile(r'\[\{"value":"(?:[^"\\]|\\.)*"\}(?:,\{"value":"(?:[^"\\]|\\.)*"\})*\]')
+# Element-scoped, and read off the RAW page. Both payloads are HTML-ESCAPED attributes, so
+# unescaping the document first would put bare `"` inside them and destroy the very attribute
+# boundaries this matches on — the same trap the schedule scraper documents.
+_TABLE_SPLIT = "<stzh-datatable"
+_COLUMNS_ATTR = re.compile(r'\scolumns="([^"]*)"')
+_ROWS_ATTR = re.compile(r'\srows="([^"]*)"')
+# "Erwachsene (ab 20 J.)" — the tariff printing its own lower bound.
+_MIN_AGE_RE = re.compile(r"\bab\s+(\d{1,2})\s*J", re.IGNORECASE)
+
+# The `Einzeleintritte` row is `Ticketart | Erwachsene | Jugendliche | Kinder`; the header at
+# each index carries that column's published bound. Position fixes only the CATEGORY LABEL —
+# every age bound is read from the header, never assumed here.
+_COLUMN_CATEGORIES = (PriceCategory.ADULT, PriceCategory.YOUTH, PriceCategory.CHILD)
 
 
 def _text(cell_html: str) -> str:
@@ -42,35 +54,77 @@ def _money(cell: str) -> Decimal | None:
     return Decimal(f"{match.group(1)}.{cents}")
 
 
-def parse_prices(page_html: str, valid_as_of: date) -> Result[PriceTable, ProviderError]:
-    decoded = html.unescape(page_html)
-    rows: list[list[str]] = []
-    for match in _ROW_RE.findall(decoded):
-        try:
-            rows.append([_text(c["value"]) for c in json.loads(match)])
-        except json.JSONDecodeError:
-            continue
+def _cells(attr_value: str) -> list[list[str]] | None:
+    """Decode one escaped `rows="…"` attribute into rows of plain cell text."""
+    try:
+        payload = json.loads(html.unescape(attr_value))
+    except json.JSONDecodeError:
+        return None
+    return [[_text(str(cell.get("value", ""))) for cell in row] for row in payload]
 
-    single = next((r for r in rows if len(r) >= 4 and "einzeleintritt" in r[0].lower()), None)
-    if single is None:
+
+def _headers(attr_value: str) -> list[str] | None:
+    try:
+        payload = json.loads(html.unescape(attr_value))
+    except json.JSONDecodeError:
+        return None
+    return [_text(str(column.get("text", ""))) for column in payload]
+
+
+def _single_entry_table(page_html: str) -> tuple[list[str], list[str]] | None:
+    """The `Einzeleintritte` row WITH the headers of its own table.
+
+    Scoped per `<stzh-datatable>` element: the page carries several, and a row means nothing
+    without the column bounds printed above it.
+    """
+    for chunk in page_html.split(_TABLE_SPLIT)[1:]:
+        columns, rows = _COLUMNS_ATTR.search(chunk), _ROWS_ATTR.search(chunk)
+        if columns is None or rows is None:
+            continue
+        headers, decoded = _headers(columns.group(1)), _cells(rows.group(1))
+        if headers is None or decoded is None:
+            continue
+        for row in decoded:
+            if len(row) >= 4 and len(headers) >= 4 and "einzeleintritt" in row[0].lower():
+                return headers, row
+    return None
+
+
+def parse_prices(page_html: str, valid_as_of: date) -> Result[PriceTable, ProviderError]:
+    found = _single_entry_table(page_html)
+    if found is None:
         return Err(
             ParseError(
-                source=_SOURCE, detail="Einzeleintritte row not found", raw_snippet=decoded[:200]
+                source=_SOURCE,
+                detail="Einzeleintritte row not found",
+                raw_snippet=page_html[:200],
             )
         )
-    adult, reduced, child = _money(single[1]), _money(single[2]), _money(single[3])
-    if adult is None or reduced is None or child is None:
-        return Err(
-            ParseError(source=_SOURCE, detail=f"unparseable prices: {single}", raw_snippet="")
-        )
+    headers, single = found
 
-    entries = (
-        PriceEntry(PriceCategory.ADULT, adult, f"Erwachsene Fr. {adult}"),
-        PriceEntry(PriceCategory.YOUTH, reduced, f"Jugendliche/ermässigt Fr. {reduced}"),
-        PriceEntry(PriceCategory.SENIOR, reduced, f"Senior:innen/ermässigt Fr. {reduced}"),
-        PriceEntry(PriceCategory.CHILD, child, f"Kinder Fr. {child}"),
-    )
-    return Ok(PriceTable(entries=entries, valid_as_of=valid_as_of, source_url=PRICES_URL))
+    entries: list[PriceEntry] = []
+    for index, category in enumerate(_COLUMN_CATEGORIES, start=1):
+        header, amount = headers[index], _money(single[index])
+        bound = _MIN_AGE_RE.search(header)
+        if amount is None or bound is None:
+            # Fail rather than serve an amount we cannot attach to an age. A price without its
+            # published bound is exactly the guess this parser exists to stop making.
+            return Err(
+                ParseError(
+                    source=_SOURCE,
+                    detail=f"unbounded or unparseable price column: {header!r} / {single[index]!r}",
+                    raw_snippet="",
+                )
+            )
+        entries.append(
+            PriceEntry(
+                category=category,
+                amount_chf=amount,
+                display=f"{header} Fr. {amount}",
+                min_age=int(bound.group(1)),
+            )
+        )
+    return Ok(PriceTable(entries=tuple(entries), valid_as_of=valid_as_of, source_url=PRICES_URL))
 
 
 def scrape_prices(client: HttpClient, valid_as_of: date) -> Result[PriceTable, ProviderError]:

@@ -158,7 +158,6 @@ _CATEGORY_TO: dict[PriceCategory, _PriceCategory] = {
     PriceCategory.CHILD: "child",
     PriceCategory.YOUTH: "youth",
     PriceCategory.ADULT: "adult",
-    PriceCategory.SENIOR: "senior",
 }
 _BASIN_KIND_FROM: dict[str, BasinKind] = {k.value: k for k in BasinKind}
 _BASIN_KIND_TO: dict[BasinKind, _BasinKind] = {
@@ -650,7 +649,10 @@ def price_table_from_dto(dto: PriceTableDTO) -> PriceTable:
     return PriceTable(
         entries=tuple(
             PriceEntry(
-                category=_CATEGORY_FROM[e.category], amount_chf=e.amount_chf, display=e.display
+                category=_CATEGORY_FROM[e.category],
+                amount_chf=e.amount_chf,
+                display=e.display,
+                min_age=e.min_age,
             )
             for e in dto.entries
         ),
@@ -663,7 +665,10 @@ def price_table_to_dto(table: PriceTable) -> PriceTableDTO:
     return PriceTableDTO(
         entries=[
             PriceEntryDTO(
-                category=_CATEGORY_TO[e.category], amount_chf=e.amount_chf, display=e.display
+                category=_CATEGORY_TO[e.category],
+                amount_chf=e.amount_chf,
+                display=e.display,
+                min_age=e.min_age,
             )
             for e in table.entries
         ],

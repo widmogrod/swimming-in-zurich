@@ -44,6 +44,7 @@ from swimzh.domain.models import (
     PoolKind,
     Provenance,
 )
+from swimzh.domain.pricing import PriceCategory, PriceEntry, PriceTable
 from swimzh.domain.schedule import (
     AnnualWindow,
     MonthDay,
@@ -455,6 +456,28 @@ def test_lane_plan_source_round_trips_and_is_absent_when_unset(
     assert back.basins[0].lane_plan_source == source
     # `section` is omitted from the payload when None (Slice-D-style pop-when-default).
     assert '"section"' not in codec.dumps(facility)
+
+
+def test_price_min_age_round_trips_and_is_absent_when_unstated(
+    facilities: tuple[Facility, ...],
+) -> None:
+    base = replace(
+        facilities[0],
+        prices=PriceTable(entries=(PriceEntry(PriceCategory.ADULT, Decimal("8.00"), "Adult"),)),
+    )
+    # An entry whose source printed no bound adds nothing to the payload.
+    assert '"min_age"' not in codec.dumps(base)
+
+    priced = replace(
+        base,
+        prices=PriceTable(
+            entries=(PriceEntry(PriceCategory.ADULT, Decimal("8.00"), "Erwachsene", min_age=20),)
+        ),
+    )
+    back = codec.loads(codec.dumps(priced))
+    assert back == priced
+    assert back.prices is not None
+    assert back.prices.entries[0].min_age == 20
 
 
 def test_provider_error_union_round_trips_losslessly_through_the_dto() -> None:

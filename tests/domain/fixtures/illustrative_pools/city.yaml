@@ -33,10 +33,9 @@ prices:
   valid_as_of: "2026-07-18"
   source_url: "https://www.stadt-zuerich.ch/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/hallenbaeder/city.html"
   entries:
-    - { category: "adult", amount_chf: "8.00", display: "Erwachsene CHF 8.00" }
-    - { category: "youth", amount_chf: "6.00", display: "Jugendliche CHF 6.00" }
-    - { category: "child", amount_chf: "4.00", display: "Kinder CHF 4.00" }
-    - { category: "senior", amount_chf: "6.00", display: "Senioren CHF 6.00" }
+    - { category: "adult", amount_chf: "8.00", display: "Erwachsene (ab 20 J.) CHF 8.00", min_age: 20 }
+    - { category: "youth", amount_chf: "6.00", display: "Jugendliche (ab 16 J.) CHF 6.00", min_age: 16 }
+    - { category: "child", amount_chf: "4.00", display: "Kinder (ab 6 J.) CHF 4.00", min_age: 6 }
 
 closures:
   - { start: "2026-07-04", end: "2026-08-07", reason: "Sommerpause / Revision" }

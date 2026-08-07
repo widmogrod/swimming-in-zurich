@@ -181,7 +181,11 @@ _FACILITY: tuple[FieldSourcing, ...] = (
         "zuerich.ch pools in the scrape-gold layer (NOT the base `build`). Compose precedence is "
         "curated-wins today, so a curated `prices:` block still shadows the scrape until S6 "
         "deletes the authoritative curated payload; the producer is nonetheless the website "
-        "scrape.",
+        "scrape. FALSIFIED 2026-08-06: the age BANDS were domain constants (<=5/<=15/>=65 plus an "
+        "invented SENIOR rate) while the page prints its own — 'Erwachsene (ab 20 J.)', "
+        "'Jugendliche (ab 16 J.)', 'Kinder (ab 6 J.)'. `PriceEntry.min_age` now carries the "
+        "published bound; a 15-year-old was overcharged and a 70-year-old undercharged. Under-6 "
+        "is unpriced on the page and resolves to None, never to the adult rate.",
     ),
     FieldSourcing(
         "facility.closures",

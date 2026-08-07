@@ -129,6 +129,7 @@ class PriceEntryOut(BaseModel):
     category: str  # PriceCategory value
     amount_chf: float
     display: str
+    min_age: int | None  # the lower bound the tariff itself prints; None = none printed
 
 
 class PriceTableOut(BaseModel):

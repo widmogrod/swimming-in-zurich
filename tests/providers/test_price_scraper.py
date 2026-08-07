@@ -30,6 +30,27 @@ def test_parses_admission_prices() -> None:
     assert result.value.valid_as_of == AS_OF
 
 
+def test_parses_the_published_age_bounds_from_the_column_headers() -> None:
+    """The page prints its own bands; three columns, three entries, no invented senior rate."""
+    result = parse_prices(FIXTURE.read_text(encoding="utf-8"), AS_OF)
+    assert isinstance(result, Ok), result
+    assert [(e.min_age, e.amount_chf) for e in result.value.entries] == [
+        (20, Decimal("8.00")),
+        (16, Decimal("6.00")),
+        (6, Decimal("4.00")),
+    ]
+    # The bound reaches the reader, not just the resolver.
+    assert result.value.entries[0].display == "Erwachsene (ab 20 J.) Fr. 8.00"
+
+
+def test_a_column_with_no_published_bound_is_a_parse_error() -> None:
+    """An amount we cannot attach to an age is refused, not stored under a guessed band."""
+    page = FIXTURE.read_text(encoding="utf-8").replace("Erwachsene (ab 20 J.)", "Erwachsene")
+    result = parse_prices(page, AS_OF)
+    assert isinstance(result, Err)
+    assert isinstance(result.error, ParseError)
+
+
 def test_missing_price_row_is_parse_error() -> None:
     result = parse_prices("<html>no prices</html>", AS_OF)
     assert isinstance(result, Err)

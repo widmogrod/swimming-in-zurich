@@ -154,7 +154,9 @@ def test_evening_public_swim_is_open_and_eligible(dataset: Dataset) -> None:
     city = [o for o in open_eligible if o.facility_name == "Hallenbad City"]
     assert city, "City should be open Tuesday 18:00"
     assert city[0].price is not None
-    assert city[0].price.display == "Erwachsene CHF 8.00"
+    # The bound the tariff prints travels in the display string, so a reader can check it.
+    assert city[0].price.display == "Erwachsene (ab 20 J.) CHF 8.00"
+    assert city[0].price.min_age == 20
     assert city[0].provenance.curated is True
     assert city[0].provenance.valid_as_of is not None
 
