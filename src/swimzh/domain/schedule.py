@@ -264,6 +264,24 @@ class OpenDay:
 
 
 @dataclass(frozen=True, slots=True)
+class OpenUnscheduledDay:
+    """The facility is open per its stated operating season, but publishes NO hours.
+
+    The third `DaySchedule` variant (sharedsource-fanout): a Planschbecken's page states a
+    season ("von Mai bis September in Betrieb") and no timetable at all, so inside that
+    window the day is neither an `OpenDay` (there are no sessions to list) nor a
+    `ClosedDay` (the pool's own page says it operates). Produced ONLY by the resolver's
+    season gate for a rule-less facility carrying an `OperatingSeason` — a facility
+    without one never yields this variant.
+    """
+
+    #: Deliberately REQUIRED, no default: the only legitimate producer is the season gate
+    #: passing `operating_season.weather` through. A defaulted `ANY` would let any other
+    #: construction site silently claim all-weather operation the page never stated.
+    weather: Weather
+
+
+@dataclass(frozen=True, slots=True)
 class ClosedDay:
     """The facility/basin is closed on this day, as a CODE plus its parameters.
 
@@ -275,4 +293,4 @@ class ClosedDay:
     params: Mapping[str, str] = field(default_factory=dict)
 
 
-type DaySchedule = OpenDay | ClosedDay
+type DaySchedule = OpenDay | OpenUnscheduledDay | ClosedDay

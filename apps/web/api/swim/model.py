@@ -74,9 +74,14 @@ class OptionOut(BaseModel):
 
 class StatusOut(BaseModel):
     facility: str
-    # The three-state schedule freshness of a no-options pool (delete-curated-schedule-tier S1):
+    # The schedule status of a no-options pool (delete-curated-schedule-tier S1):
     # "closed" (curated but shut today) | "awaiting_scrape" (indoor, no schedule yet) | "no_source"
-    # (no timetable source). A schedule-less pool is NEVER "closed".
+    # (no timetable source) | "open_unscheduled" (sharedsource-fanout S1: the pool's own page
+    # states an operating season it is inside, but publishes no hours — season + weather ride
+    # `detail_params`). A schedule-less pool is NEVER "closed": that invariant protects pools
+    # whose schedule is UNKNOWN, and a pool whose own page states its season is knowably shut
+    # outside it — such a pool serves "closed" + closure_code "out_of_season", the same pair a
+    # seasonal scraped pool already serves, and "open_unscheduled" (never "no_source") in season.
     status: str
     # --- i18n ------------------------------------------------------------------------
     # `detail` used to mix languages here: English "schedule not yet curated" in one branch

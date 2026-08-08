@@ -111,7 +111,11 @@ a WFS-`indoor` stadt-zuerich pool, incl. a `thermal` display-override like Käfe
 schedule yet), **`no_source`** (not scrapeable, e.g. `schulschwimmanlage-hardau` — one of the 14
 Schulschwimmanlagen with no page of their own — or an outdoor/lake pool). A schedule-less pool is a
 first-class honest state on `/pools` (`freshness`), `/swim` (status), and the UI's three ghost
-states — **never rendered as "closed"**.
+states — **never rendered as "closed"**. That invariant protects pools whose schedule is
+UNKNOWN; a pool whose own page states a facility-level `operating_season` (sharedsource-fanout)
+is knowably shut outside it, so `/swim` serves it as `"closed"` + `closure_code:
+"out_of_season"` out of season and as the honest `"open_unscheduled"` status (never a
+`no_source` ghost) in season.
 
 **Which pools get scraped: `etl/scrape.declared_sources`** — a conjunction of `kind ∈ {indoor,
 thermal, school}`, having a URL, and **no other roster entry sharing that URL**. The last test is

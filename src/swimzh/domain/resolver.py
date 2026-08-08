@@ -5,8 +5,10 @@ basin's sessions?* It composes, in priority order:
 
   1. facility closures (maintenance "Revision" / seasonal)  -> ClosedDay
   2. a one-off ScheduleException for the date                -> its override (closed or sessions)
-  3. public-holiday policy (closed / Sunday schedule / normal)
-  4. recurring rules filtered by weekday, school-calendar scope and SEASON
+  3. the facility-level SEASON GATE (`operating_season`)     -> ClosedDay(OUT_OF_SEASON) outside
+     the window; OpenUnscheduledDay(weather) inside it when NO rules exist
+  4. public-holiday policy (closed / Sunday schedule / normal)
+  5. recurring rules filtered by weekday, school-calendar scope and SEASON
 
 This is what makes future-date answers correct: the same weekday yields different sessions
 in term vs holiday, and holidays alter or close the day.
@@ -26,6 +28,7 @@ from swimzh.domain.schedule import (
     DayScope,
     HolidayPolicy,
     OpenDay,
+    OpenUnscheduledDay,
     ResolvedSession,
     ScheduleException,
     ScheduleRule,
@@ -108,9 +111,22 @@ def resolve_hours(
             return ClosedDay(code=exception.code, params=dict(exception.params))
         return OpenDay(sessions=exception.sessions)
 
+    # 3. The facility-level SEASON GATE (sharedsource-fanout): a page-stated operating
+    # season with no timetable. Outside the window the pool is knowably shut — its own
+    # page says so. Inside it, a rule-less schedule is *open, hours unpublished* — the
+    # honest third state, carrying the season's weather condition. A facility WITHOUT an
+    # `operating_season` never reaches either branch, and a rule-carrying schedule inside
+    # its window falls through to the unchanged path below.
+    season = facility.operating_season
+    if season is not None:
+        if not season.window.contains(d):
+            return ClosedDay(code=ClosureCode.OUT_OF_SEASON)
+        if not rules:
+            return OpenUnscheduledDay(weather=season.weather)
+
     ctx = calendar.context(d)
 
-    # 3. Public-holiday policy.
+    # 4. Public-holiday policy.
     effective_weekday = Weekday(d.weekday())
     # A holiday we cannot vouch for: the pool states no policy, so we fall through to its
     # ordinary weekday rules AND say so, rather than silently presenting them as confirmed.
@@ -137,7 +153,7 @@ def resolve_hours(
                 # Unknown policy: use the weekday rules, flagged (see `unverified_holiday`).
                 pass
 
-    # 4. Recurring rules for the effective weekday, calendar scope and season.
+    # 5. Recurring rules for the effective weekday, calendar scope and season.
     sessions = _sessions_for_weekday(rules, effective_weekday, ctx, d)
     if not sessions:
         return _empty_day(rules, d)

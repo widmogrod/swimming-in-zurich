@@ -6,7 +6,9 @@ import {
   classifyPools,
   focusWeekOnPool,
   isStructuralUrlChange,
+  isUnlisted,
   rowFacilityName,
+  unlistedLabelKey,
   type PoolMeta,
 } from "./appdata.js";
 
@@ -272,4 +274,15 @@ test("Pool view with no selection falls back to the row label, never null", () =
   expect(rowFacilityName(undefined, "Hallenbad City", null)).toBe(
     "Hallenbad City",
   );
+});
+
+// ---- open_unscheduled degrade (sharedsource-fanout S1) -------------------------------
+
+test("the new 'open_unscheduled' status degrades cleanly, no raw i18n key leaking", () => {
+  // The wire value lands before the UI learns it (S3 makes it live). `unlistedLabelKey`
+  // must fall back to the GENERIC ghost copy — its return type is `MessageKey`, so the
+  // fallback is a compile-time-checked catalog key and `t()` can never render the raw
+  // "status.open_unscheduled" string to a user.
+  expect(isUnlisted("open_unscheduled")).toBe(false);
+  expect(unlistedLabelKey("open_unscheduled")).toBe("status.uncurated");
 });

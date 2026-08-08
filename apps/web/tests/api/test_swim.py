@@ -5,6 +5,9 @@ Tuesday morning), so the eligibility round-trip is asserted at a Thursday evenin
 
 from __future__ import annotations
 
+import sqlite3
+from pathlib import Path
+
 from fastapi.testclient import TestClient
 
 from apps.web.main import app
@@ -277,3 +280,22 @@ def test_every_option_carries_a_weather_value_from_the_closed_set() -> None:
     indoor = [o for o in options if o["kind"] == "indoor"]
     assert indoor
     assert all(o["weather"] == "any" for o in indoor)
+
+
+def test_the_season_gate_is_inert_on_the_committed_fixture_store(gold_db: Path) -> None:
+    """sharedsource-fanout S1: the resolver knows `open_unscheduled`, but NO pool in the
+    committed-fixture store carries an `operating_season` yet (S3 writes the first ones), so
+    `/swim` must serve exactly what it served before the slice — no new status value, no new
+    blob key. (Byte-identity against the pre-slice response was verified at implementation
+    time; this is its committed regression pin.)"""
+    with sqlite3.connect(gold_db) as conn:
+        (seasoned,) = conn.execute(
+            "select count(*) from pool"
+            " where json_extract(facility_doc,'$.operating_season') is not null"
+        ).fetchone()
+    assert seasoned == 0
+    with TestClient(app) as client:
+        for at in (JULY_AFTERNOON, "2026-01-15T14:00"):
+            response = client.get("/swim", params={"at": at, "eligible_only": "false"})
+            assert response.status_code == 200
+            assert "open_unscheduled" not in response.text

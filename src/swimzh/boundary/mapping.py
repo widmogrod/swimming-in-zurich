@@ -36,6 +36,7 @@ from swimzh.boundary.curated_dto import (
     LaneReservationDTO,
     LaneSwimDTO,
     LockerOptionDTO,
+    OperatingSeasonDTO,
     ParseErrorDTO,
     PlanCoverageDTO,
     PriceEntryDTO,
@@ -111,6 +112,7 @@ from swimzh.domain.models import (
     FeatureKind,
     LanePlanSource,
     LanePlanUnavailable,
+    OperatingSeason,
 )
 from swimzh.domain.pricing import PriceCategory, PriceEntry, PriceTable
 from swimzh.domain.schedule import (
@@ -288,6 +290,20 @@ def season_to_dto(window: AnnualWindow) -> SeasonDTO:
         end_month=window.end.month,
         end_day=window.end.day,
         precision=_PRECISION_TO[window.precision],
+    )
+
+
+def operating_season_from_dto(dto: OperatingSeasonDTO) -> OperatingSeason:
+    return OperatingSeason(
+        window=season_from_dto(dto.window),
+        weather=_WEATHER_FROM[dto.weather],
+    )
+
+
+def operating_season_to_dto(season: OperatingSeason) -> OperatingSeasonDTO:
+    return OperatingSeasonDTO(
+        window=season_to_dto(season.window),
+        weather=_WEATHER_TO[season.weather],
     )
 
 

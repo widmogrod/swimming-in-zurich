@@ -214,6 +214,16 @@ _FACILITY: tuple[FieldSourcing, ...] = (
         "gold; exactly the 4 free pools carry the key.",
     ),
     FieldSourcing(
+        "facility.operating_season",
+        ProducerKind.SOURCEABLE_UNBUILT,
+        None,
+        "0/57 written; one shared page states one for 13 pools",
+        "The facility-level, timetable-free season (sharedsource-fanout S1). The Planschbecken "
+        "overview page states it once for all 13 members ('je nach Wetter von Mai bis September "
+        "in Betrieb'); the shared-source scrape phase (S3 of that plan) will parse and write it. "
+        "Until then no provider produces it and every blob omits the key.",
+    ),
+    FieldSourcing(
         "facility.closures",
         ProducerKind.SOURCED,
         _SCHEDULE,

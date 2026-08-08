@@ -50,7 +50,7 @@ from swimzh.domain.query import (
     TempUnavailableCode,
     read_temperature,
 )
-from swimzh.domain.schedule import ClosedDay, OpenDay, TimeRange
+from swimzh.domain.schedule import ClosedDay, OpenDay, OpenUnscheduledDay, TimeRange
 
 
 def _pool_out(row: RosterEntry) -> PoolOut:
@@ -161,8 +161,15 @@ def _feature_status_out(status: FeatureStatus) -> FeatureStatusOut:
             hours = [TimeRangeOut(start=start, end=end) for start, end in start_end]
         case ClosedDay(reason):
             closed_reason = reason
+        case OpenUnscheduledDay():
+            # Open per the facility's operating season, hours unpublished: nothing to list
+            # and no closed reason — `hours` stays empty and `open_now` is the domain's
+            # honest None. (Unreachable today: a feature resolves only when it HAS hours.)
+            pass
         case None:
             pass
+        case _ as unreachable:
+            assert_never(unreachable)
     return FeatureStatusOut(
         kind=feature.kind.value,
         name=feature.name,

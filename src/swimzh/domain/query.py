@@ -16,7 +16,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import date, datetime, time, timedelta
 from decimal import Decimal
 from enum import StrEnum
 from typing import Protocol, assert_never
@@ -46,6 +46,7 @@ from swimzh.domain.models import (
     BasinKind,
     Facility,
     Feature,
+    OperatingSeason,
     PoolId,
     PoolIdentity,
     PoolKind,
@@ -55,7 +56,15 @@ from swimzh.domain.models import (
 from swimzh.domain.person import Person
 from swimzh.domain.pricing import PriceEntry, price_for
 from swimzh.domain.resolver import resolve_basin, resolve_hours
-from swimzh.domain.schedule import ClosedDay, DaySchedule, OpenDay, ResolvedSession, Weekday
+from swimzh.domain.schedule import (
+    ClosedDay,
+    DatePrecision,
+    DaySchedule,
+    OpenDay,
+    OpenUnscheduledDay,
+    ResolvedSession,
+    Weekday,
+)
 
 _ZURICH = ZoneInfo("Europe/Zurich")
 
@@ -278,11 +287,16 @@ class StatusCode(StrEnum):
     The schedule-less codes mirror `ScheduleFreshness` (delete-curated-schedule-tier S1), which
     replaced the single `UNCURATED` code: `AWAITING_SCRAPE` (scrapeable, no schedule yet) vs
     `NO_SOURCE` (no timetable source at all). Neither is ever "closed".
+
+    `OPEN_UNSCHEDULED` (sharedsource-fanout S1) is the fourth honest state: the facility's
+    own page states an operating season it is inside, but publishes no hours. It REPLACES
+    the `no_source` ghost for a season-carrying facility — the two are exclusive.
     """
 
     CLOSED_REASON = "closed_reason"
     AWAITING_SCRAPE = "awaiting_scrape"
     NO_SOURCE = "no_source"
+    OPEN_UNSCHEDULED = "open_unscheduled"
 
 
 @dataclass(frozen=True, slots=True)
@@ -356,6 +370,118 @@ def _price_of(admission: Admission, age: int | None) -> PriceEntry | None:
             assert_never(unreachable)
 
 
+def _seasonal_status(
+    facility: Facility, season: OperatingSeason, schedule: DaySchedule
+) -> FacilityStatus:
+    """Project a rule-less season-carrying facility's day resolution onto a `/swim` status.
+
+    In season -> `status: "open_unscheduled"` carrying the season window + weather as params;
+    out of season (or under a facility closure) -> the SAME `"closed"` shape a seasonal scraped
+    pool already serves (`closure_code: "out_of_season"` from the resolver's gate) — no new
+    closed shape on the wire.
+    """
+    match schedule:
+        case OpenUnscheduledDay(weather):
+            window = season.window
+            params = {
+                "weather": weather.value,
+                "season_start_month": str(window.start.month),
+                "season_end_month": str(window.end.month),
+                "season_precision": window.precision.value,
+            }
+            if window.precision is DatePrecision.DAY:
+                params["season_start_day"] = str(window.start.day)
+                params["season_end_day"] = str(window.end.day)
+            return FacilityStatus(
+                facility_id=facility.identity.facility_id,
+                facility_name=facility.identity.name,
+                status="open_unscheduled",
+                code=StatusCode.OPEN_UNSCHEDULED,
+                params=params,
+            )
+        case ClosedDay():
+            return FacilityStatus(
+                facility_id=facility.identity.facility_id,
+                facility_name=facility.identity.name,
+                status="closed",
+                code=StatusCode.CLOSED_REASON,
+                closure=schedule.code,
+                params=dict(schedule.params),
+            )
+        case OpenDay():
+            # A rule-less, exception-less resolution cannot produce sessions; reaching this
+            # arm means the season gate itself is broken. Fail loudly rather than fabricate
+            # a status.
+            raise AssertionError("facility-level seasonal resolution cannot yield OpenDay")
+        case _ as unreachable:
+            assert_never(unreachable)
+
+
+def _seasonal_status_for(
+    facility: Facility, day: date, calendar: ZurichCalendar
+) -> FacilityStatus | None:
+    """The facility-level SEASON GATE (sharedsource-fanout S1): a rule-less facility whose
+    page states an operating season resolves at FACILITY level — `/swim` reports it as
+    `open_unscheduled` inside the window, or `closed`/`out_of_season` outside it. This
+    REPLACES its `no_source` ghost (see `_schedule_less_statuses`), so the facility appears
+    exactly once per query. `None` for every facility the gate does not apply to."""
+    if facility.operating_season is None or any(b.rules for b in facility.basins):
+        return None
+    return _seasonal_status(
+        facility,
+        facility.operating_season,
+        resolve_hours(facility, (), (), day, calendar),
+    )
+
+
+def _session_option(
+    facility: Facility,
+    basin: Basin,
+    session: ResolvedSession,
+    day: date,
+    now_time: time,
+    price: PriceEntry | None,
+    distance: float | None,
+    live: OccupancyResult | None,
+    person: Person,
+) -> SwimOption:
+    """Shape one resolved session into a `SwimOption`, deriving the lane split at the
+    QUERIED moment (`now_time`, the queried time-of-day already used by
+    `open_at_query_time`) clamped into the session, else the session start — so 12:00 and
+    18:00 report different lane splits. NOT the wall-clock now (that is reserved for
+    occupancy freshness); using it would collapse a future/other-time query back to
+    `session.time.start`."""
+    weekday = Weekday(day.weekday())
+    t = now_time if session.time.contains(now_time) else session.time.start
+    lane_avail: LaneAvailability | None = None
+    lane_timeline: LaneAvailabilityTimeline | None = None
+    # `lane_plan` carries a third state (`LanePlanUnavailable`); only a parsed `LanePlan`
+    # yields a derivation — a recorded failure is inert here.
+    if isinstance(basin.lane_plan, LanePlan):
+        lane_avail = lane_availability_at(basin.lane_plan, weekday, t)
+        lane_timeline = lane_availability_timeline(basin.lane_plan, weekday, session.time)
+    return SwimOption(
+        facility_id=facility.identity.facility_id,
+        facility_name=facility.identity.name,
+        facility_kind=facility.identity.kind,
+        basin_id=basin.basin_id,
+        basin_name=basin.name,
+        basin_kind=basin.kind,
+        basin_length_m=(basin.dimensions.length_m if basin.dimensions is not None else None),
+        lanes=basin.lanes,
+        water_temp_c=basin.nominal_temp_c,
+        session=session,
+        eligibility=eligibility(person, session.access),
+        open_at_query_time=session.time.contains(now_time),
+        price=price,
+        distance_km=distance,
+        provenance=facility.provenance,
+        live_occupancy=live,
+        lane_availability=lane_avail,
+        lane_timeline=lane_timeline,
+    )
+
+
 def find_swim_options(
     query: SwimQuery,
     facilities: tuple[Facility, ...],
@@ -423,49 +549,32 @@ def find_swim_options(
                         unverified_holiday_pools.add(facility.identity.name)
                     for session in sessions:
                         produced = True
-                        # Clamp the point eval to the QUERIED moment (`now_time`, the queried
-                        # time-of-day already used by `open_at_query_time`) when it falls in the
-                        # session, else the session start — so 12:00 and 18:00 report different
-                        # lane splits. NOT the wall-clock `now` (that is reserved for occupancy
-                        # freshness); using it would collapse a future/other-time query back to
-                        # `session.time.start`.
-                        weekday = Weekday(day.weekday())
-                        t = now_time if session.time.contains(now_time) else session.time.start
-                        lane_avail: LaneAvailability | None = None
-                        lane_timeline: LaneAvailabilityTimeline | None = None
-                        # `lane_plan` now carries a third state (`LanePlanUnavailable`); only a
-                        # parsed `LanePlan` yields a derivation — a recorded failure is inert here.
-                        if isinstance(basin.lane_plan, LanePlan):
-                            lane_avail = lane_availability_at(basin.lane_plan, weekday, t)
-                            lane_timeline = lane_availability_timeline(
-                                basin.lane_plan, weekday, session.time
-                            )
                         options.append(
-                            SwimOption(
-                                facility_id=facility.identity.facility_id,
-                                facility_name=facility.identity.name,
-                                facility_kind=facility.identity.kind,
-                                basin_id=basin.basin_id,
-                                basin_name=basin.name,
-                                basin_kind=basin.kind,
-                                basin_length_m=(
-                                    basin.dimensions.length_m
-                                    if basin.dimensions is not None
-                                    else None
-                                ),
-                                lanes=basin.lanes,
-                                water_temp_c=basin.nominal_temp_c,
-                                session=session,
-                                eligibility=eligibility(query.person, session.access),
-                                open_at_query_time=session.time.contains(now_time),
-                                price=price,
-                                distance_km=distance,
-                                provenance=facility.provenance,
-                                live_occupancy=live,
-                                lane_availability=lane_avail,
-                                lane_timeline=lane_timeline,
+                            _session_option(
+                                facility,
+                                basin,
+                                session,
+                                day,
+                                now_time,
+                                price,
+                                distance,
+                                live,
+                                query.person,
                             )
                         )
+                case OpenUnscheduledDay():
+                    # Unreachable via a basin: the rule-less skip above means `resolve_basin`
+                    # always runs with rules, and the season gate emits this variant only for
+                    # a RULE-LESS schedule. The facility-level seasonal path below is its one
+                    # producer. Guarded so the NEXT variant is a loud error here, not a silent
+                    # fall-through.
+                    pass
+                case _ as unreachable:
+                    assert_never(unreachable)
+
+        seasonal = _seasonal_status_for(facility, day, calendar)
+        if seasonal is not None:
+            statuses.append(seasonal)
 
         if not produced and facility_closed_reason is not None:
             statuses.append(
@@ -558,11 +667,19 @@ def _feature_status(
     if not feature.hours:
         return FeatureStatus(feature=feature, schedule=None, open_at_query_time=None)
     schedule = resolve_hours(facility, feature.hours, (), at_local.date(), calendar)
+    open_now: bool | None
     match schedule:
         case OpenDay(sessions):
             open_now = any(s.time.contains(at_local.time()) for s in sessions)
         case ClosedDay():
             open_now = False
+        case OpenUnscheduledDay():
+            # Only reachable if a season-carrying facility's feature had rule-less hours —
+            # impossible today (`feature.hours` is non-empty above), but the honest answer
+            # would be "open, hours unpublished": unknown at this instant, never closed.
+            open_now = None
+        case _ as unreachable:
+            assert_never(unreachable)
     return FeatureStatus(feature=feature, schedule=schedule, open_at_query_time=open_now)
 
 
@@ -611,9 +728,17 @@ def _schedule_less_statuses(
     facility_doc: a prose-only pool (auto-extracted PARSED_PROSE basins, no rules — Decision #5)
     has a facility_doc but no schedule, so it stays schedule-less here, never silently dropped.
     Its `freshness` is thus `awaiting_scrape` or `no_source` (never `scraped`), so the status
-    string is the freshness value and the code mirrors it."""
+    string is the freshness value and the code mirrors it.
+
+    A facility carrying an `operating_season` is ALSO excluded (sharedsource-fanout S1): its
+    seasonal path already reported it (`open_unscheduled` / `closed`), and the two statuses are
+    exclusive — the facility appears exactly once per query, never also as a `no_source` ghost.
+    (`ScheduleFreshness` itself is untouched: the season is not a timetable, so the pool's
+    `/pools` freshness stays `no_source` — the honest answer about its SCHEDULE.)"""
     scheduled_ids = {
-        str(f.identity.facility_id) for f in facilities if any(basin.rules for basin in f.basins)
+        str(f.identity.facility_id)
+        for f in facilities
+        if any(basin.rules for basin in f.basins) or f.operating_season is not None
     }
     return [
         FacilityStatus(

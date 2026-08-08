@@ -23,6 +23,7 @@ from swimzh.domain.resolver import resolve_basin
 from swimzh.domain.schedule import (
     AnnualWindow,
     ClosedDay,
+    DaySchedule,
     OpenDay,
     ScheduleRule,
     TimeRange,
@@ -48,7 +49,7 @@ def _facility(*rules: ScheduleRule) -> Facility:
     )
 
 
-def _resolve(facility: Facility, d: date) -> OpenDay | ClosedDay:
+def _resolve(facility: Facility, d: date) -> DaySchedule:
     return resolve_basin(facility, facility.basins[0], d, _calendar())
 
 

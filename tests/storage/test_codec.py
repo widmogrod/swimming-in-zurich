@@ -40,6 +40,7 @@ from swimzh.domain.models import (
     FeatureKind,
     LanePlanSource,
     LanePlanUnavailable,
+    OperatingSeason,
     PoolId,
     PoolIdentity,
     PoolKind,
@@ -48,6 +49,7 @@ from swimzh.domain.models import (
 from swimzh.domain.pricing import PriceCategory, PriceEntry, PriceTable
 from swimzh.domain.schedule import (
     AnnualWindow,
+    DatePrecision,
     MonthDay,
     ResolvedSession,
     ScheduleException,
@@ -649,6 +651,45 @@ def test_a_seasoned_rule_round_trips(facilities: tuple[Facility, ...]) -> None:
     assert back.basins[0].rules[0].season == AnnualWindow.whole_months(5, 9)
     assert back.basins[0].rules[0].season is not None
     assert back.basins[0].rules[1].weather is Weather.FAIR_ONLY
+
+
+def test_no_operating_season_adds_no_key_to_the_blob(
+    facilities: tuple[Facility, ...],
+) -> None:
+    # Additive-and-invisible (sharedsource-fanout S1): the facility-level `operating_season`
+    # is POPPED when None, so every pool without one — 44 of 57 — serializes byte-identically
+    # to before the field existed.
+    for facility in facilities:
+        assert facility.operating_season is None
+        assert '"operating_season"' not in codec.dumps(facility)
+
+
+def test_an_operating_season_round_trips_losslessly(
+    facilities: tuple[Facility, ...],
+) -> None:
+    # The Planschbecken shape: a rule-less facility carrying the page's month-granular season
+    # + weather condition. Both must survive the store exactly — losing `precision` would
+    # silently narrow "Mai–September" to 1 May – 1 September.
+    season = OperatingSeason(window=AnnualWindow.whole_months(5, 9), weather=Weather.FAIR_ONLY)
+    seasoned = replace(facilities[1], operating_season=season)
+    dumped = codec.dumps(seasoned)
+    assert '"operating_season"' in dumped
+    back = codec.loads(dumped)
+    assert back == seasoned
+    assert back.operating_season == season
+    assert back.operating_season is not None
+    assert back.operating_season.window.precision is DatePrecision.MONTH
+    assert back.operating_season.weather is Weather.FAIR_ONLY
+
+
+def test_a_pre_slice_blob_without_the_key_loads_with_no_season(
+    facilities: tuple[Facility, ...],
+) -> None:
+    # A gold blob written before this slice has no `operating_season` key at all; it must
+    # load as the honest None (and re-dump byte-identically, per the pop above).
+    blob = json.loads(codec.dumps(facilities[1]))
+    assert "operating_season" not in blob
+    assert codec.loads(json.dumps(blob)).operating_season is None
 
 
 def test_a_fair_weather_exception_session_round_trips(

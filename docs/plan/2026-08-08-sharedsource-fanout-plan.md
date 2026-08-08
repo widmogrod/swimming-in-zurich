@@ -196,7 +196,10 @@ sentence is `Err(ParseError)` and aborts the build.
 - **Goal**: the fan-out runs in the atomic build; the store carries the facts; `/swim` and
   `/pools` serve them.
 - **Touches**: `etl/scrape.py` (`SharedSource`, `shared_sources`, `scrape_shared_sources`, the
-  parser registry), `etl/scrape.ScrapedAspects` (`operating_season`), `build/compose.py`,
+  parser registry), `build/compose.py` (`ScrapedAspects.operating_season` — the dataclass lives
+  at `build/compose.py:42`), `apps/web/tests/api/test_swim.py` (the S1 inertness pin's
+  `seasoned == 0` premise dies at this slice's rebuild — rewrite it into the "exactly 13"
+  assertion below; planned here so it is not a surprise),
   `build/compose.py:42` (`ScrapedAspects.operating_season` — the dataclass lives HERE, not in
   `etl/scrape.py`, which only imports it; and if the admission plan has not renamed the `prices`
   aspect field to `admission`, that rename lands here too),
@@ -226,6 +229,7 @@ Appended by /dev:implement after each slice — never rewritten. Newest row last
 
 | date | slice | status | divergence from plan | tech debt created | human review? |
 |------|-------|--------|----------------------|-------------------|---------------|
+| 2026-08-08 | S1 | done | CRAP-gate refactor inside the slice (`find_swim_options` hit CC=32 with the new arm — extracted `_session_option`/`_seasonal_status_for`, pure code motion, /swim byte-identity re-verified by cmp after); plan line numbers had drifted (written pre-admission-union merge) — match sites identified by content, all 4 guarded (3 named + the new `_seasonal_status`); the Design's UI degrade pin was in no slice's Touches — landed here (2 vitest tests) since S1 mints the wire value; `OpenUnscheduledDay.weather` REQUIRED (recorded unfolded suggestion taken) | `_seasonal_status`'s mypy-required unreachable `OpenDay` arm raises AssertionError — one permanently-uncovered line in query.py | yes |
 
 ## Accepted drift
 
@@ -260,6 +264,23 @@ heading, Föhrenwald absent, 12 accordion items) into S2's committed-fixture cri
 `OpenUnscheduledDay.weather` required rather than defaulted; pin `SharedFacts` to one owner
 (drop "etl/scrape.py or the provider"); delete S3 Touches' stale `etl/scrape.ScrapedAspects`
 entry; soften the "silently" over-claim for the `query.py` open_now site (NameError, loud).
+
+### 2026-08-08 — S1 (critic: approve, round 1) + the pinned wire shape for S3
+
+The `_seasonal_status` params wire shape was unpinned by the plan; S1 chose
+and shipped: `{"weather", "season_start_month", "season_end_month",
+"season_precision"}`, plus `"season_start_day"`/`"season_end_day"` ONLY at
+`DAY` precision (honoring the annual-window month-rendering rule). **S3's
+acceptance must assert these exact keys.** S1 also landed the Design's UI
+degrade pin (2 vitest tests — no slice owned it; S1 mints the wire value)
+and took the recorded unfolded suggestion: `OpenUnscheduledDay.weather` is
+REQUIRED, no default — the season gate passing `operating_season.weather`
+is the only producer. Critic verification of note: `/swim` byte-identity
+independently reproduced (3 instants, cmp clean); the no-ghost exclusivity
+guard mutation-tested (removing it fails 3 pins). The critic's claim-audit
+step correctly SKIPPED this slice (no externally-sourced data transformed —
+the season fact enters only at S3). Tech debt: `_seasonal_status`'s
+mypy-required unreachable `OpenDay` arm is one permanently-uncovered line.
 
 ## Summary
 

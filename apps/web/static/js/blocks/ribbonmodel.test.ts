@@ -73,6 +73,18 @@ test('uncurated status → a DOTTED ghost ribbon (unknown ≠ closed)', () => {
   expect(r.variant).not.toBe(statusRibbon({ status: 'closed', detail: '' }).variant);
 });
 
+test('the new "open_unscheduled" status degrades to the dotted ghost, never to closed', () => {
+  // sharedsource-fanout S1 pins the wire value before S3 makes it live: a UI that does not
+  // yet know the status must fall back to the ghost/unknown ribbon — rendering it closed
+  // would break the "unknown != closed" invariant for a pool that is in fact open.
+  const r = statusRibbon({ status: 'open_unscheduled', detail: '' });
+  expect(r.variant).toBe('ghost');
+  expect(r.style).toBe('dotted');
+  expect(r.variant).not.toBe('closed');
+  // The status value rides along so a future UI can render its SPECIFIC label.
+  expect(r.status).toBe('open_unscheduled');
+});
+
 test('an option WITH lane_timeline → a filled ribbon; thickness = public/lane_count, pinched where reserved>0, sheath present', () => {
   const { options } = load<{ options: RibbonOption[] }>('swim_day.json');
   // the PublicSwim arc at Oerlikon carries BOTH a full (reserved=0) and pinched segment

@@ -140,6 +140,20 @@ class SeasonDTO(_Strict):
     precision: _DatePrecision = "day"
 
 
+class OperatingSeasonDTO(_Strict):
+    """A facility-level, timetable-free operating season (sharedsource-fanout).
+
+    Mirrors `domain.models.OperatingSeason`: the annual window a page states with no hours
+    attached, plus the weather condition qualifying the whole season. `weather` is required
+    (never defaulted) — it is read off the page, and the domain refuses a silent all-weather
+    claim; the codec pops the whole key when the facility has no season, so this DTO never
+    rides a blob that lacks the fact.
+    """
+
+    window: SeasonDTO
+    weather: _Weather
+
+
 class RuleDTO(_Strict):
     weekdays: list[_Weekday]
     start: time

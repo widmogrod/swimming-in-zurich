@@ -20,10 +20,12 @@ from swimzh.domain.geo import GeoPoint
 from swimzh.domain.lane_plan import LanePlan
 from swimzh.domain.lockers import LockerOption
 from swimzh.domain.schedule import (
+    AnnualWindow,
     ClosureRange,
     HolidayPolicy,
     ScheduleException,
     ScheduleRule,
+    Weather,
 )
 
 PoolId = NewType("PoolId", str)
@@ -212,6 +214,21 @@ class Feature:
 
 
 @dataclass(frozen=True, slots=True)
+class OperatingSeason:
+    """A facility-level, timetable-free operating season (sharedsource-fanout).
+
+    The seat for a page-stated fact that fits no `ScheduleRule`: *"Diese sind je nach
+    Wetter von Mai bis September in Betrieb"* names a season and a weather condition but
+    no hours, so it cannot carry a `TimeRange`. `weather` rides the SEASON (not a session)
+    because the sentence qualifies the whole season and there are no sessions to hang it
+    from. Both fields are required: each is read off the page, never assumed.
+    """
+
+    window: AnnualWindow
+    weather: Weather
+
+
+@dataclass(frozen=True, slots=True)
 class Facility:
     identity: PoolIdentity
     address: str
@@ -226,6 +243,13 @@ class Facility:
     #: Friday, contradicting (for Bungertwies) its own page. Only a pool whose timetable says
     #: so (a `(und Feiertage)` row) carries a real policy.
     public_holiday_policy: HolidayPolicy | None = None
+    #: A facility-level operating season for a pool whose page states WHEN it operates but
+    #: publishes no timetable (the 13 Planschbecken). `None` == no such statement. Written
+    #: ONLY where no schedule rules exist — a scraped pool's seasonal rules carry
+    #: `ScheduleRule.season` instead, never both. Drives the resolver's season gate:
+    #: outside the window -> `ClosedDay(OUT_OF_SEASON)`; inside it with no rules ->
+    #: `OpenUnscheduledDay(weather)`.
+    operating_season: OperatingSeason | None = None
     #: The closed admission union: `Free` (the pool's own page states it), `Tariff` (the city
     #: rate its page links), or `Unknown` (no source states it). REPLACES the old
     #: `prices: PriceTable | None`, which compressed *free* and *unknown* into one null.
