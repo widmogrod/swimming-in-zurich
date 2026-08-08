@@ -1,8 +1,11 @@
 ---
 type: plan
-status: approved
+status: in-progress
 created: 2026-08-08
 feature: sharedsource-fanout
+branch: plan/sharedsource-fanout
+worktree: .claude/worktrees/plan-sharedsource-fanout
+base_branch: feat/new-ui
 prerequisite: "[[2026-08-08-admission-union-plan]] frontmatter must read `status: done` — this plan writes `Admission.Free` onto 13 pools and needs the `Admission` union and `Facility.admission` that plan delivers. (That plan does NOT promise an aspect-level field; renaming `ScrapedAspects.prices` to `admission` is verified at S3 start and belongs to whichever plan runs first.)"
 gates:
   qa: full
