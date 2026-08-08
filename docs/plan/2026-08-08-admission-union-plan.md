@@ -1,8 +1,11 @@
 ---
 type: plan
-status: approved
+status: in-progress
 created: 2026-08-08
 feature: admission-union
+branch: plan/admission-union
+worktree: .claude/worktrees/plan-admission-union
+base_branch: feat/new-ui
 gates:
   qa: full
   review: adversarial
