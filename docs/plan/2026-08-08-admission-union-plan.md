@@ -1,6 +1,6 @@
 ---
 type: plan
-status: in-progress
+status: done
 created: 2026-08-08
 feature: admission-union
 branch: plan/admission-union
@@ -247,5 +247,26 @@ into `_with_price_fixture`. Discovery worth keeping: the fatality also binds
 
 ## Summary
 
-Written when the plan reaches `done`; then distilled into
-`docs/summaries/admission-union.md` (what EXISTS now, not what was intended).
+Done 2026-08-08, two slices, both critic-approved round 1 (the first plan
+reviewed under the critic's claim-audit step — one true finding, fixed
+pre-commit; zero noise).
+
+What exists now: `Admission = Free | Tariff(table) | Unknown` (closed,
+`assert_never`-matched) replaces `Facility.prices`; the compressed field
+cannot return (`dataclasses.fields` pin). `states_free_admission` reads the
+pool page's own sentence — the tight Eintritt pattern plus a
+predication-anchored Gratisbad arm — and matches exactly the 4 free pools
+across all 26 declared fixtures, with the locker-row `gratis` trap pinned
+False on hallenbad_city. The store splits 21 Tariff / 4 Free / 32 Unknown
+(literal-SQL pin); serialization is additive (`admission_state` popped when
+absent; Tariff/Unknown blobs byte-identical; pre-union blobs load Unknown);
+`/pools/{id}` serves the three-way kind, `/swim` unchanged for Tariff and
+Unknown, a Free pool still carries `price: null` (UI deferred). A failed
+tariff scrape is fatal with the typed cause named and the prior gold store
+content-unchanged — binding scrape-gold too — while a pool stating neither
+fact stays exit-0 Unknown + noted. `scrape_declared_sources` takes
+`tariffs: CityTariffs` required; the degrade state is unrepresentable.
+
+Final: make qa green — 807 passed, coverage 96.24% ≥ 95, mypy strict,
+CRAP clean. Free-ness rendering in the UI is deferred by design; the
+SharedSource plan inherits `Free` for the 13 Planschbecken.
