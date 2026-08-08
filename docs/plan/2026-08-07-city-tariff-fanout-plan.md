@@ -1,6 +1,6 @@
 ---
 type: plan
-status: in-progress
+status: done
 created: 2026-08-07
 feature: city-tariff-fanout
 branch: plan/city-tariff-fanout
@@ -316,5 +316,28 @@ slice.
 
 ## Summary
 
-Written when the plan reaches `done`; then distilled into
-`docs/summaries/city-tariff-fanout.md` (what EXISTS now, not what was intended).
+Admission price coverage went from **10 to 21** of 57 pools, and the 4 Schulschwimmanlagen
+stopped being charged the Hallenbad rate.
+
+The page publishes two single-admission tariffs; only the general one was read, so a school pool
+served Fr. 8.–/6.–/4.– where the city prints Fr. 5.–/5.–/2.50. `parse_prices` now returns
+`CityTariffs`, section-anchored inside the one `<stzh-datatable>` that carries the
+`Eintritte Schulschwimmanlagen` heading — necessary because three rows in that element begin with
+`Einzeleintritt` and the third is the sauna's surcharge.
+
+The fan-out no longer keys on a hostname. `_CITY_HOST` is deleted; a pool carries the tariff
+exactly when **its own page links to it**. That change came from the pre-approval review: the
+host rule would have charged Fr. 8.00 at the four pools the city publishes as free
+(`flussbad-au-hoengg`, `flussbad-oberer-letten`, `seebad-katzensee`) plus
+`maennerbad-schanzengraben` (*"wird privat betrieben … ein Gratisbad"*). Across all 26 declared
+sources' committed fixtures: 21 link, 5 do not, and the 5 are exactly those four plus the private
+`hallenbad-altstetten`.
+
+`ScrapeReport.notes` carries one line per declared source that states no tariff; the build prints
+them and exits 0. It exists because the live build reads `fetch_roster`, not the committed
+`catalog.json`, so the offline pin cannot see a WFS URL drift that silently deletes a price.
+
+Both slices were reviewed by mutation rather than by reading: S1's anchoring reverted to
+first-match-wins fails 3 tests, and S2's link check fails 8 tests forced `True` / 12 forced
+`False`. Left standing: free-ness is still unrecorded (`prices=None` for the four free pools,
+indistinguishable from unknown), and a total link outage would build green.
