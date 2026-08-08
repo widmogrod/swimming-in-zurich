@@ -15,6 +15,7 @@ from apps.web.main import app
 from swimzh.core.errors import ProviderError
 from swimzh.core.result import Ok, Result
 from swimzh.domain.access import PublicSwim
+from swimzh.domain.admission import Tariff
 from swimzh.domain.catalog import ScheduleFreshness
 from swimzh.domain.lockers import LockerCategory, LockerOption
 from swimzh.domain.models import (
@@ -173,7 +174,9 @@ def test_pool_detail_surfaces_basins_physicals_and_prices() -> None:
     assert body["features"] == []
     assert body["lockers"] == []
 
-    # Prices: the whole scraped facility price table, with its freshness date present.
+    # Prices: the whole scraped facility price table, with its freshness date present — and the
+    # admission kind naming it a stated tariff (non-null `prices` exactly when "tariff").
+    assert body["admission"] == "tariff"
     prices = body["prices"]
     assert prices is not None
     entries = {e["category"]: e for e in prices["entries"]}
@@ -183,6 +186,24 @@ def test_pool_detail_surfaces_basins_physicals_and_prices() -> None:
 
     # Provenance: the curated flag reaches the detail view.
     assert "curated" in body["provenance"]
+
+
+def test_pool_detail_projects_all_three_admission_kinds() -> None:
+    """Admission-union S1 acceptance on the wire: `seebad-katzensee` states its own gratis
+    sentence → "free"; `hallenbad-city` links the city tariff → "tariff" (with the table);
+    `hallenbad-altstetten` states neither → "unknown". Free and unknown both carry
+    `prices: null` — the KIND is what stops them reading as the same fact."""
+    with TestClient(app) as client:
+        katzensee = client.get("/pools/seebad-katzensee").json()
+        city = client.get("/pools/hallenbad-city").json()
+        altstetten = client.get("/pools/hallenbad-altstetten").json()
+
+    assert katzensee["admission"] == "free"
+    assert katzensee["prices"] is None  # free is a fact, not a zero-franc table
+    assert city["admission"] == "tariff"
+    assert city["prices"] is not None
+    assert altstetten["admission"] == "unknown"
+    assert altstetten["prices"] is None
 
 
 def test_pool_detail_surfaces_lane_plan_source_url() -> None:
@@ -252,9 +273,11 @@ def test_facility_detail_out_surfaces_temp_and_parsed_prose_caveat() -> None:
     )
     out = facility_detail_out(
         detail,
-        PriceTable(
-            entries=(PriceEntry(PriceCategory.ADULT, Decimal("8"), "Adult CHF 8"),),
-            valid_as_of=date(2026, 7, 1),
+        Tariff(
+            PriceTable(
+                entries=(PriceEntry(PriceCategory.ADULT, Decimal("8"), "Adult CHF 8"),),
+                valid_as_of=date(2026, 7, 1),
+            )
         ),
         TempUnavailable(reason="no baditicker key"),
         ScheduleFreshness.AWAITING_SCRAPE,
@@ -267,6 +290,7 @@ def test_facility_detail_out_surfaces_temp_and_parsed_prose_caveat() -> None:
     assert out.basins[0].width_m == 8.0
     assert out.features[0].open_now is False
     assert [(h.start, h.end) for h in out.features[0].hours] == [("09:00", "21:00")]
+    assert out.admission == "tariff"  # the `Tariff` arm projects its kind alongside the table
     assert out.prices is not None and out.prices.entries[0].display == "Adult CHF 8"
     assert out.provenance.curated is False and out.provenance.valid_as_of == "2026-07-01"
     # The detail carries the SAME three-state freshness as the `/pools` row, so the panel's

@@ -2,7 +2,13 @@
 
 from __future__ import annotations
 
+from typing import Literal
+
 from pydantic import BaseModel
+
+#: The closed admission union, projected: "free" (the pool's own page states it), "tariff"
+#: (the city rate its page links — `prices` carries the table), "unknown" (no source states it).
+AdmissionOut = Literal["free", "tariff", "unknown"]
 
 
 class PoolOut(BaseModel):
@@ -186,7 +192,11 @@ class FacilityDetailOut(BaseModel):
     basins: list[BasinOut]
     features: list[FeatureStatusOut]
     lockers: list[LockerOut]
-    prices: PriceTableOut | None  # the facility's price table; None when not curated
+    # The admission kind + its table: `prices` is non-null exactly when `admission == "tariff"`.
+    # A "free" pool carries `prices: null` AND the fact that admission is free — no longer
+    # conflated with "unknown" (the 32 pools nobody has priced).
+    admission: AdmissionOut
+    prices: PriceTableOut | None  # the tariff table; None for free/unknown admission
     provenance: ProvenanceOut
     # One panel per basin that carries a parsed Belegungsplan; empty when none do.
     lane_panels: list[BasinLanePanelOut]

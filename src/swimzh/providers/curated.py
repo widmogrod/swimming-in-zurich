@@ -24,6 +24,7 @@ from swimzh.boundary import mapping
 from swimzh.boundary.curated_dto import CalendarDTO, FacilityDTO, RegistryDTO
 from swimzh.core.errors import ParseError, ProviderError, SchemaMismatch
 from swimzh.core.result import Err, Ok, Result
+from swimzh.domain.admission import Tariff, Unknown
 from swimzh.domain.calendar import HolidayRange, ZurichCalendar
 from swimzh.domain.models import (
     Facility,
@@ -99,7 +100,13 @@ def _map_facility(dto: FacilityDTO, identity: PoolIdentity) -> Facility:
         public_holiday_policy=(
             _POLICIES[dto.public_holiday_policy] if dto.public_holiday_policy is not None else None
         ),
-        prices=mapping.price_table_from_dto(dto.prices) if dto.prices is not None else None,
+        # A curated price table is a stated `Tariff`; an absent one is the honest `Unknown` —
+        # a thin-crosswalk file states nothing about admission, it never asserts free.
+        admission=(
+            Tariff(mapping.price_table_from_dto(dto.prices))
+            if dto.prices is not None
+            else Unknown()
+        ),
         features=tuple(mapping.feature_from_dto(f) for f in dto.features),
         lockers=tuple(mapping.locker_from_dto(lo) for lo in dto.lockers),
         last_admission_before=dto.last_admission_before,

@@ -26,6 +26,7 @@ from swimzh.core.errors import (
     TooLarge,
 )
 from swimzh.domain.access import ClubReserved, GirlsOnly, PublicSwim
+from swimzh.domain.admission import Free, Tariff, Unknown
 from swimzh.domain.lane_plan import LanePlan, LaneReservation, PlanConfidence, PlanCoverage
 from swimzh.domain.lockers import LockerCategory, LockerMechanism, LockerOption
 from swimzh.domain.models import (
@@ -463,21 +464,72 @@ def test_price_min_age_round_trips_and_is_absent_when_unstated(
 ) -> None:
     base = replace(
         facilities[0],
-        prices=PriceTable(entries=(PriceEntry(PriceCategory.ADULT, Decimal("8.00"), "Adult"),)),
+        admission=Tariff(
+            PriceTable(entries=(PriceEntry(PriceCategory.ADULT, Decimal("8.00"), "Adult"),))
+        ),
     )
     # An entry whose source printed no bound adds nothing to the payload.
     assert '"min_age"' not in codec.dumps(base)
 
     priced = replace(
         base,
-        prices=PriceTable(
-            entries=(PriceEntry(PriceCategory.ADULT, Decimal("8.00"), "Erwachsene", min_age=20),)
+        admission=Tariff(
+            PriceTable(
+                entries=(
+                    PriceEntry(PriceCategory.ADULT, Decimal("8.00"), "Erwachsene", min_age=20),
+                )
+            )
         ),
     )
     back = codec.loads(codec.dumps(priced))
     assert back == priced
-    assert back.prices is not None
-    assert back.prices.entries[0].min_age == 20
+    assert isinstance(back.admission, Tariff)
+    assert back.admission.table.entries[0].min_age == 20
+
+
+# --- the admission union rides the `prices` key + one optional discriminant (admission-union S1) —
+
+
+def test_tariff_and_unknown_facilities_serialize_without_the_admission_state_key(
+    facilities: tuple[Facility, ...],
+) -> None:
+    """Byte-stability: only the `Free` arm adds bytes. A `Tariff` facility and an `Unknown` one
+    must serialize exactly as they did before the union existed — no `admission_state` key."""
+    unknown = facilities[1]
+    assert unknown.admission == Unknown()
+    tariff = replace(
+        facilities[0],
+        admission=Tariff(
+            PriceTable(entries=(PriceEntry(PriceCategory.ADULT, Decimal("8.00"), "Adult"),))
+        ),
+    )
+    for facility in (unknown, tariff):
+        assert '"admission_state"' not in codec.dumps(facility)
+
+
+def test_free_round_trips_via_the_discriminant_and_a_null_prices_key(
+    facilities: tuple[Facility, ...],
+) -> None:
+    free = replace(facilities[0], admission=Free())
+    dumped = codec.dumps(free)
+    payload = json.loads(dumped)
+    assert payload["admission_state"] == "free"
+    assert payload["prices"] is None  # `Free` never invents a table
+    back = codec.loads(dumped)
+    assert back == free
+    assert back.admission == Free()
+
+
+def test_a_pre_union_blob_with_null_prices_loads_as_unknown(
+    facilities: tuple[Facility, ...],
+) -> None:
+    """A blob written before the union carries `prices: null` and NO `admission_state` — the
+    honest reading is `Unknown`, which is what keeps `scrape-gold`/`scrape-lanes` (which reload
+    existing blobs) working across the change."""
+    blob = json.loads(codec.dumps(facilities[1]))
+    assert blob["prices"] is None
+    assert "admission_state" not in blob  # this IS the pre-union shape, byte-for-byte
+    assert codec.loads(json.dumps(blob)).admission == Unknown()
 
 
 def test_provider_error_union_round_trips_losslessly_through_the_dto() -> None:

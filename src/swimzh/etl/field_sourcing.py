@@ -192,13 +192,26 @@ _FACILITY: tuple[FieldSourcing, ...] = (
         "read — the 4 Schulschwimmanlagen were served the Hallenbad rate (Fr. 8.–/6.–/4.–) where "
         "the city prints 'Eintritte Schulschwimmanlagen' Fr. 5.–/5.–/2.50. `parse_prices` now "
         "returns both (`CityTariffs`, section-anchored within the one table carrying that "
-        "section) and `etl.scrape.tariff_for` picks by pool kind. FALSIFIED 2026-08-07: the "
+        "section) and `etl.scrape.admission_for` picks by pool kind. FALSIFIED 2026-08-07: the "
         "fan-out gated on the literal host `stadt-zuerich.ch`, so 15 of the 26 declared sources — "
         "the ones the city publishes on sportamt.ch — were unpriced. The gate is now the tariff "
         "LINK the pool's own page emits (`price_scraper.states_city_tariff`), which prices 21 and "
         "correctly withholds a rate from the 4 pools the city states are free plus the privately "
-        "run maennerbad-schanzengraben; free-ness itself is still unrecorded (Gap: `prices=None` "
-        "conflates free with unknown), so those 5 ride a build note instead.",
+        "run maennerbad-schanzengraben. RESOLVED 2026-08-08 (admission-union): free-ness is no "
+        "longer compressed into the null — the serialized `prices` key is the `Tariff` arm of "
+        "the `Admission` union, `Unknown` is `prices: null`, and `Free` rides the "
+        "`admission_state` discriminant (its own row below).",
+    ),
+    FieldSourcing(
+        "facility.admission_state",
+        ProducerKind.SOURCED,
+        _PRICE,
+        "4/26 declared sources",
+        'The `Free` arm of the `Admission` union: "free" when the pool\'s own page states '
+        "'Der Eintritt … ist gratis' / 'ein Gratisbad' (`price_scraper.states_free_admission`, "
+        "the tight sentence only — never bare 'gratis', which the locker rows print on 21 of 26 "
+        "pages). Popped when absent, so `Tariff`/`Unknown` blobs are byte-identical to pre-union "
+        "gold; exactly the 4 free pools carry the key.",
     ),
     FieldSourcing(
         "facility.closures",

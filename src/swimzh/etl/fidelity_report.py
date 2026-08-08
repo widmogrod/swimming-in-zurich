@@ -389,7 +389,9 @@ def build_gap_report(measurements: tuple[PoolMeasurement, ...]) -> GapReport:
         _structural_entry(
             "facility.prices (admission)",
             "neither the timetable rows nor the infrastruktur basin prose carry admission "
-            "prices; a discovered price page (price_provider, S5) is the intended route",
+            "prices; admission is sourced elsewhere — the central tariff page (price_scraper) "
+            "or the pool page's own gratis sentence (states_free_admission), as the Admission "
+            "union",
         ),
         _structural_entry(
             "facility.public_holiday_policy",

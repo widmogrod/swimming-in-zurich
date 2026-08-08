@@ -28,6 +28,11 @@ _Weather = Literal["any", "fair_only"]
 _DatePrecision = Literal["day", "month"]
 _PoolKind = Literal["indoor", "outdoor", "river", "lake", "school", "paddling", "thermal"]
 _PriceCategory = Literal["child", "youth", "adult"]
+#: The stored-blob discriminant for the `Free` arm of the admission union. `"free"` is its only
+#: value: `Tariff` is discriminated by a non-null `prices` table and `Unknown` by the absence of
+#: both, so a pre-union blob (`prices: null`, no `admission_state` key) loads as `Unknown` — the
+#: honest reading of a blob that predates the distinction.
+_AdmissionState = Literal["free"]
 _BasinKind = Literal[
     "lap", "non_swimmer", "diving", "vario", "teaching", "children", "outdoor", "other"
 ]

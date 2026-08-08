@@ -25,6 +25,7 @@ from zoneinfo import ZoneInfo
 from swimzh.core.errors import ProviderError, describe
 from swimzh.core.result import Err, Ok, Result
 from swimzh.domain.access import EligibilityResult, eligibility
+from swimzh.domain.admission import Admission, Free, Tariff, Unknown
 from swimzh.domain.calendar import ZurichCalendar
 from swimzh.domain.catalog import RosterEntry, ScheduleFreshness
 from swimzh.domain.closure import ClosureCode
@@ -342,6 +343,19 @@ def _read_occupancy(
             assert_never(unreachable)
 
 
+def _price_of(admission: Admission, age: int | None) -> PriceEntry | None:
+    """The per-person price the closed admission union resolves: only a `Tariff` pool has one.
+    A `Free` pool's option still carries `price=None` (rendering free-ness is UI, deferred) —
+    but the *data* distinguishes it from `Unknown` now, all the way to the store."""
+    match admission:
+        case Tariff(table):
+            return price_for(table, age)
+        case Free() | Unknown():
+            return None
+        case _ as unreachable:
+            assert_never(unreachable)
+
+
 def find_swim_options(
     query: SwimQuery,
     facilities: tuple[Facility, ...],
@@ -383,7 +397,7 @@ def find_swim_options(
             for notice in facility.notices
             if notice.active_on(day)
         )
-        price = price_for(facility.prices, query.person.age) if facility.prices else None
+        price = _price_of(facility.admission, query.person.age)
         live: OccupancyResult | None = None
         if occupancy is not None and want_occupancy:
             live = _read_occupancy(occupancy, facility.identity, now)

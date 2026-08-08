@@ -69,6 +69,18 @@ _TARIFF_PATH_TAIL = "/sport-und-badeanlagen/preise-abos.html"
 #: attributes are: the document's own attribute boundaries are what delimit a URL.
 _HREF_RE = re.compile(r"""href\s*=\s*["']([^"']+)["']""", re.IGNORECASE)
 
+#: The TIGHT free-admission sentence four pool pages print ("Der Eintritt ins Flussbad Au-Höngg
+#: ist gratis"), plus the ANCHORED "Gratisbad" predication ("Tagsüber ist es ein Gratisbad" —
+#: the privately run Männerbad). Deliberately NOT bare `gratis`: the Ausstattung/locker rows
+#: print it on 21 of the 26 declared pages ("Garderobenkasten … gratis", "gratis, plus Depot
+#: Fr. 5.–"), so a loose match would declare almost every priced pool free. And NOT bare
+#: `Gratisbad` either: the page must PREDICATE it of itself ("ist [es] ein Gratisbad"), so a mere
+#: mention of another facility's Gratisbad can never assert this pool free. `[^.<]` keeps the
+#: sentence arm inside one sentence and one text node.
+_FREE_SENTENCE_RE = re.compile(
+    r"Der Eintritt[^.<]{0,80}ist\s+gratis|ist\s+(?:es\s+)?ein\s+Gratisbad"
+)
+
 #: The section heading (a grouping row) under which the city prints the Schulschwimmanlage rate.
 _SCHOOL_SECTION = "eintritte schulschwimmanlagen"
 #: Both tariff rows are labelled `Einzeleintritte` / `Einzeleintritt`.
@@ -106,6 +118,17 @@ def states_city_tariff(page_html: str) -> bool:
         urlsplit(html.unescape(match.group(1))).path.endswith(_TARIFF_PATH_TAIL)
         for match in _HREF_RE.finditer(page_html)
     )
+
+
+def states_free_admission(page_html: str) -> bool:
+    """Does this pool's own page STATE that admission is free?
+
+    The page-stated fact, read from the tight sentence only (`_FREE_SENTENCE_RE`): *"Der
+    Eintritt … ist gratis"* or *"… ein Gratisbad"*. Never inferred from a missing tariff link,
+    a hostname, or a kind — and never from a bare `gratis`, which the locker/Ausstattung rows
+    print on most priced pages ("Garderobenkasten … gratis").
+    """
+    return _FREE_SENTENCE_RE.search(page_html) is not None
 
 
 def _text(cell_html: str) -> str:

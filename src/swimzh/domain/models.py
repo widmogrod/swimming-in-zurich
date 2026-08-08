@@ -15,10 +15,10 @@ from enum import Enum
 from typing import NewType
 
 from swimzh.core.errors import ProviderError
+from swimzh.domain.admission import Admission, Unknown
 from swimzh.domain.geo import GeoPoint
 from swimzh.domain.lane_plan import LanePlan
 from swimzh.domain.lockers import LockerOption
-from swimzh.domain.pricing import PriceTable
 from swimzh.domain.schedule import (
     ClosureRange,
     HolidayPolicy,
@@ -226,7 +226,10 @@ class Facility:
     #: Friday, contradicting (for Bungertwies) its own page. Only a pool whose timetable says
     #: so (a `(und Feiertage)` row) carries a real policy.
     public_holiday_policy: HolidayPolicy | None = None
-    prices: PriceTable | None = None
+    #: The closed admission union: `Free` (the pool's own page states it), `Tariff` (the city
+    #: rate its page links), or `Unknown` (no source states it). REPLACES the old
+    #: `prices: PriceTable | None`, which compressed *free* and *unknown* into one null.
+    admission: Admission = field(default_factory=Unknown)
     notices: tuple[Notice, ...] = field(default_factory=tuple)
     features: tuple[Feature, ...] = field(default_factory=tuple)
     lockers: tuple[LockerOption, ...] = field(default_factory=tuple)

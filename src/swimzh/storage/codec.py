@@ -10,8 +10,9 @@ directions. `dumps(f)` / `loads(s)` are exact inverses (verified by a round-trip
 from __future__ import annotations
 
 from datetime import date, datetime, timedelta
+from typing import Any, assert_never
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, SerializerFunctionWrapHandler, model_serializer
 
 from swimzh.boundary import mapping
 from swimzh.boundary.curated_dto import (
@@ -21,9 +22,11 @@ from swimzh.boundary.curated_dto import (
     GeoDTO,
     LockerOptionDTO,
     PriceTableDTO,
+    _AdmissionState,
     _HolidayPolicy,
     _PoolKind,
 )
+from swimzh.domain.admission import Admission, Free, Tariff, Unknown
 from swimzh.domain.catalog import ScheduleFreshness, freshness_of
 from swimzh.domain.models import (
     Facility,
@@ -86,7 +89,15 @@ class StoredFacilityDTO(BaseModel):
     # which is a positive claim. Defaulted so a pre-existing blob (whose value was the
     # fabricated "normal") still validates; a rebuild replaces it with the honest unknown.
     public_holiday_policy: _HolidayPolicy | None = None
+    # The admission union rides the EXISTING `prices` key plus one optional discriminant:
+    #   Tariff(t) -> prices: <table>                        (byte-identical to pre-union blobs)
+    #   Unknown   -> prices: null                           (byte-identical to pre-union blobs)
+    #   Free      -> prices: null, admission_state: "free"  (the only new bytes)
+    # A pre-union blob therefore loads as `Unknown` for unpriced pools — the honest reading of a
+    # blob that predates the distinction. `admission_state` is popped when absent (the `min_age`
+    # precedent), so only the 4 Free pools' blobs gain a key.
     prices: PriceTableDTO | None
+    admission_state: _AdmissionState | None = None
     closures: list[ClosureDTO]
     basins: list[BasinDTO]
     notices: list[_NoticeDTO]
@@ -100,10 +111,45 @@ class StoredFacilityDTO(BaseModel):
     # the round-trip fixtures assert; facility-level keys carry no such byte-identity contract.
     last_admission_before: timedelta | None = None
 
+    @model_serializer(mode="wrap")
+    def _serialize(self, handler: SerializerFunctionWrapHandler) -> dict[str, Any]:
+        # Additive-and-invisible (the `min_age` precedent): a facility that is not `Free` must
+        # serialise to exactly the same bytes as before `admission_state` existed.
+        data: dict[str, Any] = handler(self)
+        if self.admission_state is None:
+            data.pop("admission_state", None)
+        return data
+
+
+def _admission_to_stored(
+    admission: Admission,
+) -> tuple[PriceTableDTO | None, _AdmissionState | None]:
+    """Project the union onto the two stored keys (`prices`, `admission_state`)."""
+    match admission:
+        case Tariff(table):
+            return mapping.price_table_to_dto(table), None
+        case Free():
+            return None, "free"
+        case Unknown():
+            return None, None
+        case _ as unreachable:
+            assert_never(unreachable)
+
+
+def _admission_from_stored(stored: StoredFacilityDTO) -> Admission:
+    """A table means `Tariff`; the discriminant means `Free`; anything else — including every
+    pre-union blob with `prices: null` — is the honest `Unknown`."""
+    if stored.prices is not None:
+        return Tariff(mapping.price_table_from_dto(stored.prices))
+    if stored.admission_state == "free":
+        return Free()
+    return Unknown()
+
 
 def to_stored(facility: Facility) -> StoredFacilityDTO:
     ident = facility.identity
     prov = facility.provenance
+    prices, admission_state = _admission_to_stored(facility.admission)
     return StoredFacilityDTO(
         facility_id=str(ident.facility_id),
         name=ident.name,
@@ -123,7 +169,8 @@ def to_stored(facility: Facility) -> StoredFacilityDTO:
             if facility.public_holiday_policy is not None
             else None
         ),
-        prices=mapping.price_table_to_dto(facility.prices) if facility.prices is not None else None,
+        prices=prices,
+        admission_state=admission_state,
         closures=[mapping.closure_to_dto(c) for c in facility.closures],
         basins=[mapping.basin_to_dto(b) for b in facility.basins],
         notices=[
@@ -163,7 +210,7 @@ def from_stored(stored: StoredFacilityDTO) -> Facility:
             if stored.public_holiday_policy is not None
             else None
         ),
-        prices=mapping.price_table_from_dto(stored.prices) if stored.prices is not None else None,
+        admission=_admission_from_stored(stored),
         notices=tuple(
             Notice(text=n.text, active_from=n.active_from, active_to=n.active_to)
             for n in stored.notices

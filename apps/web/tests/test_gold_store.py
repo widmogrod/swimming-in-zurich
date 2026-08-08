@@ -11,6 +11,7 @@ import pytest
 
 from apps.web.services.gold_store import GoldSwimStore
 from swimzh.core.result import Ok
+from swimzh.domain.admission import Free, Tariff, Unknown
 from swimzh.domain.catalog import ScheduleFreshness
 from swimzh.etl.build import build_store
 from swimzh.providers.curated import load_dataset
@@ -107,7 +108,7 @@ def test_the_priced_pool_count_is_the_coverage_ratchet(gold_db: Path) -> None:
     priced = {
         str(f.identity.facility_id)
         for f in GoldSwimStore.open(gold_db).facilities()
-        if f.prices is not None
+        if isinstance(f.admission, Tariff)
     }
     assert {
         "hallenbad-city",
@@ -121,7 +122,9 @@ def test_the_priced_pool_count_is_the_coverage_ratchet(gold_db: Path) -> None:
         "schulschwimmanlage-riedtli",
         "schulschwimmanlage-tannenrauch",
     } <= priced
-    # …and the five the city publishes as free / privately run stay unpriced.
+    # …and the five the city publishes as free / privately run stay unpriced — but no longer as
+    # one indistinguishable null: the four free pools now carry `Free`, altstetten the honest
+    # `Unknown` (a private operator whose tariff no source states).
     assert (
         priced
         & {
@@ -133,15 +136,54 @@ def test_the_priced_pool_count_is_the_coverage_ratchet(gold_db: Path) -> None:
         }
         == set()
     )
+    admission_of = {
+        str(f.identity.facility_id): f.admission for f in GoldSwimStore.open(gold_db).facilities()
+    }
+    for free_pool in (
+        "flussbad-au-hoengg",
+        "flussbad-oberer-letten",
+        "seebad-katzensee",
+        "maennerbad-schanzengraben",
+    ):
+        assert admission_of[free_pool] == Free(), free_pool
+    assert admission_of["hallenbad-altstetten"] == Unknown()
+
+
+def test_the_store_splits_twenty_one_tariff_four_free_thirty_two_unknown(gold_db: Path) -> None:
+    """The union, counted by LITERAL SQL over `facility_doc` — the acceptance numbers of the
+    admission-union plan. `admission_state` is present on exactly the 4 free pools' blobs (the
+    only new bytes), `prices` is non-null on exactly the 21 tariffed ones, and the remaining 32
+    roster pools carry neither: the honest unknown, no longer conflated with free."""
+    conn = open_db(gold_db)
+    total = conn.execute("select count(*) from pool").fetchone()[0]
+    tariff = conn.execute(
+        "select count(*) from pool where json_extract(facility_doc,'$.prices') is not null"
+    ).fetchone()[0]
+    free = conn.execute(
+        "select count(*) from pool where json_extract(facility_doc,'$.admission_state') is not null"
+    ).fetchone()[0]
+    free_ids = {
+        row[0]
+        for row in conn.execute(
+            "select id from pool where json_extract(facility_doc,'$.admission_state') = 'free'"
+        )
+    }
+    assert (tariff, free, total - tariff - free) == (21, 4, 32)
+    assert free_ids == {
+        "flussbad-au-hoengg",
+        "flussbad-oberer-letten",
+        "seebad-katzensee",
+        "maennerbad-schanzengraben",
+    }
 
 
 def test_the_school_pools_are_served_the_school_tariff(gold_db: Path) -> None:
     """The city prints `Eintritte Schulschwimmanlagen` at 5.-/5.-/2.50, not the Hallenbad
     8.-/6.-/4.-. Asserted on the STORE, so it covers scrape -> compose -> codec end to end."""
     priced = {
-        str(f.identity.facility_id): f.prices
+        str(f.identity.facility_id): f.admission.table
         for f in GoldSwimStore.open(gold_db).facilities()
-        if f.prices is not None
+        if isinstance(f.admission, Tariff)
     }
     school = {k: v for k, v in priced.items() if k.startswith("schulschwimmanlage-")}
     assert len(school) == 4, sorted(school)

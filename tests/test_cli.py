@@ -40,6 +40,7 @@ from swimzh.core.httpcache import (
     request_ttl_s,
 )
 from swimzh.core.result import Err, Ok
+from swimzh.domain.admission import Tariff, Unknown
 from swimzh.domain.catalog import PoolCatalogEntry, ScheduleFreshness
 from swimzh.domain.closure import ClosureCode
 from swimzh.domain.geo import GeoPoint
@@ -256,9 +257,9 @@ def test_scrape_merge_puts_curated_schedule_and_scraped_price_on_read_path(tmp_p
 
     curated_city = GoldRepository(conn).get(reconstruct_pool_id("hallenbad-city"))
     assert curated_city is not None
-    assert curated_city.prices is not None  # real curated City carries a price
+    assert isinstance(curated_city.admission, Tariff)  # real built City carries a tariff
     assert any(b.rules for b in curated_city.basins)  # ...and a curated schedule
-    priceless_city = replace(curated_city, prices=None)
+    priceless_city = replace(curated_city, admission=Unknown())
 
     scraped_price = PriceTable(
         entries=(PriceEntry(PriceCategory.ADULT, Decimal("8.00"), "Erwachsene CHF 8.00"),),
@@ -273,7 +274,7 @@ def test_scrape_merge_puts_curated_schedule_and_scraped_price_on_read_path(tmp_p
         basins=(),
         closures=(),
         notices=(),
-        prices=scraped_price,
+        admission=Tariff(scraped_price),
         fetched_at=FETCHED_AT,
     )
     composition = compose((priceless_city,), ((reconstruct_pool_id("hallenbad-city"), scraped),))
@@ -282,7 +283,8 @@ def test_scrape_merge_puts_curated_schedule_and_scraped_price_on_read_path(tmp_p
     served = GoldRepository(open_db(db)).get(reconstruct_pool_id("hallenbad-city"))
     assert served is not None
     assert served.basins == curated_city.basins  # curated schedule preserved through the seam
-    assert served.prices == scraped_price  # scraped price gained, now on `pool.facility_doc`
+    # Scraped tariff gained, now on `pool.facility_doc`.
+    assert served.admission == Tariff(scraped_price)
 
 
 def test_scrape_gold_requires_a_built_store(tmp_path: Path) -> None:
@@ -699,11 +701,14 @@ def test_build_produces_complete_store(tmp_path: Path) -> None:
 def test_build_reports_the_pools_that_state_no_city_tariff_and_still_exits_zero(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    """A pool whose page links no city tariff is unpriced ON PURPOSE — four state "Der Eintritt …
-    ist gratis" and the Männerbad "wird privat betrieben". That is not a build failure, so the
-    build exits 0; but it is not silence either, because the LIVE build reads `fetch_roster`, not
-    the committed `catalog.json`, so a WFS url drift that quietly unprices a pool would leave no
-    other trace. Gated on the committed fixtures rather than a manual build."""
+    """A pool whose page states neither the city tariff nor free admission is `Unknown` ON
+    PURPOSE — not a build failure, so the build exits 0; but not silence either, because the
+    LIVE build reads `fetch_roster`, not the committed `catalog.json`, so a WFS url drift that
+    quietly unprices a pool would leave no other trace. Under the admission union only
+    altstetten (a private operator) is left in that state: the four pools that state their own
+    gratis sentence now carry `Free` as DATA, so the note — which existed to keep their
+    free-ness visible in stderr — no longer fires for them. Gated on the committed fixtures
+    rather than a manual build."""
     db = tmp_path / "gold.sqlite"
     assert build(db_path=db, data_dir=DATA_DIR, clients=_build_clients()) == 0
 
@@ -712,13 +717,7 @@ def test_build_reports_the_pools_that_state_no_city_tariff_and_still_exits_zero(
         for line in capsys.readouterr().err.splitlines()
         if line.startswith("no city tariff stated: ")
     }
-    assert noted == {
-        "hallenbad-altstetten",
-        "flussbad-au-hoengg",
-        "flussbad-oberer-letten",
-        "seebad-katzensee",
-        "maennerbad-schanzengraben",
-    }
+    assert noted == {"hallenbad-altstetten"}
 
 
 def test_build_admits_the_seasonal_pools_with_real_hours(tmp_path: Path) -> None:

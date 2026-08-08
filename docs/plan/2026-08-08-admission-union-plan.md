@@ -194,6 +194,7 @@ Appended by /dev:implement after each slice — never rewritten. Newest row last
 
 | date | slice | status | divergence from plan | tech debt created | human review? |
 |------|-------|--------|----------------------|-------------------|---------------|
+| 2026-08-08 | S1 | done | none — implementation notes: the Tariff-arm price match lives in module-level `_price_of` (match + `assert_never` preserved) because inlining pushed `find_swim_options` to CRAP 30.1 > 30; the `Gratisbad` regex arm was anchored to a predication (`ist\s+(?:es\s+)?ein\s+Gratisbad`) after a critic claim-audit finding — the bare token would have asserted Free from a page merely mentioning another facility's Gratisbad; Männerbad's fixture bytes match the anchored form exactly | none — the `tariffs: CityTariffs \| None = None` bridge and its None-branch test are plan-mandated S1 state that S2 deletes | yes |
 
 ## Accepted drift
 
@@ -211,6 +212,24 @@ Suggestions taken: `cli.py` line refs corrected post-merge (294-295), the `hasat
 with `dataclasses.fields` (a defaultless re-add would slip past `hasattr`), unterer-letten's
 compressed free fact recorded as a known gap. `pause_after: []` is deliberate: the plan is two
 small slices, review runs at `max_rounds: 2`, and completion always pauses before merge-back.
+
+### 2026-08-08 — S1 (critic: approve, round 1; claim-audit step live)
+
+First slice reviewed under the critic's new claim-audit step. The step
+self-gated correctly (diff transforms scraped-page facts), verified the
+slice as a REPAIR of the free/unknown absence-as-claim (every absence door
+traced to `Unknown`), and produced one true shape-1 finding at the correct
+minor severity: the unanchored `Gratisbad` token (fixed pre-commit, see
+ledger). Declined suggestion: deduplicating the `states_free_admission`
+re-scan on Tariff pages — conformant to the plan's note-with-caller design
+and S2 reworks that loop anyway. Discoveries: the build's "states no city
+tariff" stderr note count drops 5 → 1 (the 4 free pools no longer emit it —
+an implied consequence no criterion named); the /swim Unknown pin uses a
+September instant because altstetten's operator Revision closure (Jul 30 –
+Aug 16) covers the suite's AUGUST_MORNING constant. Starting state: the
+worktree carried uncommitted partial S1 edits from a prior interrupted
+session; the implementer verified each against the plan, finished the two
+files broken mid-edit, and wrote the (absent) test mirror from scratch.
 
 ## Summary
 

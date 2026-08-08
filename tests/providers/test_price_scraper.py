@@ -13,7 +13,7 @@ from swimzh.core.errors import HttpStatus, ParseError
 from swimzh.core.http import HttpClient, RetryPolicy
 from swimzh.core.result import Err, Ok
 from swimzh.domain.pricing import PriceCategory
-from swimzh.providers.price_scraper import parse_prices, scrape_prices
+from swimzh.providers.price_scraper import parse_prices, scrape_prices, states_free_admission
 
 FIXTURE = Path(__file__).resolve().parent / "fixtures" / "preise_abos.html"
 AS_OF = date(2026, 7, 19)
@@ -146,3 +146,40 @@ def test_scrape_prices_http_error_propagates() -> None:
     result = scrape_prices(_client(lambda _r: httpx.Response(500, text="x")), AS_OF)
     assert isinstance(result, Err)
     assert isinstance(result.error, HttpStatus)
+
+
+# --- states_free_admission: the TIGHT page-stated sentence, never bare `gratis` ----------------
+#
+# The population-level pin (True for exactly 4 of the 26 declared fixtures, incl. the
+# hallenbad_city.html locker-row trap) lives in tests/etl/test_scrape.py next to the fixture
+# map; these pin the pattern's edges in isolation.
+
+
+def test_the_published_free_sentences_match() -> None:
+    # The two real shapes the four pages print: the sentence and the anchored Gratisbad
+    # predication (the Männerbad's actual phrasing, "Tagsüber ist es ein Gratisbad …").
+    assert states_free_admission("<p>Der Eintritt ins Flussbad Au-Höngg ist gratis.</p>")
+    assert states_free_admission("<p>Tagsüber ist es ein Gratisbad nur für Männer.</p>")
+
+
+def test_a_mere_mention_of_another_facilitys_gratisbad_is_not_a_free_statement() -> None:
+    # The Gratisbad arm is ANCHORED as a predication ("ist [es] ein Gratisbad"): a page that only
+    # MENTIONS a Gratisbad — e.g. pointing visitors at the free bath next door — asserts nothing
+    # about its own admission.
+    assert not states_free_admission("<p>Direkt neben dem Gratisbad Unterer Letten gelegen.</p>")
+    assert not states_free_admission("<a>Zum Gratisbad</a>")
+
+
+def test_a_bare_locker_row_gratis_does_not_read_as_free_admission() -> None:
+    # The Ausstattung/locker rows print bare `gratis` on 21 of the 26 declared pages — a loose
+    # match would declare almost every priced pool free.
+    assert not states_free_admission("<td>Garderobenkasten</td><td>gratis, plus Depot Fr. 5.-</td>")
+    assert not states_free_admission("<li>Sportgeräte gratis ausleihbar</li>")
+
+
+def test_the_match_never_crosses_a_sentence_or_tag_boundary() -> None:
+    # `[^.<]{0,80}` keeps `Der Eintritt … ist gratis` inside ONE sentence and ONE text node: an
+    # `Eintritt` heading followed by an unrelated locker-row `ist gratis` in a later element (or
+    # after a full stop) must not be stitched into a free-admission statement.
+    assert not states_free_admission("<h2>Der Eintritt</h2><td>Garderobenkasten ist gratis</td>")
+    assert not states_free_admission("<p>Der Eintritt kostet Fr. 8.00. Der Kasten ist gratis.</p>")

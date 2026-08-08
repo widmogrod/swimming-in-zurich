@@ -7,10 +7,11 @@ city pools, the 4 Schulschwimmanlagen that publish public swimming on their own 
 outdoor/lake/river pools whose seasonal `Zeitraum` table the scraper reads (seasonal-hours S3).
 
 Per pool we scrape: the timetable (→ rules and the page's last-admission rule), notices/alerts
-(→ `Notice`s, and closure-type notices → `ClosureRange`s), and attach the city admission tariff the
-pool is served (`tariff_for`: only if the page LINKS the tariff — the Schulschwimmanlage rate for a
-`SCHOOL` pool, the general rate otherwise; a page that links no tariff yields no price and one
-``ScrapeReport.notes`` line). The result is a ``ScrapedAspects`` payload paired with a ``Name``
+(→ `Notice`s, and closure-type notices → `ClosureRange`s), and the pool's ``Admission``
+(`admission_for`: `Tariff` when the page LINKS the city tariff — the Schulschwimmanlage rate for
+a `SCHOOL` pool, the general rate otherwise; `Free` when the page states its own gratis sentence;
+`Unknown` — plus one ``ScrapeReport.notes`` line — when it states neither). The result is a
+``ScrapedAspects`` payload paired with a ``Name``
 ``SourceRef`` (the WFS display name) — **never a canonical id**. ``build.reconcile.resolve_all``
 turns each ``Name`` into a ``PoolId`` by lookup, and ``build.compose`` folds the aspects onto the
 matching pool.
@@ -35,12 +36,16 @@ from swimzh.build.reconcile import Name, SourceRef
 from swimzh.core.errors import ProviderError
 from swimzh.core.http import HttpClient
 from swimzh.core.result import Err, Ok
+from swimzh.domain.admission import Admission, Free, Tariff, Unknown
 from swimzh.domain.catalog import PoolCatalogEntry
 from swimzh.domain.models import Basin, BasinId, Notice, PoolKind
-from swimzh.domain.pricing import PriceTable
 from swimzh.domain.schedule import ClosureRange
 from swimzh.providers.operator_pages import parse_maintenance_closures
-from swimzh.providers.price_scraper import CityTariffs, states_city_tariff
+from swimzh.providers.price_scraper import (
+    CityTariffs,
+    states_city_tariff,
+    states_free_admission,
+)
 from swimzh.providers.schedule_scraper import (
     ScrapedSchedule,
     fetch_page,
@@ -119,12 +124,13 @@ class ScrapeFailure:
 class ScrapeReport:
     extracts: tuple[Extract, ...]  # (SourceRef, ScrapedAspects) — no canonical id minted here
     failures: tuple[ScrapeFailure, ...]  # declared sources that failed (typed cause preserved)
-    #: Non-fatal build notes: one per declared source whose page states NO city tariff, so the
-    #: pool ships unpriced on purpose. Not a failure — four of these pools publish *"Der Eintritt
-    #: … ist gratis"* and one *"wird privat betrieben"* — but not silence either: the live build
-    #: reads `fetch_roster`, not the committed `catalog.json`, so a WFS URL drift that silently
-    #: unprices a pool would otherwise leave no trace. Free-ness itself is still unrecorded
-    #: (`prices=None` conflates *free* with *unknown*); the note is where the fact stays visible.
+    #: Non-fatal build notes: one per declared source whose page states NEITHER the city tariff
+    #: nor free admission (`Unknown`). Not a failure — the privately run `hallenbad-altstetten`
+    #: is the honest example — but not silence either: the live build reads `fetch_roster`, not
+    #: the committed `catalog.json`, so a WFS URL drift that silently unprices a pool would
+    #: otherwise leave no trace. A `Free` pool needs no note any more: its free-ness is recorded
+    #: as data (`Admission`), no longer only in stderr. A page that states BOTH (tariff link wins)
+    #: also gets a note naming the contradiction — a page bug to surface, not a build failure.
     notes: tuple[str, ...] = ()
 
 
@@ -143,7 +149,7 @@ def _aspects(
     schedule: ScrapedSchedule,
     notices: tuple[Notice, ...],
     closures: tuple[ClosureRange, ...],
-    prices: PriceTable | None,
+    admission: Admission,
     fetched_at: datetime,
 ) -> ScrapedAspects:
     return ScrapedAspects(
@@ -158,7 +164,7 @@ def _aspects(
         ),
         closures=closures,
         notices=notices,
-        prices=prices,
+        admission=admission,
         fetched_at=fetched_at,
         public_holiday_policy=schedule.holiday_policy,
         last_admission_before=schedule.last_admission_before,
@@ -197,26 +203,29 @@ def declared_sources(catalog: tuple[PoolCatalogEntry, ...]) -> tuple[DeclaredSou
     )
 
 
-def tariff_for(
-    source: DeclaredSource, page_html: str, tariffs: CityTariffs | None
-) -> PriceTable | None:
-    """Which of the city's two published single-admission tariffs this pool is served, if any.
+def admission_for(source: DeclaredSource, page_html: str, tariffs: CityTariffs) -> Admission:
+    """This pool's ``Admission``, decided by page-stated facts only — never a hostname:
 
-    Two page-stated facts decide it, and neither is a hostname:
-
-    * **whether** the city tariff governs the pool — its own page links the tariff page
-      (`price_scraper.states_city_tariff`). A page that does not link it gets **no** price: 21 of
-      the 26 declared sources link it, and the 5 that do not are exactly the four the city
-      publishes as free plus the privately-run Männerbad. The old `stadt-zuerich.ch` host test
-      dropped 15 priced pools; widening it to `sportamt.ch` would have invented a Fr. 8.00 charge
-      at four free ones. The link is right where the host test was wrong in both directions.
-    * **which** tariff — the city prints a separate `Eintritte Schulschwimmanlagen` rate
-      (Fr. 5.– / 5.– / 2.50) that a Schulschwimmanlage charges instead of the Hallenbad rate. The
-      kind is the discriminator, from the WFS roster (with the registry's display overrides).
+    * **Tariff** — the pool's own page links the city tariff page
+      (`price_scraper.states_city_tariff`): 21 of the 26 declared sources. Which rate: the city
+      prints a separate `Eintritte Schulschwimmanlagen` rate (Fr. 5.– / 5.– / 2.50) that a
+      Schulschwimmanlage charges instead of the Hallenbad rate; the kind is the discriminator,
+      from the WFS roster (with the registry's display overrides). Checked FIRST: if a page ever
+      stated both, the tariff link wins and the caller notes the contradiction — a page bug to
+      surface, not a build failure.
+    * **Free** — the page states its own gratis sentence
+      (`price_scraper.states_free_admission`): the 3 pools printing *"Der Eintritt … ist gratis"*
+      plus the Männerbad's *"ein Gratisbad"*. The old host test would have invented a Fr. 8.00
+      charge at all four.
+    * **Unknown** — neither (e.g. `hallenbad-altstetten`, a private operator whose tariff we do
+      not know). The honest default, and the arm the build note rides on.
     """
-    if tariffs is None or not states_city_tariff(page_html):
-        return None
-    return tariffs.school if source.entry.kind is PoolKind.SCHOOL else tariffs.general
+    if states_city_tariff(page_html):
+        table = tariffs.school if source.entry.kind is PoolKind.SCHOOL else tariffs.general
+        return Tariff(table)
+    if states_free_admission(page_html):
+        return Free()
+    return Unknown()
 
 
 def scrape_declared_sources(
@@ -243,12 +252,26 @@ def scrape_declared_sources(
             failures.append(ScrapeFailure(name=entry.name, url=url, cause=schedule.error))
             continue
         notices = parse_notices(page)
-        pool_prices = tariff_for(source, page, tariffs)
-        if tariffs is not None and pool_prices is None:
-            # A page-stated absence, not a failure: the pool ships unpriced on purpose. Noted only
-            # when a tariff WAS scraped — with `tariffs is None` every pool is unpriced for one
-            # already-reported reason, and 26 identical notes would say nothing.
-            notes.append(f"no city tariff stated: {entry.pool_id} ({url})")
+        admission: Admission
+        if tariffs is None:
+            # S1 interim bridge: a failed price scrape (`tariffs is None`) maps every declared
+            # source to `Unknown` with NO note — every pool is unpriced for one already-reported
+            # reason, and 26 identical notes would say nothing. S2 deletes this branch by making
+            # the parameter non-optional and the failed scrape fatal.
+            admission = Unknown()
+        else:
+            admission = admission_for(source, page, tariffs)
+            if isinstance(admission, Unknown):
+                # A page-stated absence, not a failure: the pool ships unpriced on purpose —
+                # its page states neither the city tariff nor free admission.
+                notes.append(f"no city tariff stated: {entry.pool_id} ({url})")
+            elif isinstance(admission, Tariff) and states_free_admission(page):
+                # Both facts on one page: the tariff link won, but the contradiction is a page
+                # bug worth surfacing — never a silent pick and never a build failure.
+                notes.append(
+                    f"contradiction: {entry.pool_id} ({url}) links the city tariff "
+                    "but also states free admission"
+                )
         # City notices carry their own dates; an operator page states its shutdown in prose,
         # so the two closure sources are additive, not alternatives.
         operator = _OPERATOR_CLOSURES.get(entry.pool_id)
@@ -260,7 +283,7 @@ def scrape_declared_sources(
             schedule.value,
             notices,
             closures,
-            pool_prices,
+            admission,
             fetched_at,
         )
         extracts.append((Name(entry.name), aspects))

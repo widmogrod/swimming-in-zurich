@@ -19,6 +19,7 @@ from zoneinfo import ZoneInfo
 
 from swimzh.build.compose import ScrapedAspects, compose
 from swimzh.domain.access import PublicSwim
+from swimzh.domain.admission import Admission, Free, Tariff, Unknown
 from swimzh.domain.geo import GeoPoint
 from swimzh.domain.lockers import LockerCategory, LockerOption
 from swimzh.domain.models import (
@@ -46,17 +47,21 @@ _CURATED_RULE = ScheduleRule(
 )
 
 
-def _curated_city(*, prices: PriceTable | None) -> Facility:
+#: Module-level singleton default (`Unknown` is frozen and value-equal, so sharing is safe).
+_UNKNOWN = Unknown()
+
+
+def _curated_city(*, admission: Admission = _UNKNOWN) -> Facility:
     return Facility(
         identity=PoolIdentity(PoolId("hallenbad-city"), "Hallenbad City", PoolKind.INDOOR),
         address="Sihlstrasse 71",
         provenance=Provenance(source="curated", curated=True, valid_as_of=date(2026, 7, 18)),
         basins=(Basin(basin_id=BasinId("city-50m"), name="50m-Becken", rules=(_CURATED_RULE,)),),
-        prices=prices,
+        admission=admission,
     )
 
 
-def _scraped_city(*, prices: PriceTable | None) -> ScrapedAspects:
+def _scraped_city(*, admission: Admission = _UNKNOWN) -> ScrapedAspects:
     scraped_rule = ScheduleRule(
         weekdays=frozenset({Weekday.SATURDAY}),
         time=TimeRange(start=time(8, 0), end=time(20, 0)),
@@ -74,7 +79,7 @@ def _scraped_city(*, prices: PriceTable | None) -> ScrapedAspects:
         ),
         closures=(),
         notices=(),
-        prices=prices,
+        admission=admission,
         fetched_at=FETCHED,
     )
 
@@ -90,8 +95,8 @@ def _price(amount: str) -> PriceTable:
 def test_curated_keeps_schedule_and_gains_scraped_price() -> None:
     scraped_price = _price("8.00")
     result = compose(
-        (_curated_city(prices=None),),  # curated has a schedule but NO price
-        ((CITY, _scraped_city(prices=scraped_price)),),
+        (_curated_city(),),  # curated has a schedule but NO admission fact (Unknown)
+        ((CITY, _scraped_city(admission=Tariff(scraped_price))),),
     )
     assert len(result.facilities) == 1
     merged = result.facilities[0]
@@ -99,9 +104,9 @@ def test_curated_keeps_schedule_and_gains_scraped_price() -> None:
     # Curated schedule kept (curated-wins on basins), the scraped basin discarded.
     assert {b.basin_id for b in merged.basins} == {BasinId("city-50m")}
     assert merged.basins[0].rules == (_CURATED_RULE,)
-    # ...and the pool GAINED the scraped price the curated data lacked (the merge the old
-    # whole-row filter dropped).
-    assert merged.prices == scraped_price
+    # ...and the pool GAINED the scraped tariff the curated data lacked (the merge the old
+    # whole-row filter dropped). `Unknown` is the admission zero object — it never wins a merge.
+    assert merged.admission == Tariff(scraped_price)
     # Identity stays canonical; the merged facility remains the curated (facility-level) row.
     assert merged.identity.facility_id == PoolId("hallenbad-city")
     assert merged.provenance.curated is True
@@ -109,24 +114,31 @@ def test_curated_keeps_schedule_and_gains_scraped_price() -> None:
 
 def test_curated_price_wins_when_both_sources_supply_it() -> None:
     result = compose(
-        (_curated_city(prices=_price("8.00")),),
-        ((CITY, _scraped_city(prices=_price("9.50"))),),
+        (_curated_city(admission=Tariff(_price("8.00"))),),
+        ((CITY, _scraped_city(admission=Tariff(_price("9.50")))),),
     )
     merged = result.facilities[0]
-    assert merged.prices == _price("8.00")  # curated-wins
-    # A build note records that both sources supplied the price aspect.
-    assert any("prices" in note and "curated" in note for note in result.notes)
+    assert merged.admission == Tariff(_price("8.00"))  # curated-wins
+    # A build note records that both sources supplied the admission aspect.
+    assert any("admission" in note and "curated" in note for note in result.notes)
+
+
+def test_a_scraped_free_fact_fills_a_curated_unknown() -> None:
+    # `Free` is a supplied FACT (unlike the `Unknown` zero object), so a curated pool that states
+    # nothing about admission gains it — exactly as it gains a scraped tariff.
+    result = compose((_curated_city(),), ((CITY, _scraped_city(admission=Free())),))
+    assert result.facilities[0].admission == Free()
 
 
 def test_scraped_only_pool_passes_through() -> None:
     # An uncurated pool (no curated counterpart) keeps its scraped schedule + price.
-    scraped = _scraped_city(prices=_price("8.00"))
+    scraped = _scraped_city(admission=Tariff(_price("8.00")))
     result = compose((), ((CITY, scraped),))
     assert len(result.facilities) == 1
     merged = result.facilities[0]
     assert merged.identity.facility_id == PoolId("hallenbad-city")
     assert merged.basins[0].rules == scraped.basins[0].rules
-    assert merged.prices == _price("8.00")
+    assert merged.admission == Tariff(_price("8.00"))
     assert merged.provenance.curated is False
 
 
@@ -136,7 +148,7 @@ def test_scraped_features_and_lockers_survive_compose_onto_non_curated_base() ->
     sauna = Feature(kind=FeatureKind.SAUNA, name="Sauna", surcharge_chf=Decimal("10.00"))
     locker = LockerOption(category=LockerCategory.VALUABLES, fee_chf=Decimal("2.00"))
     scraped = replace(
-        _scraped_city(prices=None),
+        _scraped_city(),
         features=(sauna,),
         lockers=(locker,),
     )
@@ -170,7 +182,7 @@ def test_scraped_schedule_carries_curated_lane_binding() -> None:
     # away, or `_attach_lanes` would abort on `attached == 0`.
     result = compose(
         (_stripped_curated_city(),),
-        ((CITY, _scraped_city(prices=None)),),
+        ((CITY, _scraped_city()),),
     )
     merged = result.facilities[0]
     # The scraped timetable is present...
@@ -197,12 +209,12 @@ def test_scraped_basin_url_already_declared_is_not_duplicated() -> None:
     # not appended (no duplicate binding); the scraped basin wins.
     url = "https://example.test/city-schwimmer.pdf"
     scraped = replace(
-        _scraped_city(prices=None),
+        _scraped_city(),
         basins=(
             Basin(
                 basin_id=BasinId("hallenbad-city-main"),
                 name="Hauptbecken",
-                rules=_scraped_city(prices=None).basins[0].rules,
+                rules=_scraped_city().basins[0].rules,
                 lane_plan_source=LanePlanSource(url=url),
             ),
         ),
@@ -221,12 +233,12 @@ def test_output_is_ordered_by_canonical_id() -> None:
         basins=(),
         closures=(),
         notices=(),
-        prices=None,
+        admission=Unknown(),
         fetched_at=FETCHED,
     )
     result = compose(
         (),
-        ((PoolId("hallenbad-oerlikon"), other), (CITY, _scraped_city(prices=None))),
+        ((PoolId("hallenbad-oerlikon"), other), (CITY, _scraped_city())),
     )
     ids = [str(f.identity.facility_id) for f in result.facilities]
     assert ids == sorted(ids) == ["hallenbad-city", "hallenbad-oerlikon"]

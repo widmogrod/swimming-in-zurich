@@ -18,13 +18,19 @@ from swimzh.build.reconcile import Name
 from swimzh.core.errors import ConnectionFailed, ParseError
 from swimzh.core.http import HttpClient, RetryPolicy
 from swimzh.domain.access import WomenOnly
+from swimzh.domain.admission import Free, Tariff, Unknown
 from swimzh.domain.catalog import PoolCatalogEntry
 from swimzh.domain.geo import GeoPoint
 from swimzh.domain.models import PoolKind
 from swimzh.domain.pricing import PriceCategory, PriceEntry, PriceTable
 from swimzh.domain.schedule import TimeRange, Weekday
-from swimzh.etl.scrape import declared_sources, scrape_declared_sources, tariff_for
-from swimzh.providers.price_scraper import PRICES_URL, CityTariffs, states_city_tariff
+from swimzh.etl.scrape import admission_for, declared_sources, scrape_declared_sources
+from swimzh.providers.price_scraper import (
+    PRICES_URL,
+    CityTariffs,
+    states_city_tariff,
+    states_free_admission,
+)
 from swimzh.storage import catalog_json
 
 FIXTURE = Path(__file__).resolve().parents[1] / "providers" / "fixtures" / "hallenbad_city.html"
@@ -109,7 +115,8 @@ def test_extracts_carry_notices_closures_and_prices() -> None:
     _ref, aspects = report.extracts[0]
     assert aspects.notices and "Revision" in aspects.notices[0].text
     assert aspects.closures  # derived from the closure notice
-    assert aspects.prices is not None  # its page links the tariff → the shared tariff applied
+    # Its page links the tariff → the shared tariff applied, as the `Tariff` arm of the union.
+    assert isinstance(aspects.admission, Tariff)
 
 
 def test_unparseable_page_is_a_typed_failure_not_a_skip() -> None:
@@ -352,16 +359,16 @@ def test_a_school_pool_is_served_the_school_tariff_not_the_hallenbad_one() -> No
     indoor = next(s for s in declared_sources(entries) if s.entry.pool_id == "hallenbad-city")
 
     assert by_id["schulschwimmanlage-aemtler"].kind is PoolKind.SCHOOL
-    school_table = tariff_for(school, _page_of("schulschwimmanlage-aemtler"), _TARIFFS)
-    assert school_table is not None
-    assert [e.amount_chf for e in school_table.entries] == [
+    school_admission = admission_for(school, _page_of("schulschwimmanlage-aemtler"), _TARIFFS)
+    assert isinstance(school_admission, Tariff)
+    assert [e.amount_chf for e in school_admission.table.entries] == [
         Decimal("5.00"),
         Decimal("5.00"),
         Decimal("2.50"),
     ]
-    general_table = tariff_for(indoor, _page_of("hallenbad-city"), _TARIFFS)
-    assert general_table is not None
-    assert [e.amount_chf for e in general_table.entries] == [
+    general_admission = admission_for(indoor, _page_of("hallenbad-city"), _TARIFFS)
+    assert isinstance(general_admission, Tariff)
+    assert [e.amount_chf for e in general_admission.table.entries] == [
         Decimal("8.00"),
         Decimal("6.00"),
         Decimal("4.00"),
@@ -462,20 +469,49 @@ def test_the_link_is_matched_by_path_not_by_equality_with_the_prices_url() -> No
     assert not states_city_tariff('<a href="/web/de/stadtleben/sport-und-badeanlagen/sauna.html">')
 
 
-def test_tariff_for_splits_the_declared_sources_four_seventeen_five() -> None:
-    """S2 deletes the host test: the pool's page states whether the city tariff governs it, by
-    linking it. 4 school + 17 general + 5 unpriced, against the committed page fixtures — where
-    the S1 host test scored 4 / 6 / 16 and left 11 city-run pools unpriced."""
+#: The pools whose OWN page states free admission — "Der Eintritt … ist gratis" on the three
+#: city-published ones, "ein Gratisbad" on the privately run Männerbad. Exactly `_NO_TARIFF`
+#: minus altstetten, whose page states neither (a private operator whose tariff we do not know).
+_FREE = _NO_TARIFF - {"hallenbad-altstetten"}
+
+
+def test_states_free_admission_over_every_declared_sources_committed_page() -> None:
+    """The tight sentence matches EXACTLY the 4 free pools and none of the other 22. Offline,
+    against the committed page fixtures — one per declared source, so this is the whole
+    population, and the whole exposure surface of a too-loose pattern."""
     entries = catalog_json.loads(_CATALOG.read_text(encoding="utf-8"))
-    school, general, none = [], [], []
+    declared = _declared_ids(entries)
+    free = {pool_id for pool_id in declared if states_free_admission(_page_of(pool_id))}
+    assert free == _FREE
+    assert len(declared - free) == 22
+
+
+def test_the_locker_row_gratis_is_not_a_free_admission_statement() -> None:
+    """The trap the loose pattern falls into: `hallenbad_city.html` prints bare `gratis` in its
+    Ausstattung/locker rows ("Garderobenkasten … gratis") — as do 21 of the 26 declared pages —
+    yet City charges the full Hallenbad rate. The tight sentence must keep it False."""
+    page = _page_of("hallenbad-city")
+    assert "gratis" in page.lower()  # the bait is really on the page
+    assert states_free_admission(page) is False
+
+
+def test_admission_for_splits_the_declared_sources_four_seventeen_four_one() -> None:
+    """The union over the whole population: 4 school-tariff + 17 general-tariff + 4 free +
+    1 unknown (altstetten, a private operator), against the committed page fixtures — where
+    `prices=None` used to compress the last five into one indistinguishable null."""
+    entries = catalog_json.loads(_CATALOG.read_text(encoding="utf-8"))
+    school, general, free, unknown = [], [], [], []
     for source in declared_sources(entries):
-        table = tariff_for(source, _page_of(source.entry.pool_id), _TARIFFS)
-        if table is None:
-            none.append(source.entry.pool_id)
-        elif table is _TARIFFS.school:
-            school.append(source.entry.pool_id)
-        else:
-            general.append(source.entry.pool_id)
+        admission = admission_for(source, _page_of(source.entry.pool_id), _TARIFFS)
+        match admission:
+            case Tariff(table) if table is _TARIFFS.school:
+                school.append(source.entry.pool_id)
+            case Tariff(_):
+                general.append(source.entry.pool_id)
+            case Free():
+                free.append(source.entry.pool_id)
+            case Unknown():
+                unknown.append(source.entry.pool_id)
 
     assert sorted(school) == [
         "schulschwimmanlage-aemtler",
@@ -484,8 +520,9 @@ def test_tariff_for_splits_the_declared_sources_four_seventeen_five() -> None:
         "schulschwimmanlage-tannenrauch",
     ]
     assert len(general) == 17, sorted(general)
-    assert set(none) == _NO_TARIFF
-    assert len(school) + len(general) + len(none) == 26
+    assert set(free) == _FREE
+    assert unknown == ["hallenbad-altstetten"]
+    assert len(school) + len(general) + len(free) + len(unknown) == 26
 
 
 def test_the_city_host_gate_is_gone_from_the_source_tree() -> None:
@@ -496,12 +533,11 @@ def test_the_city_host_gate_is_gone_from_the_source_tree() -> None:
     assert offenders == []
 
 
-def test_a_pool_whose_page_states_no_tariff_yields_a_note_not_a_failure() -> None:
-    """Free and privately-run pools ship unpriced ON PURPOSE — a note, never a `ScrapeFailure`
-    (which would abort the build) and never a silent drop."""
-    catalog = (
-        _entry("flussbad-oberer-letten", "Flussbad Oberer Letten", PoolKind.RIVER, "https://x/l"),
-    )
+def test_a_pool_whose_page_states_neither_tariff_nor_gratis_yields_a_note_not_a_failure() -> None:
+    """An `Unknown` pool ships unpriced ON PURPOSE — a note, never a `ScrapeFailure` (which would
+    abort the build) and never a silent drop. The subject is a doctored City page (its tariff
+    link broken), which states neither fact."""
+    catalog = (_entry("hallenbad-x", "Hallenbad X", PoolKind.INDOOR, "https://x/l"),)
     body = _page_of("hallenbad-city").replace(
         "/web/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/preise-abos.html", "/x.html"
     )
@@ -513,8 +549,47 @@ def test_a_pool_whose_page_states_no_tariff_yields_a_note_not_a_failure() -> Non
     )
     assert report.failures == ()
     (_ref, aspects) = report.extracts[0]
-    assert aspects.prices is None
-    assert report.notes == ("no city tariff stated: flussbad-oberer-letten (https://x/l)",)
+    assert aspects.admission == Unknown()
+    assert report.notes == ("no city tariff stated: hallenbad-x (https://x/l)",)
+
+
+def test_a_free_pool_carries_free_as_data_and_needs_no_note() -> None:
+    """*"Der Eintritt ins Flussbad Oberer Letten ist gratis."* Before the union that fact
+    survived only as a build note; now it is DATA (`Free`), so the note — which existed to keep
+    it visible in stderr — has nothing left to carry."""
+    catalog = (
+        _entry("flussbad-oberer-letten", "Flussbad Oberer Letten", PoolKind.RIVER, "https://x/l"),
+    )
+    body = _page_of("flussbad-oberer-letten").encode("utf-8")
+    report = scrape_declared_sources(
+        _client(lambda _r: httpx.Response(200, content=body)), catalog, FETCHED, tariffs=_TARIFFS
+    )
+    assert report.failures == ()
+    (_ref, aspects) = report.extracts[0]
+    assert aspects.admission == Free()
+    assert report.notes == ()
+
+
+def test_a_page_stating_both_tariff_and_gratis_is_a_tariff_plus_a_contradiction_note() -> None:
+    """If a page ever states both facts, the tariff link wins (checked first) and the
+    contradiction is surfaced as a note — a page bug to report, never a silent pick and never a
+    build failure."""
+    body = _page_of("hallenbad-city").replace("</body>", "<p>Der Eintritt ist gratis.</p></body>")
+    assert states_city_tariff(body) and states_free_admission(body)  # the premise is real
+    catalog = (_entry("hallenbad-city", "Hallenbad City", PoolKind.INDOOR, "https://x/c"),)
+    report = scrape_declared_sources(
+        _client(lambda _r: httpx.Response(200, content=body.encode("utf-8"))),
+        catalog,
+        FETCHED,
+        tariffs=_TARIFFS,
+    )
+    assert report.failures == ()
+    (_ref, aspects) = report.extracts[0]
+    assert isinstance(aspects.admission, Tariff)
+    assert report.notes == (
+        "contradiction: hallenbad-city (https://x/c) links the city tariff "
+        "but also states free admission",
+    )
 
 
 def test_a_priced_pool_produces_no_note() -> None:
@@ -524,21 +599,20 @@ def test_a_priced_pool_produces_no_note() -> None:
         _client(lambda _r: httpx.Response(200, content=body)), catalog, FETCHED, tariffs=_TARIFFS
     )
     (_ref, aspects) = report.extracts[0]
-    assert aspects.prices is not None
+    assert isinstance(aspects.admission, Tariff)
     assert report.notes == ()
 
 
-def test_no_tariffs_scraped_means_no_pool_is_priced_and_emits_no_notes() -> None:
-    """A failed price scrape leaves every pool unpriced — never a stale or invented rate. It emits
-    NO notes either: every pool is unpriced for one already-reported reason, and 26 identical
-    lines would drown the five that state a real fact about the pool."""
-    entries = catalog_json.loads(_CATALOG.read_text(encoding="utf-8"))
-    sources = declared_sources(entries)
-    assert all(tariff_for(s, _page_of(s.entry.pool_id), None) is None for s in sources)
-
+def test_no_tariffs_scraped_means_every_pool_is_unknown_and_emits_no_notes() -> None:
+    """S1 interim bridge (S2 deletes it with the `tariffs: ... | None` parameter): a failed price
+    scrape maps every declared source to `Unknown` — never a stale or invented rate, and never a
+    fabricated `Free`. It emits NO notes either: every pool is unpriced for one already-reported
+    reason, and 26 identical lines would drown the ones that state a real fact about a pool."""
     catalog = (_entry("hallenbad-city", "Hallenbad City", PoolKind.INDOOR, "https://x/c"),)
     body = _page_of("hallenbad-city").encode("utf-8")
     report = scrape_declared_sources(
         _client(lambda _r: httpx.Response(200, content=body)), catalog, FETCHED, tariffs=None
     )
+    (_ref, aspects) = report.extracts[0]
+    assert aspects.admission == Unknown()
     assert report.notes == ()

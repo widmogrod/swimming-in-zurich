@@ -20,6 +20,7 @@ from datetime import datetime, timedelta
 from enum import Enum
 from typing import Any
 
+from swimzh.domain.admission import Admission, Unknown
 from swimzh.domain.geo import GeoPoint
 from swimzh.domain.lockers import LockerOption
 from swimzh.domain.models import (
@@ -32,7 +33,6 @@ from swimzh.domain.models import (
     PoolKind,
     Provenance,
 )
-from swimzh.domain.pricing import PriceTable
 from swimzh.domain.schedule import ClosureRange, HolidayPolicy
 
 _SCRAPE_SOURCE = "schedule_scraper"
@@ -43,9 +43,9 @@ class ScrapedAspects:
     """The identity-free payload a schedule scrape emits, paired with a ``SourceRef``.
 
     Carries only *aspects* (never a canonical id): the basins/rules parsed from a pool's
-    timetable, plus notices, closures, and the shared admission price for city-run pools.
-    ``compose`` turns it into a scraped ``Facility`` once ``reconcile`` has produced the
-    ``PoolId`` — the id is never minted here.
+    timetable, plus notices, closures, and the page-stated ``Admission`` (the shared city
+    tariff, free, or unknown). ``compose`` turns it into a scraped ``Facility`` once
+    ``reconcile`` has produced the ``PoolId`` — the id is never minted here.
     """
 
     name: str
@@ -55,7 +55,7 @@ class ScrapedAspects:
     basins: tuple[Basin, ...]
     closures: tuple[ClosureRange, ...]
     notices: tuple[Notice, ...]
-    prices: PriceTable | None
+    admission: Admission
     fetched_at: datetime
     # Slice F: richer scraped statics, folded per-aspect like the rest (defaulting empty/None so
     # existing scrape call-sites are unchanged and a curated pool keeps its curated values).
@@ -103,13 +103,18 @@ def _is_nonempty(value: tuple[Any, ...]) -> bool:
     return bool(value)
 
 
+def _is_known_admission(value: Any) -> bool:
+    """`Unknown` is the admission zero object — only `Free`/`Tariff` count as a supplied fact."""
+    return not isinstance(value, Unknown)
+
+
 # The declarative precedence map — the single place aspect merge policy is stated. No aspect is
 # merged by a hand-written provider ``if``; adding one means one row here. ``basins`` is NOT here:
 # it is not a plain replace-the-winner field but a binding-preserving merge (``_merge_basins``),
 # because a stripped pool's ``lane_plan_source`` crosswalk must survive when the scraped schedule
 # wins the timetable — see below.
 _ASPECTS: tuple[_Aspect, ...] = (
-    _Aspect("prices", _is_not_none, CURATED_WINS),
+    _Aspect("admission", _is_known_admission, CURATED_WINS),
     _Aspect("closures", _is_nonempty, CURATED_WINS),
     _Aspect("notices", _is_nonempty, CURATED_WINS),
     _Aspect("geo", _is_not_none, CURATED_WINS),
@@ -144,7 +149,7 @@ def _scraped_facility(pool_id: PoolId, aspects: ScrapedAspects) -> Facility:
         closures=aspects.closures,
         public_holiday_policy=aspects.public_holiday_policy,
         last_admission_before=aspects.last_admission_before,
-        prices=aspects.prices,
+        admission=aspects.admission,
         notices=aspects.notices,
         features=aspects.features,
         lockers=aspects.lockers,

@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import assert_never
 
 from apps.web.api.pools.model import (
+    AdmissionOut,
     BasinLanePanelOut,
     BasinOut,
     ClubSlotOut,
@@ -26,6 +28,7 @@ from apps.web.api.pools.model import (
 )
 from apps.web.services.ports import TemperatureProvider
 from swimzh.domain.access import PublicSwim
+from swimzh.domain.admission import Admission, Free, Tariff, Unknown
 from swimzh.domain.catalog import RosterEntry, ScheduleFreshness
 from swimzh.domain.lane_plan import (
     ClubSlot,
@@ -252,20 +255,37 @@ def _live_water_temp_out(result: TempResult) -> LiveWaterTempOut:
             )
 
 
+def _admission_out(admission: Admission) -> tuple[AdmissionOut, PriceTable | None]:
+    """Project the closed union onto the wire: the kind string plus the tariff table (the table
+    exists exactly in the `Tariff` arm — a free pool is `("free", None)`, never conflated with
+    `("unknown", None)`)."""
+    match admission:
+        case Tariff(table):
+            return "tariff", table
+        case Free():
+            return "free", None
+        case Unknown():
+            return "unknown", None
+        case _ as unreachable:
+            assert_never(unreachable)
+
+
 def facility_detail_out(
     detail: FacilityDetail,
-    prices: PriceTable | None,
+    admission: Admission,
     live_water_temp: TempResult,
     freshness: ScheduleFreshness,
 ) -> FacilityDetailOut:
     """Shape the domain facility-detail answer for the API: the physical basins (size, lanes,
     water temperature + `physical_source` caveat), features with hours resolved for the queried
-    moment, lockers, the facility price table, provenance, and the per-basin lane panels.
+    moment, lockers, the facility admission (kind + tariff table), provenance, and the per-basin
+    lane panels.
 
-    Every field is a pure projection of what the domain already computes; `prices` is the
-    facility's own `PriceTable` (the query surface computes a per-person `price` inside
-    `find_swim_options`, but the price *table* rides on the `Facility`, so the thin router hands
+    Every field is a pure projection of what the domain already computes; `admission` is the
+    facility's own `Admission` union (the query surface computes a per-person `price` inside
+    `find_swim_options`, but the admission fact rides on the `Facility`, so the thin router hands
     it in rather than re-reading the store)."""
+    admission_kind, price_table = _admission_out(admission)
     return FacilityDetailOut(
         facility_id=str(detail.facility_id),
         facility_name=detail.facility_name,
@@ -274,7 +294,8 @@ def facility_detail_out(
         basins=[_basin_out(b) for b in detail.basins],
         features=[_feature_status_out(f) for f in detail.features],
         lockers=[_locker_out(locker) for locker in detail.lockers],
-        prices=_price_table_out(prices) if prices is not None else None,
+        admission=admission_kind,
+        prices=_price_table_out(price_table) if price_table is not None else None,
         provenance=_provenance_out(detail.provenance),
         lane_panels=[_basin_panel_out(p) for p in detail.lane_panels],
         last_admission_before_min=(

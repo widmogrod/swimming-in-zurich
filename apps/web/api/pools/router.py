@@ -51,7 +51,7 @@ def pool_detail(
     )
     return facility_detail_out(
         facility_detail(facility, when, data.calendar()),
-        facility.prices,
+        facility.admission,
         live_temp,
         # Derived from THIS facility by the domain rule the roster uses, not re-looked-up: the
         # detail and the `/pools` row are then two projections of one answer.

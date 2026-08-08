@@ -246,9 +246,22 @@ def test_an_outdoor_pool_that_links_the_tariff_now_carries_the_city_price() -> N
 
 def test_a_pool_the_city_publishes_as_free_is_never_assigned_a_rate() -> None:
     """*"Der Eintritt ins Flussbad Oberer Letten ist gratis."* Its page links no tariff, so it
-    carries none — the invariant a host-keyed widening would have broken at four pools."""
+    carries none — the invariant a host-keyed widening would have broken at four pools. Under
+    the admission union the store now records it as `Free`, and the `/swim` option still carries
+    `price: null` (rendering free-ness is UI, deferred) — the RESPONSE is unchanged; only the
+    stored data stopped conflating free with unknown."""
     options = _options_for("flussbad-oberer-letten", AUGUST_MORNING, age=30)
     assert options, "Flussbad Oberer Letten has no option at its own August morning"
+    assert all(o["price"] is None for o in options)
+
+
+def test_an_unknown_admission_pool_still_serves_its_option_with_no_price() -> None:
+    """Regression pin for the union's third arm: `hallenbad-altstetten` (a private operator whose
+    page states neither tariff nor gratis) is `Unknown` — its `/swim` response is byte-identical
+    to the pre-union one: the option is served, `price` stays null. A September instant, because
+    its operator page announces a Revision closure over `AUGUST_MORNING` (Jul 30 – Aug 16)."""
+    options = _options_for("hallenbad-altstetten", "2026-09-15T10:00", age=30)
+    assert options, "Hallenbad Altstetten has no option on a Tuesday morning"
     assert all(o["price"] is None for o in options)
 
 
