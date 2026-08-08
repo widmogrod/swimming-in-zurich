@@ -186,9 +186,26 @@ def _scraped_only_catalog_file(tmp_path: Path) -> Path:
     return catalog_file
 
 
+def _with_price_fixture(fallback_body: bytes) -> ProviderClients:
+    """Clients serving the committed tariff fixture at the price page, `fallback_body` elsewhere.
+
+    Since admission-union S2 a failed `scrape_prices` is FATAL to the schedule phase (`scrape-gold`
+    drives the same `_compose_schedules`), so every scrape double must serve a parseable price
+    page — unless the price failure IS the test's subject
+    (`test_build_price_scrape_failure_aborts_content_unchanged`)."""
+    prices = (_FIXTURES / "preise_abos.html").read_bytes()
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if "preise-abos" in str(request.url):
+            return httpx.Response(200, content=prices)
+        return httpx.Response(200, content=fallback_body)
+
+    return clients_over(httpx.MockTransport(handler))
+
+
 def _city_scrape_clients() -> ProviderClients:
-    body = FIXTURE_HTML.read_bytes()
-    return clients_over(httpx.MockTransport(lambda _r: httpx.Response(200, content=body)))
+    """The city page for every pool URL, plus the parseable price page every scrape now needs."""
+    return _with_price_fixture(FIXTURE_HTML.read_bytes())
 
 
 def test_scrape_gold_composes_onto_built_store(tmp_path: Path) -> None:
@@ -448,9 +465,10 @@ def test_scrape_gold_declared_source_parse_failure_aborts_content_unchanged(
     before = _db_content_digest(db)
 
     # The city page fetches 200 but has no timetable, so `parse_schedule` fails -> a declared
-    # source failure with a typed ParseError cause.
-    unparseable = b"<html>no table</html>"
-    clients = clients_over(httpx.MockTransport(lambda _r: httpx.Response(200, content=unparseable)))
+    # source failure with a typed ParseError cause. The price page is served its REAL fixture
+    # (`_with_price_fixture`) so the abort under test stays the pool page's, not the tariff
+    # page's own fatal case.
+    clients = _with_price_fixture(b"<html>no table</html>")
     code = scrape_gold(
         db_path=db,
         catalog_path=_city_catalog_file(tmp_path),
@@ -845,6 +863,32 @@ def test_build_atomic_pipeline_scrapes_then_aborts_content_unchanged(
     assert "HTTP 503" in err  # the typed ProviderError cause is surfaced
 
 
+def test_build_price_scrape_failure_aborts_content_unchanged(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # admission-union S2 acceptance: the shared city tariff page 500s while every pool page still
+    # fetches fine. Before this slice the build degraded to `tariffs=None` and exited 0 with all
+    # 21 tariffed pools silently unpriced; now the failed price scrape is FATAL — the build exits
+    # non-zero naming the typed `ProviderError`, and the prior gold DB is CONTENT-unchanged (the
+    # atomic temp-swap discards the mid-chain store, per the S4 digest convention).
+    db = tmp_path / "gold.sqlite"
+    assert build(db_path=db, data_dir=DATA_DIR, clients=_build_clients()) == 0
+    before = _db_content_digest(db)
+
+    def fail_price_page(request: httpx.Request) -> httpx.Response | None:
+        if "preise-abos" in str(request.url):
+            return httpx.Response(500, text="down")
+        return None
+
+    code = build(db_path=db, data_dir=DATA_DIR, clients=recorded_build_clients(fail_price_page))
+    assert code == 1
+    assert _db_content_digest(db) == before  # temp discarded — the live store never mutated
+    err = capsys.readouterr().err
+    assert "aborted" in err
+    assert "city tariff page" in err  # the abort names WHICH declared source was lost
+    assert "HTTP 500" in err  # the typed ProviderError cause is surfaced
+
+
 def test_build_via_main(tmp_path: Path) -> None:
     # `main` threads an injected client into `build` (live runs create their own); the recorded
     # WFS snapshot lets the CLI-level build run offline.
@@ -909,11 +953,9 @@ def test_build_then_scrape_gold_enriches(tmp_path: Path) -> None:
         phone=None,
     )
     catalog_file.write_text(catalog_json.dumps((entry,), FETCHED_AT), encoding="utf-8")
-    body = FIXTURE_HTML.read_bytes()
-    clients = clients_over(httpx.MockTransport(lambda _r: httpx.Response(200, content=body)))
 
     scraped = scrape_gold(
-        db_path=db, catalog_path=catalog_file, clients=clients, fetched_at=FETCHED_AT
+        db_path=db, catalog_path=catalog_file, clients=_city_scrape_clients(), fetched_at=FETCHED_AT
     )
     assert scraped == 0
     # Enrichment adds/updates facilities on top of the offline build; catalog+calendar survive.

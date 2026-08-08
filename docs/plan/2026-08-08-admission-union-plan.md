@@ -195,6 +195,7 @@ Appended by /dev:implement after each slice — never rewritten. Newest row last
 | date | slice | status | divergence from plan | tech debt created | human review? |
 |------|-------|--------|----------------------|-------------------|---------------|
 | 2026-08-08 | S1 | done | none — implementation notes: the Tariff-arm price match lives in module-level `_price_of` (match + `assert_never` preserved) because inlining pushed `find_swim_options` to CRAP 30.1 > 30; the `Gratisbad` regex arm was anchored to a predication (`ist\s+(?:es\s+)?ein\s+Gratisbad`) after a critic claim-audit finding — the bare token would have asserted Free from a page merely mentioning another facility's Gratisbad; Männerbad's fixture bytes match the anchored form exactly | none — the `tariffs: CityTariffs \| None = None` bridge and its None-branch test are plan-mandated S1 state that S2 deletes | yes |
+| 2026-08-08 | S2 | done | plan's affected-call-site count was stale (said 10 in tests/etl/test_scrape.py; actual 14 sites, 9 affected — 8 omit + 1 `tariffs=None`, 5 already passed `_TARIFFS`); CLI-test doubles beyond the enumerated changes (in-Touches file) had to serve the committed price fixture at the tariff URL — they served pool HTML everywhere, which S1 silently degraded and S2 correctly makes fatal; consolidated into `_with_price_fixture` per critic round 2, which also dropped the now-invariant " (with tariffs)" stdout suffix | none | yes |
 
 ## Accepted drift
 
@@ -230,6 +231,19 @@ Aug 16) covers the suite's AUGUST_MORNING constant. Starting state: the
 worktree carried uncommitted partial S1 edits from a prior interrupted
 session; the implementer verified each against the plan, finished the two
 files broken mid-edit, and wrote the (absent) test mirror from scratch.
+
+### 2026-08-08 — S2 (critic: approve, round 1; two mechanical suggestions taken)
+
+The critic's claim-audit step self-gated again and returned an EMPTY findings
+list, explicitly invoking the empty-list-is-valid outcome — it verified the
+slice as the shape-1 repair it is (the failed-scrape absence door now refuses
+loudly at the boundary; per-pool Unknown keeps its explicit seat + note).
+Suggestions taken: the " (with tariffs)" stdout suffix dropped (its
+discriminator died with the degrade branch — an invariant claim implying a
+counterfactual mode) and the duplicated price-fixture routing consolidated
+into `_with_price_fixture`. Discovery worth keeping: the fatality also binds
+`scrape-gold` (same `_compose_schedules`), so the re-layer can no longer exit
+0 unpriced — intended in spirit, unnamed by any criterion.
 
 ## Summary
 

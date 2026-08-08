@@ -82,7 +82,7 @@ def test_builds_indoor_extracts_with_real_rules() -> None:
         _entry("planschbecken-x", "Planschbecken X", PoolKind.PADDLING, "https://x/paddling.html"),
     )
     report = scrape_declared_sources(
-        _client(lambda _r: httpx.Response(200, content=body)), catalog, FETCHED
+        _client(lambda _r: httpx.Response(200, content=body)), catalog, FETCHED, tariffs=_TARIFFS
     )
 
     assert len(report.extracts) == 1  # only the scrapeable-kind pool
@@ -125,7 +125,7 @@ def test_unparseable_page_is_a_typed_failure_not_a_skip() -> None:
     # 200 but has no timetable), so `scrape-gold` can abort the whole run and surface the cause.
     catalog = (_entry("hallenbad-x", "Hallenbad X", PoolKind.INDOOR, "https://x/x.html"),)
     client = _client(lambda _r: httpx.Response(200, content=b"<html>no table</html>"))
-    report = scrape_declared_sources(client, catalog, FETCHED)
+    report = scrape_declared_sources(client, catalog, FETCHED, tariffs=_TARIFFS)
     assert report.extracts == ()
     assert len(report.failures) == 1
     failure = report.failures[0]
@@ -141,7 +141,7 @@ def test_unreachable_page_failure_preserves_the_transport_cause() -> None:
     def boom(_r: httpx.Request) -> httpx.Response:
         raise httpx.ConnectError("dns")
 
-    report = scrape_declared_sources(_client(boom), catalog, FETCHED)
+    report = scrape_declared_sources(_client(boom), catalog, FETCHED, tariffs=_TARIFFS)
     assert report.extracts == ()
     assert len(report.failures) == 1
     assert isinstance(report.failures[0].cause, ConnectionFailed)
@@ -170,7 +170,7 @@ def test_operator_page_closure_is_attached_to_the_pool() -> None:
     body = FIXTURE_ALTSTETTEN.read_bytes()
 
     report = scrape_declared_sources(
-        _client(lambda _r: httpx.Response(200, content=body)), catalog, FETCHED
+        _client(lambda _r: httpx.Response(200, content=body)), catalog, FETCHED, tariffs=_TARIFFS
     )
 
     assert report.failures == ()
@@ -191,7 +191,7 @@ def test_operator_closures_are_keyed_by_pool_id_not_by_page_content() -> None:
     body = FIXTURE_ALTSTETTEN.read_bytes()
 
     report = scrape_declared_sources(
-        _client(lambda _r: httpx.Response(200, content=body)), catalog, FETCHED
+        _client(lambda _r: httpx.Response(200, content=body)), catalog, FETCHED, tariffs=_TARIFFS
     )
 
     assert report.failures == ()
@@ -221,7 +221,10 @@ def test_a_school_pool_with_its_own_page_is_scraped() -> None:
         _entry("schulschwimmanlage-x", "Schule X", PoolKind.SCHOOL, "https://x/school.html"),
     )
     report = scrape_declared_sources(
-        _client(lambda _r: httpx.Response(200, content=FIXTURE.read_bytes())), catalog, FETCHED
+        _client(lambda _r: httpx.Response(200, content=FIXTURE.read_bytes())),
+        catalog,
+        FETCHED,
+        tariffs=_TARIFFS,
     )
     assert report.failures == ()
     assert [ref for ref, _ in report.extracts] == [Name("Schule X")]
@@ -236,7 +239,10 @@ def test_pools_sharing_one_overview_url_are_neither_scraped_nor_failures() -> No
         _entry("schulschwimmanlage-b", "Schule B", PoolKind.SCHOOL, overview),
     )
     report = scrape_declared_sources(
-        _client(lambda _r: httpx.Response(200, content=b"<html>no table</html>")), catalog, FETCHED
+        _client(lambda _r: httpx.Response(200, content=b"<html>no table</html>")),
+        catalog,
+        FETCHED,
+        tariffs=_TARIFFS,
     )
     assert report.extracts == ()
     assert report.failures == ()
@@ -316,7 +322,10 @@ def test_an_excluded_operator_page_is_not_even_fetched_so_it_cannot_fail() -> No
         _entry("freibad-dolder", "Freibad Dolder", PoolKind.OUTDOOR, "https://x/dolder/"),
     )
     report = scrape_declared_sources(
-        _client(lambda _r: httpx.Response(200, content=b"<html>no table</html>")), catalog, FETCHED
+        _client(lambda _r: httpx.Response(200, content=b"<html>no table</html>")),
+        catalog,
+        FETCHED,
+        tariffs=_TARIFFS,
     )
     assert report.extracts == ()
     assert report.failures == ()
@@ -600,19 +609,4 @@ def test_a_priced_pool_produces_no_note() -> None:
     )
     (_ref, aspects) = report.extracts[0]
     assert isinstance(aspects.admission, Tariff)
-    assert report.notes == ()
-
-
-def test_no_tariffs_scraped_means_every_pool_is_unknown_and_emits_no_notes() -> None:
-    """S1 interim bridge (S2 deletes it with the `tariffs: ... | None` parameter): a failed price
-    scrape maps every declared source to `Unknown` — never a stale or invented rate, and never a
-    fabricated `Free`. It emits NO notes either: every pool is unpriced for one already-reported
-    reason, and 26 identical lines would drown the ones that state a real fact about a pool."""
-    catalog = (_entry("hallenbad-city", "Hallenbad City", PoolKind.INDOOR, "https://x/c"),)
-    body = _page_of("hallenbad-city").encode("utf-8")
-    report = scrape_declared_sources(
-        _client(lambda _r: httpx.Response(200, content=body)), catalog, FETCHED, tariffs=None
-    )
-    (_ref, aspects) = report.extracts[0]
-    assert aspects.admission == Unknown()
     assert report.notes == ()

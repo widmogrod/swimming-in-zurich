@@ -233,8 +233,15 @@ def scrape_declared_sources(
     catalog: tuple[PoolCatalogEntry, ...],
     fetched_at: datetime,
     *,
-    tariffs: CityTariffs | None = None,
+    tariffs: CityTariffs,
 ) -> ScrapeReport:
+    """Fetch and parse every declared source, deciding each pool's ``Admission`` as it goes.
+
+    ``tariffs`` is REQUIRED: a failed city-tariff scrape is the *caller's* fatal abort
+    (`cli._compose_schedules`), so the "scrape failed but we continued" state is unrepresentable
+    here — there is no ``None`` to degrade to. A pool whose page states neither the tariff nor
+    free admission is still the per-pool honest ``Unknown`` (plus a note), never a failure.
+    """
     extracts: list[Extract] = []
     failures: list[ScrapeFailure] = []
     notes: list[str] = []
@@ -252,26 +259,18 @@ def scrape_declared_sources(
             failures.append(ScrapeFailure(name=entry.name, url=url, cause=schedule.error))
             continue
         notices = parse_notices(page)
-        admission: Admission
-        if tariffs is None:
-            # S1 interim bridge: a failed price scrape (`tariffs is None`) maps every declared
-            # source to `Unknown` with NO note — every pool is unpriced for one already-reported
-            # reason, and 26 identical notes would say nothing. S2 deletes this branch by making
-            # the parameter non-optional and the failed scrape fatal.
-            admission = Unknown()
-        else:
-            admission = admission_for(source, page, tariffs)
-            if isinstance(admission, Unknown):
-                # A page-stated absence, not a failure: the pool ships unpriced on purpose —
-                # its page states neither the city tariff nor free admission.
-                notes.append(f"no city tariff stated: {entry.pool_id} ({url})")
-            elif isinstance(admission, Tariff) and states_free_admission(page):
-                # Both facts on one page: the tariff link won, but the contradiction is a page
-                # bug worth surfacing — never a silent pick and never a build failure.
-                notes.append(
-                    f"contradiction: {entry.pool_id} ({url}) links the city tariff "
-                    "but also states free admission"
-                )
+        admission = admission_for(source, page, tariffs)
+        if isinstance(admission, Unknown):
+            # A page-stated absence, not a failure: the pool ships unpriced on purpose —
+            # its page states neither the city tariff nor free admission.
+            notes.append(f"no city tariff stated: {entry.pool_id} ({url})")
+        elif isinstance(admission, Tariff) and states_free_admission(page):
+            # Both facts on one page: the tariff link won, but the contradiction is a page
+            # bug worth surfacing — never a silent pick and never a build failure.
+            notes.append(
+                f"contradiction: {entry.pool_id} ({url}) links the city tariff "
+                "but also states free admission"
+            )
         # City notices carry their own dates; an operator page states its shutdown in prose,
         # so the two closure sources are additive, not alternatives.
         operator = _OPERATOR_CLOSURES.get(entry.pool_id)

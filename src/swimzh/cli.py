@@ -286,13 +286,24 @@ def _compose_schedules(
     one ``ScrapeReport.notes`` line on stderr and the phase still exits 0 — four of those pools are
     published free and one is privately run.
 
-    Fail-fast: a declared source (`etl.scrape.declared_sources`) whose page fails to fetch or
-    parse aborts the phase (``fatal``) carrying the typed cause. An unresolved WFS name (a scraped
-    pool in no alias) is a benign partial success — the resolved pools are written and the phase
-    exits 1 with the miss named (``fatal=False``), not a data hole.
+    Fail-fast: the shared city tariff page is itself a declared source — a failed `scrape_prices`
+    aborts the phase (``fatal``) naming the typed cause, never a run that exits 0 with all 21
+    tariffed pools silently unpriced. Likewise a declared source
+    (`etl.scrape.declared_sources`) whose page fails to fetch or parse aborts the phase
+    (``fatal``) carrying the typed cause. An unresolved WFS name (a scraped pool in no alias) is
+    a benign partial success — the resolved pools are written and the phase exits 1 with the miss
+    named (``fatal=False``), not a data hole.
     """
     tariffs_result = scrape_prices(price_client, fetched_at.date())
-    tariffs = tariffs_result.value if isinstance(tariffs_result, Ok) else None
+    if isinstance(tariffs_result, Err):
+        # The tariff page failing wholesale is a provider failure, not "26 pools are Unknown":
+        # abort the phase so no build exits 0 with the city tariff silently missing.
+        print(
+            f"schedule scrape aborted: city tariff page failed: {describe(tariffs_result.error)}",
+            file=sys.stderr,
+        )
+        return _PhaseResult(code=1, fatal=True)
+    tariffs = tariffs_result.value
     report = scrape_declared_sources(schedule_client, catalog, fetched_at, tariffs=tariffs)
     if report.failures:
         # A declared source failed to fetch/parse: abort, surfacing the typed cause.
@@ -326,7 +337,6 @@ def _compose_schedules(
                 tuple((f.identity.facility_id, f) for f in composition.facilities),
             )
             msg = f"scraped {len(outcome.resolved)} declared sources"
-            msg += " (with tariffs)" if tariffs is not None else " (tariffs unavailable)"
             for note in composition.notes:
                 msg += f"; {note}"
             print(msg)
