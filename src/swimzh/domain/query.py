@@ -55,6 +55,7 @@ from swimzh.domain.models import (
 )
 from swimzh.domain.person import Person
 from swimzh.domain.pricing import PriceEntry, price_for
+from swimzh.domain.rentals import RentalItem
 from swimzh.domain.resolver import resolve_basin, resolve_hours
 from swimzh.domain.schedule import (
     ClosedDay,
@@ -656,6 +657,7 @@ class FacilityDetail:
     basins: tuple[Basin, ...]
     features: tuple[FeatureStatus, ...]
     lockers: tuple[LockerOption, ...]
+    rentals: tuple[RentalItem, ...]
     provenance: Provenance
     lane_panels: tuple[BasinLanePanel, ...] = field(default_factory=tuple)
     last_admission_before: timedelta | None = None
@@ -704,6 +706,7 @@ def facility_detail(facility: Facility, at: datetime, calendar: ZurichCalendar) 
         basins=facility.basins,
         features=tuple(_feature_status(facility, f, at_local, calendar) for f in facility.features),
         lockers=facility.lockers,
+        rentals=facility.rentals,
         provenance=facility.provenance,
         lane_panels=lane_panels,
         last_admission_before=facility.last_admission_before,

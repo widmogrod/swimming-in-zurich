@@ -88,6 +88,12 @@ def test_residue_and_crosswalk_are_recorded() -> None:
     assert lockers.producer is ProducerKind.SOURCED
     assert lockers.module == "providers.mietobjekt"
 
+    # `rentals` is BORN sourced in S2 — the non-locker half of the same table, from the same
+    # provider (never a residue bucket: the rows were on the page all along).
+    rentals = by_field["facility.rentals"]
+    assert rentals.producer is ProducerKind.SOURCED
+    assert rentals.module == "providers.mietobjekt"
+
     # Sourced since 2026-08-04 from the timetable's "(und Feiertage)" Sunday row.
     assert by_field["facility.public_holiday_policy"].producer is ProducerKind.SOURCED
 

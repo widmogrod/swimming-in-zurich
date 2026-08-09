@@ -25,14 +25,20 @@ carry prose cells a naive parser would crash on ("gratis, eigenes Vorhängeschlo
 mitbringen" on the Garderobenkasten row at the outdoor pools, "auf Anfrage",
 "Vermietung via Restaurant/Kiosk", the non-monetary "Fr. 2.–, plus Ausweis als Depot"):
 
-* a cell with **no** ``Fr.`` token → ``fee=None, deposit=None``, the prose preserved in
-  ``raw`` — absence of a stated price is data, not an error;
-* a cell **with** ``Fr.`` tokens → the first non-Depot amount is the fee (a
-  ``"gratis, …"`` cell has none ⇒ ``fee=None``), a ``Depot Fr. N`` clause is the deposit;
-  extra clauses ride in ``raw``; "Ausweis als Depot" carries no ``Fr.`` token ⇒
-  ``deposit=None`` (non-monetary, kept in ``raw``);
+* the first non-``Depot`` ``Fr.`` amount is the fee — `Priced`; a cell whose leading
+  clause is the word ``gratis`` and that carries no fee amount is `Gratis` (a page-STATED
+  free-ness — "gratis, plus Depot Fr. 2.–"); a cell with neither is `Unstated` ("auf
+  Anfrage"), the prose preserved in ``raw`` — stated free and stated nothing are
+  different facts and never share a value (the S2 fee-union resolution);
+* a ``Depot Fr. N`` clause is the deposit; extra clauses ride in ``raw``; "Ausweis als
+  Depot" carries no ``Fr.`` token ⇒ ``deposit=None`` (non-monetary, kept in ``raw``);
 * a ``Fr.`` token that yields **no parseable amount** → ``Err(ParseError)``, fatal — that
   is garble, not prose.
+
+The LOCKER side keeps its S1 two-state ``fee_chf`` (``None`` == free to use): every
+fee-less locker cell in the committed corpus prints ``gratis`` (the unstated cells all sit
+on rental-labeled rows), so the locker ``None`` is corpus-honest — pinned by the corpus
+sweep in ``tests/providers/test_mietobjekt.py``.
 
 A page without the table is **not** a failure — it yields ``Ok`` with empty tuples.
 """
@@ -46,7 +52,7 @@ from decimal import Decimal
 from swimzh.core.errors import ParseError, ProviderError
 from swimzh.core.result import Err, Ok, Result
 from swimzh.domain.lockers import LockerCategory, LockerOption
-from swimzh.domain.rentals import RentalItem, RentalKind
+from swimzh.domain.rentals import Gratis, Priced, RentalFee, RentalItem, RentalKind, Unstated
 
 # The shared escaped-JSON <stzh-datatable> machinery — deliberately imported from
 # price_scraper (the plan's recorded reuse decision) rather than re-implemented: it already
@@ -73,6 +79,11 @@ _FR_TOKEN = re.compile(r"(Depot\s+)?Fr\.")
 #: A trailing parenthesized label suffix — "Wäschefach (1/2 Jahr)" — split off before routing.
 _LABEL_SUFFIX = re.compile(r"^(?P<base>.*\S)\s*\((?P<suffix>[^)]+)\)$")
 
+#: A cell whose LEADING clause is the word `gratis` states free-ness ("gratis, plus Depot
+#: Fr. 2.–"). Anchored at the start on purpose: the page predicates gratis of the row's
+#: item only when it opens the cell, and every stated-gratis cell in the corpus does.
+_GRATIS = re.compile(r"^gratis\b", re.IGNORECASE)
+
 
 @dataclass(frozen=True, slots=True)
 class MietobjektTable:
@@ -84,15 +95,15 @@ class MietobjektTable:
 
 @dataclass(frozen=True, slots=True)
 class _Cost:
-    """The two orthogonal monetary axes one price cell decomposes onto."""
+    """One price cell decomposed: the three-state fee plus the orthogonal deposit axis."""
 
-    fee: Decimal | None
+    fee: RentalFee
     deposit: Decimal | None
 
 
 def _cost(cell: str) -> Result[_Cost, ProviderError]:
     """Decompose one price cell per the corpus grammar (module docstring)."""
-    fee: Decimal | None = None
+    amount_chf: Decimal | None = None
     deposit: Decimal | None = None
     for token in _FR_TOKEN.finditer(cell):
         amount = _money(cell[token.end() :])
@@ -106,9 +117,24 @@ def _cost(cell: str) -> Result[_Cost, ProviderError]:
             )
         if token.group(1) is not None:
             deposit = amount if deposit is None else deposit
-        elif fee is None:
-            fee = amount
+        elif amount_chf is None:
+            amount_chf = amount
+    fee: RentalFee
+    if amount_chf is not None:
+        fee = Priced(amount_chf)
+    elif _GRATIS.match(cell.strip()) is not None:
+        fee = Gratis()
+    else:
+        fee = Unstated()
     return Ok(_Cost(fee=fee, deposit=deposit))
+
+
+def _fee_chf(fee: RentalFee) -> Decimal | None:
+    """Project the fee union onto the locker side's S1 two-state ``fee_chf``: an amount, or
+    ``None`` for free-to-use. Corpus-honest for lockers only (module docstring): every
+    fee-less LOCKER cell prints ``gratis``, so the `Gratis`→``None`` arm never swallows an
+    `Unstated` fact there."""
+    return fee.amount_chf if isinstance(fee, Priced) else None
 
 
 def _split_label(label: str) -> tuple[str, str | None]:
@@ -130,7 +156,7 @@ def _locker(base: str, suffix: str | None, cost: _Cost, raw: str) -> LockerOptio
         period = suffix if suffix is not None else prefix if lowered != "garderobenkasten" else None
         return LockerOption(
             category=LockerCategory.WARDROBE,
-            fee_chf=cost.fee,
+            fee_chf=_fee_chf(cost.fee),
             deposit_chf=cost.deposit,
             period=period,
             raw=raw,
@@ -138,7 +164,11 @@ def _locker(base: str, suffix: str | None, cost: _Cost, raw: str) -> LockerOptio
     if base in ("Wertsachenfach", "Wäschefach"):
         category = LockerCategory.VALUABLES if base == "Wertsachenfach" else LockerCategory.LAUNDRY
         return LockerOption(
-            category=category, fee_chf=cost.fee, deposit_chf=cost.deposit, period=suffix, raw=raw
+            category=category,
+            fee_chf=_fee_chf(cost.fee),
+            deposit_chf=cost.deposit,
+            period=suffix,
+            raw=raw,
         )
     return None
 
@@ -164,10 +194,8 @@ def _rental(base: str, suffix: str | None, cost: _Cost, raw: str) -> RentalItem:
         # The no-drop guarantee: an unmapped label ("Mööslihalle (35 x 16 Meter)", "Lounge")
         # is kept as OTHER with the full row in `raw`. Its parenthesized suffix is NOT a
         # rental period (Mööslihalle's is its dimensions), so `period` stays None.
-        return RentalItem(
-            kind=RentalKind.OTHER, fee_chf=cost.fee, deposit_chf=cost.deposit, raw=raw
-        )
-    return RentalItem(kind=kind, fee_chf=cost.fee, deposit_chf=cost.deposit, period=period, raw=raw)
+        return RentalItem(kind=RentalKind.OTHER, fee=cost.fee, deposit_chf=cost.deposit, raw=raw)
+    return RentalItem(kind=kind, fee=cost.fee, deposit_chf=cost.deposit, period=period, raw=raw)
 
 
 def parse_mietobjekte(page_html: str) -> Result[MietobjektTable, ProviderError]:

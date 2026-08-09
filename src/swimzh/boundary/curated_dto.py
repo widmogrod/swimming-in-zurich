@@ -43,6 +43,12 @@ _FeatureKind = Literal[
 ]
 _LockerCategory = Literal["wardrobe", "valuables", "laundry"]
 _LockerMechanism = Literal["coin", "key", "chip", "wristband", "other"]
+_RentalKind = Literal["towel", "swimwear", "goggles", "cabin", "sunlounger", "parasol", "other"]
+#: The stored discriminant for the `Gratis` arm of the rental-fee union. `"gratis"` is its only
+#: value: `Priced` is discriminated by a non-null `fee_chf` and `Unstated` by the absence of
+#: both — the `admission_state` pattern at rental scale (the page STATING free-ness and the
+#: page stating nothing are different facts and never share a serialization).
+_RentalFeeState = Literal["gratis"]
 
 
 class _Strict(BaseModel):
@@ -433,6 +439,30 @@ class LockerOptionDTO(_Strict):
     period: str | None = None
     mechanism: _LockerMechanism | None = None
     raw: str = ""
+
+
+class RentalItemDTO(_Strict):
+    """The non-locker half of the same `Mietobjekt | Preis` table (mietobjekt-extraction S2).
+
+    The domain's closed `RentalFee` union rides two keys, mirroring how `Admission` rides
+    `prices` + `admission_state`: `Priced(n)` -> `fee_chf: n`; `Gratis` -> `fee_state:
+    "gratis"`; `Unstated` -> neither (the `fee_state` key is POPPED when None — the
+    `admission_state`/`min_age` precedent — so only stated-gratis rows carry it).
+    """
+
+    kind: _RentalKind
+    fee_chf: Decimal | None = None
+    fee_state: _RentalFeeState | None = None
+    deposit_chf: Decimal | None = None
+    period: str | None = None
+    raw: str = ""
+
+    @model_serializer(mode="wrap")
+    def _serialize(self, handler: SerializerFunctionWrapHandler) -> dict[str, Any]:
+        data: dict[str, Any] = handler(self)
+        if self.fee_state is None:
+            data.pop("fee_state", None)
+        return data
 
 
 # --- pricing ----------------------------------------------------------------------

@@ -34,6 +34,7 @@ from swimzh.domain.models import (
     PoolKind,
     Provenance,
 )
+from swimzh.domain.rentals import RentalItem
 from swimzh.domain.schedule import ClosureRange, HolidayPolicy
 
 _SCRAPE_SOURCE = "schedule_scraper"
@@ -62,6 +63,9 @@ class ScrapedAspects:
     # existing scrape call-sites are unchanged and a curated pool keeps its curated values).
     features: tuple[Feature, ...] = ()
     lockers: tuple[LockerOption, ...] = ()
+    #: The non-locker half of the same `Mietobjekt | Preis` table the lockers come from
+    #: (mietobjekt-extraction S2). Empty == the page states none; defaulted like its peers.
+    rentals: tuple[RentalItem, ...] = ()
     #: Sourced from the timetable's "(und Feiertage)" Sunday row; `None` when the page is
     #: silent. Never defaulted to `NORMAL` — that fabricated a fact on all 57 pools.
     public_holiday_policy: HolidayPolicy | None = None
@@ -125,6 +129,7 @@ _ASPECTS: tuple[_Aspect, ...] = (
     _Aspect("geo", _is_not_none, CURATED_WINS),
     _Aspect("features", _is_nonempty, CURATED_WINS),
     _Aspect("lockers", _is_nonempty, CURATED_WINS),
+    _Aspect("rentals", _is_nonempty, CURATED_WINS),
     _Aspect("public_holiday_policy", _is_not_none, CURATED_WINS),
     _Aspect("last_admission_before", _is_not_none, CURATED_WINS),
     _Aspect("operating_season", _is_not_none, CURATED_WINS),
@@ -159,6 +164,7 @@ def _scraped_facility(pool_id: PoolId, aspects: ScrapedAspects) -> Facility:
         notices=aspects.notices,
         features=aspects.features,
         lockers=aspects.lockers,
+        rentals=aspects.rentals,
         operating_season=aspects.operating_season,
     )
 

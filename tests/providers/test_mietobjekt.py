@@ -15,9 +15,17 @@ from pathlib import Path
 from swimzh.core.errors import ParseError
 from swimzh.core.result import Err, Ok
 from swimzh.domain.lockers import LockerCategory, LockerOption
-from swimzh.domain.rentals import RentalKind
+from swimzh.domain.rentals import Gratis, Priced, RentalItem, RentalKind, Unstated
 from swimzh.providers.mietobjekt import MietobjektTable, parse_mietobjekte
-from tests.declared_fixtures import LOCKER_NOUN, PAGE_FIXTURES
+from tests.declared_fixtures import (
+    CABIN_NOUN,
+    LOCKER_NOUN,
+    MIETOBJEKT_NOUN,
+    PAGE_FIXTURES,
+    PARASOL_NOUN,
+    RENTAL_WEAR_NOUN,
+    SUNLOUNGER_NOUN,
+)
 
 FIXTURES = Path(__file__).resolve().parent / "fixtures"
 
@@ -71,13 +79,35 @@ def test_city_yields_exactly_the_four_locker_rows() -> None:
 
 def test_city_routes_the_non_locker_rows_to_rentals_not_to_the_floor() -> None:
     """The other half of the same table: towel/swimwear/goggles at Fr. 3 + Fr. 20 deposit.
-    Parsed since S1 (the return shape never changes); wired onto the facility in S2."""
+    Parsed since S1; wired onto the facility — with the fee as the closed union — in S2."""
     table = _parsed("hallenbad_city.html")
-    assert [(r.kind, r.fee_chf, r.deposit_chf) for r in table.rentals] == [
-        (RentalKind.TOWEL, Decimal("3.00"), Decimal("20.00")),
-        (RentalKind.SWIMWEAR, Decimal("3.00"), Decimal("20.00")),
-        (RentalKind.GOGGLES, Decimal("3.00"), Decimal("20.00")),
+    assert [(r.kind, r.fee, r.deposit_chf) for r in table.rentals] == [
+        (RentalKind.TOWEL, Priced(Decimal("3.00")), Decimal("20.00")),
+        (RentalKind.SWIMWEAR, Priced(Decimal("3.00")), Decimal("20.00")),
+        (RentalKind.GOGGLES, Priced(Decimal("3.00")), Decimal("20.00")),
     ]
+
+
+def test_the_synthetic_unknown_label_lands_as_other_with_raw_not_on_the_floor() -> None:
+    """The no-drop guarantee, pinned synthetically (S2 acceptance): a label no route knows —
+    `Luftmatratze | Fr. 5.–` — parses to `RentalItem(OTHER, Priced(5), raw=…)`; nothing a
+    future page invents can be silently dropped."""
+    page = (
+        '<stzh-datatable columns="[{&#34;text&#34;:&#34;Mietobjekt&#34;},'
+        '{&#34;text&#34;:&#34;Preis&#34;}]" rows="[[{&#34;value&#34;:&#34;Luftmatratze&#34;},'
+        '{&#34;value&#34;:&#34;Fr. 5.–&#34;}]]"></stzh-datatable>'
+    )
+    result = parse_mietobjekte(page)
+    assert isinstance(result, Ok)
+    assert result.value == MietobjektTable(
+        rentals=(
+            RentalItem(
+                kind=RentalKind.OTHER,
+                fee=Priced(Decimal("5.00")),
+                raw="Luftmatratze | Fr. 5.–",
+            ),
+        )
+    )
 
 
 # --- absence vs garble ------------------------------------------------------------------
@@ -147,8 +177,23 @@ def test_auf_anfrage_is_prose_not_a_price_nor_an_error() -> None:
     table = _parsed("strandbad_mythenquai.html")
     on_request = next(r for r in table.rentals if r.raw.startswith("Mehrzweckraum"))
     assert on_request.kind is RentalKind.OTHER
-    assert on_request.fee_chf is None and on_request.deposit_chf is None
+    assert on_request.fee == Unstated() and on_request.deposit_chf is None
     assert on_request.raw == "Mehrzweckraum | auf Anfrage"
+
+
+def test_stated_gratis_and_auf_anfrage_are_different_fee_facts_never_one_value() -> None:
+    """The S1-review directive's proof pair, on ONE fixture's one table: mythenquai's
+    Liegestuhl prints "gratis, plus Depot Fr. 2.–" — the page STATING free-ness — while its
+    Mehrzweckraum prints "auf Anfrage" — the page stating nothing. `Gratis()` vs `Unstated()`:
+    the admission-union Free/Unknown lesson at rental scale, no shared null."""
+    table = _parsed("strandbad_mythenquai.html")
+    lounger = next(r for r in table.rentals if r.kind is RentalKind.SUNLOUNGER)
+    assert lounger.fee == Gratis()
+    assert lounger.deposit_chf == Decimal("2.00")  # gratis usage still carries a real Pfand
+    assert lounger.raw == "Liegestuhl | gratis, plus Depot Fr. 2.–"  # nbsp normalised by _text
+    on_request = next(r for r in table.rentals if r.raw.startswith("Mehrzweckraum"))
+    # The collision the directive forbids, pinned shut: the two rows carry DIFFERENT arms.
+    assert on_request.fee == Unstated()
 
 
 def test_a_non_monetary_deposit_is_a_fee_with_no_deposit_amount() -> None:
@@ -156,17 +201,17 @@ def test_a_non_monetary_deposit_is_a_fee_with_no_deposit_amount() -> None:
     fee 2, deposit None, the clause preserved in `raw` (never invented as an amount)."""
     table = _parsed("flussbad_au_hoengg.html")
     padlock = next(r for r in table.rentals if r.raw.startswith("Vorhängeschloss"))
-    assert padlock.fee_chf == Decimal("2.00")
+    assert padlock.fee == Priced(Decimal("2.00"))
     assert padlock.deposit_chf is None
     assert padlock.raw == "Vorhängeschloss | Fr. 2.–, plus Ausweis als Depot"
 
 
 def test_rental_via_kiosk_prose_keeps_its_known_kind() -> None:
     # wollishofen's parasol row states no price at all ("Vermietung via Kiosk") — the KIND is
-    # still known even when the price is prose.
+    # still known even when the price is prose, and prose is `Unstated`, never stated-free.
     table = _parsed("strandbad_wollishofen.html")
     parasol = next(r for r in table.rentals if r.kind is RentalKind.PARASOL)
-    assert parasol.fee_chf is None and parasol.deposit_chf is None
+    assert parasol.fee == Unstated() and parasol.deposit_chf is None
     assert parasol.raw == "Sonnenschirm | Vermietung via Kiosk"
 
 
@@ -247,14 +292,20 @@ def test_every_declared_fixture_parses_and_the_locker_carrying_set_is_the_noun_s
     routing, so this cannot collapse into comparing the parser with itself."""
     carrying: set[str] = set()
     expected: set[str] = set()
+    renting: set[str] = set()
+    tabled: set[str] = set()
     for pool_id, fixture in PAGE_FIXTURES.items():
         page = _page(fixture)
         if LOCKER_NOUN.search(page):
             expected.add(pool_id)
+        if MIETOBJEKT_NOUN.search(page):
+            tabled.add(pool_id)
         result = parse_mietobjekte(page)
         assert isinstance(result, Ok), (pool_id, result)
         if result.value.lockers:
             carrying.add(pool_id)
+        if result.value.rentals:
+            renting.add(pool_id)
         # No-drop across the corpus: every parsed row landed in one of the two tuples —
         # nothing raised, nothing silently skipped — and absence stays absence.
         if not result.value.lockers and not result.value.rentals:
@@ -269,3 +320,70 @@ def test_every_declared_fixture_parses_and_the_locker_carrying_set_is_the_noun_s
     assert carrying == expected
     assert len(carrying) == 20
     assert "strandbad-mythenquai" in carrying  # the Wertsachenfach-only table
+    # …and the rental-carrying set is EXACTLY the table-carrying set (the Decisions-corrected
+    # count: with OTHER routing honest, every declared table has ≥1 non-locker row), derived
+    # by the shared `Mietobjekt`-header scan, independent of the parser's own routing.
+    assert renting == tabled
+    assert len(renting) == 20
+    # heuried's only non-locker row is a `Liegestuhlsaisonfach` — an UNMAPPED label. It carries
+    # rentals only because OTHER routing keeps it; a kind-noun-only counter would call it 0.
+    assert "freibad-heuried" in renting
+
+
+def test_the_rental_kind_carrying_sets_are_the_fixture_derived_noun_scans() -> None:
+    """Kind-level acceptance pins (S2), each expected set derived by the shared
+    parser-independent noun scan over the declared fixtures: TOWEL/SWIMWEAR/GOGGLES on the 11
+    wear-noun fixtures, CABIN on 11 (the plan's ≥10), SUNLOUNGER on the 9 exact-`Liegestuhl`
+    fixtures, PARASOL on 8 — where `(?!\\w)` keeps `Liegestuhlsaisonfach` (a compartment, not
+    a lounger rental) out of both sides of the comparison."""
+    wear_kinds = {RentalKind.TOWEL, RentalKind.SWIMWEAR, RentalKind.GOGGLES}
+    scans = (
+        (RENTAL_WEAR_NOUN, wear_kinds, 11),
+        (CABIN_NOUN, {RentalKind.CABIN}, 11),
+        (SUNLOUNGER_NOUN, {RentalKind.SUNLOUNGER}, 9),
+        (PARASOL_NOUN, {RentalKind.PARASOL}, 8),
+    )
+    for noun, kinds, count in scans:
+        expected = {pool_id for pool_id, f in PAGE_FIXTURES.items() if noun.search(_page(f))}
+        carrying = {
+            pool_id
+            for pool_id, fixture in PAGE_FIXTURES.items()
+            if kinds & {r.kind for r in _parsed(fixture).rentals}
+        }
+        assert carrying == expected, kinds
+        assert len(carrying) == count, kinds
+
+
+def test_every_rental_fee_arm_agrees_with_its_own_source_cell() -> None:
+    """The fee-union honesty sweep over the whole declared corpus: every `Priced` rental's
+    cell carries a `Fr.` token, every `Gratis` one's OPENS with the word gratis (a stated
+    fact), and every `Unstated` one's has neither — so no arm can ever swallow another's
+    cells. Measured scale: 13 stated-gratis (Liegestuhl ×8, Sonnenschirm ×4, Spielmaterial)
+    vs 8 unstated — the two populations the pre-S2 `None` compressed into one value."""
+    gratis, unstated = 0, 0
+    for fixture in set(PAGE_FIXTURES.values()):
+        for rental in _parsed(fixture).rentals:
+            cell = rental.raw.split(" | ", 1)[1]
+            if isinstance(rental.fee, Priced):
+                assert "Fr." in cell, rental
+            elif isinstance(rental.fee, Gratis):
+                gratis += 1
+                assert cell.lower().startswith("gratis"), rental
+            else:
+                unstated += 1
+                assert "Fr." not in cell, rental
+                assert not cell.lower().startswith("gratis"), rental
+    assert (gratis, unstated) == (13, 8)
+
+
+def test_no_locker_in_the_corpus_carries_an_unstated_fee() -> None:
+    """What keeps the LOCKER side's S1 two-state `fee_chf` honest (`None` == free to use):
+    every fee-less locker cell in the committed corpus PRINTS gratis — the unstated cells
+    all sit on rental-labeled rows, where the union now carries the distinction. If a page
+    ever prints an `auf Anfrage` locker row, this sweep fails and the locker representation
+    must be revisited rather than silently reading it as free."""
+    for fixture in set(PAGE_FIXTURES.values()):
+        for locker in _parsed(fixture).lockers:
+            cell = locker.raw.split(" | ", 1)[1]
+            if locker.fee_chf is None:
+                assert cell.lower().startswith("gratis"), locker

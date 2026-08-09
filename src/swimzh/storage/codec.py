@@ -23,6 +23,7 @@ from swimzh.boundary.curated_dto import (
     LockerOptionDTO,
     OperatingSeasonDTO,
     PriceTableDTO,
+    RentalItemDTO,
     _AdmissionState,
     _HolidayPolicy,
     _PoolKind,
@@ -108,12 +109,18 @@ class StoredFacilityDTO(BaseModel):
     notices: list[_NoticeDTO]
     features: list[FeatureDTO]
     lockers: list[LockerOptionDTO]
+    # The non-locker half of the same page table (mietobjekt-extraction S2). Defaulted so every
+    # pre-S2 blob (which lacks the key) still validates under `extra="forbid"`, and POPPED when
+    # empty (see `_serialize`) so the 37 pools without a `Mietobjekt` table serialize
+    # byte-identically to before the field.
+    rentals: list[RentalItemDTO] = []
     # Slice F additive facility-level statics. Defaulted so a pre-Slice-F gold blob (which lacks
     # these keys) still validates under `extra="forbid"` and re-dumps faithfully. NOTE: these are
     # emitted UNCONDITIONALLY (as `null` when unset), matching the existing facility-level optional
     # keys (`website`, `prices`, …) — NOT popped when None. Recorded deviations from that rule:
-    # `admission_state` (admission-union) and `operating_season` (sharedsource-fanout) ARE popped
-    # when None — each is a rare, positively-stated fact (4 free pools; 13 seasonal pools), so
+    # `admission_state` (admission-union), `operating_season` (sharedsource-fanout) and `rentals`
+    # (mietobjekt-extraction S2) ARE popped when None/empty — each is a rare-to-partial,
+    # positively-stated fact (4 free pools; 13 seasonal pools; 20 rental-carrying pools), so
     # popping keeps every blob that lacks the fact byte-identical to its pre-field form, exactly
     # like the Slice-D-style pop-when-default serializers on the nested basin/lane-plan DTOs.
     last_admission_before: timedelta | None = None
@@ -121,13 +128,15 @@ class StoredFacilityDTO(BaseModel):
     @model_serializer(mode="wrap")
     def _serialize(self, handler: SerializerFunctionWrapHandler) -> dict[str, Any]:
         # Additive-and-invisible (the `min_age` precedent): a facility that is not `Free` (or
-        # carries no operating season) must serialise to exactly the same bytes as before the
-        # `admission_state` / `operating_season` fields existed.
+        # carries no operating season, or no rentals) must serialise to exactly the same bytes
+        # as before the `admission_state` / `operating_season` / `rentals` fields existed.
         data: dict[str, Any] = handler(self)
         if self.admission_state is None:
             data.pop("admission_state", None)
         if self.operating_season is None:
             data.pop("operating_season", None)
+        if not self.rentals:
+            data.pop("rentals", None)
         return data
 
 
@@ -194,6 +203,7 @@ def to_stored(facility: Facility) -> StoredFacilityDTO:
         ],
         features=[mapping.feature_to_dto(f) for f in facility.features],
         lockers=[mapping.locker_to_dto(lo) for lo in facility.lockers],
+        rentals=[mapping.rental_to_dto(r) for r in facility.rentals],
         last_admission_before=facility.last_admission_before,
     )
 
@@ -237,6 +247,7 @@ def from_stored(stored: StoredFacilityDTO) -> Facility:
         ),
         features=tuple(mapping.feature_from_dto(f) for f in stored.features),
         lockers=tuple(mapping.locker_from_dto(lo) for lo in stored.lockers),
+        rentals=tuple(mapping.rental_from_dto(r) for r in stored.rentals),
         last_admission_before=stored.last_admission_before,
     )
 

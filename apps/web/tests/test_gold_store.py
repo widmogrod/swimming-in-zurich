@@ -8,7 +8,7 @@ from decimal import Decimal
 from pathlib import Path
 
 import pytest
-from tests.declared_fixtures import LOCKER_NOUN, PAGE_FIXTURES, page_of
+from tests.declared_fixtures import LOCKER_NOUN, MIETOBJEKT_NOUN, PAGE_FIXTURES, page_of
 
 from apps.web.services.gold_store import GoldSwimStore
 from swimzh.core.result import Ok
@@ -202,16 +202,38 @@ def test_locker_carrying_pools_after_a_rebuild_are_the_fixture_derived_twenty(
     assert "strandbad-mythenquai" in carrying
 
 
+def test_rental_carrying_pools_after_a_rebuild_are_the_fixture_derived_twenty(
+    gold_db: Path,
+) -> None:
+    """Mietobjekt-extraction S2 acceptance: after a full (offline) atomic build, EXACTLY the
+    pools whose committed page carries the `Mietobjekt` table header serve non-empty
+    `rentals` — the Decisions-corrected count (every declared table has ≥1 non-locker row
+    once OTHER routing is honest), derived by the shared parser-independent scan
+    (`tests.declared_fixtures.MIETOBJEKT_NOUN`), so this cannot collapse into comparing the
+    parser with itself. Measured count: 20 of the 26 declared sources."""
+    expected = {pool_id for pool_id in PAGE_FIXTURES if MIETOBJEKT_NOUN.search(page_of(pool_id))}
+    carrying = {
+        str(f.identity.facility_id) for f in GoldSwimStore.open(gold_db).facilities() if f.rentals
+    }
+    assert carrying == expected
+    assert len(carrying) == 20
+    # heuried's only non-locker row is an unmapped `Liegestuhlsaisonfach` — it carries rentals
+    # only because OTHER routing keeps it (the no-drop guarantee at store scale).
+    assert "freibad-heuried" in carrying
+
+
 def test_a_pool_without_the_mietobjekt_table_keeps_a_byte_stable_blob(gold_db: Path) -> None:
-    """S1 touches no codec/DTO code, so a pool whose page carries no Mietobjekt table
-    serializes exactly as before: `lockers` stays the pre-existing (unconditional) empty
-    list, and the stored blob round-trips byte-identically through the codec."""
+    """A pool whose page carries no Mietobjekt table serializes exactly as before S1/S2:
+    `lockers` stays the pre-existing (unconditional) empty list, the additive `rentals` key
+    is POPPED when empty (never emitted as `[]`), and the stored blob round-trips
+    byte-identically through the codec."""
     doc = (
         open_db(gold_db)
         .execute("select facility_doc from pool where id = 'maennerbad-schanzengraben'")
         .fetchone()[0]
     )
     assert '"lockers":[]' in doc
+    assert '"rentals"' not in doc
     assert codec.dumps(codec.loads(doc)) == doc
 
 

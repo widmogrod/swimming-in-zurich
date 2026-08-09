@@ -35,6 +35,7 @@ from swimzh.domain.models import (
     Provenance,
 )
 from swimzh.domain.pricing import PriceCategory, PriceEntry, PriceTable
+from swimzh.domain.rentals import Gratis, Priced, RentalItem, RentalKind
 from swimzh.domain.schedule import ScheduleRule, TimeRange, Weekday
 
 FETCHED = datetime(2026, 7, 19, 9, 0, tzinfo=ZoneInfo("Europe/Zurich"))
@@ -156,6 +157,17 @@ def test_scraped_features_and_lockers_survive_compose_onto_non_curated_base() ->
     merged = result.facilities[0]
     assert merged.features == (sauna,)
     assert merged.lockers == (locker,)
+
+
+def test_scraped_rentals_survive_compose_onto_non_curated_base() -> None:
+    # mietobjekt-extraction S2: the rentals aspect folds through compose exactly like its
+    # lockers sibling — including the fee union's stated-gratis arm, untouched by the merge.
+    towel = RentalItem(kind=RentalKind.TOWEL, fee=Priced(Decimal("3.00")))
+    lounger = RentalItem(kind=RentalKind.SUNLOUNGER, fee=Gratis(), deposit_chf=Decimal("2.00"))
+    scraped = replace(_scraped_city(), rentals=(towel, lounger))
+    result = compose((), ((CITY, scraped),))
+    merged = result.facilities[0]
+    assert merged.rentals == (towel, lounger)
 
 
 def _stripped_curated_city() -> Facility:

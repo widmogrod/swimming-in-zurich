@@ -11,6 +11,7 @@ turn failures into `Result` values catch it at their boundary.
 from __future__ import annotations
 
 from datetime import time
+from decimal import Decimal
 from typing import assert_never
 
 from swimzh.boundary.curated_dto import (
@@ -46,6 +47,7 @@ from swimzh.boundary.curated_dto import (
     PublicDTO,
     RateLimitedDTO,
     RedirectDTO,
+    RentalItemDTO,
     ResolvedSessionDTO,
     RuleDTO,
     SchemaMismatchDTO,
@@ -63,6 +65,8 @@ from swimzh.boundary.curated_dto import (
     _LockerMechanism,
     _PlanConfidence,
     _PriceCategory,
+    _RentalFeeState,
+    _RentalKind,
     _Scope,
     _Weather,
     _Weekday,
@@ -115,6 +119,7 @@ from swimzh.domain.models import (
     OperatingSeason,
 )
 from swimzh.domain.pricing import PriceCategory, PriceEntry, PriceTable
+from swimzh.domain.rentals import Gratis, Priced, RentalFee, RentalItem, RentalKind, Unstated
 from swimzh.domain.schedule import (
     AnnualWindow,
     ClosureRange,
@@ -655,6 +660,77 @@ def locker_to_dto(locker: LockerOption) -> LockerOptionDTO:
         period=locker.period,
         mechanism=_LOCKER_MECHANISM_TO[locker.mechanism] if locker.mechanism is not None else None,
         raw=locker.raw,
+    )
+
+
+_RENTAL_KIND_FROM: dict[str, RentalKind] = {k.value: k for k in RentalKind}
+
+
+def _rental_kind_to_dto(kind: RentalKind) -> _RentalKind:
+    """Exhaustive by construction (the fee-union style): a future `RentalKind` member is a
+    TYPE error here until it gets a wire value — never a runtime `KeyError` from a dict a
+    later edit forgot."""
+    match kind:
+        case RentalKind.TOWEL:
+            return "towel"
+        case RentalKind.SWIMWEAR:
+            return "swimwear"
+        case RentalKind.GOGGLES:
+            return "goggles"
+        case RentalKind.CABIN:
+            return "cabin"
+        case RentalKind.SUNLOUNGER:
+            return "sunlounger"
+        case RentalKind.PARASOL:
+            return "parasol"
+        case RentalKind.OTHER:
+            return "other"
+        case _ as unreachable:
+            assert_never(unreachable)
+
+
+def _rental_fee_from_dto(dto: RentalItemDTO) -> RentalFee:
+    """A non-null `fee_chf` means `Priced`; the discriminant means `Gratis`; anything else is
+    the honest `Unstated` — mirroring `_admission_from_stored`'s prices-first reading."""
+    if dto.fee_chf is not None:
+        return Priced(dto.fee_chf)
+    if dto.fee_state == "gratis":
+        return Gratis()
+    return Unstated()
+
+
+def _rental_fee_to_dto(fee: RentalFee) -> tuple[Decimal | None, _RentalFeeState | None]:
+    """Project the fee union onto the two stored keys (`fee_chf`, `fee_state`)."""
+    match fee:
+        case Priced(amount_chf):
+            return amount_chf, None
+        case Gratis():
+            return None, "gratis"
+        case Unstated():
+            return None, None
+        case _ as unreachable:
+            assert_never(unreachable)
+
+
+def rental_from_dto(dto: RentalItemDTO) -> RentalItem:
+    return RentalItem(
+        kind=_RENTAL_KIND_FROM[dto.kind],
+        fee=_rental_fee_from_dto(dto),
+        deposit_chf=dto.deposit_chf,
+        period=dto.period,
+        raw=dto.raw,
+    )
+
+
+def rental_to_dto(rental: RentalItem) -> RentalItemDTO:
+    fee_chf, fee_state = _rental_fee_to_dto(rental.fee)
+    return RentalItemDTO(
+        kind=_rental_kind_to_dto(rental.kind),
+        fee_chf=fee_chf,
+        fee_state=fee_state,
+        deposit_chf=rental.deposit_chf,
+        period=rental.period,
+        raw=rental.raw,
     )
 
 

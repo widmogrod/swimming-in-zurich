@@ -274,7 +274,21 @@ _FACILITY: tuple[FieldSourcing, ...] = (
         "over the 26 declared sources' committed fixtures: 20 carry the table (the 2026-08-02 "
         "note's '25 pages' grepped all fixtures, not the declared set); the 6 without are "
         "altstetten, maennerbad, and the 4 Schulschwimmanlagen. The non-locker rows of the "
-        "same table are `rentals` — parsed since S1, wired onto the facility in S2.",
+        "same table are `rentals` — its own row below since S2.",
+    ),
+    FieldSourcing(
+        "facility.rentals",
+        ProducerKind.SOURCED,
+        "providers.mietobjekt",
+        "20/26 declared sources",
+        "BUILT 2026-08-09 (mietobjekt-extraction S2): the non-locker rows of the same "
+        "`Mietobjekt|Preis` table — towels/swimwear/goggles/cabins/loungers/parasols, unknown "
+        "labels kept as OTHER with the row in `raw` (the no-drop guarantee). Every one of the "
+        "20 table-carrying declared pages has at least one non-locker row, so rentals coverage "
+        "equals table coverage. The fee is the closed Priced/Gratis/Unstated union (the S1 "
+        "review directive): a stated 'gratis' cell and an 'auf Anfrage' cell are different "
+        "facts, never one null. Serialized additively — the `rentals` key is POPPED when "
+        "empty, so the 37 pools without a table keep byte-identical blobs.",
     ),
     FieldSourcing(
         "facility.last_admission_before",

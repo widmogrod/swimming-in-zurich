@@ -31,6 +31,7 @@ from swimzh.domain.models import (
 )
 from swimzh.domain.pricing import PriceCategory, PriceEntry, PriceTable
 from swimzh.domain.query import FacilityDetail, FeatureStatus, TempReading, TempUnavailable
+from swimzh.domain.rentals import Gratis, RentalItem, RentalKind, Unstated
 from swimzh.domain.schedule import OpenDay, ResolvedSession, TimeRange
 
 _ZURICH = ZoneInfo("Europe/Zurich")
@@ -211,6 +212,38 @@ def test_pool_detail_surfaces_basins_physicals_and_prices() -> None:
             "raw": "Wäschefach (1 Jahr) | Fr. 400.–",
         },
     ]
+    # Rentals (mietobjekt-extraction S2): the non-locker half of the same table. The fee is
+    # the projected closed union — "priced" with the amount here; a stated-gratis row would
+    # be ("gratis", None), never conflated with an unstated ("unstated", None).
+    assert body["rentals"] == [
+        {
+            "kind": "towel",
+            "fee": "priced",
+            "fee_chf": 3.0,
+            "deposit_chf": 20.0,
+            "period": None,
+            "raw": "Badetuch | Fr. 3.–, plus Depot Fr. 20.–",
+        },
+        {
+            "kind": "swimwear",
+            "fee": "priced",
+            "fee_chf": 3.0,
+            "deposit_chf": 20.0,
+            "period": None,
+            "raw": "Badebekleidung | Fr. 3.–, plus Depot Fr. 20.–",
+        },
+        {
+            "kind": "goggles",
+            "fee": "priced",
+            "fee_chf": 3.0,
+            "deposit_chf": 20.0,
+            "period": None,
+            "raw": "Schwimmbrille | Fr. 3.–, plus Depot Fr. 20.–",
+        },
+    ]
+    # The S2 acceptance stated as the page states it: all 7 Mietobjekt rows of City's table
+    # reach the wire across the two typed fields — 4 lockers + 3 rentals, nothing dropped.
+    assert len(body["lockers"]) + len(body["rentals"]) == 7
 
     # Prices: the whole scraped facility price table, with its freshness date present — and the
     # admission kind naming it a stated tariff (non-null `prices` exactly when "tariff").
@@ -333,6 +366,24 @@ def test_facility_detail_out_surfaces_temp_and_parsed_prose_caveat() -> None:
         basins=(basin,),
         features=(sauna,),
         lockers=(LockerOption(category=LockerCategory.WARDROBE, deposit_chf=Decimal("2")),),
+        rentals=(
+            # The gratis/unstated PAIR at the projection seam — the two arms the store-backed
+            # City test cannot reach (its rows are all priced). Both project fee_chf None, so
+            # the fee STRING is the only carrier of the stated-vs-absent distinction on the
+            # wire: pinning both strings side by side is what makes a `_rental_out` arm that
+            # collapses them fail here.
+            RentalItem(
+                kind=RentalKind.SUNLOUNGER,
+                fee=Gratis(),
+                deposit_chf=Decimal("2"),
+                raw="Liegestuhl | gratis, plus Depot Fr. 2.–",
+            ),
+            RentalItem(
+                kind=RentalKind.OTHER,
+                fee=Unstated(),
+                raw="Mehrzweckraum | auf Anfrage",
+            ),
+        ),
         provenance=Provenance(source="pool-page", curated=False, valid_as_of=date(2026, 7, 1)),
     )
     out = facility_detail_out(
@@ -359,6 +410,13 @@ def test_facility_detail_out_surfaces_temp_and_parsed_prose_caveat() -> None:
     assert [(h.start, h.end) for h in out.features[0].hours] == [("09:00", "21:00")]
     assert out.admission == "tariff"  # the `Tariff` arm projects its kind alongside the table
     assert out.prices is not None and out.prices.entries[0].display == "Adult CHF 8"
+    # The stated-gratis rental projects as ("gratis", fee_chf None) and the unstated one as
+    # ("unstated", fee_chf None): same null amount, DIFFERENT fee strings — a page-stated
+    # fact is never rendered the same as an absent one (the fee-union directive at the wire).
+    assert [(r.fee, r.fee_chf) for r in out.rentals] == [("gratis", None), ("unstated", None)]
+    assert out.rentals[0].kind == "sunlounger"
+    assert out.rentals[0].deposit_chf == 2.0
+    assert out.rentals[1].kind == "other" and out.rentals[1].raw == "Mehrzweckraum | auf Anfrage"
     assert out.provenance.curated is False and out.provenance.valid_as_of == "2026-07-01"
     # The detail carries the SAME three-state freshness as the `/pools` row, so the panel's
     # trust line no longer has to read the (now always-False) `curated` flag.

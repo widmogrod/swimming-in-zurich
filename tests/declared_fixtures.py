@@ -57,6 +57,24 @@ PAGE_FIXTURES: dict[str, str] = {
 #: with itself. Measured: 20 of the 26 declared fixtures match.
 LOCKER_NOUN = re.compile(r"\wkasten|Wertsachenfach|Wäschefach")
 
+#: The same parser-independent posture for the S2 rental acceptance sets (each measured
+#: over the declared fixtures; the counts are pinned by `tests/providers/test_mietobjekt.py`
+#: and `apps/web/tests/test_gold_store.py`):
+#:
+#: * `MIETOBJEKT_NOUN` — the word `Mietobjekt` appears on a declared page ONLY as the
+#:   anchoring column header of the one table, so its presence derives the table-carrying
+#:   (== rentals-carrying, every table has ≥1 non-locker row) set. Measured: 20.
+#: * `SUNLOUNGER_NOUN` / `PARASOL_NOUN` — the EXACT label word, `(?!\w)` so a compound like
+#:   `Liegestuhlsaisonfach` (a compartment FOR a lounger, not renting one) never counts.
+#:   Measured: 9 / 8.
+#: * `RENTAL_WEAR_NOUN` — the towel/swimwear/goggles row nouns. Measured: 11.
+#: * `CABIN_NOUN` — a compound `…kabine` (Tages-/Saisonkabine). Measured: 11.
+MIETOBJEKT_NOUN = re.compile(r"Mietobjekt")
+SUNLOUNGER_NOUN = re.compile(r"Liegestuhl(?!\w)")
+PARASOL_NOUN = re.compile(r"Sonnenschirm(?!\w)")
+RENTAL_WEAR_NOUN = re.compile(r"Badetuch|Badebekleidung|Badehosen|Schwimmbrille")
+CABIN_NOUN = re.compile(r"\wkabine")
+
 
 def page_of(pool_id: str) -> str:
     """The committed page fixture text for one declared source."""

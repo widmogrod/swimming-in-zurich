@@ -131,6 +131,21 @@ class LockerOut(BaseModel):
     raw: str
 
 
+#: The closed rental-fee union, projected: "priced" (`fee_chf` carries the amount), "gratis"
+#: (the page STATES the rental is free), "unstated" (the page states no fee — "auf Anfrage").
+#: Stated-free and unstated are different facts and never share a value on the wire.
+RentalFeeOut = Literal["priced", "gratis", "unstated"]
+
+
+class RentalOut(BaseModel):
+    kind: str  # RentalKind value: "towel" / "swimwear" / … / "other" (unmapped label, see raw)
+    fee: RentalFeeOut
+    fee_chf: float | None  # the amount; non-null exactly when fee == "priced"
+    deposit_chf: float | None  # refundable monetary Pfand; None also for a non-monetary one
+    period: str | None  # free text ("Saison", "Tages")
+    raw: str  # the exact source row — for "other" the only carrier of the label
+
+
 class PriceEntryOut(BaseModel):
     category: str  # PriceCategory value
     amount_chf: float
@@ -207,6 +222,9 @@ class FacilityDetailOut(BaseModel):
     basins: list[BasinOut]
     features: list[FeatureStatusOut]
     lockers: list[LockerOut]
+    # The non-locker half of the same page table the lockers come from (`Mietobjekt | Preis`):
+    # towels/cabins/loungers…, unknown labels kept as "other" + raw (mietobjekt-extraction S2).
+    rentals: list[RentalOut]
     # The admission kind + its table: `prices` is non-null exactly when `admission == "tariff"`.
     # A "free" pool carries `prices: null` AND the fact that admission is free — no longer
     # conflated with "unknown" (the 32 pools nobody has priced).

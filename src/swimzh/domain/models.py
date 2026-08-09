@@ -19,6 +19,7 @@ from swimzh.domain.admission import Admission, Unknown
 from swimzh.domain.geo import GeoPoint
 from swimzh.domain.lane_plan import LanePlan
 from swimzh.domain.lockers import LockerOption
+from swimzh.domain.rentals import RentalItem
 from swimzh.domain.schedule import (
     AnnualWindow,
     ClosureRange,
@@ -257,6 +258,10 @@ class Facility:
     notices: tuple[Notice, ...] = field(default_factory=tuple)
     features: tuple[Feature, ...] = field(default_factory=tuple)
     lockers: tuple[LockerOption, ...] = field(default_factory=tuple)
+    #: The non-locker half of the same page table the lockers come from (`Mietobjekt | Preis`):
+    #: towels/swimwear/goggles/cabins/loungers/parasols, unknown labels kept as OTHER + raw —
+    #: nothing dropped (mietobjekt-extraction S2). Empty == the page states none.
+    rentals: tuple[RentalItem, ...] = field(default_factory=tuple)
     # How long before closing the last admission is (e.g. 30 min). `timedelta` so the UI can render
     # it against the resolved closing time rather than hard-coding a clock.
     last_admission_before: timedelta | None = None

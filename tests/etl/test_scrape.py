@@ -24,6 +24,7 @@ from swimzh.domain.geo import GeoPoint
 from swimzh.domain.lockers import LockerCategory
 from swimzh.domain.models import PoolKind
 from swimzh.domain.pricing import PriceCategory, PriceEntry, PriceTable
+from swimzh.domain.rentals import Priced, RentalKind
 from swimzh.domain.schedule import DatePrecision, TimeRange, Weather, Weekday
 from swimzh.etl.scrape import (
     admission_for,
@@ -144,9 +145,27 @@ def test_extracts_fill_the_lockers_aspect_from_the_mietobjekt_table() -> None:
     ]
 
 
+def test_extracts_fill_the_rentals_aspect_from_the_same_table() -> None:
+    """mietobjekt-extraction S2: the OTHER half of the one table rides the same extract —
+    City's towel/swimwear/goggles rows at `Priced(3)` + Fr. 20 deposit reach `ScrapedAspects`,
+    so compose can fold them onto the facility."""
+    body = FIXTURE.read_bytes()
+    catalog = (_entry("hallenbad-city", "Hallenbad City", PoolKind.INDOOR, "https://x/city.html"),)
+    report = scrape_declared_sources(
+        _client(lambda _r: httpx.Response(200, content=body)), catalog, FETCHED, tariffs=_TARIFFS
+    )
+    _ref, aspects = report.extracts[0]
+    assert [(r.kind, r.fee, r.deposit_chf) for r in aspects.rentals] == [
+        (RentalKind.TOWEL, Priced(Decimal("3.00")), Decimal("20.00")),
+        (RentalKind.SWIMWEAR, Priced(Decimal("3.00")), Decimal("20.00")),
+        (RentalKind.GOGGLES, Priced(Decimal("3.00")), Decimal("20.00")),
+    ]
+
+
 def test_a_page_without_the_mietobjekt_table_yields_empty_lockers_not_a_failure() -> None:
     # maennerbad is a real declared source whose committed page has no Mietobjekt table:
-    # absence is data — an extract with `lockers == ()`, never a `ScrapeFailure`.
+    # absence is data — an extract with `lockers == ()` AND `rentals == ()`, never a
+    # `ScrapeFailure`.
     catalog = (
         _entry(
             "maennerbad-schanzengraben", "Männerbad Schanzengraben", PoolKind.RIVER, "https://x/m"
@@ -159,6 +178,7 @@ def test_a_page_without_the_mietobjekt_table_yields_empty_lockers_not_a_failure(
     assert report.failures == ()
     (_ref, aspects) = report.extracts[0]
     assert aspects.lockers == ()
+    assert aspects.rentals == ()
 
 
 def test_a_garbled_mietobjekt_price_cell_is_a_typed_failure_that_aborts_the_build() -> None:

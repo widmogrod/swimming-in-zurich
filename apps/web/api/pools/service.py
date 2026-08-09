@@ -25,6 +25,8 @@ from apps.web.api.pools.model import (
     PriceTableOut,
     ProvenanceOut,
     PublicWindowOut,
+    RentalFeeOut,
+    RentalOut,
     TimeRangeOut,
 )
 from apps.web.services.ports import TemperatureProvider
@@ -51,6 +53,7 @@ from swimzh.domain.query import (
     TempUnavailableCode,
     read_temperature,
 )
+from swimzh.domain.rentals import Gratis, Priced, RentalItem, Unstated
 from swimzh.domain.schedule import (
     ClosedDay,
     DatePrecision,
@@ -200,6 +203,31 @@ def _locker_out(locker: LockerOption) -> LockerOut:
     )
 
 
+def _rental_out(rental: RentalItem) -> RentalOut:
+    """Project the closed fee union onto the wire: the kind string plus the amount (non-null
+    exactly in the `Priced` arm — a stated-gratis rental is `("gratis", None)`, never conflated
+    with the unstated `("unstated", None)`)."""
+    fee: RentalFeeOut
+    amount: float | None = None
+    match rental.fee:
+        case Priced(amount_chf):
+            fee, amount = "priced", float(amount_chf)
+        case Gratis():
+            fee = "gratis"
+        case Unstated():
+            fee = "unstated"
+        case _ as unreachable:
+            assert_never(unreachable)
+    return RentalOut(
+        kind=rental.kind.value,
+        fee=fee,
+        fee_chf=amount,
+        deposit_chf=float(rental.deposit_chf) if rental.deposit_chf is not None else None,
+        period=rental.period,
+        raw=rental.raw,
+    )
+
+
 def _price_table_out(table: PriceTable) -> PriceTableOut:
     return PriceTableOut(
         entries=[
@@ -325,6 +353,7 @@ def facility_detail_out(
         basins=[_basin_out(b) for b in detail.basins],
         features=[_feature_status_out(f) for f in detail.features],
         lockers=[_locker_out(locker) for locker in detail.lockers],
+        rentals=[_rental_out(rental) for rental in detail.rentals],
         admission=admission_kind,
         prices=_price_table_out(price_table) if price_table is not None else None,
         operating_season=(

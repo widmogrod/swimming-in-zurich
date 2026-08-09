@@ -47,6 +47,7 @@ from swimzh.domain.models import (
     Provenance,
 )
 from swimzh.domain.pricing import PriceCategory, PriceEntry, PriceTable
+from swimzh.domain.rentals import Gratis, Priced, RentalItem, RentalKind, Unstated
 from swimzh.domain.schedule import (
     AnnualWindow,
     DatePrecision,
@@ -265,6 +266,72 @@ def test_roundtrip_covers_every_facility_level_static_field(
     assert back == facility
     assert back.features[0].hours == base.basins[0].rules[:1]
     assert back.lockers[0].mechanism is LockerMechanism.COIN
+
+
+def test_a_facility_without_rentals_serializes_without_the_key(
+    facilities: tuple[Facility, ...],
+) -> None:
+    """S2 acceptance: `rentals` is POPPED when empty (the recorded deviation from the
+    facility-level emit-unconditionally rule — the `admission_state`/`operating_season`/
+    `min_age` precedent), so every blob without rentals — including a LOCKER-carrying one
+    like the rich fixture — is byte-identical to its pre-S2 form."""
+    for facility in facilities:
+        assert facility.rentals == ()
+        assert '"rentals"' not in codec.dumps(facility)
+    assert facilities[0].lockers  # popping is per-field: lockers alone never emit rentals
+
+
+def test_rentals_round_trip_losslessly_across_all_three_fee_arms(
+    facilities: tuple[Facility, ...],
+) -> None:
+    """The full `RentalFee` union survives the store exactly: `Priced` rides `fee_chf`,
+    `Gratis` rides the popped-when-absent `fee_state` discriminant, and `Unstated` rides
+    neither — so a stated-gratis Liegestuhl and an `auf Anfrage` Mehrzweckraum can never
+    collapse into one null in the blob (the S1-review directive, at the codec seam)."""
+    rentals = (
+        RentalItem(
+            kind=RentalKind.TOWEL,
+            fee=Priced(Decimal("3.00")),
+            deposit_chf=Decimal("20.00"),
+            raw="Badetuch | Fr. 3.–, plus Depot Fr. 20.–",
+        ),
+        RentalItem(
+            kind=RentalKind.SUNLOUNGER,
+            fee=Gratis(),
+            deposit_chf=Decimal("2.00"),
+            raw="Liegestuhl | gratis, plus Depot Fr. 2.–",
+        ),
+        RentalItem(
+            kind=RentalKind.CABIN,
+            fee=Priced(Decimal("120.00")),
+            deposit_chf=Decimal("20.00"),
+            period="Saison",
+            raw="Saisonkabine | Fr. 120.–, plus Depot Fr. 20.–",
+        ),
+        RentalItem(kind=RentalKind.OTHER, fee=Unstated(), raw="Mehrzweckraum | auf Anfrage"),
+    )
+    facility = replace(facilities[0], rentals=rentals)
+    dumped = codec.dumps(facility)
+    # Only the stated-gratis row carries the discriminant key.
+    assert dumped.count('"fee_state":"gratis"') == 1
+    back = codec.loads(dumped)
+    assert back == facility
+    assert [r.fee for r in back.rentals] == [
+        Priced(Decimal("3.00")),
+        Gratis(),
+        Priced(Decimal("120.00")),
+        Unstated(),
+    ]
+
+
+def test_a_pre_s2_blob_without_the_rentals_key_loads_with_no_rentals(
+    facilities: tuple[Facility, ...],
+) -> None:
+    # A gold blob written before S2 has no `rentals` key at all; it must load as the honest
+    # empty tuple (and re-dump byte-identically, per the pop above).
+    blob = json.loads(codec.dumps(facilities[1]))
+    assert "rentals" not in blob
+    assert codec.loads(json.dumps(blob)).rentals == ()
 
 
 def test_roundtrip_basin_carrying_a_lane_plan(facilities: tuple[Facility, ...]) -> None:
