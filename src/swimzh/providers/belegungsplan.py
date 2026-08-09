@@ -6,7 +6,9 @@ the basin name, the lane count ("6 Bahnen"), and a valid-from date ("ab 01. Janu
 and a right-hand legend mapping codes to owner names.
 
 `pdfplumber` reconstructs per-word bounding boxes; this module clusters the digit
-x-coordinates into lane columns and their y-coordinates into slot rows, maps each cell to an
+x-coordinates into lane columns and their y-coordinates into slot rows, pairs each slot row
+to its time label by y-geometry (a gutter label the source left cell-free is a blank
+half-hour, never a rank shift — see `_pair_rows_to_labels`), maps each cell to an
 owner via the legend, RLE-compresses contiguous same-owner regions into `LaneReservation`s,
 then runs two invariants (per-slot lane disjointness, lanes ⊆ {1..N}) before returning. A
 clean 7×N rectangle takes a uniform fast path; a movable-floor / truncated sheet whose day
@@ -31,7 +33,7 @@ from __future__ import annotations
 import math
 import re
 from collections import defaultdict
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import date, time
 
@@ -116,8 +118,20 @@ class GridSpec:
     # time label; anything lower is page prose, not a grid cell. Measured on the committed
     # corpus: real cell rows sit at most 0.434×pitch below their own label, while the footer
     # sentence's standalone digit ("… mindestens N Bahnen zur Verfügung.") sits 2.11×pitch
-    # (Leimbach) / 2.65×pitch (Oerlikon) below the last label — 1.0 separates them cleanly.
+    # (Leimbach) / 2.65×pitch (Oerlikon) below the last label ROW — including the
+    # "23.30 - 24.00" row that never becomes a `TimeRange`; measured to the last
+    # *constructable* `TimeRange` instead, the same Oerlikon gap is 3.65×pitch — and 1.0
+    # separates prose from cells cleanly in either frame.
     label_overhang_ratio: float = 1.0
+    # Row→label pairing tolerance: a cell-row cluster claims the time label whose top is
+    # nearest, but only within this × label pitch (see `_pair_rows_to_labels`). Corpus-
+    # measured: real cell rows sit 0.411–0.434×pitch below their own label, while the next
+    # label is ≥0.514×pitch away — the binding case is the two sectioned Oerlikon basins
+    # (0.434×pitch offset, next label at 0.514×; the single-basin sheets all sit ≥0.576×).
+    # 0.5 admits every real row and keeps the nearest label unambiguous, but with only
+    # 0.014×pitch of headroom: do NOT widen this past 0.514. A label no row claims is a
+    # blank half-hour (legal); an in-grid row no label admits is garble (`SchemaMismatch`).
+    row_label_tol_ratio: float = 0.5
 
 
 _DEFAULT_GRID_SPEC = GridSpec()  # default layout tolerances; a module singleton for defaults
@@ -373,16 +387,25 @@ def _code_to_access(name: str) -> SessionAccess:
 # --- grid segmentation --------------------------------------------------------------
 
 
-def _time_labels(words: list[_Word], grid_x_min: float) -> list[TimeRange]:
+@dataclass(frozen=True, slots=True)
+class _TimeLabel:
+    """A left-gutter time label with its page y-top — the geometry rows pair against."""
+
+    top: float
+    time: TimeRange
+
+
+def _time_labels(words: list[_Word], grid_x_min: float) -> list[_TimeLabel]:
     # A label ("06.00 - 06.30") is split across several words on one row; group by row first,
     # then match the joined text — no single word carries the whole range.
     label_words = [w for w in words if w.xc < grid_x_min]
     rows: dict[int, list[_Word]] = defaultdict(list)
     for w in label_words:
         rows[round(w.top)].append(w)
-    labels: list[TimeRange] = []
+    labels: list[_TimeLabel] = []
     for top in sorted(rows):
-        text = " ".join(w.text for w in sorted(rows[top], key=lambda w: w.x0))
+        group = sorted(rows[top], key=lambda w: w.x0)
+        text = " ".join(w.text for w in group)
         match = _TIME_LABEL_RE.search(text)
         if match is None:
             continue
@@ -394,8 +417,66 @@ def _time_labels(words: list[_Word], grid_x_min: float) -> list[TimeRange]:
         except ValueError:
             continue
         if start < end:
-            labels.append(TimeRange(start=start, end=end))
+            labels.append(_TimeLabel(top=min(w.top for w in group), time=TimeRange(start, end)))
     return labels
+
+
+def _pair_rows_to_labels(
+    rows: Sequence[float], labels: Sequence[_TimeLabel], spec: GridSpec
+) -> Result[tuple[TimeRange, ...], ProviderError]:
+    """Pair each cell-row cluster to the time label it geometrically sits under.
+
+    Rank pairing (`labels[: len(rows)]`) silently shifts every row after a *blank* gutter
+    slot — a label the source printed but left cell-free (Bläsi's 07:30–08:00, Käferberg's
+    06:00–06:30) — serving whole sheets 30 minutes early. Geometry pairing instead lets each
+    row claim its NEAREST label within `row_label_tol_ratio` × pitch: a label no row claims
+    is a legal blank half-hour, while an in-grid row no label admits (or two rows claiming
+    the same label) is garble → `SchemaMismatch`. Correct sheets, where every row's nearest
+    label is the rank-assigned one anyway, pair byte-identically."""
+    if not labels:
+        return Err(SchemaMismatch(source=_SOURCE, detail="no time labels"))
+    if len(labels) < 2:
+        # A single label yields no pitch to derive the tolerance from; only rank can pair.
+        if len(rows) > len(labels):
+            return Err(
+                SchemaMismatch(
+                    source=_SOURCE,
+                    detail=f"{len(rows)} slot rows but only {len(labels)} time labels",
+                )
+            )
+        return Ok(tuple(label.time for label in labels[: len(rows)]))
+    tops = [label.top for label in labels]
+    pitch = (tops[-1] - tops[0]) / (len(tops) - 1)
+    tolerance = pitch * spec.row_label_tol_ratio
+    paired: list[TimeRange] = []
+    claimed: set[int] = set()
+    for row in rows:
+        index = _nearest(row, tops)
+        label = labels[index]
+        if abs(tops[index] - row) > tolerance:
+            return Err(
+                SchemaMismatch(
+                    source=_SOURCE,
+                    detail=(
+                        f"cell row at y={row:.1f} matches no time label within "
+                        f"{spec.row_label_tol_ratio}×pitch (nearest is "
+                        f"{abs(tops[index] - row) / pitch:.2f}×pitch away)"
+                    ),
+                )
+            )
+        if index in claimed:
+            return Err(
+                SchemaMismatch(
+                    source=_SOURCE,
+                    detail=(
+                        f"two cell rows claim the {label.time.start}-{label.time.end} "
+                        f"time label (second at y={row:.1f})"
+                    ),
+                )
+            )
+        claimed.add(index)
+        paired.append(label.time)
+    return Ok(tuple(paired))
 
 
 def _label_row_tops(words: list[_Word], grid_x_min: float) -> list[float]:
@@ -530,14 +611,10 @@ def _segment_grid(
 
     rows = _cluster([w.top for w in cells], spec.y_tol)
     labels = _time_labels(words, header.grid_x_min)
-    if len(labels) < len(rows):
-        return Err(
-            SchemaMismatch(
-                source=_SOURCE,
-                detail=f"{len(rows)} slot rows but only {len(labels)} time labels",
-            )
-        )
-    slots = labels[: len(rows)]
+    slots_result = _pair_rows_to_labels(rows, labels, spec)
+    if isinstance(slots_result, Err):
+        return slots_result
+    slots = list(slots_result.value)
 
     columns = _cluster([w.xc for w in cells], spec.x_tol)
     if len(columns) == 7 * header.lane_count:
@@ -585,7 +662,15 @@ def _column_runs(
             start_row, current = None, None
             continue
         resolved += 1
-        if current is not None and access == current:
+        # A run may only extend across CONTIGUOUS slots: geometry pairing leaves a blank
+        # gutter label out of `slots`, so adjacent row indices can be half an hour apart —
+        # a same-owner block on both sides of the blank must stay two reservations, never
+        # a claim over the half-hour the source left empty.
+        if (
+            current is not None
+            and access == current
+            and grid.slots[row].start == grid.slots[row - 1].end
+        ):
             continue
         flush(row - 1)
         start_row, current = row, access
@@ -824,8 +909,9 @@ def _parse_sectioned_basin(
     group: list[_Word],
     legend: dict[int, str],
     valid_from: date | None,
-    slots: list[TimeRange],
+    labels: list[_TimeLabel],
     data_top: float,
+    data_bottom: float,
     spec: GridSpec,
     page_width: float,
 ) -> Result[ParsedPlan, ProviderError]:
@@ -839,7 +925,9 @@ def _parse_sectioned_basin(
     cells = [
         w
         for w in words
-        if w.text.isdigit() and grid_x_min < w.xc < grid_x_max and w.top >= data_top - spec.y_tol
+        if w.text.isdigit()
+        and grid_x_min < w.xc < grid_x_max
+        and data_top - spec.y_tol <= w.top < data_bottom
     ]
     if not cells:
         return Err(SchemaMismatch(source=_SOURCE, detail="no grid cells"))
@@ -857,14 +945,10 @@ def _parse_sectioned_basin(
         return Err(SchemaMismatch(source=_SOURCE, detail="no section columns"))
 
     rows = _cluster([w.top for w in cells], spec.y_tol)
-    if len(slots) < len(rows):
-        return Err(
-            SchemaMismatch(
-                source=_SOURCE,
-                detail=f"{len(rows)} slot rows but only {len(slots)} time labels",
-            )
-        )
-    used_slots = slots[: len(rows)]
+    slots_result = _pair_rows_to_labels(rows, labels, spec)
+    if isinstance(slots_result, Err):
+        return slots_result
+    used_slots = list(slots_result.value)
 
     basin_hint = _basin_title(words, grid_x_min, grid_x_max, spec, weekday_top)
     if not basin_hint:
@@ -924,16 +1008,17 @@ def parse_belegungsplan_sheet(
         return Err(SchemaMismatch(source=_SOURCE, detail="no legend"))
     valid_from = _header_valid_from(words, grid_x_max, weekday_top)
     left_edge = min(_grid_band(g, spec, page_width)[0] for g in groups)
-    slots = _time_labels(words, left_edge)
-    if not slots:
+    labels = _time_labels(words, left_edge)
+    if not labels:
         return Err(SchemaMismatch(source=_SOURCE, detail="no time labels"))
     data_top = _first_data_top(words, left_edge)
+    data_bottom = _grid_bottom(words, left_edge, spec)
 
     plans: list[ParsedPlan] = []
     first_error: ProviderError | None = None
     for group in groups:
         result = _parse_sectioned_basin(
-            words, group, legend, valid_from, slots, data_top, spec, page_width
+            words, group, legend, valid_from, labels, data_top, data_bottom, spec, page_width
         )
         if isinstance(result, Ok):
             plans.append(result.value)

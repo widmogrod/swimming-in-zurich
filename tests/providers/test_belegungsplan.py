@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import hashlib
 import io
+import math
 import sys
 from collections.abc import Callable
 from datetime import date, time
@@ -27,11 +28,13 @@ from swimzh.providers.belegungsplan import (
     _Grid,
     _grid_band,
     _Header,
+    _pair_rows_to_labels,
     _parse_header,
     _parse_sectioned_basin,
     _parse_valid_from,
     _resolve,
     _segment_grid,
+    _TimeLabel,
     _weekday_row,
     _Word,
     parse_belegungsplan,
@@ -209,6 +212,45 @@ def test_blaesi_real_fixture_parses_uniform_five_lanes() -> None:
     assert _check_invariants(parsed.plan.reservations, parsed.plan.lane_count) is None
 
 
+def test_blaesi_sunday_public_swim_parses_at_published_times() -> None:
+    # Geometry pairing (claim-audit S2): Bläsi's 07:30–08:00 gutter label has zero grid
+    # cells, so rank pairing shifted every later row 30 min early (Sunday public served
+    # 08:30–17:30). The PDF publishes 09:00–18:00 — pinned by value, all five lanes.
+    plan = parse_belegungsplan((FIXTURES / "blaesi.pdf").read_bytes()).unwrap_or_raise().plan
+    sunday_public = [
+        r
+        for r in plan.reservations
+        if Weekday.SUNDAY in r.weekdays and isinstance(r.access, PublicSwim)
+    ]
+    assert len(sunday_public) == 1
+    assert sunday_public[0].time == TimeRange(time(9, 0), time(18, 0))
+    assert sunday_public[0].lanes == frozenset({1, 2, 3, 4, 5})
+
+
+def test_blaesi_monday_school_block_parses_at_published_times() -> None:
+    # Same shift, school arm: the Monday all-lanes school block was served 07:30–11:30;
+    # the PDF publishes 08:00–12:00.
+    plan = parse_belegungsplan((FIXTURES / "blaesi.pdf").read_bytes()).unwrap_or_raise().plan
+    monday_school = [
+        r
+        for r in plan.reservations
+        if Weekday.MONDAY in r.weekdays and isinstance(r.access, SchoolReserved)
+    ]
+    assert len(monday_school) == 1
+    assert monday_school[0].time == TimeRange(time(8, 0), time(12, 0))
+    assert monday_school[0].lanes == frozenset({1, 2, 3, 4, 5})
+
+
+def test_blaesi_blank_half_hour_yields_no_sessions() -> None:
+    # The 07:30–08:00 label is a BLANK half-hour — the source printed the label but left the
+    # slot cell-free on every weekday. No session may cover it: not by the rank shift, and
+    # not by the RLE bridging a same-owner block on both sides of the gap (Thursday's
+    # Kantonspolizei 06:30–07:30 + 08:00–09:00 is exactly that shape).
+    plan = parse_belegungsplan((FIXTURES / "blaesi.pdf").read_bytes()).unwrap_or_raise().plan
+    for weekday in Weekday:
+        assert _reservations_at(plan.reservations, weekday, time(7, 30)) == [], weekday
+
+
 def test_variobecken_real_fixture_parses_uniform_four_lanes() -> None:
     # E2 net-new parse. The City Variobecken's real Sunday 4th lane (x≈661, 32/32 public cells)
     # sits just right of the old A4 legend clamp, which dropped it and falsely reported a 4/3
@@ -239,6 +281,15 @@ def test_kaeferberg_real_fixture_parses_uniform_four_lanes() -> None:
     assert parsed.plan.lanes_by_weekday is None
     assert parsed.plan.coverage.confidence is PlanConfidence.PARTIAL
     assert _check_invariants(parsed.plan.reservations, parsed.plan.lane_count) is None
+
+
+def test_kaeferberg_first_sessions_start_at_earliest_cell_backed_label() -> None:
+    # Geometry pairing (claim-audit S2): Käferberg's FIRST gutter label (06:00–06:30) is
+    # empty — the first cells sit under the 06:30 label — so rank pairing served the whole
+    # week 30 min early. The week's first sessions start 06:30 — the earliest cell-backed
+    # label — and the min() pin implies no session starts before it.
+    plan = parse_belegungsplan((FIXTURES / "kaeferberg.pdf").read_bytes()).unwrap_or_raise().plan
+    assert min(r.time.start for r in plan.reservations) == time(6, 30)
 
 
 # --- Oerlikon sheets: single 8-lane grid + stacked Teil-sectioned basins (E3) --------
@@ -380,8 +431,9 @@ def test_parse_sectioned_basin_without_cells_is_schema_mismatch() -> None:
         group=group,
         legend={1: "Öffentlichkeit"},
         valid_from=None,
-        slots=[TimeRange(time(6, 0), time(6, 30))],
+        labels=[_TimeLabel(top=100.0, time=TimeRange(time(6, 0), time(6, 30)))],
         data_top=100.0,
+        data_bottom=math.inf,
         spec=GridSpec(),
         page_width=1190.0,
     )
@@ -642,6 +694,79 @@ def test_segment_grid_excludes_digit_below_label_span() -> None:
     assert all(row in (0, 1) for (_wd, _lane, row) in grid.codes)
 
 
+def test_segment_grid_unpairable_in_grid_row_is_schema_mismatch() -> None:
+    # An IN-GRID cell row (above the S1 bottom boundary) that sits nowhere near any time
+    # label is garble, not data: labels at tops 100/120 (pitch 20, tolerance 0.5×pitch=10,
+    # bottom boundary 140), so a digit row at 132 is inside the grid but 0.6×pitch from the
+    # nearest label -> a typed SchemaMismatch naming the row.
+    words = _ragged_grid_words(sunday_lanes=2)
+    words.append(_word("1", 110.0, 132.0, width=1.0))
+    result = _segment_grid(words, GridSpec(), _header(lane_count=2))
+    assert isinstance(result, Err)
+    assert isinstance(result.error, SchemaMismatch)
+    assert "y=132.0" in result.error.detail  # names the offending row
+
+
+# --- row -> label pairing (claim-audit S2) ------------------------------------------
+
+
+def _labels(
+    *ranges: tuple[int, int, int, int], top0: float = 100.0, pitch: float = 20.0
+) -> list[_TimeLabel]:
+    return [
+        _TimeLabel(top=top0 + pitch * i, time=TimeRange(time(h1, m1), time(h2, m2)))
+        for i, (h1, m1, h2, m2) in enumerate(ranges)
+    ]
+
+
+def test_pair_rows_to_labels_blank_label_is_legal() -> None:
+    # Four labels, three cell rows at the corpus offset (+0.42×pitch); the 07:00–07:30
+    # label has no cells — a blank half-hour. The rows claim their GEOMETRIC labels, so the
+    # blank is skipped instead of shifting every later row (the rank-pairing corruption).
+    labels = _labels((6, 0, 6, 30), (6, 30, 7, 0), (7, 0, 7, 30), (7, 30, 8, 0))
+    result = _pair_rows_to_labels([108.4, 128.4, 168.4], labels, GridSpec())
+    assert isinstance(result, Ok), result
+    assert result.value == (
+        TimeRange(time(6, 0), time(6, 30)),
+        TimeRange(time(6, 30), time(7, 0)),
+        TimeRange(time(7, 30), time(8, 0)),
+    )
+
+
+def test_pair_rows_to_labels_row_outside_tolerance_is_schema_mismatch() -> None:
+    labels = _labels((6, 0, 6, 30), (6, 30, 7, 0), (7, 0, 7, 30))
+    result = _pair_rows_to_labels([108.4, 152.0], labels, GridSpec())  # 152 is 0.6p from 140
+    assert isinstance(result, Err)
+    assert isinstance(result.error, SchemaMismatch)
+    assert "y=152.0" in result.error.detail
+
+
+def test_pair_rows_to_labels_duplicate_claim_is_schema_mismatch() -> None:
+    # Two cell rows both nearest the same label (row pitch collapsed below label pitch) is
+    # garble — the grid cannot serve two rows at one half-hour.
+    labels = _labels((6, 0, 6, 30), (6, 30, 7, 0))
+    result = _pair_rows_to_labels([95.0, 105.0], labels, GridSpec())
+    assert isinstance(result, Err)
+    assert isinstance(result.error, SchemaMismatch)
+    assert "y=105.0" in result.error.detail
+
+
+def test_pair_rows_to_labels_single_label_pairs_by_rank() -> None:
+    # With <2 labels there is no pitch to derive the tolerance from; pairing degrades to
+    # rank (unreachable on committed sheets, which all carry ≥34 label rows).
+    result = _pair_rows_to_labels([108.4], _labels((6, 0, 6, 30)), GridSpec())
+    assert isinstance(result, Ok), result
+    assert result.value == (TimeRange(time(6, 0), time(6, 30)),)
+
+
+def test_pair_rows_to_labels_more_rows_than_labels_is_schema_mismatch() -> None:
+    # The <2-labels rank fallback still refuses a row it has no label for.
+    result = _pair_rows_to_labels([108.4, 128.4], _labels((6, 0, 6, 30)), GridSpec())
+    assert isinstance(result, Err)
+    assert isinstance(result.error, SchemaMismatch)
+    assert "time labels" in result.error.detail
+
+
 def test_segment_grid_missing_time_labels_is_schema_mismatch() -> None:
     # A full 42-column × 2-row grid but no left-hand time labels to name the slots.
     cells: list[_Word] = []
@@ -679,6 +804,18 @@ def test_resolve_rle_merges_lanes_and_days_and_flags_unknown() -> None:
     assert resolved.unresolved_lanes == frozenset({2})
     assert resolved.cells_resolved == 7 * 2  # lane 1 only, 7 days × 2 slots
     assert resolved.cells_total == 2 * 7 * 2
+
+
+def test_resolve_never_bridges_a_blank_slot() -> None:
+    # Geometry pairing leaves a blank gutter label out of `slots`, so adjacent ROW indices
+    # can be half an hour apart. A same-owner block on both sides of the blank must stay
+    # two reservations — never one claim covering the half-hour the source left empty.
+    slots = [TimeRange(time(7, 0), time(7, 30)), TimeRange(time(8, 0), time(8, 30))]
+    codes = {(Weekday.MONDAY, 1, 0): 1, (Weekday.MONDAY, 1, 1): 1}
+    grid = _Grid(codes=codes, slots=slots, lane_count=1)
+    resolved = _resolve(grid, {1: "Öffentlichkeit"})
+    assert {r.time for r in resolved.reservations} == set(slots)
+    assert all(not r.time.contains(time(7, 30)) for r in resolved.reservations)
 
 
 # --- invariants ---------------------------------------------------------------------
