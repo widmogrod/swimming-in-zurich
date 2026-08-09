@@ -1,6 +1,6 @@
 ---
 type: plan
-status: in-progress
+status: done
 created: 2026-08-08
 feature: sharedsource-fanout
 branch: plan/sharedsource-fanout
@@ -286,5 +286,26 @@ mypy-required unreachable `OpenDay` arm is one permanently-uncovered line.
 
 ## Summary
 
-Written when the plan reaches `done`; then distilled into
-`docs/summaries/sharedsource-fanout.md` (what EXISTS now, not what was intended).
+Done 2026-08-09, three slices (S1–S2 on 08-08), one critic `revise` total
+(S2's false fixture-provenance claim — caught and fixed pre-commit).
+
+What exists now: `OpenUnscheduledDay` (weather required) is `DaySchedule`'s
+honest third answer, produced only by the season gate; `OperatingSeason`
+rides `Facility`, popped from blobs when absent; all `DaySchedule` matches
+end in `assert_never`, AST-meta-tested. `parse_planschbecken` reads the
+page's own lead sentence from a byte-exact committed fixture (Mai–Sep at
+MONTH precision, FAIR_ONLY, Free) with stated-never-assumed removal pins
+and the three join-rejection measurements committed as tests. The shared
+phase fans one fetch out to 13 identity-free member extracts (one failure
+for the whole set); after rebuild exactly 13 blobs carry the season and
+free admission (citywide free: 17), `/swim` serves `open_unscheduled` with
+the pinned params in July and `out_of_season` in January, the 13 left the
+ghost set by design (31→18), and all 44 other pools are byte-identical —
+critic-verified against a true pre-slice baseline. A registered shared
+page whose roster sharers drop below 2 emits an audit note.
+
+Final: make qa green — 849 passed, coverage 96.05% ≥ 95, mypy strict,
+CRAP clean; TS chain green where touched (S1). Open debt: per-aspect
+provenance (13 blobs serve scrape-derived facts under seed provenance —
+accepted, cited to the pool-identity plan's deferral); the fourth private
+German month table; 13 new compose stderr notes per build.
