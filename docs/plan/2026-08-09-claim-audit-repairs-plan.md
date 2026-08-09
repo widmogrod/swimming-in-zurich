@@ -1,8 +1,11 @@
 ---
 type: plan
-status: approved
+status: in-progress
 created: 2026-08-09
 feature: claim-audit-repairs
+branch: plan/claim-audit-repairs
+worktree: .claude/worktrees/plan-claim-audit-repairs
+base_branch: feat/new-ui
 gates:
   qa: full
   review: adversarial
