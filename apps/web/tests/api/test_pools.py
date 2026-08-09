@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+import sqlite3
 from datetime import date, datetime, time, timedelta
 from decimal import Decimal
 from pathlib import Path
@@ -513,6 +515,64 @@ def test_pool_detail_live_water_temp_fail_open_when_unconfigured() -> None:
     temp = body["live_water_temp"]
     assert temp["available"] is False
     assert temp["reason"] == "live temperature not configured"
+
+
+def test_absent_address_renders_absent_not_empty_string() -> None:
+    """claim-audit S4 wire pin: `planschbecken-pfingstweid` has NO published address — every WFS
+    address part is a real JSON null (not the "NULL" sentinel), so its catalog address is the
+    empty-string sentinel. The API renders that absence as `null` on both surfaces, never `""`;
+    a pool WITH a published address still serves it verbatim."""
+    with TestClient(app) as client:
+        detail = client.get("/pools/planschbecken-pfingstweid")
+        listing = client.get("/pools").json()
+    assert detail.status_code == 200
+    assert detail.json()["address"] is None  # absent, not ""
+    rows = {p["pool_id"]: p for p in listing["pools"]}
+    assert rows["planschbecken-pfingstweid"]["address"] is None
+    assert rows["hallenbad-city"]["address"] == "Sihlstrasse 71, 8001 Zürich"
+
+
+def _assert_no_null_sentinel(node: object, where: str) -> None:
+    """Recursively assert no JSON string VALUE is the literal "NULL" (the WFS null sentinel —
+    a value merely containing it as a substring would be real data, hence equality, not `in`)."""
+    if isinstance(node, str):
+        assert node != "NULL", where
+    elif isinstance(node, dict):
+        for key, value in node.items():
+            _assert_no_null_sentinel(value, f"{where}.{key}")
+    elif isinstance(node, list):
+        for index, value in enumerate(node):
+            _assert_no_null_sentinel(value, f"{where}[{index}]")
+
+
+def test_no_store_or_wire_value_is_the_null_sentinel(gold_db: Path) -> None:
+    """claim-audit S4 literal scan after a full rebuild (the session `gold_db` IS an atomic
+    `build` over the raw WFS fixtures, whose 50 literal "NULL" values are kept on purpose): no
+    pool row, no `facility_doc`, and no `/pools` / `/pools/{id}` response carries the string
+    "NULL" as a value anywhere."""
+    conn = sqlite3.connect(gold_db)
+    try:
+        pool_rows = conn.execute(
+            "SELECT id, name, kind, address, url, description, phone, facility_doc FROM pool"
+        ).fetchall()
+    finally:
+        conn.close()
+    assert len(pool_rows) == 57
+    for row in pool_rows:
+        pool_id, doc = row[0], row[-1]
+        for value in row[:-1]:
+            assert value != "NULL", pool_id
+        assert doc is not None, pool_id
+        _assert_no_null_sentinel(json.loads(doc), f"facility_doc[{pool_id}]")
+
+    with TestClient(app) as client:
+        listing = client.get("/pools").json()
+        _assert_no_null_sentinel(listing, "/pools")
+        for row_out in listing["pools"]:
+            pool_id = row_out["pool_id"]
+            response = client.get(f"/pools/{pool_id}")
+            assert response.status_code == 200, pool_id
+            _assert_no_null_sentinel(response.json(), f"/pools/{pool_id}")
 
 
 def test_access_types_are_keys_the_client_translates() -> None:

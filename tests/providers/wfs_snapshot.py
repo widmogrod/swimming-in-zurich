@@ -16,6 +16,12 @@ would bake the repaired `http` form into the fixtures. These fixtures must keep 
 fails the moment the normalizer is weakened; with `http` in, it would pass even if the normalizer
 were deleted.
 
+The same raw-asymmetry applies to the WFS's **`"NULL"` null sentinel** (claim-audit S4): the
+fixtures keep the literal `"NULL"` strings the WFS publishes (50 of them, all on `infrastruktur`),
+while the committed snapshot records their ABSENCE (`description: null`) — the provider's
+sentinel rule is what closes that gap, and the golden fails the moment it is weakened. So do NOT
+re-derive `infrastruktur` from `data/catalog.json` either.
+
 `recorded_wfs_client()` serves those fixtures via `httpx.MockTransport` (the project's
 established no-network adapter double, see `tests/providers/test_geo_sport.py`), keyed on the
 `TYPENAME` query param. `unreachable_wfs_client()` raises `httpx.ConnectError` for the

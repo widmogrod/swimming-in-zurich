@@ -14,7 +14,7 @@ from swimzh.core.errors import HttpStatus, ParseError, SchemaMismatch
 from swimzh.core.http import HttpClient, RetryPolicy
 from swimzh.core.result import Err, Ok
 from swimzh.domain.models import PoolKind
-from swimzh.providers.geo_sport import POOL_LAYERS, fetch_indoor_pools, parse_pools
+from swimzh.providers.geo_sport import POOL_LAYERS, GeoPool, fetch_indoor_pools, parse_pools
 from tests.providers.wfs_snapshot import WFS_FIXTURES
 
 
@@ -155,6 +155,113 @@ def test_normalization_is_per_feature() -> None:
         "https://www.stadt-zuerich.ch/b",
         None,
     ]
+
+
+# --- WFS null sentinel ----------------------------------------------------------------------
+#
+# The WFS uses the literal token "NULL" (case-sensitive) as its null sentinel: an absent
+# `infrastruktur` (and potentially any other text property) arrives as the STRING "NULL", not
+# JSON null. Before claim-audit S4 the provider passed it through, and 50 of 57 committed
+# catalog entries served `"description": "NULL"` — absence served as a definite value. ONE rule
+# at the boundary now turns exactly that token into absence, for the description, the address
+# parts, and every other cleaned field alike. These tests drive the PUBLIC `parse_pools`.
+
+
+def _parse_one(**properties: object) -> GeoPool:
+    body = json.dumps(
+        {
+            "type": "FeatureCollection",
+            "features": [
+                {
+                    "type": "Feature",
+                    "id": "poi_hallenbad_view.1",
+                    "geometry": {"type": "Point", "coordinates": [8.5, 47.4]},
+                    "properties": {"name": "Pool X", **properties},
+                }
+            ],
+        }
+    ).encode("utf-8")
+    result = parse_pools(body, PoolKind.INDOOR)
+    assert isinstance(result, Ok), result
+    (pool,) = result.value
+    return pool
+
+
+@pytest.mark.parametrize(
+    ("raw", "expected"),
+    [
+        # the sentinel: the source's "no prose" token parses to absence, not a value
+        ("NULL", None),
+        # a real value passes (cleaned as before)
+        ("25m Becken, Sauna", "25m Becken, Sauna"),
+        # a value merely CONTAINING "NULL" as a substring is real data — untouched
+        ("Becken NULL Sauna", "Becken NULL Sauna"),
+        ("NULLARBOR", "NULLARBOR"),
+        # case-sensitive: only the source's exact token is the sentinel
+        ("null", "null"),
+        ("Null", "Null"),
+        # the rule reads the CLEANED value: whitespace around the bare token is still absence
+        ("  NULL  ", None),
+        (None, None),
+    ],
+)
+def test_description_null_sentinel_parses_to_absence(raw: str | None, expected: str | None) -> None:
+    assert _parse_one(infrastruktur=raw).description == expected
+
+
+def test_address_null_sentinel_parts_are_absent() -> None:
+    # A "NULL" street is an ABSENT street, not a street named NULL: the remaining real parts
+    # still compose (same joining as before — the rule only removes the sentinel).
+    pool = _parse_one(strasse="NULL", hausnummer="NULL", plz="8038", ort="Zürich")
+    assert pool.address == "8038 Zürich"
+    # …and an all-sentinel address composes to the empty catalog sentinel, exactly like the
+    # real-JSON-null case below.
+    assert _parse_one(strasse="NULL", hausnummer="NULL", plz="NULL", ort="NULL").address == ""
+
+
+def test_address_from_real_json_nulls_is_empty_without_the_sentinel_rule() -> None:
+    # planschbecken-pfingstweid's shape: every address part is a real JSON null. Its empty
+    # address predates the sentinel rule and must NOT change under it (no 51st catalog diff).
+    assert _parse_one().address == ""
+
+
+def test_every_other_cleaned_field_takes_the_same_rule() -> None:
+    # ONE rule for every cleaned property, not a description special case.
+    pool = _parse_one(namenzus="NULL", tel="NULL", kategorie="NULL", poi_id="NULL", www="NULL")
+    assert pool.name == "Pool X"  # a sentinel namenzus is never appended to the name
+    assert pool.phone is None
+    assert pool.category is None
+    assert pool.poi_id is None
+    assert pool.url is None
+
+
+def test_committed_wfs_fixtures_keep_raw_sentinels_and_parse_to_absence() -> None:
+    """The raw-asymmetry pin: the committed fixtures KEEP the WFS's literal "NULL" values (50 of
+    them, all on `infrastruktur`), and parsing them yields NO field anywhere whose value is the
+    string "NULL" — the exact 50 pools whose catalog entry loses its description."""
+    raw_sentinels = 0
+    parsed_absent = 0
+    for path in sorted(WFS_FIXTURES.glob("*.json")):
+        raw = path.read_bytes()
+        result = parse_pools(raw, POOL_LAYERS[path.stem])
+        assert isinstance(result, Ok), result
+        features = json.loads(raw)["features"]
+        for feature, pool in zip(features, result.value, strict=True):
+            if feature["properties"].get("infrastruktur") == "NULL":
+                raw_sentinels += 1
+                assert pool.description is None, pool.source_id
+                parsed_absent += 1
+            for value in (
+                pool.poi_id,
+                pool.name,
+                pool.address,
+                pool.url,
+                pool.category,
+                pool.description,
+                pool.phone,
+            ):
+                assert value != "NULL", pool.source_id
+    assert raw_sentinels == parsed_absent == 50
 
 
 def test_committed_wfs_snapshot_urls_are_repaired_or_byte_identical() -> None:

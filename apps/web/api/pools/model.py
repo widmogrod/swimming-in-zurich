@@ -15,7 +15,9 @@ class PoolOut(BaseModel):
     pool_id: str
     name: str
     kind: str
-    address: str
+    # None when the source publishes no address at all (real JSON nulls in every WFS address
+    # part — e.g. planschbecken-pfingstweid): absence renders absent on the wire, never "".
+    address: str | None
     lat: float | None
     lon: float | None
     url: str | None
@@ -209,7 +211,8 @@ class OperatingSeasonOut(BaseModel):
 class FacilityDetailOut(BaseModel):
     facility_id: str
     facility_name: str
-    address: str
+    # None when the facility has no published address (see PoolOut.address) — absent, not "".
+    address: str | None
     # The SAME derived three-state schedule freshness `/pools` rows carry (domain
     # `catalog.freshness_of` over this very facility) — so a detail panel and the list row beside
     # it can never disagree about whether a pool has a schedule. This, not `provenance.curated`,

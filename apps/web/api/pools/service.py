@@ -69,7 +69,9 @@ def _pool_out(row: RosterEntry) -> PoolOut:
         pool_id=entry.pool_id,
         name=entry.name,
         kind=entry.kind.value,
-        address=entry.address,
+        # The domain keeps the empty-string sentinel ("" = no published address); the wire
+        # renders that absence as null, never as "".
+        address=entry.address or None,
         lat=entry.geo.lat if entry.geo is not None else None,
         lon=entry.geo.lon if entry.geo is not None else None,
         url=entry.url,
@@ -348,7 +350,8 @@ def facility_detail_out(
     return FacilityDetailOut(
         facility_id=str(detail.facility_id),
         facility_name=detail.facility_name,
-        address=detail.address,
+        # The domain's empty-string sentinel (no published address) renders absent, not "".
+        address=detail.address or None,
         freshness=freshness.value,
         basins=[_basin_out(b) for b in detail.basins],
         features=[_feature_status_out(f) for f in detail.features],

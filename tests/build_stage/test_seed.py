@@ -144,9 +144,10 @@ def test_every_catalog_pool_has_a_non_null_facility_doc(
 
 
 def test_location_only_pool_is_zero_basin_and_uncurated(spine: PoolSpine) -> None:
-    # S1: Freibad Heuried is an outdoor pin whose catalog description is the literal "NULL" (no
-    # prose basins). It gets a location-only facility with ZERO basins that stays uncurated — so
-    # it is viewable in detail but never a `/swim` option.
+    # S1: Freibad Heuried is an outdoor pin with no prose at all — the WFS publishes its "NULL"
+    # sentinel there, parsed to an absent description since claim-audit S4 — so no prose basins.
+    # It gets a location-only facility with ZERO basins that stays uncurated — so it is
+    # viewable in detail but never a `/swim` option.
     row = next(p for p in spine.pools if p.id == PoolId("freibad-heuried"))
     assert row.facility_doc is not None
     facility = codec.loads(row.facility_doc)

@@ -72,10 +72,25 @@ class GeoPool:
     phone: str | None
 
 
+# The WFS uses the literal token "NULL" (case-sensitive) as its null sentinel: an absent
+# `infrastruktur` (and potentially any other text property) arrives as the STRING "NULL",
+# not JSON null. ONE rule at this boundary turns exactly that token into absence — for the
+# description, the address parts, and every other cleaned field alike. Only the whole-value
+# token matches: a value merely CONTAINING "NULL" (or a differently-cased "null") is real
+# data and passes untouched.
+_NULL_SENTINEL = "NULL"
+
+
+def _absent_if_null(value: str | None) -> str | None:
+    return None if value == _NULL_SENTINEL else value
+
+
 def _address(feature: FeatureDTO) -> str:
     p = feature.properties
-    street = " ".join(part for part in (p.strasse, p.hausnummer) if part)
-    town = " ".join(part for part in (p.plz, p.ort) if part)
+    parts = (_absent_if_null(part) for part in (p.strasse, p.hausnummer, p.plz, p.ort))
+    strasse, hausnummer, plz, ort = parts
+    street = " ".join(part for part in (strasse, hausnummer) if part)
+    town = " ".join(part for part in (plz, ort) if part)
     return ", ".join(part for part in (street, town) if part)
 
 
@@ -83,7 +98,7 @@ def _clean(text: str | None) -> str | None:
     if text is None:
         return None
     cleaned = " ".join(text.replace(";", " ").split()).strip()
-    return cleaned or None
+    return _absent_if_null(cleaned or None)
 
 
 # The WFS publishes `https://www.sportamt.ch/<slug>` for 17 of the 19 outdoor/river/lake pools,
@@ -132,20 +147,27 @@ def _normalize_roster_url(raw: str | None) -> str | None:
 
 def _to_geo_pool(feature: FeatureDTO, kind: PoolKind) -> GeoPool:
     lon, lat = feature.geometry.coordinates[0], feature.geometry.coordinates[1]
-    name = feature.properties.name
-    if feature.properties.namenzus:
-        name = f"{name} {feature.properties.namenzus}"
+    p = feature.properties
+    # `name` is deliberately EXEMPT from `_absent_if_null`: it is a required str and
+    # identity-bearing — a null name is not a representable pool, so its absence is not
+    # absorbable the way an absent description is. The corpus pin (`pool.name != "NULL"` in
+    # test_committed_wfs_fixtures_keep_raw_sentinels_and_parse_to_absence) guards the
+    # hypothetical.
+    name = p.name
+    namenzus = _absent_if_null(p.namenzus)
+    if namenzus:
+        name = f"{name} {namenzus}"
     return GeoPool(
         source_id=feature.id,
-        poi_id=feature.properties.poi_id,
+        poi_id=_absent_if_null(p.poi_id),
         name=name,
         kind=kind,
         address=_address(feature),
         geo=GeoPoint(lat=lat, lon=lon),
-        url=_normalize_roster_url(feature.properties.www),
-        category=feature.properties.kategorie,
-        description=_clean(feature.properties.infrastruktur),
-        phone=feature.properties.tel,
+        url=_normalize_roster_url(_absent_if_null(p.www)),
+        category=_absent_if_null(p.kategorie),
+        description=_clean(p.infrastruktur),
+        phone=_absent_if_null(p.tel),
     )
 
 

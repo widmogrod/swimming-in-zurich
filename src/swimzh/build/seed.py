@@ -174,9 +174,10 @@ def _location_only_facility(
     WITHOUT becoming a ``/swim`` option or flipping to ``curated``.
 
     Basins are best-effort from the pool's WFS ``infrastruktur`` prose (``entry.description``)
-    when it names swimmable basins (schedule-less ``PARSED_PROSE``); a pool whose prose names
-    none (an outdoor pin like *Freibad Heuried*, whose catalog description is the literal
-    ``"NULL"``) gets a **location-only** facility with ZERO basins. Either way every basin is
+    when it names swimmable basins (schedule-less ``PARSED_PROSE``); a pool with no prose at all
+    (an outdoor pin like *Freibad Heuried* — the WFS publishes its ``"NULL"`` sentinel there,
+    which the provider parses to an absent description) gets a **location-only** facility with
+    ZERO basins. Either way every basin is
     rule-less, so ``codec.schedule_freshness`` derives ``awaiting_scrape``/``no_source`` (never
     ``scraped``) and ``find_swim_options`` yields no option (it ``continue``s on ``not
     basin.rules``) and no spurious "closed" status — the schedule-less invariant holds.

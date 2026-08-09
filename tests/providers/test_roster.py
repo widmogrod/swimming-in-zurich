@@ -85,11 +85,28 @@ def test_roster_spine_matches_committed_catalog(tmp_path: Path) -> None:
 
 def test_recorded_wfs_client_reproduces_catalog_via_mock_transport() -> None:
     # The MockTransport double (used by the build-orchestration tests) reproduces the same roster
-    # as the cassette — so those tests build the identical 57-pool spine offline.
+    # as the cassette — so those tests build the identical 57-pool spine offline. Since claim-audit
+    # S4 this golden compares FULL entries (description, address, phone included), because the raw
+    # fixtures deliberately keep the WFS's literal "NULL" sentinels (50 of them, on
+    # `infrastruktur`) while the committed snapshot records their ABSENCE: the provider's sentinel
+    # rule is the only thing that makes the two sides equal, so weakening it fails here.
     result = fetch_roster(recorded_wfs_client())
     assert isinstance(result, Ok), result
-    provider = {e.pool_id for e in result.value}
-    assert provider == set(_committed_catalog())
+    committed = catalog_json.loads((DATA_DIR / "catalog.json").read_text(encoding="utf-8"))
+    provider = {e.pool_id: e for e in result.value}
+    assert provider == {e.pool_id: e for e in committed}
+
+    # Exactly 50 entries lost their description to the sentinel rule; the other 7 keep real
+    # prose verbatim; no committed description is the string "NULL" any more.
+    descriptions = [e.description for e in committed]
+    assert sum(1 for d in descriptions if d is None) == 50
+    assert sum(1 for d in descriptions if d is not None) == 7
+    assert "NULL" not in descriptions
+
+    # Guard: planschbecken-pfingstweid's empty address comes from real JSON nulls in every WFS
+    # address part, NOT from the sentinel — the rule must not produce a 51st catalog diff. Its
+    # absent-address RENDERING is a wire-layer concern (see apps/web tests), not a catalog one.
+    assert provider["planschbecken-pfingstweid"].address == ""
 
 
 def test_fetch_roster_aborts_on_unreachable_wfs() -> None:
