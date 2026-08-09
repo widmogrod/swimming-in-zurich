@@ -117,15 +117,24 @@ def test_swim_emits_freshness_statuses_live_for_catalog_pools(gold_db: Path) -> 
     schedule_less = {
         s["facility"] for s in statuses if s["status"] in {"awaiting_scrape", "no_source"}
     }
-    # 31 of the 57 catalog pools carry no schedule → that many live freshness rows. (57 − the 26
-    # declared sources; seasonal-hours S3 admitted 15 outdoor/lake/river pools, so this fell from
-    # 46. The 31 are the 13 paddling pools, 14 school pools on the shared overview URL, the two
-    # `flussbad-unterer-letten` entries that share a URL, and `seebad-enge` + `freibad-dolder`.)
-    assert len(schedule_less) == 31, sorted(schedule_less)
+    # 18 of the 57 catalog pools serve a freshness ghost. (57 − the 26 declared sources − the
+    # 13 Planschbecken: sharedsource-fanout S3 gave those an `operating_season`, and a facility
+    # carrying one is REPLACED by its seasonal status — `open_unscheduled` at this mid-September
+    # instant — never doubled as a `no_source` ghost. The 18 are the 14 school pools on the
+    # shared overview URL, the two `flussbad-unterer-letten` entries that share a URL, and
+    # `seebad-enge` + `freibad-dolder`.)
+    assert len(schedule_less) == 18, sorted(schedule_less)
+    assert not any(name.startswith("Planschbecken") for name in schedule_less)
     # A scheduled pool (City appears among the options) is never also a freshness status.
     assert "Hallenbad City" not in schedule_less
-    # The states are distinct labels, never merged — a schedule-less pool is NEVER "closed".
-    assert {s["status"] for s in statuses} <= {"closed", "awaiting_scrape", "no_source"}
+    # The states are distinct labels, never merged — a schedule-less pool is NEVER "closed"
+    # (a season-carrying pool inside its window is the honest `open_unscheduled`).
+    assert {s["status"] for s in statuses} <= {
+        "closed",
+        "awaiting_scrape",
+        "no_source",
+        "open_unscheduled",
+    }
 
 
 def test_pools_expose_the_derived_freshness(gold_db: Path) -> None:

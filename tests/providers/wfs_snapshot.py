@@ -75,6 +75,10 @@ _PAGE_BY_FILENAME: dict[str, str] = {
     "flussbad-oberer-letten": "flussbad_oberer_letten.html",
     "frauenbad": "frauenbad.html",
     "maennerbad": "maennerbad.html",
+    # The ONE registered SHARED source (sharedsource-fanout S3): the Planschbecken overview,
+    # fetched once by `scrape_shared_sources` and fanned out to its 13 members. Without this
+    # route the empty-page fallback would fail the shared parse and abort every offline build.
+    "planschbecken.html": "planschbecken.html",
 }
 # A valid single-basin Belegungsplan sheet; the URL-keyed lane join binds by URL, not by content,
 # so serving one good plan for every discovered PDF attaches each authored single-basin source.

@@ -61,7 +61,7 @@ from swimzh.etl.lane_plans import (
     undiscovered_authored,
 )
 from swimzh.etl.roster import fetch_roster
-from swimzh.etl.scrape import scrape_declared_sources
+from swimzh.etl.scrape import ScrapeReport, scrape_declared_sources, scrape_shared_sources
 from swimzh.etl.silver import LanePlanAttachment, attach_lane_plans
 from swimzh.providers import geo_sport
 from swimzh.providers.page_provider import DiscoveryReport, discover_pages
@@ -270,7 +270,8 @@ def _compose_schedules(
     price_client: HttpClient,
     fetched_at: datetime,
 ) -> _PhaseResult:
-    """Scrape indoor-pool schedules (+ the shared city price) and compose them onto the store.
+    """Scrape indoor-pool schedules (+ the shared city price + the shared-page fan-out) and
+    compose them onto the store.
 
     **Two clients, not one**: the tariff page moves a few times a year (`price_scraper`, 7d) while
     a pool timetable is re-cut per season (`schedule_scraper`, 12h). They are different sources at
@@ -304,7 +305,18 @@ def _compose_schedules(
         )
         return _PhaseResult(code=1, fatal=True)
     tariffs = tariffs_result.value
-    report = scrape_declared_sources(schedule_client, catalog, fetched_at, tariffs=tariffs)
+    declared = scrape_declared_sources(schedule_client, catalog, fetched_at, tariffs=tariffs)
+    # The shared-source fan-out (sharedsource-fanout S3) rides the SAME phase, report shape,
+    # and temp-DB swap: one fetch per registered shared page (the Planschbecken overview), one
+    # extract per member on Ok, ONE failure for the whole set on Err — so the fail-fast abort,
+    # reconcile, and compose below need no second path. Same client: the overview is a
+    # stadt-zuerich pool page, on the schedule scraper's volatility clock.
+    shared = scrape_shared_sources(schedule_client, catalog, fetched_at)
+    report = ScrapeReport(
+        extracts=declared.extracts + shared.extracts,
+        failures=declared.failures + shared.failures,
+        notes=declared.notes + shared.notes,
+    )
     if report.failures:
         # A declared source failed to fetch/parse: abort, surfacing the typed cause.
         failure = report.failures[0]
@@ -336,7 +348,7 @@ def _compose_schedules(
                 conn,
                 tuple((f.identity.facility_id, f) for f in composition.facilities),
             )
-            msg = f"scraped {len(outcome.resolved)} declared sources"
+            msg = f"scraped {len(outcome.resolved)} source extracts"
             for note in composition.notes:
                 msg += f"; {note}"
             print(msg)

@@ -173,7 +173,14 @@ def test_statuses_carry_codes_and_no_mixed_language_prose() -> None:
     statuses = response.json()["statuses"]
     assert statuses, "expected at least one closed / schedule-less facility"
     for status in statuses:
-        assert status["detail_code"] in {"closed_reason", "awaiting_scrape", "no_source"}
+        # `open_unscheduled` joined the closed set when sharedsource-fanout S3 wrote the first
+        # `operating_season` blobs (mid-September is inside the Planschbecken Mai–Sep window).
+        assert status["detail_code"] in {
+            "closed_reason",
+            "awaiting_scrape",
+            "no_source",
+            "open_unscheduled",
+        }
         assert "detail" not in status, "the mixed-language prose is retired (S5)"
         if status["detail_code"] == "closed_reason":
             # S4: WHICH closure, as a code the client can translate.
@@ -282,20 +289,70 @@ def test_every_option_carries_a_weather_value_from_the_closed_set() -> None:
     assert all(o["weather"] == "any" for o in indoor)
 
 
-def test_the_season_gate_is_inert_on_the_committed_fixture_store(gold_db: Path) -> None:
-    """sharedsource-fanout S1: the resolver knows `open_unscheduled`, but NO pool in the
-    committed-fixture store carries an `operating_season` yet (S3 writes the first ones), so
-    `/swim` must serve exactly what it served before the slice — no new status value, no new
-    blob key. (Byte-identity against the pre-slice response was verified at implementation
-    time; this is its committed regression pin.)"""
+def test_the_season_gate_covers_exactly_the_thirteen_planschbecken(gold_db: Path) -> None:
+    """sharedsource-fanout S3, replacing the S1 inertness pin (whose `seasoned == 0` premise
+    died at this slice's rebuild): exactly 13 blobs carry `operating_season` — the 13
+    Planschbecken the one shared page states it for — and all 13 are stored free."""
     with sqlite3.connect(gold_db) as conn:
-        (seasoned,) = conn.execute(
-            "select count(*) from pool"
-            " where json_extract(facility_doc,'$.operating_season') is not null"
-        ).fetchone()
-    assert seasoned == 0
+        seasoned = {
+            row[0]
+            for row in conn.execute(
+                "select id from pool"
+                " where json_extract(facility_doc,'$.operating_season') is not null"
+            )
+        }
+        free = {
+            row[0]
+            for row in conn.execute(
+                "select id from pool where json_extract(facility_doc,'$.admission_state') = 'free'"
+            )
+        }
+    assert len(seasoned) == 13, sorted(seasoned)
+    assert all(pool_id.startswith("planschbecken-") for pool_id in seasoned)
+    assert seasoned <= free
+
+
+def _planschbecken_statuses(at: str) -> list[dict[str, object]]:
     with TestClient(app) as client:
-        for at in (JULY_AFTERNOON, "2026-01-15T14:00"):
-            response = client.get("/swim", params={"at": at, "eligible_only": "false"})
-            assert response.status_code == 200
-            assert "open_unscheduled" not in response.text
+        response = client.get("/swim", params={"at": at, "eligible_only": "false"})
+    assert response.status_code == 200
+    return [
+        s for s in response.json()["statuses"] if str(s["facility"]).startswith("Planschbecken")
+    ]
+
+
+def test_a_planschbecken_is_open_unscheduled_in_july_with_the_pinned_params() -> None:
+    """In season `/swim` serves the honest fourth state: `open_unscheduled`, carrying the season
+    + weather under the EXACT param keys S1 pinned for this slice's acceptance —
+    {"weather", "season_start_month", "season_end_month", "season_precision"}; day keys ride
+    only at DAY precision, and the page states months, so none here. Each pool appears exactly
+    once in `statuses` — never also as a `no_source` ghost."""
+    statuses = _planschbecken_statuses("2026-07-15T14:00:00+02:00")
+    assert len(statuses) == 13
+    assert len({s["facility"] for s in statuses}) == 13  # once each — replaced, never doubled
+    for status in statuses:
+        assert status["status"] == "open_unscheduled"
+        params = status["detail_params"]
+        assert isinstance(params, dict)
+        assert set(params) == {
+            "weather",
+            "season_start_month",
+            "season_end_month",
+            "season_precision",
+        }
+        assert params["weather"] == "fair_only"
+        assert (params["season_start_month"], params["season_end_month"]) == ("5", "9")
+        assert params["season_precision"] == "month"
+
+
+def test_a_planschbecken_is_out_of_season_in_january() -> None:
+    """Out of season the same pool serves the SAME closed pair a seasonal scraped pool (Heuried
+    in January) already serves — `"closed"` + `closure_code: "out_of_season"` — no new closed
+    shape on the wire. (The "never rendered closed" invariant protects pools whose schedule is
+    UNKNOWN; a pool whose own page states its season is knowably shut outside it.)"""
+    statuses = _planschbecken_statuses("2026-01-15T14:00")
+    assert len(statuses) == 13
+    assert len({s["facility"] for s in statuses}) == 13  # exactly once each, in January too
+    for status in statuses:
+        assert status["status"] == "closed"
+        assert status["closure_code"] == "out_of_season"

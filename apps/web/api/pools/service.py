@@ -18,6 +18,7 @@ from apps.web.api.pools.model import (
     LaneStripOut,
     LiveWaterTempOut,
     LockerOut,
+    OperatingSeasonOut,
     PoolOut,
     PoolsOut,
     PriceEntryOut,
@@ -38,7 +39,7 @@ from swimzh.domain.lane_plan import (
     owner_label,
 )
 from swimzh.domain.lockers import LockerOption
-from swimzh.domain.models import Basin, PoolIdentity, Provenance
+from swimzh.domain.models import Basin, OperatingSeason, PoolIdentity, Provenance
 from swimzh.domain.pricing import PriceTable
 from swimzh.domain.query import (
     BasinLanePanel,
@@ -50,7 +51,13 @@ from swimzh.domain.query import (
     TempUnavailableCode,
     read_temperature,
 )
-from swimzh.domain.schedule import ClosedDay, OpenDay, OpenUnscheduledDay, TimeRange
+from swimzh.domain.schedule import (
+    ClosedDay,
+    DatePrecision,
+    OpenDay,
+    OpenUnscheduledDay,
+    TimeRange,
+)
 
 
 def _pool_out(row: RosterEntry) -> PoolOut:
@@ -277,21 +284,38 @@ def _admission_out(admission: Admission) -> tuple[AdmissionOut, PriceTable | Non
             assert_never(unreachable)
 
 
+def _operating_season_out(season: OperatingSeason) -> OperatingSeasonOut:
+    """Project the page-stated season: months always; days ONLY at `DAY` precision, so a
+    `MONTH` window is never rendered more precisely than the page published it."""
+    window = season.window
+    day_precise = window.precision is DatePrecision.DAY
+    return OperatingSeasonOut(
+        start_month=window.start.month,
+        end_month=window.end.month,
+        precision=window.precision.value,
+        weather=season.weather.value,
+        start_day=window.start.day if day_precise else None,
+        end_day=window.end.day if day_precise else None,
+    )
+
+
 def facility_detail_out(
     detail: FacilityDetail,
     admission: Admission,
     live_water_temp: TempResult,
     freshness: ScheduleFreshness,
+    operating_season: OperatingSeason | None,
 ) -> FacilityDetailOut:
     """Shape the domain facility-detail answer for the API: the physical basins (size, lanes,
     water temperature + `physical_source` caveat), features with hours resolved for the queried
     moment, lockers, the facility admission (kind + tariff table), provenance, and the per-basin
     lane panels.
 
-    Every field is a pure projection of what the domain already computes; `admission` is the
-    facility's own `Admission` union (the query surface computes a per-person `price` inside
-    `find_swim_options`, but the admission fact rides on the `Facility`, so the thin router hands
-    it in rather than re-reading the store)."""
+    Every field is a pure projection of what the domain already computes; `admission` — and
+    `operating_season` (sharedsource-fanout S3), which rides the same way — is the facility's
+    own fact (the query surface computes a per-person `price` inside `find_swim_options`, but
+    the fact rides on the `Facility`, so the thin router hands it in rather than re-reading
+    the store)."""
     admission_kind, price_table = _admission_out(admission)
     return FacilityDetailOut(
         facility_id=str(detail.facility_id),
@@ -303,6 +327,9 @@ def facility_detail_out(
         lockers=[_locker_out(locker) for locker in detail.lockers],
         admission=admission_kind,
         prices=_price_table_out(price_table) if price_table is not None else None,
+        operating_season=(
+            _operating_season_out(operating_season) if operating_season is not None else None
+        ),
         provenance=_provenance_out(detail.provenance),
         lane_panels=[_basin_panel_out(p) for p in detail.lane_panels],
         last_admission_before_min=(

@@ -149,11 +149,14 @@ def test_the_priced_pool_count_is_the_coverage_ratchet(gold_db: Path) -> None:
     assert admission_of["hallenbad-altstetten"] == Unknown()
 
 
-def test_the_store_splits_twenty_one_tariff_four_free_thirty_two_unknown(gold_db: Path) -> None:
-    """The union, counted by LITERAL SQL over `facility_doc` — the acceptance numbers of the
-    admission-union plan. `admission_state` is present on exactly the 4 free pools' blobs (the
-    only new bytes), `prices` is non-null on exactly the 21 tariffed ones, and the remaining 32
-    roster pools carry neither: the honest unknown, no longer conflated with free."""
+def test_the_store_splits_twenty_one_tariff_seventeen_free_nineteen_unknown(
+    gold_db: Path,
+) -> None:
+    """The union, counted by LITERAL SQL over `facility_doc`. The admission-union plan pinned
+    21/4/32; sharedsource-fanout S3 fans `Free` out to the 13 Planschbecken (their one shared
+    page states "Die Nutzung der Planschbecken ist kostenlos"), so the citywide free count is
+    now 17 (4 + 13) and the honest unknowns 19. `prices` stays non-null on exactly the 21
+    tariffed pools — the fan-out priced no pool and unpriced none."""
     conn = open_db(gold_db)
     total = conn.execute("select count(*) from pool").fetchone()[0]
     tariff = conn.execute(
@@ -168,8 +171,10 @@ def test_the_store_splits_twenty_one_tariff_four_free_thirty_two_unknown(gold_db
             "select id from pool where json_extract(facility_doc,'$.admission_state') = 'free'"
         )
     }
-    assert (tariff, free, total - tariff - free) == (21, 4, 32)
-    assert free_ids == {
+    assert (tariff, free, total - tariff - free) == (21, 17, 19)
+    fanout_free = {pool_id for pool_id in free_ids if pool_id.startswith("planschbecken-")}
+    assert len(fanout_free) == 13
+    assert free_ids == fanout_free | {
         "flussbad-au-hoengg",
         "flussbad-oberer-letten",
         "seebad-katzensee",

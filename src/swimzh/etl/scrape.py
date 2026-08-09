@@ -21,6 +21,15 @@ typed ``ProviderError`` is preserved in ``ScrapeReport.failures`` so the ``scrap
 aborts the whole run non-zero carrying that cause (owner decision 2026-07-28: no
 green-exit-with-a-hole). The best-effort skip-and-report
 posture is gone; the typed error *value* stays.
+
+**Shared sources (sharedsource-fanout S3):** a *shared* URL — one that several roster entries
+carry — is an overview page, excluded from `declared_sources` on purpose. But one such page
+(the Planschbecken overview) states real page-level facts once for all its members, so
+`shared_sources` admits a shared URL back in ONLY when a parser is registered for it, and
+`scrape_shared_sources` fetches each admitted page ONCE, fanning the parsed `SharedFacts` out
+to one extract per MEMBER (the same `(SourceRef, aspects)` shape, so reconcile + compose are
+reused unchanged). On failure the whole member set is ONE `ScrapeFailure` — fail-fast fails
+once, not thirteen times.
 """
 
 from __future__ import annotations
@@ -35,12 +44,13 @@ from swimzh.build.compose import ScrapedAspects
 from swimzh.build.reconcile import Name, SourceRef
 from swimzh.core.errors import ProviderError
 from swimzh.core.http import HttpClient
-from swimzh.core.result import Err, Ok
+from swimzh.core.result import Err, Ok, Result
 from swimzh.domain.admission import Admission, Free, Tariff, Unknown
 from swimzh.domain.catalog import PoolCatalogEntry
 from swimzh.domain.models import Basin, BasinId, Notice, PoolKind
 from swimzh.domain.schedule import ClosureRange
 from swimzh.providers.operator_pages import parse_maintenance_closures
+from swimzh.providers.planschbecken import SharedFacts, parse_planschbecken
 from swimzh.providers.price_scraper import (
     CityTariffs,
     states_city_tariff,
@@ -286,4 +296,120 @@ def scrape_declared_sources(
             fetched_at,
         )
         extracts.append((Name(entry.name), aspects))
+    return ScrapeReport(extracts=tuple(extracts), failures=tuple(failures), notes=tuple(notes))
+
+
+# ── Shared sources: one page's facts fan out to a member set (sharedsource-fanout S3) ──────────
+
+#: A parser for a SHARED page's page-level facts — pure, no I/O; the phase fetches, this reads.
+SharedPageParser = Callable[[str], Result[SharedFacts, ProviderError]]
+
+#: The registry that ADMITS a shared URL into the fan-out phase. Deliberately an allowlist,
+#: never "every shared URL": a shared URL is an overview page, and most state nothing about
+#: their sharers — `hallenbaeder.html` (14 school-pool sharers) names ZERO of them (verified
+#: 2026-08-07), and the `flussbad-unterer-letten` pair is an identity-aliasing problem, not a
+#: fact fan-out. Only a page a registered parser can read joins the build.
+_SHARED_PAGE_PARSERS: Mapping[str, SharedPageParser] = {
+    "https://www.stadt-zuerich.ch/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/"
+    "sommerbaeder/planschbecken.html": parse_planschbecken,
+}
+
+
+class SharedSource(NamedTuple):
+    """One shared overview page, the roster entries that share it, and its registered parser."""
+
+    url: str
+    members: tuple[PoolCatalogEntry, ...]
+    parse: SharedPageParser
+
+
+def shared_sources(catalog: tuple[PoolCatalogEntry, ...]) -> tuple[SharedSource, ...]:
+    """The shared pages the fan-out phase scrapes: entries SHARING a URL (≥2 — the same test
+    that excludes them from `declared_sources`, so the two phases partition by construction),
+    admitted ONLY when that URL has a registered parser (`_SHARED_PAGE_PARSERS`).
+
+    Today exactly one: the Planschbecken overview (13 members). `hallenbaeder.html` has no
+    parser (it names none of its 14 sharers) and the unterer-letten pair none either (one real
+    pool behind two roster entries — admitting it would fan one pool's facts onto two entries
+    without deciding whether they are one pool). Ordered by URL so a re-run yields equal rows.
+    """
+    by_url: dict[str, list[PoolCatalogEntry]] = {}
+    for entry in catalog:
+        if entry.url is not None:
+            by_url.setdefault(entry.url, []).append(entry)
+    return tuple(
+        SharedSource(url=url, members=tuple(members), parse=_SHARED_PAGE_PARSERS[url])
+        for url, members in sorted(by_url.items())
+        if len(members) > 1 and url in _SHARED_PAGE_PARSERS
+    )
+
+
+def _shared_aspects(
+    entry: PoolCatalogEntry, facts: SharedFacts, fetched_at: datetime
+) -> ScrapedAspects:
+    """One member's aspect payload: the page-level facts and NOTHING per-pool — no basins
+    (the page publishes no timetable, so the schedule stays honestly `no_source`), no
+    closures, no notices. The Name ref keeps the reconcile seam the sole id producer."""
+    return ScrapedAspects(
+        name=entry.name,
+        kind=entry.kind,
+        address=entry.address,
+        geo=entry.geo,
+        basins=(),
+        closures=(),
+        notices=(),
+        admission=facts.admission,
+        fetched_at=fetched_at,
+        operating_season=facts.operating_season,
+    )
+
+
+def scrape_shared_sources(
+    client: HttpClient,
+    catalog: tuple[PoolCatalogEntry, ...],
+    fetched_at: datetime,
+) -> ScrapeReport:
+    """Fetch each shared page ONCE and fan its parsed facts out to every member.
+
+    On `Ok`: one extract per MEMBER (same `(SourceRef, aspects)` shape as the declared scrape,
+    so `resolve_all` + `compose` fold them with no new seam). On `Err` (fetch or parse): ONE
+    `ScrapeFailure` for the whole set — under fail-fast the build aborts once, never once per
+    member. A page whose admission sentence is gone parses `Unknown` (stated facts only); that
+    ships as one audit note, mirroring the declared scrape's unpriced-pool note.
+
+    A REGISTERED url with fewer than 2 roster sharers is also one audit note: the parser is a
+    promise the roster no longer honours — the url stops being *shared*, so it exits this
+    phase, and a `PADDLING` entry exits `declared_sources` too. WFS drift has renamed roster
+    entries before; a drift that collapses the member set must leave a trace in the build
+    output, never a silent exit from BOTH phases.
+    """
+    extracts: list[Extract] = []
+    failures: list[ScrapeFailure] = []
+    notes: list[str] = []
+    sharers = Counter(entry.url for entry in catalog if entry.url)
+    for url in _SHARED_PAGE_PARSERS:
+        if sharers[url] < 2:
+            notes.append(
+                f"registered shared page has {sharers[url]} roster sharer(s); fan-out inert: {url}"
+            )
+    for source in shared_sources(catalog):
+        set_name = f"shared page ({len(source.members)} pools)"
+        match fetch_page(client, source.url):
+            case Err(cause):
+                failures.append(ScrapeFailure(name=set_name, url=source.url, cause=cause))
+                continue
+            case Ok(raw):
+                page = raw.decode("utf-8", "replace")
+
+        parsed = source.parse(page)
+        if isinstance(parsed, Err):
+            failures.append(ScrapeFailure(name=set_name, url=source.url, cause=parsed.error))
+            continue
+        facts = parsed.value
+        if isinstance(facts.admission, Unknown):
+            # A page-stated absence, once for the set — the shared-page mirror of the declared
+            # scrape's per-pool note, so a page dropping its gratis sentence leaves a trace.
+            notes.append(f"no admission stated on shared page: {source.url}")
+        for entry in source.members:
+            extracts.append((Name(entry.name), _shared_aspects(entry, facts, fetched_at)))
     return ScrapeReport(extracts=tuple(extracts), failures=tuple(failures), notes=tuple(notes))

@@ -176,6 +176,21 @@ class LiveWaterTempOut(BaseModel):
     reason_code: str | None = None
 
 
+class OperatingSeasonOut(BaseModel):
+    """The facility-level, timetable-free operating season a pool's own page states
+    (sharedsource-fanout): a month-or-day-granular annual window plus its weather condition.
+    `start_day`/`end_day` are named ONLY at `precision == "day"` — a `"month"` window is whole
+    months inclusive, and rendering it day-precise would overstate what the page published
+    (the annual-window month-rendering rule)."""
+
+    start_month: int
+    end_month: int
+    precision: str  # DatePrecision value: "month" (whole months inclusive) | "day"
+    weather: str  # Weather value: "any" | "fair_only" — qualifies the whole season
+    start_day: int | None = None  # only at DAY precision
+    end_day: int | None = None  # only at DAY precision
+
+
 class FacilityDetailOut(BaseModel):
     facility_id: str
     facility_name: str
@@ -197,6 +212,9 @@ class FacilityDetailOut(BaseModel):
     # conflated with "unknown" (the 32 pools nobody has priced).
     admission: AdmissionOut
     prices: PriceTableOut | None  # the tariff table; None for free/unknown admission
+    # The page-stated season for a pool that publishes WHEN it operates but no timetable
+    # (the 13 Planschbecken, sharedsource-fanout S3); None when its page states none.
+    operating_season: OperatingSeasonOut | None
     provenance: ProvenanceOut
     # One panel per basin that carries a parsed Belegungsplan; empty when none do.
     lane_panels: list[BasinLanePanelOut]

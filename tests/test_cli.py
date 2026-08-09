@@ -50,7 +50,7 @@ from swimzh.domain.pricing import PriceCategory, PriceEntry, PriceTable
 from swimzh.domain.resolver import resolve_basin
 from swimzh.domain.schedule import ClosedDay, OpenDay, Weather
 from swimzh.etl.build import build_store
-from swimzh.etl.scrape import declared_sources
+from swimzh.etl.scrape import ScrapeReport, declared_sources, shared_sources
 from swimzh.providers.geo_sport import POOL_LAYERS
 from swimzh.providers.price_scraper import PRICES_URL
 from swimzh.storage import catalog_json
@@ -889,6 +889,88 @@ def test_build_price_scrape_failure_aborts_content_unchanged(
     assert "HTTP 500" in err  # the typed ProviderError cause is surfaced
 
 
+def test_build_fans_the_shared_planschbecken_facts_out_to_thirteen_pools(tmp_path: Path) -> None:
+    """sharedsource-fanout S3 acceptance, by LITERAL SQL over the built store: exactly 13 blobs
+    carry `operating_season` — the 13 Planschbecken, whose one shared page states it — and all
+    13 carry `admission_state: "free"`, taking the citywide free count to 17 (4 + 13)."""
+    db = tmp_path / "gold.sqlite"
+    assert build(db_path=db, data_dir=DATA_DIR, clients=_build_clients()) == 0
+
+    conn = sqlite3.connect(db)
+    seasoned = {
+        row[0]
+        for row in conn.execute(
+            "select id from pool where json_extract(facility_doc,'$.operating_season') is not null"
+        )
+    }
+    assert len(seasoned) == 13, sorted(seasoned)
+    assert all(pool_id.startswith("planschbecken-") for pool_id in seasoned)
+    free = {
+        row[0]
+        for row in conn.execute(
+            "select id from pool where json_extract(facility_doc,'$.admission_state') = 'free'"
+        )
+    }
+    assert seasoned <= free  # every Planschbecken is free — the page states it once for all 13
+    assert len(free) == 17  # 4 declared-source free pools + the 13 members
+
+
+def test_a_shared_page_fetch_failure_aborts_the_build_once_content_unchanged(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """S3 fail-fast: the shared Planschbecken page 503s while every declared page still fetches
+    fine → the whole build aborts ONCE (a single abort line — one `ScrapeFailure` for the whole
+    13-member set, never thirteen), non-zero, prior gold content-unchanged."""
+    db = tmp_path / "gold.sqlite"
+    assert build(db_path=db, data_dir=DATA_DIR, clients=_build_clients()) == 0
+    before = _db_content_digest(db)
+
+    def fail_shared_page(request: httpx.Request) -> httpx.Response | None:
+        if str(request.url).endswith("planschbecken.html"):
+            return httpx.Response(503, text="down")
+        return None
+
+    code = build(db_path=db, data_dir=DATA_DIR, clients=recorded_build_clients(fail_shared_page))
+    assert code == 1
+    assert _db_content_digest(db) == before  # temp discarded — the live store never mutated
+    err = capsys.readouterr().err
+    assert err.count("schedule scrape aborted") == 1  # once, not once per member
+    assert "planschbecken.html" in err
+    assert "HTTP 503" in err  # the typed ProviderError cause is surfaced
+
+
+def test_the_fanout_enriches_only_the_thirteen_planschbecken_blobs(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """S3 acceptance: every pool priced/scheduled before the slice is BYTE-identical after it.
+    Two builds under a frozen clock — one real, one with the shared phase stubbed empty (the
+    pre-slice world) — must differ in exactly the 13 Planschbecken `facility_doc` blobs and in
+    nothing else."""
+    monkeypatch.setattr("swimzh.cli._now", lambda: FETCHED_AT)
+    with_shared = tmp_path / "with.sqlite"
+    without_shared = tmp_path / "without.sqlite"
+    assert build(db_path=with_shared, data_dir=DATA_DIR, clients=_build_clients()) == 0
+
+    monkeypatch.setattr(
+        "swimzh.cli.scrape_shared_sources",
+        lambda _client, _catalog, _fetched_at: ScrapeReport(extracts=(), failures=()),
+    )
+    assert build(db_path=without_shared, data_dir=DATA_DIR, clients=_build_clients()) == 0
+
+    def blobs(path: Path) -> dict[str, str]:
+        conn = sqlite3.connect(path)
+        try:
+            return dict(conn.execute("select id, facility_doc from pool").fetchall())
+        finally:
+            conn.close()
+
+    with_docs, without_docs = blobs(with_shared), blobs(without_shared)
+    assert set(with_docs) == set(without_docs)  # fan-out MODIFIES existing docs, adds no rows
+    changed = {pool_id for pool_id in with_docs if with_docs[pool_id] != without_docs[pool_id]}
+    assert len(changed) == 13, sorted(changed)
+    assert all(pool_id.startswith("planschbecken-") for pool_id in changed)
+
+
 def test_build_via_main(tmp_path: Path) -> None:
     # `main` threads an injected client into `build` (live runs create their own); the recorded
     # WFS snapshot lets the CLI-level build run offline.
@@ -1116,15 +1198,19 @@ def test_build_stamps_each_provider_call_with_its_own_tier_and_ttl(tmp_path: Pat
     # interchangeable — a registry.yaml kind override moves Käferberg from WFS-`indoor` to
     # stored-`thermal` — so each expectation is derived from the source its own provider reads.
     declared_pages = {url for _entry, url in declared_sources(_ROSTER)}
+    # The shared-source fan-out (sharedsource-fanout S3) rides the SAME schedule client, so its
+    # one registered page (the Planschbecken overview) carries the same 12h stamp.
+    shared_pages = {source.url for source in shared_sources(_ROSTER)}
     all_pages = {e.entry.url for e in load_roster(open_db(db)) if e.entry.url}
     fetched: dict[tuple[str, int], set[str]] = defaultdict(set)
     for url, tier, ttl in recorder.calls:
         fetched[(tier, ttl)].add(url)
 
-    assert fetched[("snapshot", 12 * _HOUR_S)] == declared_pages
+    assert fetched[("snapshot", 12 * _HOUR_S)] == declared_pages | shared_pages
     # 7 indoor/thermal + the 4 school pools (school-access-vocabulary S2) + the 15
-    # outdoor/lake/river pools admitted in seasonal-hours S3.
+    # outdoor/lake/river pools admitted in seasonal-hours S3; plus the ONE shared page.
     assert len(declared_pages) == 26
+    assert len(shared_pages) == 1
     # NB `price_scraper` and `page_provider` share BOTH tier and TTL (static/7d — the latent
     # overlap the plan records under its S3 decisions), so this one union cannot tell them apart:
     # binding `prices` to the page-provider client would still pass. Harmless while the two

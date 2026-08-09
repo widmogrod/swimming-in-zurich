@@ -56,4 +56,6 @@ def pool_detail(
         # Derived from THIS facility by the domain rule the roster uses, not re-looked-up: the
         # detail and the `/pools` row are then two projections of one answer.
         freshness_of(facility),
+        # The page-stated season rides the facility like `admission` does (sharedsource-fanout).
+        operating_season=facility.operating_season,
     )

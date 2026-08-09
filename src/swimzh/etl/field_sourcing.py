@@ -206,22 +206,24 @@ _FACILITY: tuple[FieldSourcing, ...] = (
         "facility.admission_state",
         ProducerKind.SOURCED,
         _PRICE,
-        "4/26 declared sources",
+        "17/57 — 4 declared sources + the 13 Planschbecken",
         'The `Free` arm of the `Admission` union: "free" when the pool\'s own page states '
         "'Der Eintritt … ist gratis' / 'ein Gratisbad' (`price_scraper.states_free_admission`, "
         "the tight sentence only — never bare 'gratis', which the locker rows print on 21 of 26 "
-        "pages). Popped when absent, so `Tariff`/`Unknown` blobs are byte-identical to pre-union "
-        "gold; exactly the 4 free pools carry the key.",
+        "pages), or when the shared Planschbecken page states 'Die Nutzung … ist kostenlos' for "
+        "its 13 members (`providers.planschbecken`, sharedsource-fanout S3). Popped when "
+        "absent, so `Tariff`/`Unknown` blobs are byte-identical to pre-union gold.",
     ),
     FieldSourcing(
         "facility.operating_season",
-        ProducerKind.SOURCEABLE_UNBUILT,
-        None,
-        "0/57 written; one shared page states one for 13 pools",
-        "The facility-level, timetable-free season (sharedsource-fanout S1). The Planschbecken "
+        ProducerKind.SOURCED,
+        "providers.planschbecken",
+        "13/57 — the Planschbecken members",
+        "The facility-level, timetable-free season (sharedsource-fanout). The Planschbecken "
         "overview page states it once for all 13 members ('je nach Wetter von Mai bis September "
-        "in Betrieb'); the shared-source scrape phase (S3 of that plan) will parse and write it. "
-        "Until then no provider produces it and every blob omits the key.",
+        "in Betrieb'); `etl.scrape.scrape_shared_sources` fetches that page once and fans the "
+        "parsed `SharedFacts` out to every member (S3). Popped when `None`, so the other 44 "
+        "blobs omit the key and serialize byte-identically.",
     ),
     FieldSourcing(
         "facility.closures",

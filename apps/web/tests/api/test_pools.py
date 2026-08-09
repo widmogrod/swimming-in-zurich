@@ -206,6 +206,32 @@ def test_pool_detail_projects_all_three_admission_kinds() -> None:
     assert altstetten["prices"] is None
 
 
+def test_pool_detail_shows_a_planschbecken_free_with_its_season() -> None:
+    """sharedsource-fanout S3 acceptance: `/pools/{id}` for a Planschbecken shows
+    `admission: "free"` AND the page-stated season — the Mai–September window at MONTH
+    precision (day fields null: rendering a month range day-precise would overstate what the
+    page published) with its fair-weather condition. A pool whose page states no season
+    carries `operating_season: null`."""
+    with TestClient(app) as client:
+        althoos = client.get("/pools/planschbecken-althoos").json()
+        city = client.get("/pools/hallenbad-city").json()
+
+    assert althoos["admission"] == "free"
+    assert althoos["prices"] is None  # free is a fact, not a zero-franc table
+    assert althoos["operating_season"] == {
+        "start_month": 5,
+        "end_month": 9,
+        "precision": "month",
+        "weather": "fair_only",
+        "start_day": None,
+        "end_day": None,
+    }
+    # The schedule signal is untouched: the page publishes no timetable, so freshness stays
+    # the honest `no_source` while the season rides as a separate fact.
+    assert althoos["freshness"] == "no_source"
+    assert city["operating_season"] is None
+
+
 def test_pool_detail_surfaces_lane_plan_source_url() -> None:
     """S1 acceptance: `/pools/{id}` projects each basin's declared Belegungsplan PDF URL
     (`Basin.lane_plan_source.url`) as `lane_plan_url`. Oerlikon's two crosswalk basins declare
@@ -281,6 +307,9 @@ def test_facility_detail_out_surfaces_temp_and_parsed_prose_caveat() -> None:
         ),
         TempUnavailable(reason="no baditicker key"),
         ScheduleFreshness.AWAITING_SCRAPE,
+        # REQUIRED like its peer `admission`: a forgotten pass-through is a TypeError at the
+        # call site, never a silently-null season on the wire.
+        operating_season=None,
     )
     # The live facility temp is additive and labelled — it never overwrites a basin's temp.
     assert out.live_water_temp.available is False

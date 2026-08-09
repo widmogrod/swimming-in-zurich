@@ -28,6 +28,7 @@ from swimzh.domain.models import (
     Facility,
     Feature,
     Notice,
+    OperatingSeason,
     PoolId,
     PoolIdentity,
     PoolKind,
@@ -67,6 +68,10 @@ class ScrapedAspects:
     #: Sourced from the page's last-admission sentence ("Der letzte Einlass erfolgt bis 30
     #: Minuten vor Badschluss"); `None` when the page is silent, never an assumed zero.
     last_admission_before: timedelta | None = None
+    #: The facility-level, timetable-free season a SHARED page states once for every member
+    #: (sharedsource-fanout S3: the Planschbecken overview). `None` for every per-pool scrape —
+    #: a scraped pool's seasonal rules carry `ScheduleRule.season` instead, never both.
+    operating_season: OperatingSeason | None = None
 
 
 class Source(Enum):
@@ -122,6 +127,7 @@ _ASPECTS: tuple[_Aspect, ...] = (
     _Aspect("lockers", _is_nonempty, CURATED_WINS),
     _Aspect("public_holiday_policy", _is_not_none, CURATED_WINS),
     _Aspect("last_admission_before", _is_not_none, CURATED_WINS),
+    _Aspect("operating_season", _is_not_none, CURATED_WINS),
 )
 
 
@@ -153,6 +159,7 @@ def _scraped_facility(pool_id: PoolId, aspects: ScrapedAspects) -> Facility:
         notices=aspects.notices,
         features=aspects.features,
         lockers=aspects.lockers,
+        operating_season=aspects.operating_season,
     )
 
 

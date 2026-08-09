@@ -23,8 +23,14 @@ from swimzh.domain.catalog import PoolCatalogEntry
 from swimzh.domain.geo import GeoPoint
 from swimzh.domain.models import PoolKind
 from swimzh.domain.pricing import PriceCategory, PriceEntry, PriceTable
-from swimzh.domain.schedule import TimeRange, Weekday
-from swimzh.etl.scrape import admission_for, declared_sources, scrape_declared_sources
+from swimzh.domain.schedule import DatePrecision, TimeRange, Weather, Weekday
+from swimzh.etl.scrape import (
+    admission_for,
+    declared_sources,
+    scrape_declared_sources,
+    scrape_shared_sources,
+    shared_sources,
+)
 from swimzh.providers.price_scraper import (
     PRICES_URL,
     CityTariffs,
@@ -610,3 +616,187 @@ def test_a_priced_pool_produces_no_note() -> None:
     (_ref, aspects) = report.extracts[0]
     assert isinstance(aspects.admission, Tariff)
     assert report.notes == ()
+
+
+# --- SHARED sources: one page's facts fan out to a member set (sharedsource-fanout S3) --------
+#
+# `shared_sources` is the mirror image of `declared_sources`' unshared-URL test: entries SHARING
+# a URL (≥2), admitted back in ONLY when that URL has a registered parser. The two phases
+# partition the roster by construction — a URL is either owned (declared) or shared (candidate),
+# never both.
+
+_PLANSCHBECKEN_URL = (
+    "https://www.stadt-zuerich.ch/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/"
+    "sommerbaeder/planschbecken.html"
+)
+_PLANSCHBECKEN_FIXTURE = _FIXTURES / "planschbecken.html"
+
+
+def test_shared_sources_over_the_committed_catalog_is_exactly_the_planschbecken_page() -> None:
+    """ONE shared source: the Planschbecken overview, 13 members, all `PADDLING` — and disjoint
+    from the declared sources, so no pool is ever scraped by both phases."""
+    entries = catalog_json.loads(_CATALOG.read_text(encoding="utf-8"))
+    sources = shared_sources(entries)
+    assert len(sources) == 1, [s.url for s in sources]
+    (source,) = sources
+    assert source.url == _PLANSCHBECKEN_URL
+    assert len(source.members) == 13
+    assert all(e.kind is PoolKind.PADDLING for e in source.members)
+    assert all(e.pool_id.startswith("planschbecken-") for e in source.members)
+    assert not {e.pool_id for e in source.members} & _declared_ids(entries)
+
+
+def test_hallenbaeder_overview_yields_no_shared_source_because_no_parser_reads_it() -> None:
+    """The 14-sharer school overview page names ZERO of its sharers (verified 2026-08-07), so no
+    parser is registered for it and the registry keeps it out — those pools stay `no_source`."""
+    entries = catalog_json.loads(_CATALOG.read_text(encoding="utf-8"))
+    overview = (
+        "https://www.stadt-zuerich.ch/de/stadtleben/sport-und-erholung/"
+        "sport-und-badeanlagen/hallenbaeder.html"
+    )
+    assert sum(1 for e in entries if e.url == overview) == 14  # genuinely shared — the premise
+    assert overview not in {s.url for s in shared_sources(entries)}
+
+
+def test_unterer_letten_pair_yields_no_shared_source_because_it_is_identity_aliasing() -> None:
+    """Two roster entries share one REAL pool page — an identity problem, not a fact fan-out:
+    admitting it would fan one pool's facts onto two entries without deciding whether they are
+    one pool. No parser is registered, so the pair stays out."""
+    entries = catalog_json.loads(_CATALOG.read_text(encoding="utf-8"))
+    pair = [e for e in entries if e.pool_id.startswith("flussbad-unterer-letten")]
+    assert len(pair) == 2 and len({e.url for e in pair}) == 1  # genuinely shared — the premise
+    assert pair[0].url not in {s.url for s in shared_sources(entries)}
+
+
+def _paddling_catalog() -> tuple[PoolCatalogEntry, ...]:
+    """Three of the real members (name + kind + the real shared URL) — enough to prove the
+    fan-out shape without carrying all 13 through every double."""
+    members = (
+        ("planschbecken-althoos", "Planschbecken Althoos"),
+        ("planschbecken-artergut", "Planschbecken Artergut"),
+        ("planschbecken-josefswiese", "Planschbecken Josefswiese"),
+    )
+    return tuple(
+        _entry(pool_id, name, PoolKind.PADDLING, _PLANSCHBECKEN_URL) for pool_id, name in members
+    )
+
+
+def test_scrape_shared_sources_fetches_once_and_emits_one_extract_per_member() -> None:
+    """ONE fetch for the whole set; per member one identity-free extract carrying the SAME
+    page-level facts — season (Mai–September, MONTH, fair-only) and `Free()` — and nothing
+    per-pool: no basins (the page publishes no timetable), no closures, no notices."""
+    body = _PLANSCHBECKEN_FIXTURE.read_bytes()
+    fetches: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        fetches.append(str(request.url))
+        return httpx.Response(200, content=body)
+
+    report = scrape_shared_sources(_client(handler), _paddling_catalog(), FETCHED)
+
+    assert fetches == [_PLANSCHBECKEN_URL]  # one fetch, not one per member
+    assert report.failures == ()
+    assert report.notes == ()
+    assert [ref for ref, _ in report.extracts] == [
+        Name("Planschbecken Althoos"),
+        Name("Planschbecken Artergut"),
+        Name("Planschbecken Josefswiese"),
+    ]
+    for _ref, aspects in report.extracts:
+        season = aspects.operating_season
+        assert season is not None
+        assert (season.window.start.month, season.window.end.month) == (5, 9)
+        assert season.window.precision is DatePrecision.MONTH
+        assert season.weather is Weather.FAIR_ONLY
+        assert aspects.admission == Free()
+        assert aspects.basins == ()  # no timetable is minted — the schedule stays no_source
+        assert aspects.closures == () and aspects.notices == ()
+
+
+def test_a_shared_page_fetch_failure_is_one_failure_for_the_whole_set() -> None:
+    """Fail-fast fails ONCE: 3 members, one 503 → exactly one `ScrapeFailure`, zero extracts —
+    never one failure per member."""
+
+    def down(_r: httpx.Request) -> httpx.Response:
+        return httpx.Response(503, text="down")
+
+    report = scrape_shared_sources(_client(down), _paddling_catalog(), FETCHED)
+    assert report.extracts == ()
+    assert len(report.failures) == 1
+    assert report.failures[0].url == _PLANSCHBECKEN_URL
+
+
+def test_a_shared_page_parse_failure_is_one_typed_failure_for_the_whole_set() -> None:
+    """A page whose season sentence is gone is `Err(ParseError)` — one typed failure for the
+    set, so the build aborts once carrying the cause."""
+    page = _PLANSCHBECKEN_FIXTURE.read_text(encoding="utf-8")
+    sentence = "Diese sind je nach Wetter von Mai bis September in Betrieb."
+    assert sentence in page  # the premise is real
+    body = page.replace(sentence, "").encode("utf-8")
+
+    report = scrape_shared_sources(
+        _client(lambda _r: httpx.Response(200, content=body)), _paddling_catalog(), FETCHED
+    )
+    assert report.extracts == ()
+    assert len(report.failures) == 1
+    assert isinstance(report.failures[0].cause, ParseError)
+
+
+def test_a_shared_page_without_the_gratis_sentence_ships_unknown_plus_one_note() -> None:
+    """Stated facts only: `kostenlos` gone → `Unknown()` on every member (never inferred free),
+    plus ONE audit note for the set — the shared mirror of the declared unpriced-pool note."""
+    page = _PLANSCHBECKEN_FIXTURE.read_text(encoding="utf-8")
+    assert "kostenlos" in page  # the premise is real
+    body = page.replace("kostenlos", "").encode("utf-8")
+
+    report = scrape_shared_sources(
+        _client(lambda _r: httpx.Response(200, content=body)), _paddling_catalog(), FETCHED
+    )
+    assert report.failures == ()
+    assert all(aspects.admission == Unknown() for _ref, aspects in report.extracts)
+    assert report.notes == (f"no admission stated on shared page: {_PLANSCHBECKEN_URL}",)
+
+
+def test_a_catalog_without_shared_registered_urls_fetches_nothing() -> None:
+    """The phase is inert off the Planschbecken page: an unshared URL (a declared source's own
+    page) and a shared-but-unregistered one both yield zero fetches, zero extracts. The
+    registered page being ABSENT from the roster entirely (0 sharers) is itself the drift
+    note, not silence."""
+
+    def boom(_r: httpx.Request) -> httpx.Response:
+        raise AssertionError("no fetch may happen")
+
+    overview = "https://x/hallenbaeder.html"
+    catalog = (
+        _entry("hallenbad-city", "Hallenbad City", PoolKind.INDOOR, "https://x/city.html"),
+        _entry("schulschwimmanlage-a", "Schule A", PoolKind.SCHOOL, overview),
+        _entry("schulschwimmanlage-b", "Schule B", PoolKind.SCHOOL, overview),
+    )
+    report = scrape_shared_sources(_client(boom), catalog, FETCHED)
+    assert report == scrape_shared_sources(_client(boom), (), FETCHED)
+    assert report.extracts == () and report.failures == ()
+    assert report.notes == (
+        f"registered shared page has 0 roster sharer(s); fan-out inert: {_PLANSCHBECKEN_URL}",
+    )
+
+
+def test_a_registered_shared_page_with_one_sharer_is_an_audit_note_not_a_silent_drop() -> None:
+    """The WFS-drift alarm: if the roster ever collapses the member set to a single entry (a
+    rename has drifted this roster before), the registered URL stops being *shared* and would
+    exit BOTH phases silently — not shared → no fan-out; `PADDLING` → never a declared source.
+    The registered parser is a promise the roster no longer honours: ONE audit note (the
+    unpriced-pool posture), zero fetches, zero extracts, and never a failure."""
+
+    def boom(_r: httpx.Request) -> httpx.Response:
+        raise AssertionError("a single sharer must not be fetched")
+
+    catalog = (
+        _entry(
+            "planschbecken-althoos", "Planschbecken Althoos", PoolKind.PADDLING, _PLANSCHBECKEN_URL
+        ),
+    )
+    report = scrape_shared_sources(_client(boom), catalog, FETCHED)
+    assert report.extracts == () and report.failures == ()
+    assert report.notes == (
+        f"registered shared page has 1 roster sharer(s); fan-out inert: {_PLANSCHBECKEN_URL}",
+    )
