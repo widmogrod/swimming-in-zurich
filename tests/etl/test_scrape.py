@@ -21,6 +21,7 @@ from swimzh.domain.access import WomenOnly
 from swimzh.domain.admission import Free, Tariff, Unknown
 from swimzh.domain.catalog import PoolCatalogEntry
 from swimzh.domain.geo import GeoPoint
+from swimzh.domain.lockers import LockerCategory
 from swimzh.domain.models import PoolKind
 from swimzh.domain.pricing import PriceCategory, PriceEntry, PriceTable
 from swimzh.domain.schedule import DatePrecision, TimeRange, Weather, Weekday
@@ -38,6 +39,7 @@ from swimzh.providers.price_scraper import (
     states_free_admission,
 )
 from swimzh.storage import catalog_json
+from tests.declared_fixtures import FIXTURES_DIR, PAGE_FIXTURES, page_of
 
 FIXTURE = Path(__file__).resolve().parents[1] / "providers" / "fixtures" / "hallenbad_city.html"
 FETCHED = datetime(2026, 7, 19, 9, 0, tzinfo=ZoneInfo("Europe/Zurich"))
@@ -123,6 +125,55 @@ def test_extracts_carry_notices_closures_and_prices() -> None:
     assert aspects.closures  # derived from the closure notice
     # Its page links the tariff → the shared tariff applied, as the `Tariff` arm of the union.
     assert isinstance(aspects.admission, Tariff)
+
+
+def test_extracts_fill_the_lockers_aspect_from_the_mietobjekt_table() -> None:
+    """mietobjekt-extraction S1: the aspect field that had a compose slot and zero producers is
+    filled by the scrape — City's page yields its four locker rows on the extract itself."""
+    body = FIXTURE.read_bytes()
+    catalog = (_entry("hallenbad-city", "Hallenbad City", PoolKind.INDOOR, "https://x/city.html"),)
+    report = scrape_declared_sources(
+        _client(lambda _r: httpx.Response(200, content=body)), catalog, FETCHED, tariffs=_TARIFFS
+    )
+    _ref, aspects = report.extracts[0]
+    assert [(lo.category, lo.fee_chf, lo.deposit_chf, lo.period) for lo in aspects.lockers] == [
+        (LockerCategory.WARDROBE, None, Decimal("5.00"), None),
+        (LockerCategory.VALUABLES, None, Decimal("5.00"), None),
+        (LockerCategory.LAUNDRY, Decimal("240.00"), None, "1/2 Jahr"),
+        (LockerCategory.LAUNDRY, Decimal("400.00"), None, "1 Jahr"),
+    ]
+
+
+def test_a_page_without_the_mietobjekt_table_yields_empty_lockers_not_a_failure() -> None:
+    # maennerbad is a real declared source whose committed page has no Mietobjekt table:
+    # absence is data — an extract with `lockers == ()`, never a `ScrapeFailure`.
+    catalog = (
+        _entry(
+            "maennerbad-schanzengraben", "Männerbad Schanzengraben", PoolKind.RIVER, "https://x/m"
+        ),
+    )
+    body = page_of("maennerbad-schanzengraben").encode("utf-8")
+    report = scrape_declared_sources(
+        _client(lambda _r: httpx.Response(200, content=body)), catalog, FETCHED, tariffs=_TARIFFS
+    )
+    assert report.failures == ()
+    (_ref, aspects) = report.extracts[0]
+    assert aspects.lockers == ()
+
+
+def test_a_garbled_mietobjekt_price_cell_is_a_typed_failure_that_aborts_the_build() -> None:
+    """A `Fr.` token with no parseable amount in a PRESENT table is garble, not prose — a typed
+    `ScrapeFailure` (ParseError), which under fail-fast aborts the whole run rather than
+    persisting a wrong or missing price for a page that states one."""
+    body = page_of("hallenbad-city").replace("Fr. 240.–", "Fr. ab").encode("utf-8")
+    catalog = (_entry("hallenbad-city", "Hallenbad City", PoolKind.INDOOR, "https://x/city.html"),)
+    report = scrape_declared_sources(
+        _client(lambda _r: httpx.Response(200, content=body)), catalog, FETCHED, tariffs=_TARIFFS
+    )
+    assert report.extracts == ()
+    assert len(report.failures) == 1
+    assert isinstance(report.failures[0].cause, ParseError)
+    assert "Fr. ab" in report.failures[0].cause.detail
 
 
 def test_unparseable_page_is_a_typed_failure_not_a_skip() -> None:
@@ -374,14 +425,14 @@ def test_a_school_pool_is_served_the_school_tariff_not_the_hallenbad_one() -> No
     indoor = next(s for s in declared_sources(entries) if s.entry.pool_id == "hallenbad-city")
 
     assert by_id["schulschwimmanlage-aemtler"].kind is PoolKind.SCHOOL
-    school_admission = admission_for(school, _page_of("schulschwimmanlage-aemtler"), _TARIFFS)
+    school_admission = admission_for(school, page_of("schulschwimmanlage-aemtler"), _TARIFFS)
     assert isinstance(school_admission, Tariff)
     assert [e.amount_chf for e in school_admission.table.entries] == [
         Decimal("5.00"),
         Decimal("5.00"),
         Decimal("2.50"),
     ]
-    general_admission = admission_for(indoor, _page_of("hallenbad-city"), _TARIFFS)
+    general_admission = admission_for(indoor, page_of("hallenbad-city"), _TARIFFS)
     assert isinstance(general_admission, Tariff)
     assert [e.amount_chf for e in general_admission.table.entries] == [
         Decimal("8.00"),
@@ -397,39 +448,10 @@ def test_a_school_pool_is_served_the_school_tariff_not_the_hallenbad_one() -> No
 # 4 of those pools state "Der Eintritt … ist gratis" and one "wird privat betrieben", so a host
 # rule would have invented a Fr. 8.00 charge at five pools that charge nothing. The page's own
 # tariff LINK is the discriminator, and these pin it against the committed page fixtures.
-
-_FIXTURES = Path(__file__).resolve().parents[1] / "providers" / "fixtures"
-
-#: `pool_id` → its committed page fixture. Two fixtures are named for the pool's short name rather
-#: than its roster id (`maennerbad.html`, `frauenbad.html`), so the mapping cannot be derived.
-_PAGE_FIXTURES = {
-    "hallenbad-city": "hallenbad_city.html",
-    "hallenbad-oerlikon": "hallenbad_oerlikon.html",
-    "hallenbad-bungertwies": "hallenbad_bungertwies.html",
-    "hallenbad-blaesi": "hallenbad_blaesi.html",
-    "hallenbad-leimbach": "hallenbad_leimbach.html",
-    "hallenbad-altstetten": "hallenbad_altstetten.html",
-    "waermebad-kaeferberg": "waermebad_kaeferberg.html",
-    "schulschwimmanlage-aemtler": "schulschwimmanlage_aemtler.html",
-    "schulschwimmanlage-altweg": "schulschwimmanlage_altweg.html",
-    "schulschwimmanlage-riedtli": "schulschwimmanlage_riedtli.html",
-    "schulschwimmanlage-tannenrauch": "schulschwimmanlage_tannenrauch.html",
-    "freibad-allenmoos": "freibad_allenmoos.html",
-    "freibad-auhof": "freibad_auhof.html",
-    "freibad-heuried": "freibad_heuried.html",
-    "freibad-letzigraben": "freibad_letzigraben.html",
-    "freibad-seebach": "freibad_seebach.html",
-    "freibad-zwischen-den-hoelzern": "freibad_zwischen_den_hoelzern.html",
-    "seebad-katzensee": "seebad_katzensee.html",
-    "seebad-utoquai": "seebad_utoquai.html",
-    "strandbad-mythenquai": "strandbad_mythenquai.html",
-    "strandbad-tiefenbrunnen": "strandbad_tiefenbrunnen.html",
-    "strandbad-wollishofen": "strandbad_wollishofen.html",
-    "flussbad-au-hoengg": "flussbad_au_hoengg.html",
-    "flussbad-oberer-letten": "flussbad_oberer_letten.html",
-    "frauenbad-stadthausquai": "frauenbad.html",
-    "maennerbad-schanzengraben": "maennerbad.html",
-}
+#
+# The pool-id → fixture mapping lives in the SHARED `tests.declared_fixtures` (three suites
+# consume it); the completeness pin below keeps this suite the place that proves it matches
+# the production `declared_sources` predicate.
 
 #: The pools whose page links NO city tariff. Four of them the city publishes as FREE
 #: ("Der Eintritt ins … ist gratis"), and the Männerbad "wird privat betrieben … ein Gratisbad";
@@ -443,18 +465,14 @@ _NO_TARIFF = {
 }
 
 
-def _page_of(pool_id: str) -> str:
-    return (_FIXTURES / _PAGE_FIXTURES[pool_id]).read_text(encoding="utf-8")
-
-
 def test_states_city_tariff_over_every_declared_sources_committed_page() -> None:
     """21 of the 26 declared sources link the tariff page; exactly 5 do not. Offline, against the
     committed page fixtures — one per declared source, so this is the whole population."""
     entries = catalog_json.loads(_CATALOG.read_text(encoding="utf-8"))
     declared = _declared_ids(entries)
-    assert declared == set(_PAGE_FIXTURES), sorted(declared ^ set(_PAGE_FIXTURES))
+    assert declared == set(PAGE_FIXTURES), sorted(declared ^ set(PAGE_FIXTURES))
 
-    stated = {pool_id for pool_id in declared if states_city_tariff(_page_of(pool_id))}
+    stated = {pool_id for pool_id in declared if states_city_tariff(page_of(pool_id))}
     assert declared - stated == _NO_TARIFF
     assert len(stated) == 21
 
@@ -463,7 +481,7 @@ def test_a_private_operators_own_price_anchors_are_not_the_city_tariff() -> None
     """`hallenbad-altstetten` carries 9 hrefs containing `preise` across 3 targets of its OWN
     (`/schwimmen-2#preise`, `/schwimmen-2#schwimmpreise`, `/sauna#saunapreise`). A substring test
     on `preise` would price it at the city rate; the match is on the tariff page's PATH."""
-    page = _page_of("hallenbad-altstetten")
+    page = page_of("hallenbad-altstetten")
     hrefs = re.findall(r'href="([^"]*preise[^"]*)"', page)
     assert len(hrefs) == 9, hrefs
     assert len({h.split("://")[-1] for h in hrefs}) == 3, sorted(set(hrefs))
@@ -496,7 +514,7 @@ def test_states_free_admission_over_every_declared_sources_committed_page() -> N
     population, and the whole exposure surface of a too-loose pattern."""
     entries = catalog_json.loads(_CATALOG.read_text(encoding="utf-8"))
     declared = _declared_ids(entries)
-    free = {pool_id for pool_id in declared if states_free_admission(_page_of(pool_id))}
+    free = {pool_id for pool_id in declared if states_free_admission(page_of(pool_id))}
     assert free == _FREE
     assert len(declared - free) == 22
 
@@ -505,7 +523,7 @@ def test_the_locker_row_gratis_is_not_a_free_admission_statement() -> None:
     """The trap the loose pattern falls into: `hallenbad_city.html` prints bare `gratis` in its
     Ausstattung/locker rows ("Garderobenkasten … gratis") — as do 21 of the 26 declared pages —
     yet City charges the full Hallenbad rate. The tight sentence must keep it False."""
-    page = _page_of("hallenbad-city")
+    page = page_of("hallenbad-city")
     assert "gratis" in page.lower()  # the bait is really on the page
     assert states_free_admission(page) is False
 
@@ -517,7 +535,7 @@ def test_admission_for_splits_the_declared_sources_four_seventeen_four_one() -> 
     entries = catalog_json.loads(_CATALOG.read_text(encoding="utf-8"))
     school, general, free, unknown = [], [], [], []
     for source in declared_sources(entries):
-        admission = admission_for(source, _page_of(source.entry.pool_id), _TARIFFS)
+        admission = admission_for(source, page_of(source.entry.pool_id), _TARIFFS)
         match admission:
             case Tariff(table) if table is _TARIFFS.school:
                 school.append(source.entry.pool_id)
@@ -553,7 +571,7 @@ def test_a_pool_whose_page_states_neither_tariff_nor_gratis_yields_a_note_not_a_
     abort the build) and never a silent drop. The subject is a doctored City page (its tariff
     link broken), which states neither fact."""
     catalog = (_entry("hallenbad-x", "Hallenbad X", PoolKind.INDOOR, "https://x/l"),)
-    body = _page_of("hallenbad-city").replace(
+    body = page_of("hallenbad-city").replace(
         "/web/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/preise-abos.html", "/x.html"
     )
     report = scrape_declared_sources(
@@ -575,7 +593,7 @@ def test_a_free_pool_carries_free_as_data_and_needs_no_note() -> None:
     catalog = (
         _entry("flussbad-oberer-letten", "Flussbad Oberer Letten", PoolKind.RIVER, "https://x/l"),
     )
-    body = _page_of("flussbad-oberer-letten").encode("utf-8")
+    body = page_of("flussbad-oberer-letten").encode("utf-8")
     report = scrape_declared_sources(
         _client(lambda _r: httpx.Response(200, content=body)), catalog, FETCHED, tariffs=_TARIFFS
     )
@@ -589,7 +607,7 @@ def test_a_page_stating_both_tariff_and_gratis_is_a_tariff_plus_a_contradiction_
     """If a page ever states both facts, the tariff link wins (checked first) and the
     contradiction is surfaced as a note — a page bug to report, never a silent pick and never a
     build failure."""
-    body = _page_of("hallenbad-city").replace("</body>", "<p>Der Eintritt ist gratis.</p></body>")
+    body = page_of("hallenbad-city").replace("</body>", "<p>Der Eintritt ist gratis.</p></body>")
     assert states_city_tariff(body) and states_free_admission(body)  # the premise is real
     catalog = (_entry("hallenbad-city", "Hallenbad City", PoolKind.INDOOR, "https://x/c"),)
     report = scrape_declared_sources(
@@ -609,7 +627,7 @@ def test_a_page_stating_both_tariff_and_gratis_is_a_tariff_plus_a_contradiction_
 
 def test_a_priced_pool_produces_no_note() -> None:
     catalog = (_entry("hallenbad-city", "Hallenbad City", PoolKind.INDOOR, "https://x/c"),)
-    body = _page_of("hallenbad-city").encode("utf-8")
+    body = page_of("hallenbad-city").encode("utf-8")
     report = scrape_declared_sources(
         _client(lambda _r: httpx.Response(200, content=body)), catalog, FETCHED, tariffs=_TARIFFS
     )
@@ -629,7 +647,7 @@ _PLANSCHBECKEN_URL = (
     "https://www.stadt-zuerich.ch/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/"
     "sommerbaeder/planschbecken.html"
 )
-_PLANSCHBECKEN_FIXTURE = _FIXTURES / "planschbecken.html"
+_PLANSCHBECKEN_FIXTURE = FIXTURES_DIR / "planschbecken.html"
 
 
 def test_shared_sources_over_the_committed_catalog_is_exactly_the_planschbecken_page() -> None:

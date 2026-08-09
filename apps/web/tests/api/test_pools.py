@@ -152,8 +152,9 @@ def test_pool_detail_surfaces_basins_physicals_and_prices() -> None:
     physical statics the domain computes — per-basin dimensions/lanes/temperature key and the
     physical_source caveat, the scraped price table, and provenance. City's `Schwimmerbecken` basin
     gains its 50 m / 6-lane physicals from the WFS `infrastruktur` prose (`apply_physicals`), tagged
-    `parsed_prose`. Features/lockers are not produced by the sourced pipeline (their projection is
-    pinned by the mapping unit test `test_facility_detail_out_...`), so they are empty here."""
+    `parsed_prose`. Features are not produced by the sourced pipeline (their projection is
+    pinned by the mapping unit test `test_facility_detail_out_...`), so they are empty here;
+    lockers ARE since mietobjekt-extraction S1 — City's four page rows reach the wire."""
     with TestClient(app) as client:
         response = client.get("/pools/hallenbad-city", params={"at": "2026-09-15T09:00"})
     assert response.status_code == 200
@@ -170,9 +171,46 @@ def test_pool_detail_surfaces_basins_physicals_and_prices() -> None:
     assert lap["nominal_temp_c"] == 28.0  # "28°C" sourced from the WFS infrastruktur prose
     assert lap["physical_source"] == "parsed_prose"  # sourced from infrastruktur, honesty caveat
 
-    # Features/lockers: not produced by the sourced pipeline (curated statics were deleted in S3).
+    # Features: not produced by the sourced pipeline (curated statics were deleted in S3).
     assert body["features"] == []
-    assert body["lockers"] == []
+    # Lockers: produced since mietobjekt-extraction S1 — City's four `Mietobjekt|Preis` rows,
+    # scrape → compose → codec → projection end to end. Fee/deposit are the page's ORTHOGONAL
+    # axes ("gratis, plus Depot Fr. 5.–" = free usage + refundable deposit); the Wäschefach
+    # term suffix rides `period` verbatim.
+    assert body["lockers"] == [
+        {
+            "category": "wardrobe",
+            "fee_chf": None,
+            "deposit_chf": 5.0,
+            "period": None,
+            "mechanism": None,
+            "raw": "Garderobenkasten | gratis, plus Depot Fr. 5.–",
+        },
+        {
+            "category": "valuables",
+            "fee_chf": None,
+            "deposit_chf": 5.0,
+            "period": None,
+            "mechanism": None,
+            "raw": "Wertsachenfach | gratis, plus Depot Fr. 5.–",
+        },
+        {
+            "category": "laundry",
+            "fee_chf": 240.0,
+            "deposit_chf": None,
+            "period": "1/2 Jahr",
+            "mechanism": None,
+            "raw": "Wäschefach (1/2 Jahr) | Fr. 240.–",
+        },
+        {
+            "category": "laundry",
+            "fee_chf": 400.0,
+            "deposit_chf": None,
+            "period": "1 Jahr",
+            "mechanism": None,
+            "raw": "Wäschefach (1 Jahr) | Fr. 400.–",
+        },
+    ]
 
     # Prices: the whole scraped facility price table, with its freshness date present — and the
     # admission kind naming it a stated tariff (non-null `prices` exactly when "tariff").

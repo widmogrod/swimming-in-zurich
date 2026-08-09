@@ -8,6 +8,7 @@ from decimal import Decimal
 from pathlib import Path
 
 import pytest
+from tests.declared_fixtures import LOCKER_NOUN, PAGE_FIXTURES, page_of
 
 from apps.web.services.gold_store import GoldSwimStore
 from swimzh.core.result import Ok
@@ -15,7 +16,7 @@ from swimzh.domain.admission import Free, Tariff, Unknown
 from swimzh.domain.catalog import ScheduleFreshness
 from swimzh.etl.build import build_store
 from swimzh.providers.curated import load_dataset
-from swimzh.storage import catalog_json
+from swimzh.storage import catalog_json, codec
 from swimzh.storage.sqlite_repo import open_db
 
 DATA_DIR = Path(__file__).resolve().parents[3] / "data"
@@ -180,6 +181,38 @@ def test_the_store_splits_twenty_one_tariff_seventeen_free_nineteen_unknown(
         "seebad-katzensee",
         "maennerbad-schanzengraben",
     }
+
+
+def test_locker_carrying_pools_after_a_rebuild_are_the_fixture_derived_twenty(
+    gold_db: Path,
+) -> None:
+    """Mietobjekt-extraction S1 acceptance: after a full (offline) atomic build, EXACTLY the
+    pools whose committed page carries a locker noun serve non-empty `lockers` — the expected
+    id set derived by the shared, parser-independent `LOCKER_NOUN` scan over the DECLARED
+    fixtures (`tests.declared_fixtures`), so this cannot collapse into comparing the parser
+    with itself. Measured count: 20 of the 26 declared sources."""
+    expected = {pool_id for pool_id in PAGE_FIXTURES if LOCKER_NOUN.search(page_of(pool_id))}
+    carrying = {
+        str(f.identity.facility_id) for f in GoldSwimStore.open(gold_db).facilities() if f.lockers
+    }
+    assert carrying == expected
+    assert len(carrying) == 20
+    # The case a Garderobenkasten-only grep misses: mythenquai's table opens with
+    # `Wertsachenfach` and has no Garderobenkasten row — it must still carry lockers.
+    assert "strandbad-mythenquai" in carrying
+
+
+def test_a_pool_without_the_mietobjekt_table_keeps_a_byte_stable_blob(gold_db: Path) -> None:
+    """S1 touches no codec/DTO code, so a pool whose page carries no Mietobjekt table
+    serializes exactly as before: `lockers` stays the pre-existing (unconditional) empty
+    list, and the stored blob round-trips byte-identically through the codec."""
+    doc = (
+        open_db(gold_db)
+        .execute("select facility_doc from pool where id = 'maennerbad-schanzengraben'")
+        .fetchone()[0]
+    )
+    assert '"lockers":[]' in doc
+    assert codec.dumps(codec.loads(doc)) == doc
 
 
 def test_the_school_pools_are_served_the_school_tariff(gold_db: Path) -> None:

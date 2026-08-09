@@ -80,9 +80,13 @@ def test_residue_and_crosswalk_are_recorded() -> None:
     for drop_field in ("basin.exceptions", "basin.measured_temp_c"):
         assert by_field[drop_field].producer is ProducerKind.DROP_CANDIDATE
 
-    # A source demonstrably exists but no provider reads it yet. Filing this as
-    # DROP_CANDIDATE (the old state) scheduled real, locatable data for deletion.
-    assert by_field["facility.lockers"].producer is ProducerKind.SOURCEABLE_UNBUILT
+    # `lockers` LEFT the unbuilt bucket in mietobjekt-extraction S1: `parse_mietobjekte`
+    # reads the pool pages' `Mietobjekt|Preis` table and the scrape fills the compose slot,
+    # so it is SOURCED and names its provider (guard against a regression that files real,
+    # produced data back under residue).
+    lockers = by_field["facility.lockers"]
+    assert lockers.producer is ProducerKind.SOURCED
+    assert lockers.module == "providers.mietobjekt"
 
     # Sourced since 2026-08-04 from the timetable's "(und Feiertage)" Sunday row.
     assert by_field["facility.public_holiday_policy"].producer is ProducerKind.SOURCED

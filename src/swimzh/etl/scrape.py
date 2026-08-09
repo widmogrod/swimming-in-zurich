@@ -7,7 +7,10 @@ city pools, the 4 Schulschwimmanlagen that publish public swimming on their own 
 outdoor/lake/river pools whose seasonal `Zeitraum` table the scraper reads (seasonal-hours S3).
 
 Per pool we scrape: the timetable (→ rules and the page's last-admission rule), notices/alerts
-(→ `Notice`s, and closure-type notices → `ClosureRange`s), and the pool's ``Admission``
+(→ `Notice`s, and closure-type notices → `ClosureRange`s), the page's ``Mietobjekt | Preis``
+table (→ the ``lockers`` aspect via `providers.mietobjekt`; a page without the table yields
+empty tuples, never a failure — a malformed price cell in a present table IS one), and the
+pool's ``Admission``
 (`admission_for`: `Tariff` when the page LINKS the city tariff — the Schulschwimmanlage rate for
 a `SCHOOL` pool, the general rate otherwise; `Free` when the page states its own gratis sentence;
 `Unknown` — plus one ``ScrapeReport.notes`` line — when it states neither). The result is a
@@ -47,8 +50,10 @@ from swimzh.core.http import HttpClient
 from swimzh.core.result import Err, Ok, Result
 from swimzh.domain.admission import Admission, Free, Tariff, Unknown
 from swimzh.domain.catalog import PoolCatalogEntry
+from swimzh.domain.lockers import LockerOption
 from swimzh.domain.models import Basin, BasinId, Notice, PoolKind
 from swimzh.domain.schedule import ClosureRange
+from swimzh.providers.mietobjekt import parse_mietobjekte
 from swimzh.providers.operator_pages import parse_maintenance_closures
 from swimzh.providers.planschbecken import SharedFacts, parse_planschbecken
 from swimzh.providers.price_scraper import (
@@ -160,6 +165,7 @@ def _aspects(
     notices: tuple[Notice, ...],
     closures: tuple[ClosureRange, ...],
     admission: Admission,
+    lockers: tuple[LockerOption, ...],
     fetched_at: datetime,
 ) -> ScrapedAspects:
     return ScrapedAspects(
@@ -175,6 +181,7 @@ def _aspects(
         closures=closures,
         notices=notices,
         admission=admission,
+        lockers=lockers,
         fetched_at=fetched_at,
         public_holiday_policy=schedule.holiday_policy,
         last_admission_before=schedule.last_admission_before,
@@ -268,6 +275,14 @@ def scrape_declared_sources(
         if isinstance(schedule, Err):
             failures.append(ScrapeFailure(name=entry.name, url=url, cause=schedule.error))
             continue
+        # The Mietobjekt table: absence yields empty tuples (6 of the 26 declared pages carry
+        # none — not a failure); a malformed price cell in a PRESENT table is garble and, under
+        # fail-fast, aborts the build like an unparseable timetable. S1 wires the lockers side;
+        # the rentals side of the parse joins the aspects in S2.
+        mietobjekte = parse_mietobjekte(page)
+        if isinstance(mietobjekte, Err):
+            failures.append(ScrapeFailure(name=entry.name, url=url, cause=mietobjekte.error))
+            continue
         notices = parse_notices(page)
         admission = admission_for(source, page, tariffs)
         if isinstance(admission, Unknown):
@@ -293,6 +308,7 @@ def scrape_declared_sources(
             notices,
             closures,
             admission,
+            mietobjekte.value.lockers,
             fetched_at,
         )
         extracts.append((Name(entry.name), aspects))

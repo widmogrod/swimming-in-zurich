@@ -28,7 +28,8 @@ Producer kinds
   (``accessibility``, ``amenities``, schedule ``exceptions``, basin physicals for the 5 NULL-prose
   pools, richer access vocabulary). Source-or-drop is decided by S5c (attempt) / S5d (recorded
   drop). ``public_holiday_policy`` LEFT this bucket in 2026-08-04 and ``last_admission_before`` in
-  2026-08-06 — both are ``SOURCED`` from the pool page now; ``lockers`` is ``SOURCEABLE_UNBUILT``.
+  2026-08-06 — both are ``SOURCED`` from the pool page now; ``lockers`` left
+  ``SOURCEABLE_UNBUILT`` in 2026-08-09 (``providers.mietobjekt``, mietobjekt-extraction S1).
 * ``BUILD_METADATA`` — provenance / honesty tags produced by the build itself, not by a data
   provider (``source``, ``curated``, ``valid_as_of``, ``fetched_at``, basin ``physical_source``).
   A fourth bucket beyond the plan's three because forcing provenance fields into a data-provider
@@ -50,8 +51,10 @@ class ProducerKind(Enum):
     #: A source demonstrably EXISTS but no provider reads it yet. Distinct from
     #: DROP_CANDIDATE, whose whole meaning is "nothing out there produces this". Without
     #: this member every such field had to be filed as a drop candidate, which is how
-    #: `lockers` (a `Mietobjekt|Preis` table on 25 pages) and `last_admission_before`
-    #: (stated verbatim on 32) came to be listed as residue scheduled for deletion.
+    #: `lockers` (a `Mietobjekt|Preis` table on 20 of the 26 declared sources' committed
+    #: fixtures — the 2026-08-02 note's "25 pages" grepped ALL fixtures, not the declared
+    #: ones) and `last_admission_before` (stated verbatim on 32) came to be listed as
+    #: residue scheduled for deletion. Both have since left the bucket (SOURCED).
     SOURCEABLE_UNBUILT = "sourceable-unbuilt"  # a source exists; no provider built yet
     BUILD_METADATA = "build-metadata"  # provenance/honesty tag, from the build not a provider
 
@@ -261,12 +264,17 @@ _FACILITY: tuple[FieldSourcing, ...] = (
     ),
     FieldSourcing(
         "facility.lockers",
-        ProducerKind.SOURCEABLE_UNBUILT,
-        None,
-        "0/57 written; 25 pages carry a source",
-        "FALSIFIED 2026-08-02 by live fetch: 25 stadt-zuerich.ch pool pages carry a "
-        "<stzh-datatable columns=[Mietobjekt, Preis]> (101 rows). No provider reads it YET, which "
-        "is a different statement from 'no source exists' — see Gap 3 of the coverage catalogue.",
+        ProducerKind.SOURCED,
+        "providers.mietobjekt",
+        "20/26 declared sources",
+        "BUILT 2026-08-09 (mietobjekt-extraction S1): parse_mietobjekte reads the "
+        "<stzh-datatable columns=[Mietobjekt, Preis]> on the pool's own page and routes the "
+        "locker nouns (…kasten / Wertsachenfach / Wäschefach) to LockerOption; "
+        "etl.scrape._aspects fills the compose slot that had waited since Slice F. MEASURED "
+        "over the 26 declared sources' committed fixtures: 20 carry the table (the 2026-08-02 "
+        "note's '25 pages' grepped all fixtures, not the declared set); the 6 without are "
+        "altstetten, maennerbad, and the 4 Schulschwimmanlagen. The non-locker rows of the "
+        "same table are `rentals` — parsed since S1, wired onto the facility in S2.",
     ),
     FieldSourcing(
         "facility.last_admission_before",

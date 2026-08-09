@@ -193,6 +193,7 @@ Appended by /dev:implement after each slice — never rewritten. Newest row last
 
 | date | slice | status | divergence from plan | tech debt created | human review? |
 |------|-------|--------|----------------------|-------------------|---------------|
+| 2026-08-09 | S1 | done | `tests/etl/test_field_sourcing.py` edited outside Touches (its SOURCEABLE_UNBUILT pin broke by the required row flip — updated to guard SOURCED); the "auf Anfrage"/"Ausweis als Depot" grammar pins land on RentalItems not LockerOptions (the corpus puts those cells on rental-labeled rows); post-approve critic fixes: a Mietobjekt-anchored table whose `columns=`/`rows=` attribute fails JSON decode is now `Err(ParseError)` not silent absence (the plan's own fatal-on-malformed posture applied to the decode door); the noun-scan regex and pool-id→fixture mapping hoisted to shared `tests/declared_fixtures.py` (kills the cross-test-module imports) | `providers/mietobjekt.py` imports `price_scraper`'s private table helpers (recorded reuse decision; promote to a shared module when a third consumer appears); `fee_chf=None` carries two meanings (stated-gratis vs unstated) — S2 MUST resolve per the Decisions directive before rentals hit the wire | yes |
 
 ## Accepted drift
 
@@ -218,6 +219,21 @@ decisions for 20 pools). Suggestions taken: reuse of `price_scraper`'s table mac
 `Monatskasten`/`Saisonkasten` routed to lockers and `Badehosen` to swimwear; the codec
 pop-vs-emit deviation recorded; the cross-plan file-collision ordering moved into checkable
 frontmatter; the S1/S2 type split stated (types in S1, wiring in S2).
+
+### 2026-08-09 — S1 review directive for S2: the two meanings of `fee_chf=None`
+
+The S1 critic surfaced a semantics collision S2 MUST resolve before putting
+rentals on the wire: `domain/lockers.py` reads `fee_chf=None` as "free to
+use" while `domain/rentals.py:39` reads it as "the page states no fee", and
+the parser maps BOTH stated-gratis cells (Liegestuhl ×8, Sonnenschirm ×4,
+Spielmaterial) and genuinely-unstated cells (`auf Anfrage`) to the same
+`None`. Serving `fee_chf: null` with two meanings is the admission-union
+compression all over again at rental scale. S2 resolves it — either a
+distinct stated-free representation on `RentalItem` or reconciled docstring
+semantics with the distinction carried another way — and pins the
+Liegestuhl (stated gratis) vs Mehrzweckraum (`auf Anfrage`) pair as the
+proof. Also for S2's awareness: periods ride as verbatim label prefixes
+("Monats"/"Saison"/"Tages", Fugen-s included).
 
 ## Summary
 
