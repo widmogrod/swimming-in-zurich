@@ -1,8 +1,11 @@
 ---
 type: plan
-status: approved
+status: in-progress
 created: 2026-08-08
 feature: mietobjekt-extraction
+branch: plan/mietobjekt-extraction
+worktree: .claude/worktrees/plan-mietobjekt-extraction
+base_branch: feat/new-ui
 gates:
   qa: full
   review: adversarial
