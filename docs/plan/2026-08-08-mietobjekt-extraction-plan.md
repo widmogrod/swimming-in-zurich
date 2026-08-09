@@ -1,6 +1,6 @@
 ---
 type: plan
-status: in-progress
+status: done
 created: 2026-08-08
 feature: mietobjekt-extraction
 branch: plan/mietobjekt-extraction
@@ -238,5 +238,29 @@ proof. Also for S2's awareness: periods ride as verbatim label prefixes
 
 ## Summary
 
-Written when the plan reaches `done`; then distilled into
-`docs/summaries/mietobjekt-extraction.md` (what EXISTS now, not what was intended).
+Done 2026-08-09, two slices, critic approve r1 (S1) and revise→approve
+(S2 — the unpinned Unstated wire arm, proven by mutation).
+
+What exists now: `parse_mietobjekte` reads the Mietobjekt-anchored
+`stzh-datatable` on the 20 declared pages that carry one, routing by
+German noun — Garderobenkasten/Wertsachenfach/Wäschefach →
+`LockerOption` (periods verbatim-unparsed), everything else →
+`RentalItem`, unknown labels → `OTHER` with `raw` (the no-drop
+guarantee). Cost cells decompose on the fee/deposit axes over the
+critic-verified 48-cell corpus grammar; absence of the table is
+Ok-empty, a malformed cell or undecodable anchored table is a fatal
+`ParseError`. `RentalItem.fee` is the closed union
+`Priced | Gratis | Unstated` — a stated gratis and an unstated fee are
+different facts, pinned at parser, codec, and wire; `LockerOption`
+keeps its corpus-honest two-state `fee_chf` behind a loud guard test.
+After rebuild both carrying sets equal the fixture-derived 20
+(parser-independent noun scans, one shared owner
+`tests/declared_fixtures.py`); `/pools/hallenbad-city` serves all 7
+rows across the two fields; blobs pop `rentals` when empty and pre-S2
+blobs load `()`.
+
+Final: make qa green — 883 passed, coverage 96.06% ≥ 95, mypy strict,
+CRAP clean. Open debt: the locker fee two-state (guarded),
+deposit-semantics compression (raw carries it), the private
+price_scraper helper imports, and the declined DTO contradiction
+validator — all in the ledger.
