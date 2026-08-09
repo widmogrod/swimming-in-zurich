@@ -379,7 +379,13 @@ def _code_to_access(name: str) -> SessionAccess:
     lowered = name.lower()
     if "öffentlich" in lowered:
         return PublicSwim()
-    if "schul" in lowered:
+    # "schul" routes to SchoolReserved — the committed legends are full of genuine
+    # compound-named schools (Kantonsschule, Tagesschule, Rafaelschule, Privatschule,
+    # Gesamtschule, Schulsportkurs). The ONE exception is targeted, not word-boundary:
+    # a name whose "schul" hit comes only from the word "Schwimmschule" is a swim CLUB
+    # (Oerlikon's "Schwimmschule Limmatsharks") and keeps its full name — the same
+    # posture as the "bare 'bad' is not a pool keyword" negative.
+    if "schul" in lowered.replace("schwimmschule", ""):
         return SchoolReserved()
     return ClubReserved(club=name)
 

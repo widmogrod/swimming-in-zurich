@@ -330,10 +330,18 @@ def _section_reservation_digest(reservations: tuple[LaneReservation, ...]) -> st
 
 # Re-pinned for the grid-bottom boundary (claim-audit S1): the footer sentence's standalone
 # '4' (y=780.3, 2.65×pitch below the last time label) had minted a phantom 35th slot row —
-# a "Thursday 23:00–23:30 lane 8 SchoolReserved" session the PDF never published. The diff
-# from the previous digest is EXACTLY that one deleted reservation; nothing was added.
-_OERLIKON_SCHWIMMER_DIGEST = "2813ca96b6d8dc072ae6fcb13692f11d060c482fb308ab4d27dfb7331f1b8d29"
-_NICHTSCHWIMMER_DIGEST = "86edde12fcfc4452502fc3cf55f6ee2549cd557e4958f38d574ebba2d6b8c628"
+# a "Thursday 23:00–23:30 lane 8 SchoolReserved" session the PDF never published.
+# Re-pinned again for the Schwimmschule exclusion (claim-audit S3): the legend's code 4
+# "Schwimmschule Limmatsharks" is a swim CLUB, not the "schul" school arm. The diff from
+# the S1 digest is EXACTLY the code-4 sessions flipping SchoolReserved ->
+# ClubReserved('Schwimmschule Limmatsharks') on identical geometry; nothing else moved
+# (cell-level corpus diff executed against the S2-committed parser, fb2690b).
+_OERLIKON_SCHWIMMER_DIGEST = "b40ed9e47f1ca80e042a561da2f9145a4ff83cd3296796a317ebe9f7ca3c7719"
+# S3 re-pin: same Schwimmschule flip — Nichtschwimmer's Teil 1 carries code-4 sessions.
+# One visible split: the old parser had FUSED a Monday "Schulen" run (15:30–16:00) with the
+# adjacent Schwimmschule run (16:00–19:00) into one SchoolReserved claim because both codes
+# mapped to the same access value; distinct owners now stay distinct reservations.
+_NICHTSCHWIMMER_DIGEST = "df36e6b660e495a7f9d69476d79022994bd19ec8b98bc4f924d4739a67cc630c"
 _SPRUNGBECKEN_DIGEST = "b9a762994cbbc00235e7f6403482ca6aeb96eb33db9c117293b60e1b7004bf0f"
 
 
@@ -371,6 +379,68 @@ def test_oerlikon_schwimmerbecken_footer_digit_is_not_a_session() -> None:
     # sessions (e.g. Tuesday Kanupolo until 23:00) survive.
     assert _reservations_at(plan.reservations, Weekday.THURSDAY, time(23, 0)) == []
     assert all(r.time.end <= time(23, 0) for r in plan.reservations)
+
+
+def test_oerlikon_schwimmschule_sessions_are_club_reserved() -> None:
+    # claim-audit S3: legend code 4 "Schwimmschule Limmatsharks" is a swim CLUB — its
+    # sessions serve ClubReserved with the full name, pinned by value; code 2 ("Schulen")
+    # still serves SchoolReserved school time.
+    plan = (
+        parse_belegungsplan((FIXTURES / "oerlikon-schwimmerbecken.pdf").read_bytes())
+        .unwrap_or_raise()
+        .plan
+    )
+    sharks = [
+        r for r in plan.reservations if r.access == ClubReserved(club="Schwimmschule Limmatsharks")
+    ]
+    got = {(frozenset(r.weekdays), r.time, frozenset(r.lanes)) for r in sharks}
+    assert got == {
+        (
+            frozenset({Weekday.MONDAY, Weekday.TUESDAY}),
+            TimeRange(time(18, 30), time(20, 0)),
+            frozenset({4}),
+        ),
+        (frozenset({Weekday.WEDNESDAY}), TimeRange(time(20, 0), time(21, 0)), frozenset({1})),
+        (frozenset({Weekday.THURSDAY}), TimeRange(time(18, 30), time(19, 30)), frozenset({3})),
+    }
+    # Code 2 ("Schulen") still serves SchoolReserved, pinned by value: the sheet's one
+    # code-2 cell is Thursday lane 1 09:30–10:00 (raw-verified from the PDF grid; its
+    # neighbours 10:00–11:00 are code 13 "Kantonsschule Zürich Nord" — both school arms,
+    # so the RLE legitimately serves them as one school reservation 09:30–11:00).
+    schulen = [
+        r
+        for r in plan.reservations
+        if Weekday.THURSDAY in r.weekdays
+        and 1 in r.lanes
+        and r.time.contains(time(9, 45))
+        and isinstance(r.access, SchoolReserved)
+    ]
+    assert [(frozenset(r.weekdays), r.time, frozenset(r.lanes)) for r in schulen] == [
+        (frozenset({Weekday.THURSDAY}), TimeRange(time(9, 30), time(11, 0)), frozenset({1}))
+    ]
+
+
+def test_oerlikon_nichtschwimmer_unfuses_schulen_from_schwimmschule() -> None:
+    # Before S3 both owners mapped to the SAME SchoolReserved() value, so the vertical RLE
+    # fused Monday Teil 1's "Schulen" half-hour (15:30–16:00) with the adjacent Schwimmschule
+    # block (16:00–19:00) into one school claim. Distinct owners stay distinct reservations:
+    # the school time ends 16:00 and the club block carries its own name.
+    result = parse_belegungsplan_sheet(
+        (FIXTURES / "oerlikon-nichtschwimmer-sprungbecken.pdf").read_bytes()
+    )
+    by_hint = {p.basin_hint: p.plan for p in result.unwrap_or_raise()}
+    plan = next(p for h, p in by_hint.items() if "Nichtschwimmer" in h)
+    monday_teil1 = sorted(
+        (r for r in plan.reservations if Weekday.MONDAY in r.weekdays and r.section == "Teil 1"),
+        key=lambda r: r.time.start,
+    )
+    boundary = [
+        r for r in monday_teil1 if r.time.contains(time(15, 45)) or r.time.contains(time(16, 0))
+    ]
+    assert [(r.time, r.access) for r in boundary] == [
+        (TimeRange(time(15, 30), time(16, 0)), SchoolReserved()),
+        (TimeRange(time(16, 0), time(19, 0)), ClubReserved(club="Schwimmschule Limmatsharks")),
+    ]
 
 
 def test_oerlikon_schwimmerbecken_via_sheet_is_single_basin() -> None:
@@ -484,6 +554,73 @@ def test_code_to_access_maps_public_school_and_clubs() -> None:
     assert _code_to_access("Öffentlichkeit") == PublicSwim()
     assert _code_to_access("Schulen") == SchoolReserved()
     assert _code_to_access("ASVZ") == ClubReserved(club="ASVZ")
+
+
+def test_code_to_access_schwimmschule_is_a_club_with_its_full_name() -> None:
+    # claim-audit S3: a name whose "schul" hit comes ONLY from the word "Schwimmschule"
+    # is a swim CLUB keeping its full name — the targeted exclusion, not a word-boundary
+    # rule (which would wrongly flip the nine genuine compound-named schools below).
+    assert _code_to_access("Schwimmschule Limmatsharks") == ClubReserved(
+        club="Schwimmschule Limmatsharks"
+    )
+    # The rule is ONLY-from-Schwimmschule: a name carrying a second, independent "schul"
+    # (hypothetical — not in any committed legend) still routes to the school arm.
+    assert _code_to_access("Schwimmschule der Kantonsschule") == SchoolReserved()
+
+
+# The genuine compound-named schools of the two committed Oerlikon legends, pinned BY NAME
+# as EXPECTED values (typed literally here, never derived from the classifier's own regex —
+# non-circular). Every one keeps its SCHOOL routing under the Schwimmschule exclusion.
+_SCHWIMMERBECKEN_LEGEND_SCHOOLS = (
+    "Kantonsschule Zürich Nord",
+    "Tagesschule Blüemlisalp",
+    "Freie Oberstufenschule Zürich",
+    "Gesamtschule Unterstrass",
+    "Rafaelschule",
+    "Privatschule Toblerstrasse",
+)
+_NICHTSCHWIMMER_LEGEND_SCHOOLS = (
+    "Privatschule firstclass",
+    "Schulsportkurs",
+    "Tagesschule Blüemlisalp Da Costa Beatrice",
+)
+
+
+def _legend_of(fixture: str) -> dict[int, str]:
+    """The code->owner legend of a committed fixture sheet, via the parser's own seams."""
+    import pdfplumber
+
+    with pdfplumber.open(io.BytesIO((FIXTURES / fixture).read_bytes())) as pdf:
+        page = pdf.pages[0]
+        words = [
+            _Word(text=str(w["text"]), x0=float(w["x0"]), x1=float(w["x1"]), top=float(w["top"]))
+            for w in page.extract_words()
+        ]
+    row = _weekday_row(words)
+    assert row is not None
+    weekday_top = min(w.top for w in row)
+    _x_min, x_max = _grid_band(row, GridSpec(), page_width=float(page.width))
+    return belegungsplan._parse_legend(words, x_max, weekday_top)
+
+
+@pytest.mark.parametrize(
+    ("fixture", "school_names"),
+    [
+        ("oerlikon-schwimmerbecken.pdf", _SCHWIMMERBECKEN_LEGEND_SCHOOLS),
+        ("oerlikon-nichtschwimmer-sprungbecken.pdf", _NICHTSCHWIMMER_LEGEND_SCHOOLS),
+    ],
+)
+def test_compound_school_names_stay_school_reserved(
+    fixture: str, school_names: tuple[str, ...]
+) -> None:
+    # Anchor: each pinned name really is an owner in the committed sheet's legend (the pin
+    # guards live legends, not invented strings) — and each still routes to SchoolReserved.
+    owners = set(_legend_of(fixture).values())
+    for name in school_names:
+        assert name in owners, f"{name!r} not in {fixture} legend"
+        assert _code_to_access(name) == SchoolReserved(), name
+    # The one club that carries "schul" is also really in both legends.
+    assert "Schwimmschule Limmatsharks" in owners
 
 
 # --- valid-from date parsing --------------------------------------------------------
