@@ -261,6 +261,7 @@ Appended by /dev:implement after each slice — never rewritten. Newest row last
 
 | date | slice | status | divergence from plan | tech debt created | human review? |
 |------|-------|--------|----------------------|-------------------|---------------|
+| 2026-08-09 | S1 | done | none of substance — `_first_data_top` refactored to reuse the new `_label_row_tops` (behavior-identical, verified by the byte-identity run). Process note: the implementer's connection dropped three times before it could deliver its report; the tree state was verified complete by the orchestrator and ALL claims were independently re-established by the critic (byte-identity executed against the HEAD parser across all 6 fixtures: exactly the two phantoms removed, nothing added, everything else field-identical). The 2.65-vs-3.65×pitch discrepancy adjudicated: both correct in different frames (last label ROW incl. the unconstructable 24:00 row vs last constructable TimeRange); a frame-naming clarification rides S2 | the sectioned-basin cell filter (`:839-843`) still has no bottom boundary — benign today (sectioned fixture parses identically), S2 touches that site and carries the boundary there; hypothetical door: a garbled final label row would silently shorten the grid by one row (no committed input takes it; a bottom-band cross-check noted for when convenient) | yes |
 
 ## Accepted drift
 

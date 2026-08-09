@@ -151,7 +151,11 @@ def test_city_reservations_are_byte_identical_golden(city_bytes: bytes) -> None:
 # legend clamp, so the pre-E2 parser silently dropped it AND a stray Wednesday cell had
 # mis-shaped the grid; the E2 anchor-derived band restores the lane and the fragment-merge
 # absorbs the stray, so this golden differs from the (buggy) E1 digest. See the header note.
-_LEIMBACH_GOLDEN_DIGEST = "5be0f339fbbdfca3f0c96a2490d18f8f4cf19a474697355bdda82ccf41c2f570"
+# Re-pinned for the grid-bottom boundary (claim-audit S1): the footer sentence's standalone
+# '2' (y=542.4, 2.11×pitch below the last time label) had minted a phantom 33rd slot row —
+# a "Wednesday 22:00–22:30 lane 4 SchoolReserved" session the PDF never published. The diff
+# from the previous digest is EXACTLY that one deleted reservation; nothing was added.
+_LEIMBACH_GOLDEN_DIGEST = "bb9a8201db8b3d391d739f429a27a5622738f7068f082273c85bd0852e1089bd"
 
 
 def test_leimbach_real_fixture_parses_to_partial_plan() -> None:
@@ -173,6 +177,19 @@ def test_leimbach_reservations_are_uniform_five_golden() -> None:
     plan = parse_belegungsplan((FIXTURES / "leimbach.pdf").read_bytes()).unwrap_or_raise().plan
     assert plan.lanes_by_weekday is None
     assert _reservation_digest(plan.reservations) == _LEIMBACH_GOLDEN_DIGEST
+
+
+def test_leimbach_footer_digit_is_not_a_session() -> None:
+    # The footer sentence "Den Badegästen stehen … mindestens 2 Bahnen zur Verfügung." ends in
+    # a standalone digit 2.11×pitch below the last time label. It is page prose — a promise
+    # that lanes stay PUBLIC — not a grid cell, and must never mint a phantom slot row.
+    plan = parse_belegungsplan((FIXTURES / "leimbach.pdf").read_bytes()).unwrap_or_raise().plan
+    # 32 slot rows (06:00–22:00), not the phantom 33: the coverage denominator is the true grid.
+    assert plan.coverage.cells_total == 32 * 7 * 5 == 1120
+    # The phantom "Wednesday 22:00–22:30 lane 4 SchoolReserved" session is gone.
+    assert _reservations_at(plan.reservations, Weekday.WEDNESDAY, time(22, 0)) == []
+    # No reservation's TimeRange lies beyond the last cell-backed label (21:30–22:00).
+    assert all(r.time.end <= time(22, 0) for r in plan.reservations)
 
 
 def test_blaesi_real_fixture_parses_uniform_five_lanes() -> None:
@@ -260,7 +277,11 @@ def _section_reservation_digest(reservations: tuple[LaneReservation, ...]) -> st
     return hashlib.sha256("\n".join(lines).encode()).hexdigest()
 
 
-_OERLIKON_SCHWIMMER_DIGEST = "c951c1e66e312ca267d8763f7dcc4f392f45d6096d90efa33bf3d5d97650d4ca"
+# Re-pinned for the grid-bottom boundary (claim-audit S1): the footer sentence's standalone
+# '4' (y=780.3, 2.65×pitch below the last time label) had minted a phantom 35th slot row —
+# a "Thursday 23:00–23:30 lane 8 SchoolReserved" session the PDF never published. The diff
+# from the previous digest is EXACTLY that one deleted reservation; nothing was added.
+_OERLIKON_SCHWIMMER_DIGEST = "2813ca96b6d8dc072ae6fcb13692f11d060c482fb308ab4d27dfb7331f1b8d29"
 _NICHTSCHWIMMER_DIGEST = "86edde12fcfc4452502fc3cf55f6ee2549cd557e4958f38d574ebba2d6b8c628"
 _SPRUNGBECKEN_DIGEST = "b9a762994cbbc00235e7f6403482ca6aeb96eb33db9c117293b60e1b7004bf0f"
 
@@ -283,6 +304,22 @@ def test_oerlikon_schwimmerbecken_parses_uniform_eight_lanes() -> None:
     assert plan.coverage.unresolved_lanes == frozenset()
     assert _check_invariants(plan.reservations, plan.lane_count) is None
     assert _reservation_digest(plan.reservations) == _OERLIKON_SCHWIMMER_DIGEST
+
+
+def test_oerlikon_schwimmerbecken_footer_digit_is_not_a_session() -> None:
+    # Same footer-prose trap as Leimbach: the standalone '4' of "… mindestens 4 Bahnen zur
+    # Verfügung." sits 2.65×pitch below the last time label and had minted a phantom 35th row.
+    plan = (
+        parse_belegungsplan((FIXTURES / "oerlikon-schwimmerbecken.pdf").read_bytes())
+        .unwrap_or_raise()
+        .plan
+    )
+    # 34 slot rows, not the phantom 35: the coverage denominator is the true grid.
+    assert plan.coverage.cells_total == 34 * 7 * 8
+    # The phantom "Thursday 23:00–23:30 lane 8 SchoolReserved" session is gone; the real late
+    # sessions (e.g. Tuesday Kanupolo until 23:00) survive.
+    assert _reservations_at(plan.reservations, Weekday.THURSDAY, time(23, 0)) == []
+    assert all(r.time.end <= time(23, 0) for r in plan.reservations)
 
 
 def test_oerlikon_schwimmerbecken_via_sheet_is_single_basin() -> None:
@@ -588,6 +625,21 @@ def test_ragged_grid_counts_cells_honestly_and_is_partial() -> None:
     resolved = _resolve(grid.unwrap_or_raise(), {1: "Öffentlichkeit"})
     assert resolved.cells_total == 2 * (6 * 2 + 1)
     assert resolved.cells_resolved == resolved.cells_total
+
+
+def test_segment_grid_excludes_digit_below_label_span() -> None:
+    # A standalone digit well below the last time label (the footer sentence's lane-count
+    # promise) is page prose, not a grid cell. Labels sit at tops 100/120 (pitch 20), so the
+    # boundary is 120 + 1.0×20 = 140; a digit at 160 (2×pitch below the last label) must be
+    # excluded. Without the bottom boundary it minted a third slot row — and here would abort
+    # the whole sheet as "3 slot rows but only 2 time labels".
+    words = _ragged_grid_words(sunday_lanes=2)
+    words.append(_word("2", 110.0, 160.0, width=1.0))  # footer digit inside the x-band
+    result = _segment_grid(words, GridSpec(), _header(lane_count=2))
+    assert isinstance(result, Ok), result
+    grid = result.value
+    assert len(grid.slots) == 2  # the two labelled rows only — no phantom third row
+    assert all(row in (0, 1) for (_wd, _lane, row) in grid.codes)
 
 
 def test_segment_grid_missing_time_labels_is_schema_mismatch() -> None:

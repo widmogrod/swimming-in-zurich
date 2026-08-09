@@ -28,6 +28,7 @@ unresolved (counted in `PlanCoverage`), preserving the three-way distinction bet
 
 from __future__ import annotations
 
+import math
 import re
 from collections import defaultdict
 from collections.abc import Mapping
@@ -111,6 +112,12 @@ class GridSpec:
     lane_merge_ratio: float = 0.5  # merge a sub-pitch column fragment (< this × lane pitch)
     title_gap: float = 8.0  # basin title sits at least this far above the weekday row
     bahnen_gap: float = 5.0  # data cells sit at least this far below the "Bahnen" row
+    # Bottom boundary: a cell may sit at most this × label pitch below the LAST left-gutter
+    # time label; anything lower is page prose, not a grid cell. Measured on the committed
+    # corpus: real cell rows sit at most 0.434×pitch below their own label, while the footer
+    # sentence's standalone digit ("… mindestens N Bahnen zur Verfügung.") sits 2.11×pitch
+    # (Leimbach) / 2.65×pitch (Oerlikon) below the last label — 1.0 separates them cleanly.
+    label_overhang_ratio: float = 1.0
 
 
 _DEFAULT_GRID_SPEC = GridSpec()  # default layout tolerances; a module singleton for defaults
@@ -391,15 +398,45 @@ def _time_labels(words: list[_Word], grid_x_min: float) -> list[TimeRange]:
     return labels
 
 
+def _label_row_tops(words: list[_Word], grid_x_min: float) -> list[float]:
+    """The y-tops of the left-gutter time-label rows, ascending. Matched by the time-range
+    regex alone: a "23.30 - 24.00" row that never becomes a `TimeRange` still counts here,
+    because these tops bound the data grid geometrically."""
+    rows: dict[int, list[_Word]] = defaultdict(list)
+    for w in words:
+        if w.xc < grid_x_min:
+            rows[round(w.top)].append(w)
+    tops = [
+        min(g.top for g in group)
+        for group in rows.values()
+        if _TIME_LABEL_RE.search(" ".join(g.text for g in sorted(group, key=lambda g: g.x0)))
+    ]
+    return sorted(tops)
+
+
+def _grid_bottom(words: list[_Word], grid_x_min: float, spec: GridSpec) -> float:
+    """The y below which a digit is page prose, not a grid cell: last time-label top plus
+    `label_overhang_ratio` × the label pitch. The footer sentence's standalone digit ("Den
+    Badegästen stehen … mindestens N Bahnen zur Verfügung.") sits well below the label span
+    and must never mint a phantom slot row. With fewer than two label rows there is no pitch
+    to derive — the boundary stays open (`inf`) and the label-count checks catch garble."""
+    tops = _label_row_tops(words, grid_x_min)
+    if len(tops) < 2:
+        return math.inf
+    pitch = (tops[-1] - tops[0]) / (len(tops) - 1)
+    return tops[-1] + pitch * spec.label_overhang_ratio
+
+
 def _cell_words(
     words: list[_Word], grid_x_min: float, grid_x_max: float, spec: GridSpec, bahnen_top: float
 ) -> list[_Word]:
+    bottom = _grid_bottom(words, grid_x_min, spec)
     return [
         w
         for w in words
         if w.text.isdigit()
         and grid_x_min < w.xc < grid_x_max
-        and w.top > bahnen_top + spec.bahnen_gap
+        and bahnen_top + spec.bahnen_gap < w.top < bottom
     ]
 
 
@@ -765,16 +802,8 @@ def _first_data_top(words: list[_Word], grid_x_min: float) -> float:
     """The top of the first time-labelled slot row — the vertical start of the data grid. Cells
     align to the left-gutter time labels, so anchoring on the earliest label top excludes the
     section-header rows ("Teil", "1 2") that sit above it."""
-    rows: dict[int, list[_Word]] = defaultdict(list)
-    for w in words:
-        if w.xc < grid_x_min:
-            rows[round(w.top)].append(w)
-    tops = [
-        min(g.top for g in group)
-        for group in rows.values()
-        if _TIME_LABEL_RE.search(" ".join(g.text for g in sorted(group, key=lambda g: g.x0)))
-    ]
-    return min(tops) if tops else 0.0
+    tops = _label_row_tops(words, grid_x_min)
+    return tops[0] if tops else 0.0
 
 
 def _has_section_labels(
