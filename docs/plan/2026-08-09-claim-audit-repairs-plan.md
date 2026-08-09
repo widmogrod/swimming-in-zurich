@@ -1,6 +1,6 @@
 ---
 type: plan
-status: in-progress
+status: done
 created: 2026-08-09
 feature: claim-audit-repairs
 branch: plan/claim-audit-repairs
@@ -302,5 +302,30 @@ the riskiest).
 
 ## Summary
 
-Written when the plan reaches `done`; then distilled into
-`docs/summaries/claim-audit-repairs.md` (what EXISTS now, not what was intended).
+Done 2026-08-09, four slices, all critic-approved round 1 (post-approve
+suggestions taken each round; two pre-approval critic rounds had already
+rebuilt the plan itself — see the 3-blocking Decisions entry).
+
+What exists now: the lane-plan grid is bounded below by its own label span
+(`_grid_bottom`), so footer digits can never mint phantom sessions —
+Leimbach's fabricated Wednesday 22:00 school slot and Oerlikon's Thursday
+23:00 lane-8 slot are gone, `cells_total` back to the true grids. Labels
+pair to cell rows by geometry (`_pair_rows_to_labels`, tolerance 0.5×pitch
+in the measured (0.434, 0.514) window with a do-not-widen warning), so
+blank half-hours are honest and Blaesi/Kaeferberg serve their published
+times — Sunday public swim 09:00–18:00, weeks starting 06:30; RLE runs
+break at slot gaps so nothing bridges a blank. Legend owners route by the
+targeted Schwimmschule exclusion: 31 cells across both Oerlikon basins now
+serve `ClubReserved("Schwimmschule Limmatsharks")` while all nine genuine
+compound-named schools stay schools, pinned by name. The WFS `NULL`
+sentinel parses to absence at the boundary: 50 catalog descriptions
+stopped being the string "NULL", addresses serve as null-never-"", and a
+whole-surface scan pins that no served value is "NULL" again.
+
+Every slice's byte-identity was EXECUTED against the prior parser, by
+implementer and critic independently — the diffs are exactly the named
+corrections, nothing else moved. Final: make qa green — 916 passed,
+coverage 95.94% ≥ 95, mypy strict, CRAP clean; TS chain green where the
+fixture moved (S3). Open: the garbled-final-label hypothetical door
+(bottom-band cross-check), the <2-labels rank fallback (unit-covered,
+unreachable), and the recorded structural notes — all in the ledger.
