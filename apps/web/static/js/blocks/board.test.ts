@@ -14,6 +14,7 @@ import {
   rowStatus,
   rowStatusLine,
   rowEligibility,
+  rowBasinName,
   hhmmToMin,
   BOARD_PLOT,
   type BoardAnswer,
@@ -45,12 +46,230 @@ test('dayRows groups a /swim answer into one row per facility', () => {
   expect(rows.length).toBe(facilities.size);
   const oerlikon = must(rows.find((r) => r.label === 'Hallenbad Oerlikon'), 'Oerlikon row');
   expect(oerlikon.options.length >= 1).toBeTruthy();
+  // Every row now states the pool it is about, and no label in this answer gained a
+  // suffix — the committed fixture carries no basin split.
+  expect(rows.every((r) => r.facility === r.label)).toBe(true);
+});
+
+// --- S3: a row is a facility AND a basin -------------------------------------------
+//
+// These use INLINE answers rather than the shared `swim_day.json`: that fixture is
+// hand-committed, predates `basin_id` entirely, and is S4's to extend (its Touches name
+// it, for `lane_day_view`). Extending it here to carry basin ids would have made every
+// assertion below read a fixture written to satisfy them. The one test that DOES read it
+// is the regression above — the whole real-shaped answer must keep producing exactly the
+// rows and labels it produced before.
+
+const opt = (
+  facility: string,
+  basin_id: string | undefined,
+  basin: string | undefined,
+  extra: Record<string, unknown> = {},
+) => ({ facility, basin_id, basin, start: '06:00', end: '22:00', ...extra });
+
+test('a pool contributing two basins becomes TWO rows, each naming its facility and basin', () => {
+  const rows = dayRows({
+    options: [
+      opt('Hallenbad City', 'city-main', 'Hauptbecken'),
+      opt('Hallenbad City', 'city-50m', 'Schwimmerbecken'),
+    ],
+    statuses: [],
+  });
+  expect(rows.length).toBe(2);
+  expect(rows.map((r) => r.facility)).toEqual(['Hallenbad City', 'Hallenbad City']);
+  expect(rows.map((r) => r.basin_id)).toEqual(['city-main', 'city-50m']);
+  expect(rows.map((r) => r.basin)).toEqual(['Hauptbecken', 'Schwimmerbecken']);
+  // L1: the suffix appears precisely because this facility contributed two basins.
+  expect(rows.map((r) => r.label)).toEqual([
+    'Hallenbad City · Hauptbecken',
+    'Hallenbad City · Schwimmerbecken',
+  ]);
+  // Two basins of one pool never share options.
+  expect(rows[0].options.length).toBe(1);
+  expect(rows[1].options.length).toBe(1);
+});
+
+test('two basins with the SAME name are still two rows — the id is the key, not the name', () => {
+  // Basin names are not guaranteed unique within a facility; a row key that can collide
+  // is a silent mis-render (the reason `basin_id` is on the wire at all).
+  const rows = dayRows({
+    options: [
+      opt('Hallenbad Oerlikon', 'oerlikon-50m', 'Becken'),
+      opt('Hallenbad Oerlikon', 'oerlikon-sprungbecken', 'Becken'),
+    ],
+    statuses: [],
+  });
+  expect(rows.length).toBe(2);
+  expect(rows.map((r) => r.basin_id)).toEqual(['oerlikon-50m', 'oerlikon-sprungbecken']);
+});
+
+test('a status-only pool stays ONE facility-level row, with no basin (I3)', () => {
+  const rows = dayRows({
+    options: [],
+    statuses: [
+      { facility: 'Seebad Utoquai', status: 'closed', detail: 'Sommerpause' },
+      { facility: 'Seebad Utoquai', status: 'closed', detail: 'Sommerpause' },
+    ],
+  });
+  expect(rows.length).toBe(1);
+  expect(rows[0].facility).toBe('Seebad Utoquai');
+  expect(rows[0].basin_id).toBe(undefined);
+  expect(rows[0].basin).toBe(undefined);
+  expect(rows[0].label).toBe('Seebad Utoquai'); // no suffix — a status names no water
+  expect(rows[0].statuses.length).toBe(2);
+});
+
+test('a pool that has BOTH options and a status renders no extra status row (I3)', () => {
+  const rows = dayRows({
+    options: [
+      opt('Hallenbad City', 'city-main', 'Hauptbecken'),
+      opt('Hallenbad City', 'city-50m', 'Schwimmerbecken'),
+    ],
+    statuses: [{ facility: 'Hallenbad City', status: 'closed' }],
+  });
+  expect(rows.length).toBe(2); // NOT three
+  expect(rows.filter((r) => r.statuses.length > 0).length).toBe(1);
+});
+
+test('a SINGLE-basin pool keeps its label byte-identical to the pool name (L1)', () => {
+  const rows = dayRows({
+    options: [
+      opt('Hallenbad City', 'city-50m', 'Schwimmerbecken'),
+      opt('Hallenbad City', 'city-50m', 'Schwimmerbecken', { start: '18:00', end: '22:00' }),
+      opt('Hallenbad Bläsi', 'blaesi-25m', 'Schwimmerbecken'),
+    ],
+    statuses: [],
+  });
+  expect(rows.length).toBe(2);
+  expect(rows.map((r) => r.label)).toEqual(['Hallenbad City', 'Hallenbad Bläsi']);
+  expect(rows[0].options.length).toBe(2); // both sessions of the one basin, one row
+});
+
+test('L1 is per-ANSWER: the same pool loses its suffix on a day one basin is closed', () => {
+  // Precisely why no code may key on a label (I6).
+  const twoBasins = dayRows({
+    options: [
+      opt('Hallenbad City', 'city-main', 'Hauptbecken'),
+      opt('Hallenbad City', 'city-50m', 'Schwimmerbecken'),
+    ],
+    statuses: [],
+  });
+  const oneBasin = dayRows({
+    options: [opt('Hallenbad City', 'city-main', 'Hauptbecken')],
+    statuses: [],
+  });
+  expect(twoBasins[0].label).toBe('Hallenbad City · Hauptbecken');
+  expect(oneBasin[0].label).toBe('Hallenbad City');
+  // …while the IDENTITY of that row is unchanged across the two answers.
+  expect(oneBasin[0].facility).toBe(twoBasins[0].facility);
+  expect(oneBasin[0].basin_id).toBe(twoBasins[0].basin_id);
+});
+
+test('a basin with no NAME is labelled by its pool alone — never by its internal id', () => {
+  // `OptionOut.basin` is a plain `str` the wire does not constrain non-empty. Falling back
+  // to `basin_id` would put "Hallenbad City \u00b7 city-50m" — a database key — in front of a
+  // reader. A basin we cannot name is a basin we say nothing about.
+  const rows = dayRows({
+    options: [
+      opt('Hallenbad City', 'city-main', 'Hauptbecken'),
+      opt('Hallenbad City', 'city-50m', ''),
+    ],
+    statuses: [],
+  });
+  expect(rows.length).toBe(2); // still two rows — the SPLIT does not depend on the name
+  expect(rows[1].label).toBe('Hallenbad City');
+  expect(rows[1].label).not.toContain('city-50m');
+  expect(rows.some((r) => r.label.includes('city-'))).toBe(false);
+  // the named sibling still earns its suffix
+  expect(rows[0].label).toBe('Hallenbad City \u00b7 Hauptbecken');
+});
+
+test('an answer with no basin_id at all degrades to one row per facility, unsuffixed', () => {
+  // Pre-S2 payloads (and the committed `swim_day.json`) carry no basin id.
+  const rows = dayRows({
+    options: [
+      { facility: 'Hallenbad City', basin: 'Hauptbecken' },
+      { facility: 'Hallenbad City', basin: 'Schwimmerbecken' },
+    ],
+    statuses: [],
+  });
+  expect(rows.length).toBe(1);
+  expect(rows[0].label).toBe('Hallenbad City');
+});
+
+// --- rowBasinName: the pure seam behind app.ts's row → panelForBasin join (AC4) -------
+
+test('rowBasinName names the CLICKED row\'s basin for a multi-basin pool', () => {
+  const rows = dayRows({
+    options: [
+      opt('Hallenbad City', 'city-main', 'Hauptbecken'),
+      opt('Hallenbad City', 'city-50m', 'Schwimmerbecken'),
+    ],
+    statuses: [],
+  });
+  expect(rowBasinName(rows[0])).toBe('Hauptbecken');
+  expect(rowBasinName(rows[1])).toBe('Schwimmerbecken');
+});
+
+test('rowBasinName reports the ROW\'s basin, not whichever option happens to be first', () => {
+  // The seam exists to answer "which basin is this ROW about". Every realistic fixture has
+  // row.basin === options[0].basin, so deleting the row-field read leaves the suite green
+  // while the seam has silently become "ask the first option" — which is the pre-S3
+  // behaviour app.ts had, and the wrong answer the moment a row holds a stray option.
+  const row = {
+    label: 'Hallenbad City \u00b7 Schwimmerbecken',
+    facility: 'Hallenbad City',
+    basin_id: 'city-50m',
+    basin: 'Schwimmerbecken',
+    options: [opt('Hallenbad City', 'city-main', 'Hauptbecken')],
+    statuses: [],
+  };
+  expect(rowBasinName(row)).toBe('Schwimmerbecken');
+  expect(rowBasinName(row)).not.toBe('Hauptbecken');
+});
+
+test('rowBasinName is null for a status row — it is about no particular water', () => {
+  const rows = dayRows({
+    options: [],
+    statuses: [{ facility: 'Seebad Utoquai', status: 'closed' }],
+  });
+  expect(rowBasinName(rows[0])).toBeNull();
+});
+
+test('rowBasinName falls back to the row\'s own options (Pool-mode day rows)', () => {
+  const rows = weekRows({
+    facility: 'Hallenbad City',
+    days: [
+      {
+        label: 'Mon',
+        iso: '2026-08-10',
+        answer: { options: [opt('Hallenbad City', 'city-50m', 'Schwimmerbecken')], statuses: [] },
+      },
+    ],
+  });
+  expect(rowBasinName(rows[0])).toBe('Schwimmerbecken');
 });
 
 test('weekRows yields one row per captured day', () => {
   const rows = weekRows(WEEK);
   expect(rows.length).toBe(WEEK.days.length);
   expect(rows[0].label).toBe(WEEK.days[0].label);
+});
+
+test('Pool mode is UNCHANGED by the row split: same labels, dates still populated (I4)', () => {
+  // weekRows' rows are DAYS, not pools. Splitting the week per basin is out of scope, so
+  // its projection must survive S3 untouched — `date` above all, which the today-marker,
+  // the Pool-view panel and the auto-open all read.
+  const rows = weekRows(WEEK);
+  expect(rows.length).toBe(WEEK.days.length);
+  expect(rows.map((r) => r.label)).toEqual(WEEK.days.map((d) => d.label));
+  expect(rows.map((r) => r.date)).toEqual(WEEK.days.map((d) => d.date ?? d.iso));
+  expect(rows.every((r) => r.date != null && r.date !== '')).toBe(true);
+  expect(rows.map((r) => r.options)).toEqual(WEEK.days.map((d) => d.answer.options ?? []));
+  expect(rows.map((r) => r.statuses)).toEqual(WEEK.days.map((d) => d.answer.statuses ?? []));
+  // No week row is per-basin, and every one names the pool the week is about.
+  expect(rows.every((r) => r.basin_id === undefined)).toBe(true);
+  expect(rows.every((r) => r.facility === WEEK.facility)).toBe(true);
 });
 
 test('boardRows honours FilterState.mode (day vs pool)', () => {

@@ -242,6 +242,30 @@ test("a Day-view row IS a pool, so the row label names the facility", () => {
   );
 });
 
+test("a multi-basin Day row resolves to the POOL, never to its composite label", () => {
+  // Invariant I6. Under rule L1 a pool contributing two basins is labelled
+  // "Hallenbad City \u00b7 Schwimmerbecken" — a string that is in neither poolIdByName nor
+  // poolUrlByName, so reading the label here silently costs the panel its official-page
+  // link and its facts for exactly the pools this feature exists for.
+  expect(
+    rowFacilityName(
+      "day",
+      "Hallenbad City \u00b7 Schwimmerbecken",
+      null,
+      "Hallenbad City",
+    ),
+  ).toBe("Hallenbad City");
+  // The CLICKED row still wins over an unrelated selection in Day view.
+  expect(
+    rowFacilityName(
+      "day",
+      "Hallenbad City \u00b7 Schwimmerbecken",
+      "Hallenbad Oerlikon",
+      "Hallenbad City",
+    ),
+  ).toBe("Hallenbad City");
+});
+
 test("a Pool-view row is a DAY, so the facility is the selection, not the label", () => {
   expect(rowFacilityName("pool", "Mon · 20 Jul", "Hallenbad City")).toBe(
     "Hallenbad City",

@@ -7,6 +7,7 @@ import {
   optionAt,
   optionNext,
   rankRows,
+  rowKey,
   terminalStatus,
   tierCounts,
   tierFor,
@@ -176,6 +177,42 @@ test('"open to you" excludes partly-reserved sessions', () => {
   // The count is a promise; a session holding lanes back is not one.
   expect(countOpenToYou(rankRows([city()], M(10)))).toBe(1);
   expect(countOpenToYou(rankRows([city()], M(12, 30)))).toBe(0);
+});
+
+test('"open to you" counts DISTINCT POOLS, so a two-basin pool contributes 1', () => {
+  // The phone bar leads with this number ("{count} open to you now"). Since S3 a row is
+  // one BASIN, so a pool publishing two lane basins yields two rows — counting rows would
+  // promise two swims in one building.
+  const basin = (basin_id: string): RankRow => ({
+    label: `Hallenbad City \u00b7 ${basin_id}`,
+    facility: 'Hallenbad City',
+    basin_id,
+    options: [opt('09:00', '21:00', { distance_km: 0.9 })],
+    statuses: [],
+  });
+  expect(countOpenToYou(rankRows([basin('city-main'), basin('city-50m')], M(10)))).toBe(1);
+  // Two DIFFERENT pools still count two.
+  const other: RankRow = {
+    label: 'Hallenbad Bl\u00e4si',
+    facility: 'Hallenbad Bl\u00e4si',
+    basin_id: 'blaesi-25m',
+    options: [opt('09:00', '21:00', { distance_km: 2.1 })],
+    statuses: [],
+  };
+  expect(countOpenToYou(rankRows([basin('city-main'), basin('city-50m'), other], M(10)))).toBe(2);
+});
+
+test('rowKey is facility + basin, and never collapses two basins of one pool', () => {
+  const a: RankRow = { label: 'X', facility: 'Hallenbad City', basin_id: 'city-main' };
+  const b: RankRow = { label: 'X', facility: 'Hallenbad City', basin_id: 'city-50m' };
+  expect(rowKey(a)).not.toBe(rowKey(b));
+  // The LABEL is not part of it: relabelling a row (which rule L1 does, per answer) must
+  // not change its identity.
+  expect(rowKey({ ...a, label: 'Hallenbad City \u00b7 Hauptbecken' })).toBe(rowKey(a));
+  // A status-only row (no basin) is keyed by its facility alone.
+  expect(rowKey({ label: 'Seebad Utoquai', facility: 'Seebad Utoquai' })).toBe(
+    rowKey({ label: 'anything', facility: 'Seebad Utoquai' }),
+  );
 });
 
 test('"open to you" excludes ineligible, closed and unlisted rows', () => {

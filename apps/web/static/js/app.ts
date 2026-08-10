@@ -38,6 +38,7 @@ import {
   closureLabel,
   createBoard,
   dayRows,
+  rowBasinName,
   type BoardAnswer,
 } from "./blocks/board.js";
 import {
@@ -55,6 +56,7 @@ import { createInsightBar } from "./blocks/insightbar.js";
 import { createBoardLegend } from "./blocks/legend.js";
 import { createPhoneBar } from "./blocks/phonebar.js";
 import { createPoolList } from "./blocks/poollist.js";
+import { rowKey } from "./blocks/poolrank.js";
 import { createStateBlocks, emptyState } from "./blocks/stateblocks.js";
 import { createFilterToolbar, DEFAULT_AGE_CHIPS } from "./blocks/toolbar.js";
 import { formatLabel } from "./components/datestepper.js";
@@ -307,15 +309,23 @@ async function main() {
     // either way — `dayRows` — so the two cannot disagree about what a row is.
     const row = board ? board.rows[rowIndex] : phoneRows[rowIndex];
     if (!row) return;
-    // The pool this row is about — the row label in Day view, the SELECTION in Pool view
-    // (whose rows are days, not pools). Every by-name lookup below goes through it, so the
-    // two views' panels are built from the same facility identity.
-    // The row's own facility — options and statuses both carry it, in BOTH views — so a
-    // Pool-view row can name its pool even before /pools backfills the selection's label.
+    // The pool this row is about — the row's OWN facility in Day view, the SELECTION in
+    // Pool view (whose rows are days, not pools). Every by-name lookup below goes through
+    // it, so the two views' panels are built from the same facility identity. Never the
+    // row LABEL: a multi-basin pool's label carries a `· <basin>` suffix (rule L1) that
+    // matches no pool→id / pool→url entry (invariant I6).
+    //
+    // The row states its facility directly (Day mode keys rows by facility + basin, so it
+    // is authoritative); a Pool-mode day row falls back to whatever its own sessions carry,
+    // which lets it name its pool even before /pools backfills the selection's label.
     const rowFacility =
-      row.options.find((o) => o.facility)?.facility ??
-      row.statuses.find((s) => s.facility)?.facility ??
+      row.facility ||
+      row.options.find((o) => o.facility)?.facility ||
+      row.statuses.find((s) => s.facility)?.facility ||
       null;
+    // The BASIN this row is about, via the pure seam in board.ts (app.ts is browser-only
+    // and imported by no test, so the rule cannot live here).
+    const rowBasin = rowBasinName(row);
     const facilityName = rowFacilityName(
       filter.mode,
       row.label,
@@ -342,10 +352,7 @@ async function main() {
       cursorPoolId = poolId;
       const detail = await fetchPoolDetail(poolId, rowDate);
       const lanePanels = (detail?.lane_panels as LanePanel[]) ?? [];
-      const lp = panelForBasin(
-        lanePanels,
-        opt.basin ? String(opt.basin) : null,
-      );
+      const lp = panelForBasin(lanePanels, rowBasin);
       const basin = lp ? basinFromPanel(lp) : null;
       const accessTypes = [
         ...new Set(row.options.map((o) => String(o.access))),
@@ -354,7 +361,7 @@ async function main() {
         basin,
         cursorMin: openAt,
         distanceKm: opt.distance_km ?? null,
-        basinName: opt.basin ? String(opt.basin) : null,
+        basinName: rowBasin,
         accessTypes,
         officialUrl: poolUrlByName.get(facilityName) || null,
       });
@@ -439,8 +446,11 @@ async function main() {
       return;
     }
     if (filter.selectedPool && filter.selectedPool.name) {
+      // By FACILITY, never by label: a multi-basin pool's label carries a `· <basin>`
+      // suffix (rule L1) that no selection name ever has, so a label match would miss
+      // silently for exactly the pools this feature exists for (invariant I6).
       const sel = board.rows.findIndex(
-        (r) => r.label === filter.selectedPool?.name,
+        (r) => r.facility === filter.selectedPool?.name,
       );
       if (sel >= 0) {
         await onRowClick(sel, null, { fromUser: false });
@@ -512,9 +522,9 @@ async function main() {
         // Expanding a card mounts the SAME DetailPanel the desktop rail uses, into the
         // card itself: facts, provenance and the per-lane Gantt — the desktop's other
         // lane view, which is what the tail's thickness resolves into.
-        onOpen: (label, host) => {
+        onOpen: (key, host) => {
           panelTarget = host;
-          const index = phoneRows.findIndex((r) => r.label === label);
+          const index = phoneRows.findIndex((r) => rowKey(r) === key);
           if (index >= 0) void onRowClick(index, null, { fromUser: true });
         },
         reducedMotion:

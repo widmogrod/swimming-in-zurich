@@ -24,6 +24,7 @@ import { asCanvas, resolveFamilyPalette, type CanvasEl, type Palette } from './r
 import {
   countOpenToYou,
   rankRows,
+  rowKey,
   TIER_KEY,
   TIERS,
   type RankedRow,
@@ -37,9 +38,10 @@ export interface PoolListOpts {
    *  summary must not claim "now" — see phonebar.ts). */
   nowMin?: number | null;
   reducedMotion?: boolean;
-  /** Called with the card's own body host, so the caller can mount the SAME
-   *  DetailPanel the desktop uses rather than a second, divergent detail view. */
-  onOpen?: (label: string, host: El) => void;
+  /** Called with the opened row's `rowKey` and the card's own body host, so the caller
+   *  can mount the SAME DetailPanel the desktop uses rather than a second, divergent
+   *  detail view. The key is facility + basin, NEVER the label (invariant I6). */
+  onOpen?: (key: string, host: El) => void;
 }
 
 interface Card {
@@ -79,6 +81,9 @@ export function createPoolList<T extends El>(el: T, opts: PoolListOpts = {}) {
   let cards: Card[] = [];
   let pal: Palette | null = null;
   let nowMin: number | null = opts.nowMin ?? null;
+  // The OPEN card, held by its `rowKey` (facility + basin). Holding it by label would
+  // break exactly for the multi-basin pools this feature exists for: L1 rewrites their
+  // labels per answer, so the card would never match itself back.
   let open: string | null = null;
 
   el.classList.add('plist');
@@ -112,12 +117,13 @@ export function createPoolList<T extends El>(el: T, opts: PoolListOpts = {}) {
 
   function buildCard(ranked: RankedRow): El {
     const card = newEl(doc, 'article', 'plist__card');
-    if (open === ranked.row.label) card.classList.add('is-open');
+    const key = rowKey(ranked.row);
+    if (open === key) card.classList.add('is-open');
     if (!ranked.openToYou) card.classList.add('is-muted');
 
     const btn = newEl(doc, 'button', 'plist__btn');
     btn.setAttribute('type', 'button');
-    btn.setAttribute('aria-expanded', String(open === ranked.row.label));
+    btn.setAttribute('aria-expanded', String(open === key));
 
     const head = newEl(doc, 'div', 'plist__head');
     head.appendChild(newEl(doc, 'span', `plist__dot is-${ranked.tier}`));
@@ -170,11 +176,11 @@ export function createPoolList<T extends El>(el: T, opts: PoolListOpts = {}) {
     card.appendChild(body);
 
     btn.addEventListener('click', () => {
-      const next = open === ranked.row.label ? null : ranked.row.label;
+      const next = open === key ? null : key;
       open = next;
       render();
       if (next && opts.onOpen) {
-        const reopened = cards.find((c) => c.ranked.row.label === next);
+        const reopened = cards.find((c) => rowKey(c.ranked.row) === next);
         if (reopened?.body) opts.onOpen(next, reopened.body);
       }
     });
@@ -214,7 +220,8 @@ export function createPoolList<T extends El>(el: T, opts: PoolListOpts = {}) {
     get cards() {
       return cards;
     },
-    get openLabel() {
+    /** The open card's `rowKey`, or null. Deliberately not a label — see `rowKey`. */
+    get openKey() {
       return open;
     },
     countOpenToYou(): number {

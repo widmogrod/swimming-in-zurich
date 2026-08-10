@@ -4,13 +4,15 @@ import { mount, type FakeElement } from '../components/_fakedom.js';
 import { fake, must } from '../testutil.js';
 import { createPoolList } from './poollist.js';
 import { createPhoneBar, leadTag, stripDates } from './phonebar.js';
-import type { RankRow } from './poolrank.js';
+import { rowKey, type RankRow } from './poolrank.js';
 
 const M = (h: number, m = 0) => h * 60 + m;
 
 const ROWS: RankRow[] = [
   {
     label: 'Hallenbad City',
+    facility: 'Hallenbad City',
+    basin_id: 'city-50m',
     options: [
       {
         start: '09:00',
@@ -24,7 +26,12 @@ const ROWS: RankRow[] = [
     ],
     statuses: [],
   },
-  { label: 'Seebad Utoquai', options: [], statuses: [{ status: 'closed' }] },
+  {
+    label: 'Seebad Utoquai',
+    facility: 'Seebad Utoquai',
+    options: [],
+    statuses: [{ status: 'closed' }],
+  },
 ];
 
 function build(nowMin: number | null = M(10)) {
@@ -57,10 +64,10 @@ test('tapping a card expands it, and tapping again collapses', () => {
   const { el, api } = build();
   const btn = must(el.query((c: FakeElement) => c.classList.contains('plist__btn')));
   btn.click();
-  expect(api.openLabel).toBe('Hallenbad City');
+  expect(api.openKey).toBe(rowKey(ROWS[0]));
   const reopened = must(el.query((c: FakeElement) => c.classList.contains('plist__btn')));
   reopened.click();
-  expect(api.openLabel).toBeNull();
+  expect(api.openKey).toBeNull();
 });
 
 test('the expanded card reports its state to assistive tech', () => {
@@ -74,8 +81,85 @@ test('setRows re-ranks and drops any open card', () => {
   const { el, api } = build();
   must(el.query((c: FakeElement) => c.classList.contains('plist__btn'))).click();
   api.setRows([ROWS[1]], M(10));
-  expect(api.openLabel).toBeNull();
+  expect(api.openKey).toBeNull();
   expect(el.queryAll((c: FakeElement) => c.tagName === 'CANVAS').length).toBe(1);
+});
+
+// --- S3: a card is a BASIN of a pool, and its open state is keyed on that -------------
+
+/** One pool publishing two basins — the case rule L1 relabels, and the case every
+ *  label-keyed comparison in this block used to break on. Both basins are open now and
+ *  wholly public, so both cards land in the same tier and the list must still tell them
+ *  apart. */
+const TWO_BASINS: RankRow[] = [
+  {
+    label: 'Hallenbad City \u00b7 Hauptbecken',
+    facility: 'Hallenbad City',
+    basin_id: 'city-main',
+    options: [{ start: '09:00', end: '21:00', distance_km: 0.9, basin: 'Hauptbecken' }],
+    statuses: [],
+  },
+  {
+    label: 'Hallenbad City \u00b7 Schwimmerbecken',
+    facility: 'Hallenbad City',
+    basin_id: 'city-50m',
+    options: [{ start: '09:00', end: '21:00', distance_km: 0.9, basin: 'Schwimmerbecken' }],
+    statuses: [],
+  },
+];
+
+function buildTwoBasins() {
+  const el = mount();
+  const opened: string[] = [];
+  const api = createPoolList(el, {
+    rows: TWO_BASINS,
+    nowMin: M(10),
+    reducedMotion: true,
+    onOpen: (key) => opened.push(key),
+  });
+  return { el: fake(el), api, opened };
+}
+
+const btns = (el: ReturnType<typeof fake>) =>
+  el.queryAll((c: FakeElement) => c.classList.contains('plist__btn'));
+
+test('two basins of ONE pool are two cards, and opening one opens only that one', () => {
+  const { el, api, opened } = buildTwoBasins();
+  expect(btns(el).length).toBe(2);
+  btns(el)[1].click();
+  expect(api.openKey).toBe(rowKey(TWO_BASINS[1]));
+  expect(opened).toEqual([rowKey(TWO_BASINS[1])]);
+  // Exactly ONE card reports itself expanded — the second, not the first.
+  const expanded = btns(el).map((b) => b.getAttribute('aria-expanded'));
+  expect(expanded).toEqual(['false', 'true']);
+  const openCards = el.queryAll((c: FakeElement) => c.classList.contains('is-open'));
+  expect(openCards.length).toBe(1);
+});
+
+test('a two-basin card collapses and re-opens the SAME card across re-renders', () => {
+  const { el, api } = buildTwoBasins();
+  btns(el)[1].click(); // open the second basin
+  expect(api.openKey).toBe(rowKey(TWO_BASINS[1]));
+  btns(el)[1].click(); // tapping it again collapses it
+  expect(api.openKey).toBeNull();
+  expect(el.queryAll((c: FakeElement) => c.classList.contains('is-open')).length).toBe(0);
+  btns(el)[1].click(); // and re-opens it, still the second
+  expect(api.openKey).toBe(rowKey(TWO_BASINS[1]));
+  expect(btns(el).map((b) => b.getAttribute('aria-expanded'))).toEqual(['false', 'true']);
+});
+
+test('opening a card hands the caller a key that finds the right row again', () => {
+  // app.ts turns this key back into a row index (`phoneRows.findIndex`) to open the panel.
+  // With a label it would have found the wrong basin — or none.
+  const { el, opened } = buildTwoBasins();
+  btns(el)[0].click();
+  const index = TWO_BASINS.findIndex((r) => rowKey(r) === opened[0]);
+  expect(index).toBe(0);
+  expect(TWO_BASINS[index].basin_id).toBe('city-main');
+});
+
+test('a two-basin pool counts ONCE toward "open to you now"', () => {
+  expect(buildTwoBasins().api.countOpenToYou()).toBe(1);
 });
 
 // --- phone bar --------------------------------------------------------------------

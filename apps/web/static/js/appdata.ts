@@ -91,6 +91,13 @@ export function fairWeatherText(
  *  Falls back to the ROW'S OWN facility (its options/statuses carry it in both views) and
  *  only then to the row label, so a caller always gets a name rather than null.
  *
+ *  Day view reads the row's facility FIRST, not the label. Since a board row became one
+ *  basin of one pool, a multi-basin pool's label carries a `· <basin>` suffix (rule L1) —
+ *  and a composite label is in no pool→id / pool→url map, so the panel would silently lose
+ *  its official-page link and its facts for exactly the pools this feature exists for
+ *  (invariant I6: a label is for humans, never a key). The label survives only as the last
+ *  resort, for a caller that has no facility to offer.
+ *
  *  That middle step is load-bearing. A URL-restored `?view=pool&pool=<id>` arrives with an
  *  id and NO name (the name is backfilled from /pools, which resolves AFTER the first
  *  render's auto-open). Falling straight through to the row label then wrote a WEEKDAY
@@ -105,7 +112,7 @@ export function rowFacilityName(
   rowFacility?: string | null,
 ): string {
   if (mode === "pool") return selectedName || rowFacility || rowLabel;
-  return rowLabel;
+  return rowFacility || rowLabel;
 }
 
 /** A `/pools` PoolOut row, read structurally. */

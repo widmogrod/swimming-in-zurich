@@ -60,8 +60,23 @@ export interface RankStatus {
 
 export interface RankRow {
   label: string;
+  /** The pool. The row's IDENTITY lives here + `basin_id`, never in `label` (I6). */
+  facility?: string;
+  basin_id?: string;
   options?: RankOption[];
   statuses?: RankStatus[];
+}
+
+/**
+ * rowKey(row) — a row's stable identity, for card open/collapse state and row lookup.
+ *
+ * NOT the label: under rule L1 a pool's label gains a `· <basin>` suffix only while that
+ * pool contributes options from more than one basin in this answer, so the label of the
+ * very pools this exists for changes between days. Keying on it fails silently.
+ */
+export function rowKey(row: RankRow): string {
+  // eslint-disable-next-line i18next/no-literal-string -- an internal map key, never rendered
+  return `${row.facility ?? row.label}\u0000${row.basin_id ?? ''}`;
 }
 
 /** How many lanes are public within an option at `min`, when it publishes a split. */
@@ -254,9 +269,17 @@ export function rankRows(rows: RankRow[], min: number): RankedRow[] {
   });
 }
 
-/** countOpenToYou(ranked) — the number the summary tag leads with. */
+/** countOpenToYou(ranked) — the number the summary tag leads with.
+ *
+ * Distinct FACILITIES, not rows. Since a row became one basin of one pool, a pool that
+ * publishes two lane basins yields two rows — and "2 open to you now" for one building
+ * you can walk into is a wrong number, not merely untuned copy. */
 export function countOpenToYou(ranked: RankedRow[]): number {
-  return ranked.filter((r) => r.openToYou).length;
+  const pools = new Set<string>();
+  for (const r of ranked) {
+    if (r.openToYou) pools.add(r.row.facility ?? r.row.label);
+  }
+  return pools.size;
 }
 
 /** tierCounts(ranked) — how many rows landed in each tier, for the group headings. */

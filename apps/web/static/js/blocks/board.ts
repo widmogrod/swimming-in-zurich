@@ -45,6 +45,8 @@ import { locale, t } from '../i18n.js';
 export interface BoardOption {
   facility: string;
   facility_id?: string;
+  /** The basin's STABLE id — the row key (basin names are not unique within a facility). */
+  basin_id?: string;
   basin?: string;
   access?: string;
   distance_km?: number | null;
@@ -62,10 +64,21 @@ export interface BoardStatus {
   detail?: string | null;
 }
 
-/** One board row: a facility (Day mode) or a day (Pool mode). */
+/** One board row: a facility + basin (Day mode) or a day (Pool mode).
+ *
+ *  `label` is for HUMANS and never a key (invariant I6): under rule L1 it gains a
+ *  `· <basin>` suffix only while the facility contributes options from more than one
+ *  basin IN THIS ANSWER, so the same pool's label can differ between days. Every
+ *  row-to-pool lookup goes through `facility` / `basin_id`. */
 export interface BoardRow {
   label: string;
   date?: string | null;
+  /** The pool this row is about. Always the bare facility name — never the composite label. */
+  facility: string;
+  /** The basin this row is about; absent on a status-only row and on Pool-mode day rows. */
+  basin_id?: string;
+  /** The basin NAME — what `panelForBasin` matches on. Absent for the same rows. */
+  basin?: string;
   options: BoardOption[];
   statuses: BoardStatus[];
 }
@@ -139,17 +152,112 @@ export { hhmmToMin };
 
 // ---- Row derivation (pure, exported for unit tests) -----------------------------
 
-/** Day mode: group a `/swim` answer's options + statuses into one row per facility,
- *  preserving first-seen order (the API already orders nearest-first). */
+// The row key's separator. NUL rather than a space: a space would let
+// `facility="A B" + basin="C"` collide with `facility="A" + basin="B C"`, and a
+// collided row is a silently mis-rendered one.
+const ROW_KEY_SEP = '\u0000';
+
+const rowKeyFor = (facility: string, basinId: string | undefined): string =>
+  `${facility}${ROW_KEY_SEP}${basinId ?? ''}`;
+
+/** Day mode: group a `/swim` answer into one row per facility + BASIN, preserving
+ *  first-seen order (the API already orders nearest-first).
+ *
+ *  Options are grouped first, because a facility's option-bearing basins are what define
+ *  its rows. A `StatusOut` names a facility and no basin (there is no schedule to
+ *  attribute to any particular water), so a status joins the facility's FIRST row when it
+ *  has one and otherwise opens a single facility-level row — a pool never renders both a
+ *  status row and option rows for the same fact (invariant I3).
+ *
+ *  Labels follow rule L1, applied at the end because it is a per-ANSWER property: the
+ *  `· <basin>` suffix appears only where a facility contributed more than one
+ *  option-bearing basin, so a single-basin pool's label is byte-identical to before. */
 export function dayRows(answer: BoardAnswer): BoardRow[] {
-  const byFacility = new Map<string, BoardRow>();
-  const rowFor = (name: string): BoardRow => {
-    if (!byFacility.has(name)) byFacility.set(name, { label: name, options: [], statuses: [] });
-    return byFacility.get(name) as BoardRow;
-  };
-  for (const o of answer.options || []) rowFor(o.facility).options.push(o);
-  for (const s of answer.statuses || []) rowFor(s.facility).statuses.push(s);
-  return [...byFacility.values()];
+  const rows = new Map<string, BoardRow>();
+  const firstByFacility = new Map<string, BoardRow>();
+
+  for (const o of answer.options || []) {
+    const basinId = typeof o.basin_id === 'string' && o.basin_id ? o.basin_id : undefined;
+    const key = rowKeyFor(o.facility, basinId);
+    let row = rows.get(key);
+    if (!row) {
+      row = {
+        label: o.facility,
+        facility: o.facility,
+        basin_id: basinId,
+        basin: typeof o.basin === 'string' && o.basin ? o.basin : undefined,
+        options: [],
+        statuses: [],
+      };
+      rows.set(key, row);
+      if (!firstByFacility.has(o.facility)) firstByFacility.set(o.facility, row);
+    }
+    row.options.push(o);
+  }
+
+  for (const s of answer.statuses || []) {
+    // Joining an existing option row is DEFENSIVE, and unreachable on shipped input: a
+    // facility that produced options never also emits a status (`query.py:612` emits the
+    // closed status only `if not produced`, and `_seasonal_status_for` returns None when
+    // any basin carries rules), so status facilities and option facilities are disjoint.
+    // It stays because the alternative — a second, facility-level row — would put a
+    // status row beside that pool's basin rows and break I3 outright.
+    //
+    // If a future change ever lets one facility carry both, this line needs revisiting
+    // rather than extending: the status would land on the facility's FIRST basin row, so
+    // a "Closed" badge would render on a row labelled `… · Hauptbecken` and read as a
+    // claim about that basin — a fact about the building, mis-attributed to one water.
+    let row = firstByFacility.get(s.facility);
+    if (!row) {
+      row = { label: s.facility, facility: s.facility, options: [], statuses: [] };
+      rows.set(rowKeyFor(s.facility, undefined), row);
+      firstByFacility.set(s.facility, row);
+    }
+    row.statuses.push(s);
+  }
+
+  return applyLabelRule([...rows.values()]);
+}
+
+/** Rule L1, in one place. A row's label is the pool name; the `· <basin>` suffix is
+ *  appended ONLY where that facility contributes options from more than one basin IN THIS
+ *  ANSWER — so a single-basin pool's label is byte-identical to what it was before rows
+ *  split per basin, and the same pool can be labelled differently on a day one of its
+ *  basins is closed. That day-dependence is why no code may key on a label (I6). */
+function applyLabelRule(rows: BoardRow[]): BoardRow[] {
+  const basinsPerFacility = new Map<string, Set<string>>();
+  for (const row of rows) {
+    if (row.options.length === 0) continue;
+    const seen = basinsPerFacility.get(row.facility) ?? new Set<string>();
+    seen.add(row.basin_id ?? '');
+    basinsPerFacility.set(row.facility, seen);
+  }
+  for (const row of rows) {
+    // ONLY the basin NAME may be shown. `basin_id` is an internal key (`city-50m`), and
+    // `OptionOut.basin` is a plain `str` the wire does not constrain non-empty — so a
+    // blank name must fall back to NO suffix, never to the id. A pool we cannot name the
+    // basin of reads as the pool; that is honest. A key in user copy is not.
+    const suffix = row.basin;
+    if (!suffix) continue;
+    if ((basinsPerFacility.get(row.facility)?.size ?? 0) < 2) continue;
+    // The separator is punctuation between two proper nouns, not copy.
+    row.label = `${row.facility} · ${suffix}`;
+  }
+  return rows;
+}
+
+/** The BASIN a row is about, or null when it is about no particular water (a status-only
+ *  row). The pure seam behind `app.ts`'s row → `panelForBasin` join: `app.ts` is
+ *  browser-only and imported by no test, so the rule lives here where it is testable.
+ *
+ *  Falls back to the row's own options so a Pool-mode day row — which carries no `basin`
+ *  field of its own — still names the basin its sessions are in. */
+export function rowBasinName(row: BoardRow): string | null {
+  if (row.basin) return row.basin;
+  for (const o of row.options) {
+    if (typeof o.basin === 'string' && o.basin) return o.basin;
+  }
+  return null;
 }
 
 /** Pool mode: one row per day of the captured week. `week` is
@@ -159,6 +267,10 @@ export function weekRows(week: BoardWeek): BoardRow[] {
   return (week.days || []).map((d) => ({
     label: d.label,
     date: d.date != null ? d.date : d.iso,
+    // Every row of a week is a day of the ONE selected pool, so the week's facility is
+    // the row's. No `basin_id`: a week row spans whatever basins that day published —
+    // splitting Pool mode per basin is deliberately out of scope (invariant I4).
+    facility: week.facility ?? '',
     options: d.answer.options || [],
     statuses: d.answer.statuses || [],
   }));

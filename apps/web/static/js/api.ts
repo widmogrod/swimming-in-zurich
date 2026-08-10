@@ -40,6 +40,8 @@ export interface SwimFilter {
 export interface SwimOption {
   facility: string;
   access?: string;
+  /** The basin's stable id — the board row key (`OptionOut.basin_id`, added in S2). */
+  basin_id?: string;
   basin?: string;
   distance_km?: number | null;
   [k: string]: unknown;
