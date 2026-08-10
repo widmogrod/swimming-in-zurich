@@ -1,0 +1,186 @@
+{
+  "_note": "FROZEN pre-change reference for lane-stack-board S2 AC5: the lane_availability + lane_timeline every plan-bearing /swim option carried at commit 659c76a (S1), BEFORE any S2 code existed. Never regenerate it to make a test pass — that would turn the reference into a copy of the code under test. Two captures on purpose: City is a single all-day session, Leimbach 2026-05-05 is TWO sessions, so a change that only holds for a day-spanning session cannot slip through.",
+  "_recipe": "git stash push -- src apps; then for each capture below GET /swim ?at=<at>&gender=female&age=34&eligible_only=false against a gold DB built by swimzh.cli.build(data_dir=data/, clients=tests.pipeline_clients.recorded_build_clients()), keeping start/end/lane_availability/lane_timeline of the named facility+basin; git stash pop.",
+  "captures": [
+    {
+      "at": "2026-08-12T12:00",
+      "basin": "Schwimmerbecken",
+      "facility": "Hallenbad City",
+      "options": [
+        {
+          "end": "22:00",
+          "lane_availability": {
+            "lane_count": 6,
+            "partial": false,
+            "public_lanes": 5,
+            "public_until": "22:00",
+            "reserved_lanes": 1
+          },
+          "lane_timeline": {
+            "segments": [
+              {
+                "end": "06:30",
+                "lane_count": 6,
+                "partial": false,
+                "public_lanes": 5,
+                "reserved_lanes": 1,
+                "start": "06:00"
+              },
+              {
+                "end": "07:30",
+                "lane_count": 6,
+                "partial": false,
+                "public_lanes": 4,
+                "reserved_lanes": 2,
+                "start": "06:30"
+              },
+              {
+                "end": "09:00",
+                "lane_count": 6,
+                "partial": false,
+                "public_lanes": 5,
+                "reserved_lanes": 1,
+                "start": "07:30"
+              },
+              {
+                "end": "12:00",
+                "lane_count": 6,
+                "partial": false,
+                "public_lanes": 6,
+                "reserved_lanes": 0,
+                "start": "09:00"
+              },
+              {
+                "end": "13:30",
+                "lane_count": 6,
+                "partial": false,
+                "public_lanes": 5,
+                "reserved_lanes": 1,
+                "start": "12:00"
+              },
+              {
+                "end": "18:00",
+                "lane_count": 6,
+                "partial": false,
+                "public_lanes": 6,
+                "reserved_lanes": 0,
+                "start": "13:30"
+              },
+              {
+                "end": "21:00",
+                "lane_count": 6,
+                "partial": false,
+                "public_lanes": 4,
+                "reserved_lanes": 2,
+                "start": "18:00"
+              },
+              {
+                "end": "22:00",
+                "lane_count": 6,
+                "partial": false,
+                "public_lanes": 5,
+                "reserved_lanes": 1,
+                "start": "21:00"
+              }
+            ]
+          },
+          "start": "06:00"
+        }
+      ]
+    },
+    {
+      "at": "2026-05-05T12:00",
+      "basin": "25m-Becken",
+      "facility": "Hallenbad Leimbach",
+      "options": [
+        {
+          "end": "08:00",
+          "lane_availability": {
+            "lane_count": 6,
+            "partial": false,
+            "public_lanes": 4,
+            "public_until": "22:00",
+            "reserved_lanes": 2
+          },
+          "lane_timeline": {
+            "segments": [
+              {
+                "end": "07:30",
+                "lane_count": 6,
+                "partial": false,
+                "public_lanes": 4,
+                "reserved_lanes": 2,
+                "start": "06:00"
+              },
+              {
+                "end": "08:00",
+                "lane_count": 6,
+                "partial": false,
+                "public_lanes": 5,
+                "reserved_lanes": 1,
+                "start": "07:30"
+              }
+            ]
+          },
+          "start": "06:00"
+        },
+        {
+          "end": "21:00",
+          "lane_availability": {
+            "lane_count": 6,
+            "partial": false,
+            "public_lanes": 5,
+            "public_until": "22:00",
+            "reserved_lanes": 1
+          },
+          "lane_timeline": {
+            "segments": [
+              {
+                "end": "13:30",
+                "lane_count": 6,
+                "partial": false,
+                "public_lanes": 5,
+                "reserved_lanes": 1,
+                "start": "12:00"
+              },
+              {
+                "end": "17:00",
+                "lane_count": 6,
+                "partial": false,
+                "public_lanes": 6,
+                "reserved_lanes": 0,
+                "start": "13:30"
+              },
+              {
+                "end": "17:30",
+                "lane_count": 6,
+                "partial": false,
+                "public_lanes": 5,
+                "reserved_lanes": 1,
+                "start": "17:00"
+              },
+              {
+                "end": "20:00",
+                "lane_count": 6,
+                "partial": false,
+                "public_lanes": 4,
+                "reserved_lanes": 2,
+                "start": "17:30"
+              },
+              {
+                "end": "21:00",
+                "lane_count": 6,
+                "partial": false,
+                "public_lanes": 5,
+                "reserved_lanes": 1,
+                "start": "20:00"
+              }
+            ]
+          },
+          "start": "12:00"
+        }
+      ]
+    }
+  ],
+  "generated_at_commit": "659c76a"
+}

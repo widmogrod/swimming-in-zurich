@@ -12,15 +12,26 @@ from zoneinfo import ZoneInfo
 from apps.web.api.swim.model import (
     AnswerOut,
     LaneAvailabilityOut,
+    LaneDayViewOut,
+    LaneSegmentOut,
+    LaneStripOut,
     LaneTimelineOut,
     LaneTimelineSegmentOut,
     NoticeOut,
     OptionOut,
+    PublicWindowOut,
     StatusOut,
 )
 from apps.web.services.ports import SwimStore
+from swimzh.domain.access import PublicSwim
 from swimzh.domain.geo import GeoPoint
-from swimzh.domain.lane_plan import LaneAvailability, LaneAvailabilityTimeline
+from swimzh.domain.lane_plan import (
+    LaneAvailability,
+    LaneAvailabilityTimeline,
+    LaneDayView,
+    PublicWindow,
+    owner_label,
+)
 from swimzh.domain.person import Gender, Person
 from swimzh.domain.query import SwimOption, SwimQuery, find_swim_options
 
@@ -57,6 +68,44 @@ def _lane_timeline_out(timeline: LaneAvailabilityTimeline | None) -> LaneTimelin
     )
 
 
+def _lane_day_view_out(view: LaneDayView | None) -> LaneDayViewOut | None:
+    if view is None:
+        return None
+    return LaneDayViewOut(
+        weekday=int(view.weekday),
+        lane_count=view.lane_count,
+        strips=[
+            LaneStripOut(
+                lane=strip.lane,
+                segments=[
+                    LaneSegmentOut(
+                        start=seg.time.start.strftime("%H:%M"),
+                        end=seg.time.end.strftime("%H:%M"),
+                        access=type(seg.access).__name__,
+                        # A public segment has no owner to name; anything else is labelled by
+                        # the domain's own `owner_label`, never by re-deriving prose here.
+                        owner=(
+                            None if isinstance(seg.access, PublicSwim) else owner_label(seg.access)
+                        ),
+                    )
+                    for seg in strip.segments
+                ],
+            )
+            for strip in view.strips
+        ],
+    )
+
+
+def _public_window_out(window: PublicWindow | None) -> PublicWindowOut | None:
+    if window is None:
+        return None
+    return PublicWindowOut(
+        start=window.time.start.strftime("%H:%M"),
+        end=window.time.end.strftime("%H:%M"),
+        public_lanes=window.public_lanes,
+    )
+
+
 def _option_out(option: SwimOption) -> OptionOut:
     valid = option.provenance.valid_as_of
     return OptionOut(
@@ -64,6 +113,7 @@ def _option_out(option: SwimOption) -> OptionOut:
         facility_id=str(option.facility_id),
         kind=option.facility_kind.value,
         basin=option.basin_name,
+        basin_id=str(option.basin_id),
         length_m=float(option.basin_length_m) if option.basin_length_m is not None else None,
         lanes=option.lanes,
         start=option.session.time.start.strftime("%H:%M"),
@@ -81,6 +131,8 @@ def _option_out(option: SwimOption) -> OptionOut:
         curated=option.provenance.curated,
         lane_availability=_lane_availability_out(option.lane_availability),
         lane_timeline=_lane_timeline_out(option.lane_timeline),
+        lane_day_view=_lane_day_view_out(option.lane_day_view),
+        lane_best_public=_public_window_out(option.lane_best_public),
     )
 
 

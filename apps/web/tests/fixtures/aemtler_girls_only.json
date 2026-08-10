@@ -9,6 +9,7 @@
     "facility_id": "schulschwimmanlage-aemtler",
     "kind": "school",
     "basin": "Hauptbecken",
+    "basin_id": "schulschwimmanlage-aemtler-main",
     "length_m": null,
     "lanes": null,
     "start": "17:15",
@@ -24,6 +25,8 @@
     "source": "schedule_scraper",
     "curated": false,
     "lane_availability": null,
-    "lane_timeline": null
+    "lane_timeline": null,
+    "lane_day_view": null,
+    "lane_best_public": null
   }
 }

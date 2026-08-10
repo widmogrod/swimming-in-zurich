@@ -33,10 +33,14 @@ from swimzh.domain.geo import GeoPoint, haversine_km
 from swimzh.domain.lane_plan import (
     LaneAvailability,
     LaneAvailabilityTimeline,
+    LaneDayView,
     LanePanel,
     LanePlan,
+    PublicWindow,
+    best_public_time,
     lane_availability_at,
     lane_availability_timeline,
+    lane_day_view,
     lane_panel,
 )
 from swimzh.domain.lockers import LockerOption
@@ -275,6 +279,19 @@ class SwimOption:
     # pure derivation of the stored plan — never stored. Powers the "4/6 then 2/6 after 18:00"
     # arc. None when the basin has no parsed plan.
     lane_timeline: LaneAvailabilityTimeline | None = None
+    # lane-stack-board S2: the per-LANE day timeline (who holds which lane, when) — the shape the
+    # board's lane stack paints. `lane_timeline` carries only COUNTS; this carries identity. Like
+    # its two siblings it is a pure derivation of the stored plan, never stored, and None when the
+    # basin has no parsed plan. It is the WHOLE weekday, not the session window: a lane's day is a
+    # property of the plan, and clipping it to the session would hide the club block that starts
+    # one minute after closing.
+    lane_day_view: LaneDayView | None = None
+    # This SESSION's "best time to come" public window (most public lanes free, earliest on a
+    # tie), bounded by `session.time` — not the whole weekday. A SEPARATE field, not part of
+    # `lane_day_view`: `LaneDayView` is {weekday, lane_count, strips} and the window lives
+    # beside it in `LanePanel` too. None when the basin has no parsed plan, and ALSO when no
+    # lane is public anywhere inside this session.
+    lane_best_public: PublicWindow | None = None
 
 
 class StatusCode(StrEnum):
@@ -451,16 +468,29 @@ def _session_option(
     `open_at_query_time`) clamped into the session, else the session start — so 12:00 and
     18:00 report different lane splits. NOT the wall-clock now (that is reserved for
     occupancy freshness); using it would collapse a future/other-time query back to
-    `session.time.start`."""
+    `session.time.start`.
+
+    `lane_day_view` is keyed by WEEKDAY alone — a lane's whole day is a property of the plan,
+    and clipping it would hide the club block starting one minute after closing. Its sibling
+    `lane_best_public` is bounded by the SESSION, because it is an instruction to the reader
+    ("come at 09:00") and an option cannot instruct anyone outside its own hours."""
     weekday = Weekday(day.weekday())
     t = now_time if session.time.contains(now_time) else session.time.start
     lane_avail: LaneAvailability | None = None
     lane_timeline: LaneAvailabilityTimeline | None = None
+    day_view: LaneDayView | None = None
+    best_public: PublicWindow | None = None
     # `lane_plan` carries a third state (`LanePlanUnavailable`); only a parsed `LanePlan`
     # yields a derivation — a recorded failure is inert here.
     if isinstance(basin.lane_plan, LanePlan):
         lane_avail = lane_availability_at(basin.lane_plan, weekday, t)
         lane_timeline = lane_availability_timeline(basin.lane_plan, weekday, session.time)
+        day_view = lane_day_view(basin.lane_plan, weekday)
+        # BOUNDED BY THE SESSION, exactly like the timeline one line above — a `SwimOption` IS
+        # one session, so a best-public window outside its hours is not a fact about it, and
+        # S4 paints this window as a band behind that option's row. `/pools`' `lane_panel`
+        # deliberately keeps the WHOLE-DAY window; that one hangs off a per-day object.
+        best_public = best_public_time(basin.lane_plan, weekday, session.time)
     return SwimOption(
         facility_id=facility.identity.facility_id,
         facility_name=facility.identity.name,
@@ -480,6 +510,8 @@ def _session_option(
         live_occupancy=live,
         lane_availability=lane_avail,
         lane_timeline=lane_timeline,
+        lane_day_view=day_view,
+        lane_best_public=best_public,
     )
 
 
