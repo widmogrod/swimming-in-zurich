@@ -58,7 +58,10 @@ function factsFor(ranked: RankedRow): string[] {
   const options = ranked.row.options ?? [];
   const first = options[0];
   const basin = typeof first?.basin === 'string' ? first.basin : null;
-  if (basin) facts.push(basin);
+  // …but not when the heading already ends in `· <basin>`. Since S3 a multi-basin pool's
+  // label carries its basin (rule L1), and repeating it below reads as a stutter:
+  // "Hallenbad City · Schwimmerbecken" over "1.2 km · Schwimmerbecken".
+  if (basin && !ranked.row.label.endsWith(`· ${basin}`)) facts.push(basin);
   return facts.slice(0, 4);
 }
 

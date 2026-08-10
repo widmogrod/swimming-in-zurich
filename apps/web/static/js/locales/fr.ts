@@ -81,6 +81,12 @@ export const fr = {
   "legend.state.open": "Ouvert (lignes publiques)",
   "legend.state.closed": "Fermé — avec motif",
   "legend.state.unknown": "Horaires pas encore publiés",
+  // --- La pile de lignes (lane-stack-board S4) -------------------------------------
+  "legend.group.laneStack": "Pile de lignes",
+  "legend.lane.public": "Ligne ouverte au public",
+  "legend.lane.reserved": "Ligne réservée (nom si la place le permet)",
+  "legend.lane.best": "Le plus de lignes publiques libres",
+  "legend.lane.unpublished": "Répartition des lignes non publiée",
   "status.closed": "Fermé",
   "status.closed_reason": "Fermé · {reason}",
   "status.uncurated": "Horaires non publiés",

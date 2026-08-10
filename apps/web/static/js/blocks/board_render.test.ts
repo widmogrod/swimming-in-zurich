@@ -48,6 +48,9 @@ function recordingCtx(calls: Call[]): Record<string, unknown> {
     clearRect: op("clearRect"),
     fillText: op("fillText"),
     setLineDash: op("setLineDash"),
+    // The lane stack MEASURES an owner's name before deciding to draw it (S4), so the
+    // recorder must answer measureText or the painter cannot run at all.
+    measureText: (s: string) => ({ width: String(s).length * 6 }),
     fillStyle: "",
     strokeStyle: "",
     lineWidth: 0,
@@ -112,6 +115,45 @@ test("a lane-split option paints ribbon geometry onto the row canvas", () => {
   // The axis is cleared and the ribbon body is filled.
   expect(calls.some((c) => c.op === "clearRect")).toBe(true);
   expect(calls.some((c) => c.op === "fillRect" || c.op === "fill")).toBe(true);
+});
+
+test("AC2 · a row with a lane plan paints its stack THROUGH the board, inside ROW_H", () => {
+  // The smoke half of AC2: the pure geometry is asserted in ribbonrender.test.ts; what this
+  // adds is that a real `/swim` option reaches `drawLaneStack` through `createBoard` — row
+  // derivation, palette probe, dispatch and all — and stays inside the 46px row box.
+  const stackOption = {
+    facility: "Hallenbad City",
+    basin: "Schwimmerbecken",
+    basin_id: "city-50m",
+    access: "PublicSwim",
+    start: "09:00",
+    end: "12:00",
+    lane_day_view: {
+      weekday: 2,
+      lane_count: 6,
+      strips: Array.from({ length: 6 }, (_, i) => ({
+        lane: i + 1,
+        segments: [
+          i < 4
+            ? { start: "09:00", end: "12:00", access: "PublicSwim", owner: null }
+            : { start: "09:00", end: "12:00", access: "ClubReserved", owner: "SC Uster" },
+        ],
+      })),
+    },
+    lane_best_public: { start: "09:00", end: "11:00", public_lanes: 4 },
+  };
+  const calls: Call[] = [];
+  mountBoard(calls, { day: answer([stackOption]) });
+  const rects = calls.filter((c) => c.op === "fillRect");
+  // 6 lane tracks + 6 lane blocks + the best-public band, at least.
+  expect(rects.length).toBeGreaterThanOrEqual(13);
+  const ROW_H = 46;
+  for (const c of rects) {
+    const y = c.args[1] as number;
+    const h = c.args[3] as number;
+    expect(y).toBeGreaterThanOrEqual(-1);
+    expect(y + h).toBeLessThanOrEqual(ROW_H + 1);
+  }
 });
 
 test("a closed row paints a DASHED status ribbon (never a solid public block)", () => {

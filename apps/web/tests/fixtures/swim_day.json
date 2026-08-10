@@ -1,10 +1,12 @@
 {
+  "_provenance": "HAND-AUTHORED, NOT a captured /swim response. The options/statuses are illustrative (see each option's own `source`, which says so). Added in lane-stack-board S4: `basin_id` on every option, and on the Hallenbad Oerlikon basin a `lane_day_view` + per-session `lane_best_public`. The day view was DERIVED MECHANICALLY from this file's own pre-existing `lane_timeline` — lanes 1..public_lanes public in each timeline segment, the rest reserved, adjacent identical holds merged — which is why the counts and the peak agree exactly. The club names (SV Limmat, Schule Liguster, Wasserball ZH, SC Oerlikon) are INVENTED: no lane owner here was scraped from a Belegungsplan, and none should be read as a fact about a real club. Shapes match apps/web/api/swim/model.py.",
   "options": [
     {
       "facility": "Hallenbad Oerlikon",
       "facility_id": "hallenbad-oerlikon",
       "kind": "indoor",
       "basin": "50m-Becken",
+      "basin_id": "oerlikon-50m",
       "length_m": 50.0,
       "lanes": null,
       "start": "06:00",
@@ -36,6 +38,171 @@
             "partial": false
           }
         ]
+      },
+      "lane_day_view": {
+        "weekday": 2,
+        "lane_count": 8,
+        "strips": [
+          {
+            "lane": 1,
+            "segments": [
+              {
+                "start": "06:00",
+                "end": "21:30",
+                "access": "PublicSwim",
+                "owner": null
+              }
+            ]
+          },
+          {
+            "lane": 2,
+            "segments": [
+              {
+                "start": "06:00",
+                "end": "21:30",
+                "access": "PublicSwim",
+                "owner": null
+              }
+            ]
+          },
+          {
+            "lane": 3,
+            "segments": [
+              {
+                "start": "06:00",
+                "end": "21:30",
+                "access": "PublicSwim",
+                "owner": null
+              }
+            ]
+          },
+          {
+            "lane": 4,
+            "segments": [
+              {
+                "start": "06:00",
+                "end": "21:30",
+                "access": "PublicSwim",
+                "owner": null
+              }
+            ]
+          },
+          {
+            "lane": 5,
+            "segments": [
+              {
+                "start": "06:00",
+                "end": "08:00",
+                "access": "PublicSwim",
+                "owner": null
+              },
+              {
+                "start": "08:00",
+                "end": "09:30",
+                "access": "ClubReserved",
+                "owner": "SV Limmat"
+              },
+              {
+                "start": "09:30",
+                "end": "14:00",
+                "access": "PublicSwim",
+                "owner": null
+              },
+              {
+                "start": "14:00",
+                "end": "21:30",
+                "access": "ClubReserved",
+                "owner": "SV Limmat"
+              }
+            ]
+          },
+          {
+            "lane": 6,
+            "segments": [
+              {
+                "start": "06:00",
+                "end": "09:30",
+                "access": "ClubReserved",
+                "owner": "Schule Liguster"
+              },
+              {
+                "start": "09:30",
+                "end": "14:00",
+                "access": "PublicSwim",
+                "owner": null
+              },
+              {
+                "start": "14:00",
+                "end": "21:30",
+                "access": "ClubReserved",
+                "owner": "Schule Liguster"
+              }
+            ]
+          },
+          {
+            "lane": 7,
+            "segments": [
+              {
+                "start": "06:00",
+                "end": "09:30",
+                "access": "ClubReserved",
+                "owner": "Wasserball ZH"
+              },
+              {
+                "start": "09:30",
+                "end": "13:30",
+                "access": "PublicSwim",
+                "owner": null
+              },
+              {
+                "start": "13:30",
+                "end": "21:30",
+                "access": "ClubReserved",
+                "owner": "Wasserball ZH"
+              }
+            ]
+          },
+          {
+            "lane": 8,
+            "segments": [
+              {
+                "start": "06:00",
+                "end": "09:30",
+                "access": "ClubReserved",
+                "owner": "SC Oerlikon"
+              },
+              {
+                "start": "09:30",
+                "end": "10:00",
+                "access": "PublicSwim",
+                "owner": null
+              },
+              {
+                "start": "10:00",
+                "end": "11:00",
+                "access": "ClubReserved",
+                "owner": "SC Oerlikon"
+              },
+              {
+                "start": "11:00",
+                "end": "13:00",
+                "access": "PublicSwim",
+                "owner": null
+              },
+              {
+                "start": "13:00",
+                "end": "21:30",
+                "access": "ClubReserved",
+                "owner": "SC Oerlikon"
+              }
+            ]
+          }
+        ]
+      },
+      "lane_best_public": {
+        "start": "06:00",
+        "end": "08:00",
+        "public_lanes": 5
       }
     },
     {
@@ -43,6 +210,7 @@
       "facility_id": "hallenbad-oerlikon",
       "kind": "indoor",
       "basin": "50m-Becken",
+      "basin_id": "oerlikon-50m",
       "length_m": 50.0,
       "lanes": null,
       "start": "08:00",
@@ -154,6 +322,171 @@
             "partial": false
           }
         ]
+      },
+      "lane_day_view": {
+        "weekday": 2,
+        "lane_count": 8,
+        "strips": [
+          {
+            "lane": 1,
+            "segments": [
+              {
+                "start": "06:00",
+                "end": "21:30",
+                "access": "PublicSwim",
+                "owner": null
+              }
+            ]
+          },
+          {
+            "lane": 2,
+            "segments": [
+              {
+                "start": "06:00",
+                "end": "21:30",
+                "access": "PublicSwim",
+                "owner": null
+              }
+            ]
+          },
+          {
+            "lane": 3,
+            "segments": [
+              {
+                "start": "06:00",
+                "end": "21:30",
+                "access": "PublicSwim",
+                "owner": null
+              }
+            ]
+          },
+          {
+            "lane": 4,
+            "segments": [
+              {
+                "start": "06:00",
+                "end": "21:30",
+                "access": "PublicSwim",
+                "owner": null
+              }
+            ]
+          },
+          {
+            "lane": 5,
+            "segments": [
+              {
+                "start": "06:00",
+                "end": "08:00",
+                "access": "PublicSwim",
+                "owner": null
+              },
+              {
+                "start": "08:00",
+                "end": "09:30",
+                "access": "ClubReserved",
+                "owner": "SV Limmat"
+              },
+              {
+                "start": "09:30",
+                "end": "14:00",
+                "access": "PublicSwim",
+                "owner": null
+              },
+              {
+                "start": "14:00",
+                "end": "21:30",
+                "access": "ClubReserved",
+                "owner": "SV Limmat"
+              }
+            ]
+          },
+          {
+            "lane": 6,
+            "segments": [
+              {
+                "start": "06:00",
+                "end": "09:30",
+                "access": "ClubReserved",
+                "owner": "Schule Liguster"
+              },
+              {
+                "start": "09:30",
+                "end": "14:00",
+                "access": "PublicSwim",
+                "owner": null
+              },
+              {
+                "start": "14:00",
+                "end": "21:30",
+                "access": "ClubReserved",
+                "owner": "Schule Liguster"
+              }
+            ]
+          },
+          {
+            "lane": 7,
+            "segments": [
+              {
+                "start": "06:00",
+                "end": "09:30",
+                "access": "ClubReserved",
+                "owner": "Wasserball ZH"
+              },
+              {
+                "start": "09:30",
+                "end": "13:30",
+                "access": "PublicSwim",
+                "owner": null
+              },
+              {
+                "start": "13:30",
+                "end": "21:30",
+                "access": "ClubReserved",
+                "owner": "Wasserball ZH"
+              }
+            ]
+          },
+          {
+            "lane": 8,
+            "segments": [
+              {
+                "start": "06:00",
+                "end": "09:30",
+                "access": "ClubReserved",
+                "owner": "SC Oerlikon"
+              },
+              {
+                "start": "09:30",
+                "end": "10:00",
+                "access": "PublicSwim",
+                "owner": null
+              },
+              {
+                "start": "10:00",
+                "end": "11:00",
+                "access": "ClubReserved",
+                "owner": "SC Oerlikon"
+              },
+              {
+                "start": "11:00",
+                "end": "13:00",
+                "access": "PublicSwim",
+                "owner": null
+              },
+              {
+                "start": "13:00",
+                "end": "21:30",
+                "access": "ClubReserved",
+                "owner": "SC Oerlikon"
+              }
+            ]
+          }
+        ]
+      },
+      "lane_best_public": {
+        "start": "11:00",
+        "end": "13:00",
+        "public_lanes": 8
       }
     },
     {
@@ -161,6 +494,7 @@
       "facility_id": "schulschwimmanlage-aemtler",
       "kind": "school",
       "basin": "Schwimmbecken",
+      "basin_id": "aemtler-main",
       "length_m": null,
       "lanes": null,
       "start": "09:00",

@@ -99,6 +99,12 @@ export const pl = {
   "legend.state.open": "Otwarte (tory publiczne)",
   "legend.state.closed": "Zamknięte — z podaniem powodu",
   "legend.state.unknown": "Godziny jeszcze nieopublikowane",
+  // --- Stos torów (lane-stack-board S4) --------------------------------------------
+  "legend.group.laneStack": "Stos torów",
+  "legend.lane.public": "Tor otwarty dla publiczności",
+  "legend.lane.reserved": "Tor zarezerwowany (nazwa, jeśli się mieści)",
+  "legend.lane.best": "Najwięcej wolnych torów publicznych",
+  "legend.lane.unpublished": "Podział torów nieopublikowany",
 
   "status.closed": "Zamknięte",
   "status.closed_reason": "Zamknięte · {reason}",

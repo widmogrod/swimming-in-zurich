@@ -158,6 +158,36 @@ test('opening a card hands the caller a key that finds the right row again', () 
   expect(TWO_BASINS[index].basin_id).toBe('city-main');
 });
 
+test('a two-basin card does not repeat the basin its heading already names', () => {
+  // S3 gave the heading its `· <basin>` suffix and the fact line kept adding the basin a
+  // second time: "Hallenbad City · Schwimmerbecken" over "0.9 km · Schwimmerbecken".
+  const { el } = buildTwoBasins();
+  const metas = el
+    .queryAll((c: FakeElement) => c.classList.contains('plist__meta'))
+    .map((m) => m.textContent);
+  expect(metas.length).toBe(2);
+  for (const m of metas) expect(m).not.toContain('becken');
+});
+
+test('a SINGLE-basin card still shows its basin — the heading does not name it', () => {
+  const el = mount();
+  createPoolList(el, {
+    rows: [
+      {
+        label: 'Hallenbad City',
+        facility: 'Hallenbad City',
+        basin_id: 'city-main',
+        options: [{ start: '09:00', end: '21:00', distance_km: 0.9, basin: 'Hauptbecken' }],
+        statuses: [],
+      },
+    ],
+    nowMin: M(10),
+    reducedMotion: true,
+  });
+  const meta = must(fake(el).query((c: FakeElement) => c.classList.contains('plist__meta')));
+  expect(meta.textContent).toContain('Hauptbecken');
+});
+
 test('a two-basin pool counts ONCE toward "open to you now"', () => {
   expect(buildTwoBasins().api.countOpenToYou()).toBe(1);
 });

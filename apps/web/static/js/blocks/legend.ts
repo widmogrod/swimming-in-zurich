@@ -44,6 +44,20 @@ const STATES = [
   { key: 'unknown', label: t('legend.state.unknown') },
 ];
 
+// The lane stack's key (lane-stack-board S4). A row whose basin has a published
+// Belegungsplan is drawn as one hairline sub-row per lane, so the board now carries an
+// encoding the original three groups do not decode: which lane, whose, and when the water
+// is freest.
+//
+// The fourth row is the honesty floor (invariant I5): most pools publish no lane split at
+// all, and their hatched bar must read as ITS OWN state — not as a stack with nothing free.
+const LANE_STACK = [
+  { key: 'public', label: t('legend.lane.public') },
+  { key: 'reserved', label: t('legend.lane.reserved') },
+  { key: 'best', label: t('legend.lane.best') },
+  { key: 'unpublished', label: t('legend.lane.unpublished') },
+];
+
 // The eligibility key — ? is DISTINCT from ✕ (never merged), and colours are the
 // muted badge tokens (never alarm red).
 const ELIGIBILITY = [
@@ -60,6 +74,7 @@ export function legendModel() {
   return {
     families: FAMILIES.slice(),
     states: STATES.slice(),
+    laneStack: LANE_STACK.slice(),
     eligibility: ELIGIBILITY.slice(),
     note: HONESTY_NOTE,
   };
@@ -111,6 +126,13 @@ export function createBoardLegend<T extends El>(el: T): { el: T } {
     states.appendChild(swatchRow(doc, `legend__state legend__state--${s.key}`, s.label));
   }
   el.appendChild(states);
+
+  // The lane stack — the encoding a row with a published plan actually paints.
+  const lanes = group(doc, t('legend.group.laneStack'));
+  for (const l of model.laneStack) {
+    lanes.appendChild(swatchRow(doc, `legend__lane legend__lane--${l.key}`, l.label));
+  }
+  el.appendChild(lanes);
 
   // Eligibility key — reuse the EligibilityBadge primitive so the key can't drift.
   const elig = group(doc, t('legend.group.forYou'));

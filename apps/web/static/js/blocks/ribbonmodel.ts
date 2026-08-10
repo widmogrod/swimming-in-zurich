@@ -1,4 +1,5 @@
 import { t } from '../i18n.js';
+import { hhmmToMin, isPublicSegment, minToHhmm } from './cursor.js';
 // ribbonmodel.js — PURE mapping of a `/swim` option/status → a ribbon render state.
 //
 // No canvas, no DOM (plan Risk #2: keep the drawable logic testable without a
@@ -39,7 +40,59 @@ export interface RibbonOption {
   facility?: string;
   basin?: string;
   lane_timeline?: { segments?: RibbonTimelineSegment[] } | null;
+  /** `OptionOut.lane_day_view` (S2): WHICH lane and WHOSE, for the lane stack. */
+  lane_day_view?: RibbonDayView | null;
+  /** `OptionOut.lane_best_public` (S2): the best public window, ALREADY bounded by this
+   *  option's own session hours server-side — the stack must not re-widen it. */
+  lane_best_public?: RibbonPublicWindow | null;
   [k: string]: unknown;
+}
+
+/** One owner's hold on one lane, as `/swim` serves it (`LaneSegmentOut`). */
+export interface RibbonLaneSegment {
+  start: string;
+  end: string;
+  access?: string;
+  owner?: string | null;
+  [k: string]: unknown;
+}
+
+/** One lane's whole weekday (`LaneStripOut`). */
+export interface RibbonLaneStrip {
+  lane: number;
+  segments?: RibbonLaneSegment[];
+  [k: string]: unknown;
+}
+
+/** `LaneDayViewOut` — the basin's per-lane WEEKDAY (not the session window). */
+export interface RibbonDayView {
+  weekday?: number;
+  lane_count: number;
+  strips?: RibbonLaneStrip[];
+  [k: string]: unknown;
+}
+
+/** `PublicWindowOut` — the session's "best time to come". */
+export interface RibbonPublicWindow {
+  start: string;
+  end: string;
+  public_lanes: number;
+}
+
+/** One block of one lane of the STACK: a drawable, session-clipped hold. */
+export interface RibbonStackBlock {
+  start: string;
+  end: string;
+  public: boolean;
+  owner: string | null;
+}
+
+/** One lane sub-row of the stack. Always present for lanes `1..lane_count`, even when the
+ *  lane holds nothing inside the session — an empty sub-row is a lane nobody has taken,
+ *  which is a different fact from a lane we know nothing about. */
+export interface RibbonStackLane {
+  lane: number;
+  segments: RibbonStackBlock[];
 }
 
 export interface RibbonTimelineSegment {
@@ -79,12 +132,62 @@ function publicFraction(seg: RibbonTimelineSegment): number {
 }
 
 /**
+ * laneStackFor(dayView, start, end) → one sub-row per lane `1..lane_count`, each carrying
+ * only the holds that fall inside THIS option's hours.
+ *
+ * The clip is not cosmetic. `lane_day_view` spans the whole WEEKDAY, while a ribbon is one
+ * SESSION: Oerlikon's 06:00–08:00 and 08:00–21:30 options share a basin and therefore
+ * share a day view, so an unclipped stack would paint each option's ribbon across the
+ * whole day — two ribbons claiming hours neither session covers, drawn over each other.
+ * Clipping mirrors what S2 already did server-side for `lane_best_public`.
+ *
+ * A lane with nothing inside the window keeps its (empty) sub-row: "nobody holds this
+ * lane" is a fact, and dropping the row would silently renumber the lanes below it.
+ */
+export function laneStackFor(
+  dayView: RibbonDayView,
+  start: string | undefined,
+  end: string | undefined,
+): RibbonStackLane[] {
+  const lo = hhmmToMin(start ?? '');
+  const hi = hhmmToMin(end ?? '');
+  const byLane = new Map<number, RibbonLaneSegment[]>();
+  for (const strip of dayView.strips ?? []) {
+    byLane.set(Number(strip.lane), strip.segments ?? []);
+  }
+  const lanes: RibbonStackLane[] = [];
+  for (let lane = 1; lane <= dayView.lane_count; lane += 1) {
+    const segments: RibbonStackBlock[] = [];
+    for (const seg of byLane.get(lane) ?? []) {
+      const s = Math.max(lo, hhmmToMin(seg.start));
+      const e = Math.min(hi, hhmmToMin(seg.end));
+      if (!(e > s)) continue; // wholly outside this session (or zero-length)
+      segments.push({
+        start: minToHhmm(s),
+        end: minToHhmm(e),
+        public: isPublicSegment(seg),
+        owner: typeof seg.owner === 'string' && seg.owner ? seg.owner : null,
+      });
+    }
+    lanes.push({ lane, segments });
+  }
+  return lanes;
+}
+
+/**
  * optionRibbon(option) → a ribbon render state for a `/swim` option.
- *   - with `lane_timeline`  → a FILLED ribbon; each segment's `thickness` is the
+ *   - with `lane_day_view`  → a LANE STACK: one sub-row per lane, public vs reserved,
+ *     the owner carried on each reserved block, and the session's best-public window
+ *     (`option.lane_best_public`, absent when the server sent null).
+ *   - with `lane_timeline` only → a FILLED ribbon; each segment's `thickness` is the
  *     public fraction (public_lanes/lane_count) and it is `pinched` wherever any
  *     lane is reserved (reserved_lanes>0); `sheath:true` draws the capacity envelope.
- *   - without `lane_timeline` → a "lane split not published" ribbon (`sheath:false`).
- * The colour `family` is set in both cases.
+ *   - with neither → a "lane split not published" ribbon (`sheath:false`).
+ * The colour `family` is set in every case.
+ *
+ * The three are NEVER merged (invariant I5): the published universe is closed at 8 lane
+ * sheets, so most pools will never have a stack, and a pool with no plan must not read as
+ * a pool with no free lanes.
  */
 export function optionRibbon(option: RibbonOption): Ribbon {
   const family = accessFamily(option.access ?? '');
@@ -97,6 +200,25 @@ export function optionRibbon(option: RibbonOption): Ribbon {
     start: option.start,
     end: option.end,
   };
+  const dayView = option.lane_day_view;
+  // Hours are required to CLIP the day view to this session, so an option missing them
+  // cannot be stacked: a stack with no window would paint every lane empty, i.e. "nothing
+  // free", which is the one thing a missing fact must never look like (I5).
+  const hasHours =
+    Number.isFinite(hhmmToMin(option.start ?? '')) && Number.isFinite(hhmmToMin(option.end ?? ''));
+  if (dayView && Number(dayView.lane_count) > 0 && Array.isArray(dayView.strips) && hasHours) {
+    return {
+      ...base,
+      variant: 'lanestack',
+      style: 'solid',
+      sheath: true,
+      lane_count: Number(dayView.lane_count),
+      strips: laneStackFor(dayView, option.start, option.end),
+      // ABSENT, not zero-width, when the server has no window for this session: the band
+      // is a claim ("come then"), and a null one is no claim at all.
+      ...(option.lane_best_public ? { best_public: option.lane_best_public } : {}),
+    };
+  }
   const timeline = option.lane_timeline;
   if (timeline && Array.isArray(timeline.segments) && timeline.segments.length > 0) {
     return {

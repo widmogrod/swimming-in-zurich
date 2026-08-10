@@ -77,6 +77,12 @@ export const de = {
   "legend.state.open": "Offen (öffentliche Bahnen)",
   "legend.state.closed": "Geschlossen — mit Begründung",
   "legend.state.unknown": "Öffnungszeiten noch nicht angegeben",
+  // --- Der Bahnen-Stapel (lane-stack-board S4) -------------------------------------
+  "legend.group.laneStack": "Bahnen-Stapel",
+  "legend.lane.public": "Bahn öffentlich zugänglich",
+  "legend.lane.reserved": "Bahn reserviert (Name, wo Platz ist)",
+  "legend.lane.best": "Die meisten öffentlichen Bahnen frei",
+  "legend.lane.unpublished": "Bahneneinteilung nicht veröffentlicht",
 
   "status.closed": "Geschlossen",
   "status.closed_reason": "Geschlossen · {reason}",

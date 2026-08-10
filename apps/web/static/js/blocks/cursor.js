@@ -94,6 +94,19 @@ function segmentAt(strip, min) {
 }
 
 /**
+ * isPublicSegment(seg) → is this lane hold OPEN TO THE PUBLIC?
+ *
+ * The ONE definition of "a public lane", so the cursor readout and the board's lane
+ * stack cannot disagree about which lanes are free. A lane counts as public only when
+ * its covering segment is a `PublicSwim` session; a reserved segment (owner named or
+ * not) and a gap do not — availability is never derived by complement.
+ * @param {{access?: string}|null|undefined} seg a lane segment, or nothing.
+ */
+export function isPublicSegment(seg) {
+  return !!seg && seg.access === 'PublicSwim';
+}
+
+/**
  * publicAt(basin, min) → { public, total } — how many of the basin's lanes are
  * open to the public at minute `min`. A lane counts as public only when its
  * covering segment is a `PublicSwim` session (owner null); a reserved segment or a
@@ -110,7 +123,7 @@ export function publicAt(basin, min) {
   let count = 0;
   for (const strip of basin.strips) {
     const seg = segmentAt(strip, min);
-    if (seg && seg.access === 'PublicSwim') count += 1;
+    if (isPublicSegment(seg)) count += 1;
   }
   return { public: count, total: basin.lane_count };
 }

@@ -257,6 +257,15 @@ body {
 .fam-axis { color: var(--fam-axis); }
 .fam-hair { color: var(--hair-2); }
 .fam-muted { color: var(--muted); }
+/* Lane-stack probes (lane-stack-board S4). The stack reuses the LaneGantt's lane
+   vocabulary — the same public/reserved inks, the same best-window band — so the board's
+   sub-rows and the panel's Gantt cannot state the same fact in two different colours. */
+.fam-lanepublic { color: var(--lane-public-ink); }
+.fam-lanereserved { color: var(--lane-res-fill); }
+.fam-laneowner { color: var(--lane-res-ink); }
+.fam-lanetrack { color: var(--hair-2); }
+.fam-bestband { color: var(--best-band); }
+.fam-bestedge { color: var(--best-edge); }
 
 /* ---------------------------------------------------------------------------
    LaneGantt (Part 3 §5) — S3.
@@ -860,6 +869,29 @@ body {
 }
 .legend__state--unknown {
   color: var(--unknown);
+}
+/* The lane stack's key (S4). Each swatch shows the sub-row encoding literally: a solid
+   public lane, a filled reserved lane, the best-window band, and the HATCH a pool with no
+   published lane split still paints — three states that must never read as one. */
+.legend__lane--public {
+  color: var(--lane-public-ink);
+}
+.legend__lane--reserved {
+  color: var(--lane-res-fill);
+  box-shadow: inset 0 0 0 1px var(--lane-res-edge);
+}
+.legend__lane--best {
+  color: var(--best-band);
+  box-shadow: inset 0 0 0 1px var(--best-edge);
+}
+.legend__lane--unpublished {
+  color: transparent;
+  box-shadow: inset 0 0 0 1px var(--muted);
+  background-image: repeating-linear-gradient(
+    45deg,
+    var(--muted) 0 1px,
+    transparent 1px 4px
+  );
 }
 .legend__note {
   flex: 1 1 100%;

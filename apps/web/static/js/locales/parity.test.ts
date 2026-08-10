@@ -81,6 +81,47 @@ describe("the access legend is fully translated in every locale", () => {
   );
 });
 
+describe("the lane-stack legend is fully translated in every locale", () => {
+  // Same reasoning as the access legend: five catalogues that all lack a key are in perfect
+  // parity and perfectly broken. The board's newest encoding (lane-stack-board S4) is the one
+  // a viewer is least able to guess unaided, so its keys are asserted BY NAME.
+  const LANE_KEYS = [
+    "legend.group.laneStack",
+    "legend.lane.public",
+    "legend.lane.reserved",
+    "legend.lane.best",
+    "legend.lane.unpublished",
+  ];
+
+  test.each(LOCALES)(
+    "%s carries every legend.lane.* label, non-empty",
+    (locale) => {
+      for (const key of LANE_KEYS) {
+        const entry = CATALOGS[locale][key];
+        expect(entry, `${locale} is missing ${key}`).toBeDefined();
+        expect(typeof entry, `${locale}/${key} must be a plain string`).toBe(
+          "string",
+        );
+        expect(
+          (entry as string).trim().length,
+          `${locale}/${key} is blank`,
+        ).toBeGreaterThan(0);
+      }
+    },
+  );
+
+  test.each(LOCALES)(
+    "%s words 'reserved' and 'not published' differently — they are different facts",
+    (locale) => {
+      // A lane held by a club and a pool that publishes no split at all are not the same
+      // thing; wording them alike would undo invariant I5 in language.
+      expect(CATALOGS[locale]["legend.lane.reserved"]).not.toBe(
+        CATALOGS[locale]["legend.lane.unpublished"],
+      );
+    },
+  );
+});
+
 describe("every closure code the resolver can emit is translated", () => {
   // Same reasoning as the access legend: parity alone is green when all five catalogues lack
   // a key. `closure.out_of_season` is a NEW resolver-generated code (seasonal-hours S2) and

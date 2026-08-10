@@ -56,6 +56,9 @@ export declare function panelForBasin<T extends { basin_name: string }>(
   basinName: string | null | undefined,
 ): T | null;
 
+/** Is this lane hold open to the public? The ONE definition of "a public lane". */
+export declare function isPublicSegment(seg: { access?: string } | null | undefined): boolean;
+
 /** Public/total lane counts at a given minute. */
 export declare function publicAt(
   basin: { lane_count: number; strips: LaneStrip[] },

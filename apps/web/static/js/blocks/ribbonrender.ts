@@ -30,6 +30,22 @@ export interface RenderRibbonSegment {
   [k: string]: unknown;
 }
 
+/** One drawable block of one lane sub-row (ribbonmodel's `RibbonStackBlock`). */
+export interface RenderStackBlock {
+  start: string;
+  end: string;
+  public?: boolean;
+  owner?: string | null;
+  [k: string]: unknown;
+}
+
+/** One lane sub-row of a `lanestack` ribbon. */
+export interface RenderStackLane {
+  lane?: number;
+  segments?: RenderStackBlock[];
+  [k: string]: unknown;
+}
+
 export interface RenderRibbon {
   kind?: string;
   variant?: string;
@@ -41,6 +57,12 @@ export interface RenderRibbon {
   start?: string;
   end?: string;
   segments?: RenderRibbonSegment[];
+  /** `lanestack` only: how many sub-rows the row is split into. */
+  lane_count?: number;
+  /** `lanestack` only: one entry per lane, in lane order. */
+  strips?: RenderStackLane[];
+  /** `lanestack` only: the session's best public window, ABSENT when there is none. */
+  best_public?: { start: string; end: string; public_lanes?: number };
   [k: string]: unknown;
 }
 
@@ -111,6 +133,13 @@ export function resolveFamilyPalette(doc: Doc, host: El): Palette | null {
   pal.closed = read('fam-closed');
   pal.unknown = read('fam-unknown');
   pal.sheath = read('fam-sheath');
+  // The lane stack's own inks (lane-stack-board S4). Tokens, like every other fill here.
+  pal.lanepublic = read('fam-lanepublic');
+  pal.lanereserved = read('fam-lanereserved');
+  pal.laneowner = read('fam-laneowner');
+  pal.lanetrack = read('fam-lanetrack');
+  pal.bestband = read('fam-bestband');
+  pal.bestedge = read('fam-bestedge');
   pal.axis = read('fam-axis');
   pal.cursor = read('fam-cursor');
   pal.hair = read('fam-hair');
@@ -250,6 +279,157 @@ function drawUnpublishedRibbon(
   ctx.restore();
 }
 
+// ---- The lane stack (variant C) --------------------------------------------------
+//
+// One hairline sub-row per lane, inside the SAME ROW_H the other variants use: the row
+// does not grow, it subdivides. Public vs reserved fill says which lanes are free; the
+// owner is written INSIDE its block wherever the block is wide enough to hold the whole
+// word, and omitted (never clipped mid-word) where it is not.
+
+/** The stack's box is the same 0.8h envelope `drawLaneRibbon` fills at full capacity. */
+const STACK_BOX = 0.8;
+/** A band shorter than this cannot carry legible type, so its blocks stay unlabelled.
+ *  The width gate's vertical twin, and the binding one on real data: at ROW_H 46 a 6-lane
+ *  basin gives each lane ~5px, so its owners are read in the DetailPanel's Gantt (one
+ *  click away) rather than painted as mush across the board's sub-rows. */
+export const OWNER_LABEL_MIN_H = 7;
+/** Horizontal breathing room inside a block, per side. */
+export const OWNER_LABEL_PAD = 3;
+const OWNER_FONT = '600 8.5px system-ui, sans-serif';
+
+/**
+ * laneBands(laneCount, mid, h) → the sub-row geometry: `laneCount` bands, top to bottom,
+ * inside the row's own box. PURE — the "six distinct sub-bands within ROW_H" property is
+ * asserted here rather than inferred from a canvas.
+ *
+ * The 1px separator is dropped once the pitch is too tight to spare it: at 20 lanes a gap
+ * would eat a third of each band, and touching bands still read as bands.
+ */
+export function laneBands(
+  laneCount: number,
+  mid: number,
+  h: number,
+): { top: number; height: number }[] {
+  const n = Math.max(1, Math.floor(laneCount));
+  const boxH = h * STACK_BOX;
+  const top = mid - boxH / 2;
+  const pitch = boxH / n;
+  const gap = pitch > 4 ? 1 : 0;
+  return Array.from({ length: n }, (_, i) => ({
+    top: top + i * pitch,
+    height: Math.max(1, pitch - gap),
+  }));
+}
+
+/**
+ * ownerLabelFits(ctx, owner, width, bandH) — may this block carry its owner's name?
+ *
+ * Measured, not guessed: the label is drawn only when the WHOLE word fits inside the block
+ * with padding, so a narrow block is drawn unlabelled rather than clipped mid-word (a
+ * half-written club name is worse than none — it reads as a different club).
+ */
+export function ownerLabelFits(
+  ctx: Pick<Ctx2D, 'measureText'>,
+  owner: string,
+  width: number,
+  bandH: number,
+): boolean {
+  if (!owner || bandH < OWNER_LABEL_MIN_H) return false;
+  return ctx.measureText(owner).width + OWNER_LABEL_PAD * 2 <= width;
+}
+
+/** The best-public window, painted BEHIND the stack (a band, never a lane). Absent when
+ *  the option carries no window — a zero-width band would be a claim about 00:00. */
+function drawBestPublicBand(
+  ctx: Ctx2D,
+  r: RenderRibbon,
+  ts: Timescale,
+  pal: Palette,
+  mid: number,
+  h: number,
+): void {
+  const win = r.best_public;
+  if (!win) return;
+  const x0 = ts.X(hhmmToMin(win.start));
+  const x1 = ts.X(hhmmToMin(win.end));
+  const boxH = h * STACK_BOX;
+  const top = mid - boxH / 2 - 2;
+  ctx.save();
+  ctx.fillStyle = pal.bestband;
+  ctx.fillRect(x0, top, Math.max(1, x1 - x0), boxH + 4);
+  ctx.strokeStyle = pal.bestedge;
+  ctx.lineWidth = 1;
+  setDashes(ctx, 'solid');
+  ctx.strokeRect(x0, top, Math.max(1, x1 - x0), boxH + 4);
+  ctx.restore();
+}
+
+function drawLaneStack(
+  ctx: Ctx2D,
+  r: RenderRibbon,
+  ts: Timescale,
+  pal: Palette,
+  mid: number,
+  h: number,
+): void {
+  const x0 = ts.X(hhmmToMin(r.start ?? ''));
+  const x1 = ts.X(hhmmToMin(r.end ?? ''));
+  const w = Math.max(1, x1 - x0);
+  const strips = r.strips ?? [];
+  const bands = laneBands(Number(r.lane_count) || strips.length, mid, h);
+  drawBestPublicBand(ctx, r, ts, pal, mid, h);
+  ctx.save();
+  ctx.textBaseline = 'middle';
+  ctx.textAlign = 'left';
+  ctx.font = OWNER_FONT;
+  for (const [i, band] of bands.entries()) {
+    // The lane's own track: the capacity envelope, per lane. An EMPTY sub-row therefore
+    // still shows a lane exists — "nobody holds it" reads differently from "no data".
+    if (r.sheath) {
+      ctx.fillStyle = pal.lanetrack || pal.sheath;
+      ctx.globalAlpha = 0.55;
+      ctx.fillRect(x0, band.top, w, band.height);
+    }
+    drawLaneBlocks(ctx, strips[i]?.segments ?? [], ts, pal, band);
+  }
+  ctx.restore();
+}
+
+/** One lane's holds: public vs reserved fill, and the owner where the word fits.
+ *
+ * DELIBERATELY drops `r.family`, unlike its two sibling painters (`drawLaneRibbon`,
+ * `drawUnpublishedRibbon`), which both resolve `(r.family ? pal[r.family] : undefined) ||
+ * pal.other`: a lane block is coloured by whether the LANE is free, not by what the session
+ * is. That is only safe because the two questions currently have the same answer — every
+ * plan-bearing session served today is `PublicSwim` (measured: 1351 of 1351 options carrying
+ * a `lane_day_view`, across all six lane facilities over 200 dates).
+ *
+ * The moment a WomenOnly / GirlsOnly / ClubReserved session appears on a basin with a parsed
+ * Belegungsplan, this REGRESSES: its lanes would paint in the public teal under a legend row
+ * reading "Lane open to the public" — exactly the "looks open to you" lie `ACCESS_FAMILY`
+ * (ribbonmodel.ts:26-29) exists to prevent. Revisit here before such data ships. */
+function drawLaneBlocks(
+  ctx: Ctx2D,
+  blocks: RenderStackBlock[],
+  ts: Timescale,
+  pal: Palette,
+  band: { top: number; height: number },
+): void {
+  for (const seg of blocks) {
+    const sx = ts.X(hhmmToMin(seg.start));
+    const sw = Math.max(1, ts.X(hhmmToMin(seg.end)) - sx);
+    ctx.globalAlpha = seg.public ? 0.9 : 0.75;
+    ctx.fillStyle = seg.public ? pal.lanepublic : pal.lanereserved;
+    ctx.fillRect(sx, band.top, sw, band.height);
+    const owner = seg.public ? null : (seg.owner ?? null);
+    if (owner && ownerLabelFits(ctx, owner, sw, band.height)) {
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = pal.laneowner;
+      ctx.fillText(owner, sx + OWNER_LABEL_PAD, band.top + band.height / 2);
+    }
+  }
+}
+
 function drawLaneRibbon(
   ctx: Ctx2D,
   r: RenderRibbon,
@@ -317,6 +497,8 @@ export function drawRibbons(
   for (const r of ribbons) {
     if (r.kind === 'status') {
       drawStatusRibbon(ctx, r, ts, pal, mid, h);
+    } else if (r.variant === 'lanestack') {
+      drawLaneStack(ctx, r, ts, pal, mid, h);
     } else if (r.variant === 'lanes') {
       drawLaneRibbon(ctx, r, ts, pal, mid, h, phase);
     } else {

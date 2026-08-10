@@ -90,6 +90,15 @@ export const en = {
   "legend.state.open": "Open (public lanes)",
   "legend.state.closed": "Closed — with reason",
   "legend.state.unknown": "Hours not listed yet",
+  // --- The lane stack (lane-stack-board S4) ----------------------------------------
+  // A row whose basin has a published Belegungsplan is drawn as one sub-row per lane.
+  // The fourth entry decodes the pools that publish NO split — its own state, never
+  // "no lanes free".
+  "legend.group.laneStack": "Lane stack",
+  "legend.lane.public": "Lane open to the public",
+  "legend.lane.reserved": "Lane reserved (holder named where it fits)",
+  "legend.lane.best": "Most public lanes free",
+  "legend.lane.unpublished": "Lane split not published",
   // --- Status codes from the API (S2 `detail_code`) --------------------------------
   //
   // Rendered from the CODE, never from the server's `detail` prose — that field is

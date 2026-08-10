@@ -78,6 +78,12 @@ export const it = {
   "legend.state.open": "Aperto (corsie pubbliche)",
   "legend.state.closed": "Chiuso — con motivo",
   "legend.state.unknown": "Orari non ancora pubblicati",
+  // --- La pila di corsie (lane-stack-board S4) -------------------------------------
+  "legend.group.laneStack": "Pila di corsie",
+  "legend.lane.public": "Corsia aperta al pubblico",
+  "legend.lane.reserved": "Corsia riservata (nome se c'è spazio)",
+  "legend.lane.best": "Più corsie pubbliche libere",
+  "legend.lane.unpublished": "Ripartizione delle corsie non pubblicata",
   "status.closed": "Chiuso",
   "status.closed_reason": "Chiuso · {reason}",
   "status.uncurated": "Orari non pubblicati",
