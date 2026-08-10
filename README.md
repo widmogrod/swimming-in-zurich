@@ -38,16 +38,23 @@ deferred debt — see `CLAUDE.md`.
 
 ## Run the app
 
-The app reads a **single source of truth**: one SQLite gold store. Build it once from the
-committed inputs (offline, no network), then run the web app against it.
+The app reads a **single source of truth**: one SQLite gold store. Build it once, then run the web
+app against it. `build` is a **single atomic pipeline** — WFS roster, curated assemble, schedule
+scrape, lane scrape, compose — inside one temp-DB + swap, so it needs the network and it already
+includes the scraping steps.
 
 ```sh
-# 1. Build a complete, self-contained gold DB from the committed data/ inputs (offline).
+# 1. Build a complete, self-contained gold DB. Atomic: a mid-chain failure aborts non-zero
+#    and leaves any prior DB content-unchanged.
 uv run python -m swimzh.cli build --db gold.sqlite
 
-# 2. (optional) enrich it with real scraped schedules (network):
-uv run python -m swimzh.cli scrape-gold  --db gold.sqlite   # real scraped schedules
+# 2. (optional) thin re-layer — re-run ONE phase against an already-built store, to refresh
+#    on its own cadence without a full rebuild:
+uv run python -m swimzh.cli scrape-gold  --db gold.sqlite   # schedules
 uv run python -m swimzh.cli scrape-lanes --db gold.sqlite   # per-basin lane plans
+#    ⚠ scrape-gold currently refreshes NOTHING already present — it re-composes over its own
+#      output and the stored value always wins. Exit 0, no signal. Rebuild instead until fixed:
+#      docs/2026-08-10-scrape-gold-recompose-defect.md
 
 # 3. Serve it (UI at /, API at /swim). A missing/empty DB fails fast with a one-line
 #    "build it first" message (no traceback); SWIMZH_RELOAD=0 disables auto-reload.
