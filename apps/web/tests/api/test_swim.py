@@ -68,7 +68,13 @@ def test_options_expose_length_kind_and_source() -> None:
 def test_options_expose_lane_count_and_degrade_when_unknown() -> None:
     """S2: the badge's "N lane" sub-line needs a per-basin lane count on OptionOut. The scraped
     schedule's flat basin carries no lane count, so `lanes` must degrade to None (present as a key)
-    rather than being invented — the real per-basin lane count surfaces on `/pools`, not here."""
+    rather than being invented — the real per-basin lane count surfaces on `/pools`, not here.
+
+    Narrowed by lane-stack-board S1: City now serves a SECOND option, from the carried
+    `Schwimmerbecken` lane basin, whose 6 lanes are real WFS-sourced physicals. The rule this test
+    pins is unchanged — the flat scraped `Hauptbecken` still invents nothing — so it is asserted per
+    basin instead of per facility.
+    """
     with TestClient(app) as client:
         response = client.get("/swim", params={"at": MONDAY_EVENING, "gender": "female", "age": 34})
     options = response.json()["options"]
@@ -76,9 +82,11 @@ def test_options_expose_lane_count_and_degrade_when_unknown() -> None:
     for o in options:
         assert "lanes" in o
         assert o["lanes"] is None or isinstance(o["lanes"], int)
-    # The scraped City option degrades its lane count to None, never an invented number.
-    city = {o["lanes"] for o in options if o["facility"] == "Hallenbad City"}
-    assert city == {None}
+    city = [o for o in options if o["facility"] == "Hallenbad City"]
+    # The flat scraped basin degrades its lane count to None, never an invented number.
+    assert {o["lanes"] for o in city if o["basin"] == "Hauptbecken"} == {None}
+    # The carried lane basin reports its real, sourced count.
+    assert {o["lanes"] for o in city if o["basin"] == "Schwimmerbecken"} == {6}
 
 
 def test_invalid_gender_is_400() -> None:

@@ -177,16 +177,46 @@ def _carry_bindings(
     preserved ALONGSIDE them, so a stripped pool's lane binding survives the schedule scrape instead
     of being replaced away. A curated binding whose URL a scraped basin already declares is dropped
     (the scraped basin wins the schedule); today the scrape emits a single synthetic ``Hauptbecken``
-    with no ``lane_plan_source``, so every authored lane basin is appended untouched."""
+    with no ``lane_plan_source``, so every authored lane basin is appended untouched.
+
+    Each carried basin is additionally STAMPED WITH THE SCRAPED TIMETABLE (lane-stack-board S1), so
+    it passes ``query.py``'s Decision-#5 gate (``if not basin.rules: continue``) on its own merits
+    rather than being skipped as schedule-less — which is what kept a lane basin from ever producing
+    a ``/swim`` option, and so kept its Belegungsplan off the wire. The rules are not invented: the
+    scrape publishes FACILITY-level opening hours, and a lane basin is open exactly when its
+    facility is.
+
+    Two invariants hold the stamp honest:
+
+    * **I1** — the rules come from **the single scraped basin bearing rules**. ``etl/scrape`` emits
+      exactly one synthetic ``Hauptbecken`` per facility, so this asserts that shape instead of
+      inventing a winner rule for a case that does not exist: more than one rules-bearing scraped
+      basin raises, failing the build loudly rather than picking. A facility with **no** scraped
+      timetable carries its lane basins forward exactly as before (no rules ⇒ no session, no
+      option).
+    * **I2** — a carried basin keeps its own ``basin_id``, ``name``, ``lanes``, ``dimensions``,
+      ``lane_plan_source`` and ``lane_plan``. Only ``rules`` is added; basin identity is never
+      merged, folded or overwritten (the mis-attach ``lane-plan-reconciliation`` exists to prevent).
+    """
     scraped_urls = {
         b.lane_plan_source.url for b in scraped_basins if b.lane_plan_source is not None
     }
-    carried = tuple(
+    rules_bearing = tuple(basin for basin in scraped_basins if basin.rules)
+    if len(rules_bearing) > 1:
+        ids = ", ".join(str(basin.basin_id) for basin in rules_bearing)
+        raise ValueError(
+            f"cannot carry a lane binding: {len(rules_bearing)} scraped basins bear rules ({ids}); "
+            "the timetable a lane basin should inherit is ambiguous (I1)"
+        )
+    bound = tuple(
         basin
         for basin in curated_basins
         if basin.lane_plan_source is not None and basin.lane_plan_source.url not in scraped_urls
     )
-    return scraped_basins + carried
+    if not rules_bearing:
+        return scraped_basins + bound
+    timetable = rules_bearing[0].rules
+    return scraped_basins + tuple(replace(basin, rules=timetable) for basin in bound)
 
 
 def _merge_basins(
@@ -201,8 +231,10 @@ def _merge_basins(
       the original per-aspect precedence did — a fully-curated pool is unchanged;
     * scraped has the schedule (curated has none — the post-strip world) → the scraped basins carry
       the timetable and every curated basin bearing a ``lane_plan_source`` is CARRIED alongside them
-      (``_carry_bindings``), so the crosswalk binding + physicals survive and ``_attach_lanes``
-      finds an owner (no ``attached == 0`` abort);
+      **and stamped with that same scraped timetable** (``_carry_bindings``), so the crosswalk
+      binding + physicals survive, ``_attach_lanes`` finds an owner (no ``attached == 0`` abort),
+      and the lane basin goes on to produce its own ``/swim`` session instead of being skipped as
+      schedule-less;
     * neither has a schedule → keep whichever source has basins (curated first).
 
     The third return value is ``True`` iff the **scraped** timetable won — the caller uses it to

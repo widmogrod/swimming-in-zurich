@@ -17,7 +17,9 @@ from datetime import date, datetime, time
 from decimal import Decimal
 from zoneinfo import ZoneInfo
 
-from swimzh.build.compose import ScrapedAspects, compose
+import pytest
+
+from swimzh.build.compose import ScrapedAspects, _carry_bindings, compose
 from swimzh.domain.access import PublicSwim
 from swimzh.domain.admission import Admission, Free, Tariff, Unknown
 from swimzh.domain.geo import GeoPoint
@@ -25,6 +27,8 @@ from swimzh.domain.lockers import LockerCategory, LockerOption
 from swimzh.domain.models import (
     Basin,
     BasinId,
+    BasinKind,
+    Dimensions,
     Facility,
     Feature,
     FeatureKind,
@@ -207,6 +211,9 @@ def test_scraped_schedule_carries_curated_lane_binding() -> None:
     )
     # A build note records the binding-carry.
     assert any("curated lane binding" in note for note in result.notes)
+    # lane-stack-board S1: the carried basin also INHERITS the scraped timetable, so it clears
+    # `query.py`'s Decision-#5 gate (`if not basin.rules: continue`) and produces its own session.
+    assert lane_basin.rules == scraped_basin.rules
     # S4 honest provenance: the schedule came from the SCRAPER, so the composed facility must NOT
     # read as hand-verified even though a (thin-crosswalk) curated blob is its base. `curated` flips
     # to False and `source`/`valid_as_of` name the scrape — freshness stays the primary signal, but
@@ -234,6 +241,55 @@ def test_scraped_basin_url_already_declared_is_not_duplicated() -> None:
     result = compose((_stripped_curated_city(),), ((CITY, scraped),))
     merged = result.facilities[0]
     assert [b.basin_id for b in merged.basins] == [BasinId("hallenbad-city-main")]
+
+
+def _binding_basin() -> Basin:
+    """A carried lane basin as the build really shapes it: the crosswalk `lane_plan_source` plus the
+    WFS-sourced physicals `apply_physicals` populated, and NO rules of its own."""
+    return Basin(
+        basin_id=BasinId("city-50m"),
+        name="Schwimmerbecken",
+        rules=(),
+        kind=BasinKind.LAP,
+        dimensions=Dimensions(length_m=Decimal("50"), width_m=Decimal("15")),
+        lanes=6,
+        lane_plan_source=LanePlanSource(url="https://example.test/city-schwimmer.pdf"),
+    )
+
+
+def test_carried_lane_basin_inherits_the_scraped_timetable_and_keeps_its_identity() -> None:
+    # lane-stack-board S1 / I2: only `rules` is added. `basin_id`, `name`, `lanes`, `dimensions`
+    # and `lane_plan_source` are the carried basin's own — identity is never merged or overwritten.
+    scraped = _scraped_city().basins
+    binding = _binding_basin()
+
+    merged = _carry_bindings(scraped, (binding,))
+
+    assert merged[: len(scraped)] == scraped
+    carried = merged[len(scraped)]
+    assert carried.rules == scraped[0].rules
+    assert replace(carried, rules=()) == binding
+
+
+def test_carried_lane_basin_without_a_scraped_timetable_keeps_no_rules() -> None:
+    # I1's other half: no scraped timetable => nothing to inherit. The binding is carried exactly as
+    # before — no rules, so no session and no `/swim` option is invented for it.
+    binding = _binding_basin()
+
+    merged = _carry_bindings((), (binding,))
+
+    assert merged == (binding,)
+
+
+def test_two_rules_bearing_scraped_basins_fail_the_build() -> None:
+    # I1: the timetable to inherit is "the single scraped basin bearing rules" — `etl/scrape` emits
+    # exactly one synthetic `Hauptbecken` per facility. Should that ever stop holding, the build
+    # fails loudly instead of silently picking a winner rule.
+    scraped = _scraped_city().basins
+    second = replace(scraped[0], basin_id=BasinId("hallenbad-city-second"), name="Lehrbecken")
+
+    with pytest.raises(ValueError, match="ambiguous"):
+        _carry_bindings((*scraped, second), (_binding_basin(),))
 
 
 def test_output_is_ordered_by_canonical_id() -> None:
