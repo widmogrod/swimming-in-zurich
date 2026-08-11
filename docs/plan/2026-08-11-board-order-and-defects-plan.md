@@ -301,8 +301,52 @@ Appended by /dev:implement after each slice — never rewritten. Newest row last
 
 | date | slice | status | divergence from plan | tech debt created | human review? |
 |------|-------|--------|----------------------|-------------------|---------------|
+| 2026-08-12 | S1 | done | (1) `compose.py` gained `carry_lane_plans` + `_lane_key`, beyond the plan's "only if the branch comment needs correcting" — the curated rebuild strands attached lane plans otherwise. (2) `etl/build.py` split into `assemble_curated` + `write_curated_store`; `build_store`'s signature and behaviour unchanged (verified byte-identical over all 57 blobs). (3) `build` runs the roster fetch and curated assemble BEFORE `atomic_swap` — neither writes, failure paths identical, now covered. (4) `_compose_schedules` writes a SUBSET of `composition.facilities` — the adjudicated fix for the deletion door. | `CuratedAssembly.facilities`/`keyed_facilities` re-run `codec.loads` over all 57 blobs on every access; called at most twice per run. | yes |
 
 ## Decisions & divergences
+
+**2026-08-12 — S1: the fix opened a second silent-deletion door, and closing it is the real result of
+this slice.** Critic verdict `revise`, accepted without rebuttal.
+
+Rebuilding the curated tier from `data/` removes the re-compose feedback, but `compose` emits a
+facility for **every** curated pool whether it was scraped or not (`compose.py:344-360`), and
+`write_schedules` then UPDATEs it. So a pool the catalog **names** but this run does not scrape had
+its stored scraped facts overwritten curated-only — exit 0, no stderr line naming it. Reproduced
+twice against committed fixtures: `freibad-heuried` with `url=None` lost 8 rules and all prices;
+`planschbecken-artergut` given a unique url lost `operating_season {May 1 – Sep 30, fair_only}`.
+
+A real input class, not a hypothesis: `scrape-gold` reads the **committed** `data/catalog.json` while
+`build` uses the **live WFS** roster (`cli.py:606-609`), and `etl/scrape.py:400-404` already records
+that "WFS drift has renamed roster entries before" and must "never [be] a silent exit from BOTH
+phases." One drifted Planschbecken keeps `sharers[url] >= 2`, so not even the `fan-out inert` note
+fires.
+
+**Adjudicated fix (a) — narrow the write — over (b) accept the risk.** Trading silent staleness for
+silent deletion is a worse trade, not an equal one. `_compose_schedules` now writes only the pools it
+resolved an extract for. **The invariant landed in the write, not in the callers**, which is the
+durable part: `compose` emitting a facility per curated pool makes the write the only safe narrowing
+point, so any future caller handing `compose` a wider curated tier inherits the same risk unless the
+rule lives there.
+
+**Two false claims corrected rather than left standing.** `cli.py:619` and the defect report's
+resolution note both said the re-layer "leaves every other blob exactly as it was" — true only for
+pools the catalog OMITS. And a test docstring claimed to guard the deletion door; **mutation proved
+it does not** (reverting the `scraped_ids` filter leaves it green, because an unchanged catalog
+rewrites unscraped pools with byte-identical content — only a DRIFTED catalog exposes a too-wide
+write). Both fixed. The orchestrator had asserted that same false property when directing the fix;
+the critic caught it.
+
+**Verification standard.** AC1/AC2 proven red pre-fix by the implementer AND independently by the
+critic against a `git archive HEAD` tree with a signature-only shim. Every new guard mutation-tested:
+reverting `scraped_ids` reddens the parametrized deletion test; reducing `_lane_key` to
+`(facility_id, basin_id)` reddens both re-pointed-binding tests; removing `carry_lane_plans` reddens
+two more. The critic hunted a **third** shape of the defect across every `facility_doc` writer and
+found none, and verified `build`'s output byte-identical across the refactor rather than accepting
+the identity argument.
+
+**One deliberate deletion path remains, now pinned end-to-end:** re-pointing a `lane_plan_source` in
+`data/` drops the stale plan until the next `scrape-lanes`. Intended, documented in three places
+(docstring, README, defect report), and asserted as a targeted drop rather than a sweep.
 
 **2026-08-11 — pre-approval adversarial review (dev:plan-critic), verdict `revise` → all seven
 blocking findings accepted, none rebutted.** The critic recomputed every number from the domain

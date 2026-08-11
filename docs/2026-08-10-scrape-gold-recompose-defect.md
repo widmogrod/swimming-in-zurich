@@ -3,6 +3,42 @@
 Not a plan — a defect report with an end-to-end reproduction. Found while tracing the data flow for
 [[2026-08-09-lane-stack-board-plan]]; independent of it.
 
+> **RESOLVED 2026-08-11** by [[2026-08-11-board-order-and-defects-plan]] S1, via **option 2** below
+> (re-layer from sources). `scrape-gold` now takes `--data` and composes onto the curated tier
+> assembled by `etl.build.assemble_curated` — the same one `build` writes — instead of loading the
+> composed blob back out of the store. `_compose_schedules` takes that tier as an **argument**, so
+> invariant S-1 ("`compose` is never called with its own output as an input") is a signature rather
+> than a convention. §4's table is now "yes" throughout. Two things this report did not anticipate,
+> both pinned by tests in `tests/test_cli.py`:
+>
+> * the rebuilt curated tier carries each basin's `lane_plan_source` binding but **no fetched
+>   `lane_plan`** (the lane phase is a separate command on a separate cadence), so a *successful*
+>   re-layer would have silently DELETED every attached plan — trading silent staleness for silent
+>   deletion. The lane tier is carried across the rebuild by `compose.carry_lane_plans`, keyed on
+>   `(facility_id, basin_id, lane_plan_source)`. The BINDING is part of that key deliberately, and
+>   that leaves exactly ONE path on which a re-layer still removes content: re-pointing a basin's
+>   sheet in `data/` drops the plan parsed from the OLD sheet rather than mis-attaching it to the
+>   new binding, so that basin carries no lane plan until the next `scrape-lanes`. Asserted
+>   end-to-end, not incidental.
+> * composing from `data/` rather than from the store opened a **new silent-deletion door**, caught
+>   in review. `compose` emits one facility per pool on EITHER side, so a pool the catalog NAMES but
+>   this run does not scrape (no url, a url shared with another entry, an unparseable operator page,
+>   a non-scrapeable kind) came out curated-only and overwrote the scraped basins, prices and season
+>   a previous run had stored — non-fatal, exit 0, no stderr line naming the pool. Reproduced
+>   against the committed fixtures on `freibad-heuried` (8 rules → 0, prices → `None`) and
+>   `planschbecken-artergut` (`operating_season` → `None`). Not hypothetical: `scrape-gold` reads
+>   the COMMITTED `data/catalog.json` while `build` uses the LIVE WFS roster, and `etl/scrape.py`
+>   already records that WFS drift has renamed roster entries before. Closed by the rule **a phase
+>   writes only the facts it owns** — `_compose_schedules` writes only the pools it resolved an
+>   extract for, so the re-layer's blast radius is the pools it actually SCRAPED, and every other
+>   blob is left byte-identical whether the catalog names it or not.
+>
+> Option 4 (assert the refresh) was taken as well, and is the acceptance: a mutated page fixture
+> changes the stored rules and a mutated tariff changes the stored price — both measured RED against
+> the pre-fix code (hours stayed `06:00–22:00`, the adult rate stayed `8.00`). The root cause §3
+> states generally — gold stores the *result* of a fold with no per-tier attribution — is **not**
+> removed; option 1 remains the fix for that, deferred by [[data-sourcing-rule]].
+
 **Severity: high, and silent.** The command exits `0`, prints `scraped N source extracts`, and
 changes nothing that the store already holds. `scrape-gold`'s documented purpose is to refresh
 against an already-built store — which is precisely the condition under which it refreshes nothing.

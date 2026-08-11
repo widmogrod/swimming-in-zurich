@@ -27,6 +27,7 @@ from swimzh.domain.models import (
     Basin,
     Facility,
     Feature,
+    LanePlanSource,
     Notice,
     OperatingSeason,
     PoolId,
@@ -217,6 +218,60 @@ def _carry_bindings(
         return scraped_basins + bound
     timetable = rules_bearing[0].rules
     return scraped_basins + tuple(replace(basin, rules=timetable) for basin in bound)
+
+
+def carry_lane_plans(
+    curated: Iterable[Facility], stored: Iterable[Facility]
+) -> tuple[Facility, ...]:
+    """Carry the lane plans a previous ``_attach_lanes`` wrote onto a FRESHLY ASSEMBLED curated
+    tier, keyed by ``(facility_id, basin_id, lane_plan_source)``.
+
+    A gold blob is three tiers folded flat: curated (``data/`` + the roster), scraped, and the lane
+    plans attached *after* ``compose``. A ``scrape-gold`` re-layer rebuilds the curated tier from
+    ``data/`` so the fresh scrape is not discarded — but that rebuilt tier carries each basin's
+    ``lane_plan_source`` **binding** with no fetched ``lane_plan``, because the lane phase is a
+    different command on a different cadence. Without this carry a *successful* re-layer would
+    silently DELETE every attached lane plan — the same class of bug as the staleness it replaces
+    (invariant S-2: a re-layer must not delete what a previous run wrote).
+
+    **The binding is part of the key, not just the identity.** ``LanePlanSource`` IS the join key a
+    plan was bound on (``url`` + the ``section`` token routing one sub-grid of a stacked sheet), and
+    both sides have it in hand. Keying on ``(facility_id, basin_id)`` alone would carry the plan
+    parsed from the OLD sheet onto a basin whose ``data/`` binding has since been re-pointed — a
+    stale plan wearing a fresh binding, which is exactly the mis-attach
+    ``docs/concepts/lane-plan-url-binding.md`` exists to prevent. A re-pointed basin carries nothing
+    and waits for the next ``scrape-lanes``, which is the honest state.
+
+    Only ``lane_plan`` crosses, and only onto a basin that has none — basin identity, physicals and
+    the binding itself are never merged (the rule ``_carry_bindings`` states as I2). A basin the
+    previous store no longer holds, or that ``data/`` no longer declares, simply has no plan: the
+    lane tier follows the curated crosswalk, it never resurrects a basin.
+    """
+    plans = {
+        (str(facility.identity.facility_id), str(basin.basin_id), basin.lane_plan_source): (
+            basin.lane_plan
+        )
+        for facility in stored
+        for basin in facility.basins
+        if basin.lane_plan is not None
+    }
+    carried: list[Facility] = []
+    for facility in curated:
+        pool_key = str(facility.identity.facility_id)
+        basins = tuple(
+            replace(basin, lane_plan=plans[_lane_key(pool_key, basin)])
+            if basin.lane_plan is None and _lane_key(pool_key, basin) in plans
+            else basin
+            for basin in facility.basins
+        )
+        carried.append(facility if basins == facility.basins else replace(facility, basins=basins))
+    return tuple(carried)
+
+
+def _lane_key(pool_key: str, basin: Basin) -> tuple[str, str, LanePlanSource | None]:
+    """The join key a carried lane plan must match on: the basin AND the binding it was parsed
+    from. A re-pointed ``lane_plan_source`` is a different key, so no stale plan crosses."""
+    return (pool_key, str(basin.basin_id), basin.lane_plan_source)
 
 
 def _merge_basins(

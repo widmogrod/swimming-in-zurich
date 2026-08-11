@@ -19,10 +19,11 @@ from zoneinfo import ZoneInfo
 
 import pytest
 
-from swimzh.build.compose import ScrapedAspects, _carry_bindings, compose
+from swimzh.build.compose import ScrapedAspects, _carry_bindings, carry_lane_plans, compose
 from swimzh.domain.access import PublicSwim
 from swimzh.domain.admission import Admission, Free, Tariff, Unknown
 from swimzh.domain.geo import GeoPoint
+from swimzh.domain.lane_plan import LanePlan, PlanConfidence, PlanCoverage
 from swimzh.domain.lockers import LockerCategory, LockerOption
 from swimzh.domain.models import (
     Basin,
@@ -310,3 +311,81 @@ def test_output_is_ordered_by_canonical_id() -> None:
     )
     ids = [str(f.identity.facility_id) for f in result.facilities]
     assert ids == sorted(ids) == ["hallenbad-city", "hallenbad-oerlikon"]
+
+
+# ── carry_lane_plans: the LANE tier crossing a curated rebuild ──────────────────────────────────
+#
+# A `scrape-gold` re-layer rebuilds the curated tier from `data/`, which carries each basin's
+# `lane_plan_source` BINDING but no fetched `lane_plan` (the lane phase is a separate command). The
+# plans a previous `scrape-lanes` attached are carried across that rebuild, or a successful re-layer
+# would silently delete them.
+
+
+def _plan(lane_count: int) -> LanePlan:
+    return LanePlan(
+        lane_count=lane_count,
+        reservations=(),
+        valid_from=date(2026, 1, 1),
+        coverage=PlanCoverage(confidence=PlanConfidence.COMPLETE, cells_total=0, cells_resolved=0),
+    )
+
+
+def _stored_city_with_plan(plan: LanePlan) -> Facility:
+    """The store as a previous `build` + `scrape-lanes` left it: the binding basin, plan on it."""
+    curated = _stripped_curated_city()
+    return replace(curated, basins=(replace(curated.basins[0], lane_plan=plan),))
+
+
+def test_a_rebuilt_curated_tier_regains_the_lane_plan_the_store_holds() -> None:
+    plan = _plan(6)
+    carried = carry_lane_plans((_stripped_curated_city(),), (_stored_city_with_plan(plan),))
+    # The PLAN itself crosses, not merely "a plan": a carry that attached some other sheet's
+    # LanePlan to the right basin would satisfy a "is not None" assertion.
+    assert [b.lane_plan for b in carried[0].basins] == [plan]
+    # …and nothing else about the basin moved (I2: identity is never merged).
+    assert (
+        carried[0].basins[0].lane_plan_source == _stripped_curated_city().basins[0].lane_plan_source
+    )
+
+
+def test_a_repointed_binding_does_not_inherit_the_old_sheets_plan() -> None:
+    # `LanePlanSource` IS the join key a plan was bound on. Re-point a basin's sheet in `data/` and
+    # the stored plan — parsed from the OLD sheet — must NOT ride across onto the new binding: that
+    # is the mis-attach the URL-keyed join exists to prevent. The basin waits for `scrape-lanes`.
+    curated = _stripped_curated_city()
+    repointed = replace(
+        curated,
+        basins=(
+            replace(
+                curated.basins[0],
+                lane_plan_source=LanePlanSource(url="https://example.test/city-NEW-sheet.pdf"),
+            ),
+        ),
+    )
+    carried = carry_lane_plans((repointed,), (_stored_city_with_plan(_plan(6)),))
+    assert carried[0].basins[0].lane_plan is None
+    assert carried == (repointed,)  # untouched, not merely plan-less
+
+
+def test_a_section_token_change_is_also_a_different_binding() -> None:
+    # The `section` token routes one sub-grid of a STACKED multi-basin sheet, so two basins can
+    # share a url and differ only there — it belongs in the key just as much as the url does.
+    curated = _stripped_curated_city()
+    url = str(curated.basins[0].lane_plan_source and curated.basins[0].lane_plan_source.url)
+    sectioned = replace(
+        curated,
+        basins=(
+            replace(
+                curated.basins[0],
+                lane_plan_source=LanePlanSource(url=url, section="sprungbecken"),
+            ),
+        ),
+    )
+    carried = carry_lane_plans((sectioned,), (_stored_city_with_plan(_plan(6)),))
+    assert carried[0].basins[0].lane_plan is None
+
+
+def test_a_basin_that_already_carries_a_plan_is_never_overwritten() -> None:
+    fresh, stale = _plan(8), _plan(6)
+    carried = carry_lane_plans((_stored_city_with_plan(fresh),), (_stored_city_with_plan(stale),))
+    assert [b.lane_plan for b in carried[0].basins] == [fresh]

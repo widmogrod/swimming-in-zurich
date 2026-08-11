@@ -17,6 +17,14 @@ THIN RE-LAYER commands: each re-runs only its own phase against an already-built
 WFS+curated rebuild. Both `build` and the thin commands drive the SAME phase functions
 (`_compose_schedules` / `_attach_lanes`), so there is no second implementation to drift.
 
+**A re-layer composes onto the curated tier REBUILT FROM `data/`, never onto the store's own
+previous output** — hence `scrape-gold --data`. Feeding the composed blob back in as the *curated*
+side made every aspect curated-wins against itself, so a re-layer refreshed nothing already
+present and still exited 0 (`docs/2026-08-10-scrape-gold-recompose-defect.md`). Both commands take
+their curated side from the one `etl.build.assemble_curated` path; the lane plans a previous
+`scrape-lanes` attached are carried across that rebuild (`compose.carry_lane_plans`), so trading
+silent staleness for silent deletion is not what happens.
+
 **HTTP disk cache.** Every network command runs over ONE `DiskCacheTransport` (`.cache/swimzh/`,
 git-ignored) shared by one `HttpClient` PER SOURCE (`ProviderClients`), so each provider's
 responses expire on its own volatility clock (`core/cache_tiers`) instead of collapsing to one
@@ -39,7 +47,7 @@ from zoneinfo import ZoneInfo
 
 import httpx
 
-from swimzh.build.compose import compose
+from swimzh.build.compose import carry_lane_plans, compose
 from swimzh.build.reconcile import crosswalk_from_rows, resolve_all
 from swimzh.core.errors import ProviderError, SchemaMismatch, describe
 from swimzh.core.http import HttpClient, RetryPolicy
@@ -52,8 +60,8 @@ from swimzh.core.httpcache import (
 from swimzh.core.result import Err, Ok
 from swimzh.domain.catalog import PoolCatalogEntry
 from swimzh.domain.lane_plan import LanePlan
-from swimzh.domain.models import PoolId
-from swimzh.etl.build import build_store
+from swimzh.domain.models import Facility, PoolId
+from swimzh.etl.build import assemble_curated, write_curated_store
 from swimzh.etl.catalog import build_catalog
 from swimzh.etl.lane_plans import (
     UndiscoveredSource,
@@ -265,6 +273,7 @@ class _PhaseResult:
 def _compose_schedules(
     conn: sqlite3.Connection,
     *,
+    curated: tuple[Facility, ...],
     catalog: tuple[PoolCatalogEntry, ...],
     schedule_client: HttpClient,
     price_client: HttpClient,
@@ -272,6 +281,13 @@ def _compose_schedules(
 ) -> _PhaseResult:
     """Scrape indoor-pool schedules (+ the shared city price + the shared-page fan-out) and
     compose them onto the store.
+
+    **`curated` is an ARGUMENT, not a read of `conn`** — invariant S-1: `compose` is never called
+    with its own output as an input. The caller supplies the curated tier assembled from `data/` +
+    the roster (`etl.build.assemble_curated`); reading the store here instead made the previous
+    fold's own output the curated side, so every aspect won against itself and a re-layer refreshed
+    nothing (`docs/2026-08-10-scrape-gold-recompose-defect.md`). `conn` still supplies the identity
+    crosswalk and receives the writes.
 
     **Two clients, not one**: the tariff page moves a few times a year (`price_scraper`, 7d) while
     a pool timetable is re-cut per season (`schedule_scraper`, 12h). They are different sources at
@@ -281,7 +297,9 @@ def _compose_schedules(
     ``resolve_all`` resolves each ``SourceRef`` to a canonical id against the store's spine (an
     unreconcilable name is a loud typed ``Err``, never a silent wrong-pool write); ``compose``
     folds the scraped aspects onto the curated pool (curated-wins per aspect). Writes the composed
-    facilities through the single ``write_schedules`` door.
+    facilities through the single ``write_schedules`` door — **only for the pools this run resolved
+    an extract for**. A pool the curated tier names but this run did not scrape keeps whatever the
+    store holds; a phase writes only the facts it owns, so it can never delete another phase's.
 
     A declared source whose page states no city tariff is neither priced nor a failure: it emits
     one ``ScrapeReport.notes`` line on stderr and the phase still exits 0 — four of those pools are
@@ -335,7 +353,6 @@ def _compose_schedules(
         # WFS url drift that silently unprices a pool leaves a trace in the build output.
         print(note, file=sys.stderr)
 
-    curated = GoldRepository(conn).load_all()
     crosswalk = crosswalk_from_rows(load_alias_rows(conn), load_xref_rows(conn))
     match resolve_all(report.extracts, crosswalk):
         case Err(error):
@@ -344,9 +361,23 @@ def _compose_schedules(
             return _PhaseResult(code=1, fatal=True)
         case Ok(outcome):
             composition = compose(curated, outcome.resolved)
+            # A PHASE WRITES ONLY THE FACTS IT OWNS. `compose` emits one facility per pool on
+            # EITHER side, so a pool the curated tier names but this run produced no extract for
+            # comes out curated-only — and writing that would overwrite the scraped basins, prices
+            # and season a previous run stored, non-fatally and with no stderr line naming the pool.
+            # That is a real input class, not a hypothetical: `scrape-gold` reads the COMMITTED
+            # catalog while `build` uses the LIVE WFS roster, and a catalog entry can be named yet
+            # unscrapeable (no url, a url shared with another entry, an unparseable operator page,
+            # a non-scrapeable kind) — so drift silently deletes. Restricting the write to the
+            # pools this run resolved an extract for leaves every other blob byte-identical.
+            scraped_ids = {str(pool_id) for pool_id, _ in outcome.resolved}
             write_schedules(
                 conn,
-                tuple((f.identity.facility_id, f) for f in composition.facilities),
+                tuple(
+                    (f.identity.facility_id, f)
+                    for f in composition.facilities
+                    if str(f.identity.facility_id) in scraped_ids
+                ),
             )
             msg = f"scraped {len(outcome.resolved)} source extracts"
             for note in composition.notes:
@@ -504,54 +535,62 @@ def build(*, db_path: Path, data_dir: Path, clients: ProviderClients) -> int:
     """Assemble a COMPLETE gold store in ONE atomic pipeline. Returns a process exit code.
 
     Order: WFS roster (`fetch_roster`) → assemble curated facilities + calendar + crosswalk
-    (`build_store`) → schedule scrape + price + reconcile + compose (`_compose_schedules`) → lane
-    discovery + fetch + attach (`_attach_lanes`). The whole chain runs inside ONE temp-DB +
-    `os.replace` swap (`storage/atomic.py`): the store is committed ONLY if every phase completed,
-    so a mid-chain provider failure aborts non-zero and leaves the prior gold DB
-    **content-unchanged** (never a partial/half-written store). This makes `build`
-    network-dependent (already true for the WFS roster since the parent refactor's S3).
+    (`assemble_curated` → `write_curated_store`) → schedule scrape + price + reconcile + compose
+    (`_compose_schedules`, handed that SAME assembled curated tier) → lane discovery + fetch +
+    attach (`_attach_lanes`). The store-writing chain runs inside ONE temp-DB + `os.replace` swap
+    (`storage/atomic.py`): the store is committed ONLY if every phase completed, so a mid-chain
+    provider failure aborts non-zero and leaves the prior gold DB **content-unchanged** (never a
+    partial/half-written store). This makes `build` network-dependent (already true for the WFS
+    roster since the parent refactor's S3).
+
+    The roster fetch and the curated assemble both happen BEFORE the temp DB exists — neither
+    writes anything, so their failure paths leave the prior store untouched by construction.
 
     A benign non-fatal miss (e.g. an unresolved extra scrape name) keeps the store but exits 1.
     """
-    match fetch_roster(clients.roster):
-        case Err(error):
-            print(f"build failed: WFS roster unavailable: {describe(error)}", file=sys.stderr)
-            return 1
-        case Ok(roster):
-            now = _now()
-            with atomic_swap(db_path) as staging:
-                match build_store(data_dir, staging.path, roster):
-                    case Err(error):
-                        # No commit: the temp is discarded, the prior gold DB is untouched.
-                        print(f"build failed: {describe(error)}", file=sys.stderr)
-                        return 1
-                    case Ok(_repo):
-                        conn = open_db(staging.path)
-                        schedules = _compose_schedules(
-                            conn,
-                            catalog=roster,
-                            schedule_client=clients.schedules,
-                            price_client=clients.prices,
-                            fetched_at=now,
-                        )
-                        if schedules.fatal:
-                            return 1  # no commit -> prior gold content-unchanged
-                        lanes = _attach_lanes(
-                            conn,
-                            page_client=clients.pages,
-                            lane_client=clients.lanes,
-                            fetched_at=now,
-                        )
-                        if lanes.fatal:
-                            return 1  # no commit -> prior gold content-unchanged
-                        # Read the count from the staging store BEFORE the swap: `commit()` only
-                        # marks the temp good; the `os.replace` fires at context exit, so `db_path`
-                        # is not yet the new store here.
-                        count = GoldRepository(conn).count()
-                        conn.close()  # release the staging handle before the atomic rename
-                        staging.commit()
-                        print(f"gold store built at {db_path} ({count} facilities)")
-                        return max(schedules.code, lanes.code)
+    roster_result = fetch_roster(clients.roster)
+    if isinstance(roster_result, Err):
+        print(
+            f"build failed: WFS roster unavailable: {describe(roster_result.error)}",
+            file=sys.stderr,
+        )
+        return 1
+    roster = roster_result.value
+    assembly_result = assemble_curated(data_dir, roster)
+    if isinstance(assembly_result, Err):
+        print(f"build failed: {describe(assembly_result.error)}", file=sys.stderr)
+        return 1
+    assembly = assembly_result.value
+
+    now = _now()
+    with atomic_swap(db_path) as staging:
+        write_curated_store(assembly, staging.path)
+        conn = open_db(staging.path)
+        schedules = _compose_schedules(
+            conn,
+            curated=assembly.facilities,
+            catalog=roster,
+            schedule_client=clients.schedules,
+            price_client=clients.prices,
+            fetched_at=now,
+        )
+        if schedules.fatal:
+            return 1  # no commit -> prior gold content-unchanged
+        lanes = _attach_lanes(
+            conn,
+            page_client=clients.pages,
+            lane_client=clients.lanes,
+            fetched_at=now,
+        )
+        if lanes.fatal:
+            return 1  # no commit -> prior gold content-unchanged
+        # Read the count from the staging store BEFORE the swap: `commit()` only marks the temp
+        # good; the `os.replace` fires at context exit, so `db_path` is not yet the new store here.
+        count = GoldRepository(conn).count()
+        conn.close()  # release the staging handle before the atomic rename
+        staging.commit()
+        print(f"gold store built at {db_path} ({count} facilities)")
+        return max(schedules.code, lanes.code)
 
 
 def build_catalog_file(*, out: Path, client: HttpClient, generated_at: datetime) -> int:
@@ -569,7 +608,12 @@ def build_catalog_file(*, out: Path, client: HttpClient, generated_at: datetime)
 
 
 def scrape_gold(
-    *, db_path: Path, catalog_path: Path, clients: ProviderClients, fetched_at: datetime
+    *,
+    db_path: Path,
+    data_dir: Path,
+    catalog_path: Path,
+    clients: ProviderClients,
+    fetched_at: datetime,
 ) -> int:
     """THIN RE-LAYER: re-run only the schedule phase against an already-built store. Exit code.
 
@@ -579,6 +623,22 @@ def scrape_gold(
     against it, and swaps the temp in ONLY on a non-fatal outcome — any abort leaves the prior gold
     content-unchanged. The catalog is read from `catalog_path` (the roster double) rather than the
     WFS, so this command stays offline of the roster feed.
+
+    **The curated side is REBUILT from `data_dir` + that catalog** (`assemble_curated`), never read
+    back out of the store: composing onto the store's own previous output made `curated` win
+    against itself, so a re-layer refreshed nothing already present and still exited 0
+    (`docs/2026-08-10-scrape-gold-recompose-defect.md`). The rebuilt tier carries the
+    `lane_plan_source` bindings but no fetched plans, so the lane plans the previous `scrape-lanes`
+    attached are carried across the rebuild (`carry_lane_plans`) — the fix must not trade silent
+    staleness for silent deletion.
+
+    Its blast radius is the pools this run actually SCRAPED — narrower than the pools the catalog
+    names, and deliberately so. A catalog entry can be named yet unscrapeable (no url, a url shared
+    with another entry, an unparseable operator page, a non-scrapeable kind), and since this command
+    reads the COMMITTED catalog while `build` uses the LIVE WFS roster, WFS drift puts real pools in
+    that class. Writing them would replace their stored scraped facts with a curated-only blob —
+    exit 0, no stderr line. `_compose_schedules` writes only what it resolved an extract for, so
+    every other blob is left byte-identical.
     """
     if not catalog_path.exists():
         print(f"catalog not found at {catalog_path}; run build-catalog first", file=sys.stderr)
@@ -587,11 +647,23 @@ def scrape_gold(
         print(f"gold store not found at {db_path}; run `swimzh build` first", file=sys.stderr)
         return 1
     catalog = catalog_json.loads(catalog_path.read_text(encoding="utf-8"))
+    assembly_result = assemble_curated(data_dir, catalog)
+    if isinstance(assembly_result, Err):
+        # Nothing is opened or written: the live store is untouched by construction.
+        print(
+            f"schedule re-layer aborted: curated inputs unusable: "
+            f"{describe(assembly_result.error)}",
+            file=sys.stderr,
+        )
+        return 1
 
     with atomic_swap(db_path, seed_from=db_path) as staging:
         conn = open_db(staging.path)
         result = _compose_schedules(
             conn,
+            curated=carry_lane_plans(
+                assembly_result.value.facilities, GoldRepository(conn).load_all()
+            ),
             catalog=catalog,
             schedule_client=clients.schedules,
             price_client=clients.prices,
@@ -672,6 +744,9 @@ def main(argv: list[str] | None = None, *, clients: ProviderClients | None = Non
     )
     scrape.add_argument("--db", required=True, help="path to the gold SQLite file to write")
     scrape.add_argument("--catalog", default="data/catalog.json", help="catalog JSON to read")
+    # The re-layer composes onto the curated tier rebuilt from here — NOT onto the store's own
+    # previous output. Same default as `build --data`, so the two commands assemble the same tier.
+    scrape.add_argument("--data", default="data", help="curated data directory (default: data)")
 
     lanes = subparsers.add_parser(
         "scrape-lanes",
@@ -719,6 +794,7 @@ def _dispatch(args: argparse.Namespace, *, clients: ProviderClients, now: dateti
     if args.command == "scrape-gold":
         return scrape_gold(
             db_path=Path(args.db),
+            data_dir=Path(args.data),
             catalog_path=Path(args.catalog),
             clients=clients,
             fetched_at=now,

@@ -52,9 +52,14 @@ uv run python -m swimzh.cli build --db gold.sqlite
 #    on its own cadence without a full rebuild:
 uv run python -m swimzh.cli scrape-gold  --db gold.sqlite   # schedules
 uv run python -m swimzh.cli scrape-lanes --db gold.sqlite   # per-basin lane plans
-#    ⚠ scrape-gold currently refreshes NOTHING already present — it re-composes over its own
-#      output and the stored value always wins. Exit 0, no signal. Rebuild instead until fixed:
-#      docs/2026-08-10-scrape-gold-recompose-defect.md
+#    scrape-gold composes the fresh scrape onto the curated tier REBUILT from `data/`
+#    (`--data`, default `data`), never onto the store's own previous output — so a re-layer
+#    really does refresh hours, prices, notices and closures. It writes only the pools it
+#    actually scraped, so nothing else in the store is touched. Lane plans a previous
+#    scrape-lanes attached are carried across that rebuild — UNLESS that basin's `data/`
+#    binding (`lane_plan_source`) was re-pointed at a different sheet, in which case the plan
+#    parsed from the OLD sheet is dropped rather than mis-attached, and the basin has no lane
+#    plan until the next scrape-lanes.
 
 # 3. Serve it (UI at /, API at /swim). A missing/empty DB fails fast with a one-line
 #    "build it first" message (no traceback); SWIMZH_RELOAD=0 disables auto-reload.

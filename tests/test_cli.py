@@ -3,6 +3,7 @@ enrich it via scrape (all HTTP through MockTransport / recorded snapshots — ne
 
 from __future__ import annotations
 
+import shutil
 import sqlite3
 from collections import defaultdict
 from collections.abc import Callable
@@ -208,6 +209,398 @@ def _city_scrape_clients() -> ProviderClients:
     return _with_price_fixture(FIXTURE_HTML.read_bytes())
 
 
+# ── The re-layer actually refreshes (board-order-and-defects S1) ────────────────────────────────
+#
+# `scrape-gold` used to load the composed blob back out of the store and hand it to `compose` as
+# the CURATED side. Every one of the ten `_ASPECTS` is curated-wins and `_merge_basins` returns
+# curated wholesale once it has a schedule, so the previous output beat the fresh scrape on every
+# aspect — a re-layer refreshed NOTHING already present and still exited 0. See
+# `docs/2026-08-10-scrape-gold-recompose-defect.md`. The fix composes onto the curated tier rebuilt
+# from `data/` + the catalog, so these two tests fail against the pre-fix code (measured: hours
+# stayed `06:00–22:00`, the adult rate stayed `8.00`).
+
+#: The production shape of a re-layer: the SAME committed roster snapshot the app is built from,
+#: so every declared source is re-scraped exactly as a live `scrape-gold` would.
+FULL_CATALOG = DATA_DIR / "catalog.json"
+
+
+def _mutated_relayer_clients() -> ProviderClients:
+    """The full recorded-build transport with TWO sources mutated: City's page hours
+    (`6–22 Uhr` → `7–21 Uhr`) and the shared tariff's adult rate (`Fr. 8.–` → `Fr. 13.–`).
+
+    Re-serving the SAME fixture would prove nothing — an unchanged store is also what correct
+    idempotence looks like (that case is `test_a_relayer_is_idempotent_over_unchanged_sources`).
+    The mutation is what makes "did the refresh reach the store?" assertable, and it is deliberately
+    one BASIN aspect plus one NON-basin aspect: the defect report's option 4 warns that a
+    basins-only guard passes while prices stay frozen.
+    """
+    city = FIXTURE_HTML.read_bytes().replace("6–22 Uhr".encode(), "7–21 Uhr".encode())
+    assert "7–21 Uhr".encode() in city, "the hours mutation must actually apply to the fixture"
+    tariff = (_FIXTURES / "preise_abos.html").read_bytes()
+    tariff = tariff.replace("Fr. 8.–".encode(), "Fr. 13.–".encode(), 1)
+    assert "Fr. 13.–".encode() in tariff, "the price mutation must actually apply to the fixture"
+
+    def override(request: httpx.Request) -> httpx.Response | None:
+        url = str(request.url)
+        if url.endswith("city.html"):
+            return httpx.Response(200, content=city)
+        if "preise-abos" in url:
+            return httpx.Response(200, content=tariff)
+        return None  # every other source keeps its unmutated fixture
+
+    return recorded_build_clients(override)
+
+
+def _city_hours(db: Path) -> set[tuple[time, time]]:
+    """Every opening window City's stored schedule states, across all its basins."""
+    facility = _facility_from_read_path(db, "hallenbad-city")
+    return {(rule.time.start, rule.time.end) for b in facility.basins for rule in b.rules}
+
+
+def _city_adult_price(db: Path) -> Decimal:
+    """City's stored adult admission — a NON-basin aspect, folded through `_ASPECTS`."""
+    admission = _facility_from_read_path(db, "hallenbad-city").admission
+    assert isinstance(admission, Tariff), admission
+    return next(e.amount_chf for e in admission.table.entries if e.category is PriceCategory.ADULT)
+
+
+def _attached_lane_plans(db: Path) -> dict[tuple[str, str], LanePlan]:
+    """Every stored `(facility_id, basin_id)` → the lane PLAN it carries.
+
+    The plan itself, not just the key: a carry that put the WRONG plan on the right basin — the
+    mis-attach the URL-keyed join exists to prevent — passes a set-of-keys assertion.
+    """
+    return {
+        (str(f.identity.facility_id), str(b.basin_id)): b.lane_plan
+        for f in GoldRepository(open_db(db)).load_all()
+        for b in f.basins
+        if isinstance(b.lane_plan, LanePlan)
+    }
+
+
+def _facility_blobs(db: Path) -> dict[str, str]:
+    """The raw stored `pool.facility_doc` per pool — byte equality, so "was this row rewritten?"
+    cannot be answered by a field-by-field comparison that happens to miss the field that moved."""
+    return {
+        str(row[0]): str(row[1])
+        for row in open_db(db).execute("SELECT id, facility_doc FROM pool").fetchall()
+    }
+
+
+_EPOCH = date(2000, 1, 1)
+
+
+def _timeless(facility: Facility) -> Facility:
+    """`facility` with every timestamp a re-layer legitimately advances flattened away.
+
+    A re-run against unchanged sources SHOULD restamp when it fetched; it must not change anything
+    else. Flattening the timestamps is what turns "did it converge?" into an equality.
+    """
+    admission = facility.admission
+    if isinstance(admission, Tariff):
+        admission = replace(admission, table=replace(admission.table, valid_as_of=_EPOCH))
+    return replace(
+        facility,
+        provenance=replace(facility.provenance, valid_as_of=_EPOCH, fetched_at=None),
+        admission=admission,
+    )
+
+
+def _catalog_file_with_urls(tmp_path: Path, overrides: dict[str, str | None]) -> Path:
+    """The COMMITTED roster snapshot with one entry's `url` replaced — the shape WFS drift takes.
+
+    `scrape-gold` reads the committed catalog while `build` uses the live WFS roster, so the two
+    can disagree about a pool's url. Both overrides below make a pool NAMED BY THE CATALOG but
+    scraped by neither `declared_sources` nor `shared_sources`.
+    """
+    entries = tuple(
+        replace(entry, url=overrides[entry.pool_id]) if entry.pool_id in overrides else entry
+        for entry in _ROSTER
+    )
+    catalog_file = tmp_path / "drifted-catalog.json"
+    catalog_file.write_text(catalog_json.dumps(entries, FETCHED_AT), encoding="utf-8")
+    return catalog_file
+
+
+def test_a_relayer_refreshes_the_stored_schedule(tmp_path: Path) -> None:
+    """S1 AC1 — the defect's own reproduction, inverted: a re-layer against an already-built store
+    whose page now states different hours CHANGES the stored rules."""
+    db = tmp_path / "gold.sqlite"
+    assert build(db_path=db, data_dir=DATA_DIR, clients=_build_clients()) == 0
+    assert _city_hours(db) == {(time(6), time(22))}  # what the unmutated fixture states
+
+    code = scrape_gold(
+        db_path=db,
+        data_dir=DATA_DIR,
+        catalog_path=FULL_CATALOG,
+        clients=_mutated_relayer_clients(),
+        fetched_at=FETCHED_AT,
+    )
+    assert code == 0
+    assert _city_hours(db) == {(time(7), time(21))}  # pre-fix: still 06:00–22:00
+
+
+def test_a_relayer_refreshes_a_non_basin_aspect_too(tmp_path: Path) -> None:
+    """S1 AC2 — the same re-layer moves a NON-basin aspect: a mutated tariff changes the stored
+    price. A basins-only fix passes AC1 while every price, notice and closure stays frozen."""
+    db = tmp_path / "gold.sqlite"
+    assert build(db_path=db, data_dir=DATA_DIR, clients=_build_clients()) == 0
+    assert _city_adult_price(db) == Decimal("8.00")
+
+    code = scrape_gold(
+        db_path=db,
+        data_dir=DATA_DIR,
+        catalog_path=FULL_CATALOG,
+        clients=_mutated_relayer_clients(),
+        fetched_at=FETCHED_AT,
+    )
+    assert code == 0
+    assert _city_adult_price(db) == Decimal("13.00")  # pre-fix: still 8.00
+
+
+def _unmutated_relayer(db: Path, catalog_path: Path = FULL_CATALOG) -> int:
+    """A re-layer over the SAME fixtures the offline `build` used — nothing upstream changed."""
+    return scrape_gold(
+        db_path=db,
+        data_dir=DATA_DIR,
+        catalog_path=catalog_path,
+        clients=recorded_build_clients(),
+        fetched_at=FETCHED_AT,
+    )
+
+
+def test_a_relayer_is_idempotent_over_unchanged_sources(tmp_path: Path) -> None:
+    """S1 AC3 / invariant S-1 — running the phase twice over unchanged sources leaves the store
+    content-identical. `compose` is never fed its own output, so a re-layer converges instead of
+    accreting."""
+    db = tmp_path / "gold.sqlite"
+    assert build(db_path=db, data_dir=DATA_DIR, clients=_build_clients()) == 0
+
+    assert _unmutated_relayer(db) == 0
+    once = _db_content_digest(db)
+    assert _unmutated_relayer(db) == 0
+    assert _db_content_digest(db) == once
+
+
+def test_a_relayer_over_unchanged_sources_changes_nothing_but_provenance(tmp_path: Path) -> None:
+    """The property re-layer-vs-re-layer cannot see: compared against the `build` that PRECEDED it,
+    a re-layer over unchanged sources restamps when it fetched and changes NOTHING else — the pools
+    it scraped come back with the same facts, and no row is added or dropped.
+
+    **It does NOT guard the deletion door**, and must not be read as if it did: with the
+    `scraped_ids` filter reverted this test still passes, because an unchanged catalog rewrites the
+    31 unscraped pools with byte-identical content and `rewritten` stays 26 (mutation-verified). A
+    pool the catalog names but this run does not scrape is guarded by
+    `test_a_relayer_never_rewrites_a_pool_it_did_not_scrape` — that is the test to keep.
+    """
+    db = tmp_path / "gold.sqlite"
+    assert build(db_path=db, data_dir=DATA_DIR, clients=_build_clients()) == 0
+    before_blobs = _facility_blobs(db)
+    before = {str(f.identity.facility_id): f for f in GoldRepository(open_db(db)).load_all()}
+
+    assert _unmutated_relayer(db) == 0
+
+    after_blobs = _facility_blobs(db)
+    assert set(after_blobs) == set(before_blobs)  # no row added, none dropped
+    rewritten = {
+        pool_id for pool_id in before_blobs if before_blobs[pool_id] != after_blobs[pool_id]
+    }
+    # 26, derived — never a bare number (the habit `etl/scrape.py` sets for its own `== 26`):
+    # the phase resolves 39 extracts (26 declared sources + the 13-member Planschbecken fan-out)
+    # and writes exactly those 39. The 13 Planschbecken fold WITHOUT a scraped timetable, so
+    # `_merge_basins` never reports a scraped win and `_fold` never adopts scraped provenance —
+    # their blobs come back byte-identical. 39 − 13 = 26 rows actually change, and every one of
+    # them changes only by the scrape's timestamps (asserted below).
+    assert len(rewritten) == 26, sorted(rewritten)
+    assert not any(pool_id.startswith("planschbecken-") for pool_id in rewritten)
+    assert not rewritten & {"freibad-dolder", "seebad-enge", "schulschwimmanlage-hardau"}
+
+    after = {str(f.identity.facility_id): f for f in GoldRepository(open_db(db)).load_all()}
+    assert {k: _timeless(v) for k, v in after.items()} == {
+        k: _timeless(v) for k, v in before.items()
+    }
+
+
+@pytest.mark.parametrize(
+    ("pool_id", "url"),
+    [
+        # No url at all -> `declared_sources` rejects it (and it is in no shared set).
+        ("freibad-heuried", None),
+        # A UNIQUE url -> it leaves the Planschbecken shared fan-out, and `PADDLING` is not a
+        # scrapeable kind, so neither phase produces an extract for it.
+        ("planschbecken-artergut", "https://example.test/artergut-only.html"),
+    ],
+)
+def test_a_relayer_never_rewrites_a_pool_it_did_not_scrape(
+    tmp_path: Path, pool_id: str, url: str | None
+) -> None:
+    """A pool the catalog NAMES but this run does not scrape keeps exactly what the store holds.
+
+    Found in review, and the reason `_compose_schedules` narrows its write: `compose` emits one
+    facility per pool on either side, so such a pool came out CURATED-ONLY and overwrote the
+    scraped rules, prices and season a previous `build` had written — non-fatal, exit 0, no stderr
+    line naming the pool. Both cases below are real input classes, not hypotheticals: `scrape-gold`
+    reads the committed catalog while `build` uses the live WFS roster, and `etl/scrape.py` records
+    that WFS drift has renamed roster entries before.
+    """
+    db = tmp_path / "gold.sqlite"
+    assert build(db_path=db, data_dir=DATA_DIR, clients=_build_clients()) == 0
+    before = _facility_blobs(db)[pool_id]
+    stored = _facility_from_read_path(db, pool_id)
+    # The pool starts out holding facts only the SCRAPE could have supplied…
+    assert any(b.rules for b in stored.basins) or stored.operating_season is not None
+
+    code = _unmutated_relayer(db, _catalog_file_with_urls(tmp_path, {pool_id: url}))
+    assert code == 0
+
+    # …and the re-layer left its blob byte-identical, rather than replacing it curated-only.
+    assert _facility_blobs(db)[pool_id] == before
+
+
+def test_a_relayer_keeps_the_lane_plans_a_previous_run_attached(tmp_path: Path) -> None:
+    """S1 / invariant S-2 — the fix must not trade silent staleness for silent DELETION. The
+    curated tier rebuilt from `data/` carries each basin's `lane_plan_source` binding but no
+    fetched plan (the lane phase is a different command on a different cadence), so a successful
+    schedule re-layer would erase every attached plan without `carry_lane_plans`."""
+    db = tmp_path / "gold.sqlite"
+    assert build(db_path=db, data_dir=DATA_DIR, clients=_build_clients()) == 0
+    before = _attached_lane_plans(db)
+    assert before, "the offline build must attach lane plans for this to mean anything"
+
+    code = scrape_gold(
+        db_path=db,
+        data_dir=DATA_DIR,
+        catalog_path=FULL_CATALOG,
+        clients=_mutated_relayer_clients(),
+        fetched_at=FETCHED_AT,
+    )
+    assert code == 0
+    assert _attached_lane_plans(db) == before
+
+
+def _data_dir_with_repointed_city_binding(tmp_path: Path) -> Path:
+    """A copy of `data/` in which City's basin points at a DIFFERENT Belegungsplan sheet."""
+    data_dir = tmp_path / "data"
+    shutil.copytree(DATA_DIR, data_dir)
+    city_yaml = data_dir / "pools" / "city.yaml"
+    text = city_yaml.read_text(encoding="utf-8")
+    assert "city-schwimmerbecken.pdf" in text
+    city_yaml.write_text(
+        text.replace("city-schwimmerbecken.pdf", "city-schwimmerbecken-2027.pdf"), encoding="utf-8"
+    )
+    return data_dir
+
+
+def test_a_relayer_drops_a_lane_plan_whose_binding_was_repointed(tmp_path: Path) -> None:
+    """The ONE path on which a re-layer legitimately removes stored content — asserted so it stays
+    a decision rather than becoming a surprise.
+
+    `carry_lane_plans` keys on the BINDING (`lane_plan_source`), not just the basin, so re-pointing
+    a basin's sheet in `data/` means the stored plan — parsed from the OLD sheet — does not cross.
+    City is a scraped pool, so it IS rewritten, and it is rewritten plan-less. That is the honest
+    outcome (the alternative is a stale plan wearing a fresh binding, the mis-attach the URL-keyed
+    join exists to prevent) and it is repaired by the next `scrape-lanes`. Every OTHER pool's plan,
+    whose binding did not move, survives — so this is a targeted drop, never a sweep.
+    """
+    db = tmp_path / "gold.sqlite"
+    assert build(db_path=db, data_dir=DATA_DIR, clients=_build_clients()) == 0
+    before = _attached_lane_plans(db)
+    city_basins = {key for key in before if key[0] == "hallenbad-city"}
+    assert city_basins, "City must start with an attached plan for this to mean anything"
+
+    code = scrape_gold(
+        db_path=db,
+        data_dir=_data_dir_with_repointed_city_binding(tmp_path),
+        catalog_path=FULL_CATALOG,
+        clients=recorded_build_clients(),
+        fetched_at=FETCHED_AT,
+    )
+    assert code == 0
+
+    after = _attached_lane_plans(db)
+    assert not {
+        key for key in after if key[0] == "hallenbad-city"
+    }  # dropped, awaiting scrape-lanes
+    assert after == {key: plan for key, plan in before.items() if key not in city_basins}
+
+
+def test_a_relayer_aborts_when_the_curated_inputs_are_unusable(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The curated tier is now an INPUT to the re-layer, so it has its own fail-fast: unreadable
+    `data/` aborts before the temp store is even seeded, naming the typed cause. This is what makes
+    "the live store is untouched by construction" true rather than merely likely."""
+    db = tmp_path / "gold.sqlite"
+    assert build(db_path=db, data_dir=DATA_DIR, clients=_build_clients()) == 0
+    before = _db_content_digest(db)
+
+    code = scrape_gold(
+        db_path=db,
+        data_dir=tmp_path / "no-such-data",
+        catalog_path=FULL_CATALOG,
+        clients=_city_scrape_clients(),
+        fetched_at=FETCHED_AT,
+    )
+    assert code == 1
+    assert _db_content_digest(db) == before
+    assert "curated inputs unusable" in capsys.readouterr().err
+
+
+def test_build_aborts_when_the_curated_inputs_are_unusable(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The same fail-fast on the build side: the curated assemble runs BEFORE the temp DB exists,
+    so an unreadable `data/` writes nothing at all."""
+    db = tmp_path / "gold.sqlite"
+    code = build(db_path=db, data_dir=tmp_path / "no-such-data", clients=_build_clients())
+    assert code == 1
+    assert not db.exists()  # nothing was opened, let alone swapped in
+    assert "build failed" in capsys.readouterr().err
+
+
+def _urlless_catalog_file(tmp_path: Path) -> Path:
+    """A catalog whose single entry carries NO page URL, so `declared_sources` selects nothing and
+    the phase scrapes zero extracts."""
+    catalog_file = tmp_path / "catalog.json"
+    entry = PoolCatalogEntry(
+        pool_id="hallenbad-city",
+        name="Hallenbad City",
+        kind=PoolKind.INDOOR,
+        address="Sihlstrasse 71",
+        geo=GeoPoint(lat=47.37, lon=8.53),
+        url=None,
+        description=None,
+        phone=None,
+    )
+    catalog_file.write_text(catalog_json.dumps((entry,), FETCHED_AT), encoding="utf-8")
+    return catalog_file
+
+
+def test_a_relayer_that_scrapes_nothing_leaves_the_store_content_unchanged(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """S1 AC4 / invariant S-2 — an EMPTY scrape is fatal to the phase, so the seeded temp is
+    discarded and the live store keeps everything the previous run wrote. Pinned as a regression:
+    `_compose_schedules` already aborts on `not report.extracts`, and the re-layer commits only on
+    a non-fatal outcome — but the fix's whole risk is deletion, so the property is now asserted.
+    (Its sibling, a FAILED declared source, is
+    `test_scrape_gold_declared_source_parse_failure_aborts_content_unchanged`.)"""
+    db = tmp_path / "gold.sqlite"
+    assert build(db_path=db, data_dir=DATA_DIR, clients=_build_clients()) == 0
+    before = _db_content_digest(db)
+
+    code = scrape_gold(
+        db_path=db,
+        data_dir=DATA_DIR,
+        catalog_path=_urlless_catalog_file(tmp_path),
+        clients=_city_scrape_clients(),
+        fetched_at=FETCHED_AT,
+    )
+    assert code == 1
+    assert _db_content_digest(db) == before  # nothing deleted, nothing rewritten
+    assert "no schedules could be scraped" in capsys.readouterr().err
+
+
 def test_scrape_gold_composes_onto_built_store(tmp_path: Path) -> None:
     # scrape-gold now layers onto an already-built spine: it resolves the scraped WFS name to a
     # canonical id by lookup and composes, rather than minting a second (long-slug) row.
@@ -216,6 +609,7 @@ def test_scrape_gold_composes_onto_built_store(tmp_path: Path) -> None:
 
     code = scrape_gold(
         db_path=db,
+        data_dir=DATA_DIR,
         catalog_path=_city_catalog_file(tmp_path),
         clients=_city_scrape_clients(),
         fetched_at=FETCHED_AT,
@@ -246,6 +640,7 @@ def test_scrape_gold_wires_scraped_only_pool_onto_read_path(tmp_path: Path) -> N
 
     code = scrape_gold(
         db_path=db,
+        data_dir=DATA_DIR,
         catalog_path=_scraped_only_catalog_file(tmp_path),
         clients=_city_scrape_clients(),
         fetched_at=FETCHED_AT,
@@ -309,6 +704,7 @@ def test_scrape_gold_requires_a_built_store(tmp_path: Path) -> None:
     # scrape-gold refuses rather than opening a second door to a gold row.
     code = scrape_gold(
         db_path=tmp_path / "absent.sqlite",
+        data_dir=DATA_DIR,
         catalog_path=_city_catalog_file(tmp_path),
         clients=_city_scrape_clients(),
         fetched_at=FETCHED_AT,
@@ -340,7 +736,11 @@ def test_scrape_gold_unreconcilable_name_is_reported_not_silently_written(
     catalog_file.write_text(catalog_json.dumps((entry,), FETCHED_AT), encoding="utf-8")
 
     code = scrape_gold(
-        db_path=db, catalog_path=catalog_file, clients=_city_scrape_clients(), fetched_at=FETCHED_AT
+        db_path=db,
+        data_dir=DATA_DIR,
+        catalog_path=catalog_file,
+        clients=_city_scrape_clients(),
+        fetched_at=FETCHED_AT,
     )
     assert code == 1  # the unmatched name is signalled by a non-zero exit
     # The miss is named on stderr, not swallowed.
@@ -408,6 +808,7 @@ def test_scrape_gold_partial_success_writes_matched_reports_unmatched(
 
     code = scrape_gold(
         db_path=db,
+        data_dir=DATA_DIR,
         catalog_path=_partial_catalog_file(tmp_path),
         clients=_city_scrape_clients(),
         fetched_at=FETCHED_AT,
@@ -443,6 +844,7 @@ def test_scrape_gold_ambiguous_reconcile_aborts_writing_nothing(
 
     code = scrape_gold(
         db_path=db,
+        data_dir=DATA_DIR,
         catalog_path=_city_catalog_file(tmp_path),
         clients=_city_scrape_clients(),
         fetched_at=FETCHED_AT,
@@ -471,6 +873,7 @@ def test_scrape_gold_declared_source_parse_failure_aborts_content_unchanged(
     clients = _with_price_fixture(b"<html>no table</html>")
     code = scrape_gold(
         db_path=db,
+        data_dir=DATA_DIR,
         catalog_path=_city_catalog_file(tmp_path),
         clients=clients,
         fetched_at=FETCHED_AT,
@@ -490,6 +893,7 @@ def test_build_and_scrape_gold_share_one_id_namespace(tmp_path: Path) -> None:
     assert (
         scrape_gold(
             db_path=db,
+            data_dir=DATA_DIR,
             catalog_path=_city_catalog_file(tmp_path),
             clients=_city_scrape_clients(),
             fetched_at=FETCHED_AT,
@@ -1037,7 +1441,11 @@ def test_build_then_scrape_gold_enriches(tmp_path: Path) -> None:
     catalog_file.write_text(catalog_json.dumps((entry,), FETCHED_AT), encoding="utf-8")
 
     scraped = scrape_gold(
-        db_path=db, catalog_path=catalog_file, clients=_city_scrape_clients(), fetched_at=FETCHED_AT
+        db_path=db,
+        data_dir=DATA_DIR,
+        catalog_path=catalog_file,
+        clients=_city_scrape_clients(),
+        fetched_at=FETCHED_AT,
     )
     assert scraped == 0
     # Enrichment adds/updates facilities on top of the offline build; catalog+calendar survive.
@@ -1098,7 +1506,7 @@ def test_main_routes_scrape_gold_scrape_lanes_and_build_catalog(tmp_path: Path) 
     catalog = _city_catalog_file(tmp_path)
     assert (
         main(
-            ["scrape-gold", "--db", str(db), "--catalog", str(catalog)],
+            ["scrape-gold", "--db", str(db), "--catalog", str(catalog), "--data", str(DATA_DIR)],
             clients=_city_scrape_clients(),
         )
         == 0
@@ -1335,7 +1743,16 @@ def test_every_network_command_accepts_the_refresh_flag(tmp_path: Path) -> None:
     catalog = _city_catalog_file(tmp_path)
     assert (
         main(
-            ["scrape-gold", "--refresh", "--db", str(db), "--catalog", str(catalog)],
+            [
+                "scrape-gold",
+                "--refresh",
+                "--db",
+                str(db),
+                "--catalog",
+                str(catalog),
+                "--data",
+                str(DATA_DIR),
+            ],
             clients=_city_scrape_clients(),
         )
         == 0
