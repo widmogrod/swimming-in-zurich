@@ -15,6 +15,7 @@
 //      never "✕ not for you" — that would blame the swimmer for the pool's outage.
 
 import { hhmmToMin } from './cursor.js';
+import { rowKeyFor } from './rowkey.js';
 import { isUnlisted } from '../appdata.js';
 import type { MessageKey } from '../i18n.js';
 
@@ -63,6 +64,10 @@ export interface RankRow {
   /** The pool. The row's IDENTITY lives here + `basin_id`, never in `label` (I6). */
   facility?: string;
   basin_id?: string;
+  /** Did rule L1 put `· <basin>` in `label`? Minted by `board.ts::applyLabelRule` — the
+   *  ONE place that decides it — and carried here so the renderer never has to parse the
+   *  label back apart to find out (invariant I6 in spirit). */
+  basinInLabel?: boolean;
   options?: RankOption[];
   statuses?: RankStatus[];
 }
@@ -75,8 +80,13 @@ export interface RankRow {
  * very pools this exists for changes between days. Keying on it fails silently.
  */
 export function rowKey(row: RankRow): string {
-  // eslint-disable-next-line i18next/no-literal-string -- an internal map key, never rendered
-  return `${row.facility ?? row.label}\u0000${row.basin_id ?? ''}`;
+  // ONE definition of the format, shared with `board.ts` (which mints these keys when it
+  // groups rows). Re-deriving it here is how the two silently drifted apart before.
+  //
+  // The `?? row.label` fallback is for a hand-built row that names no facility; a real
+  // `/swim` row always carries one, and a label-derived key is still stable WITHIN one
+  // answer, which is all the open-card state needs.
+  return rowKeyFor(row.facility ?? row.label, row.basin_id);
 }
 
 /** How many lanes are public within an option at `min`, when it publishes a split. */

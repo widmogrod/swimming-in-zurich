@@ -96,6 +96,11 @@ const TWO_BASINS: RankRow[] = [
     label: 'Hallenbad City \u00b7 Hauptbecken',
     facility: 'Hallenbad City',
     basin_id: 'city-main',
+    // Rule L1 put the basin in the label, and says so — exactly what `dayRows` emits for
+    // this answer. That the two agree is asserted in board.test.ts ("`basinInLabel` is set
+    // on exactly the rows whose LABEL carries the basin"), so this flag is not a free
+    // choice here: a fixture that set it without the suffix would contradict that test.
+    basinInLabel: true,
     options: [{ start: '09:00', end: '21:00', distance_km: 0.9, basin: 'Hauptbecken' }],
     statuses: [],
   },
@@ -103,6 +108,7 @@ const TWO_BASINS: RankRow[] = [
     label: 'Hallenbad City \u00b7 Schwimmerbecken',
     facility: 'Hallenbad City',
     basin_id: 'city-50m',
+    basinInLabel: true,
     options: [{ start: '09:00', end: '21:00', distance_km: 0.9, basin: 'Schwimmerbecken' }],
     statuses: [],
   },

@@ -25,6 +25,7 @@ import {
   ownerLabelFits,
   resolveFamilyPalette,
   OWNER_LABEL_MIN_H,
+  OWNER_LABEL_PAD,
   type Ctx2D,
   type Palette,
   type RenderRibbon,
@@ -95,6 +96,10 @@ function stackOption(opts: {
   lanes: number;
   publicLanes: number;
   owner?: string | null;
+  /** An owner name on the PUBLIC segments too. Every fixture here (and every real
+   *  Belegungsplan we have parsed) leaves a public hold's owner null, which is exactly why
+   *  the renderer's `seg.public ? null : …` guard was untestable until this existed. */
+  publicOwner?: string | null;
   start?: string;
   end?: string;
   best?: { start: string; end: string; public_lanes: number } | null;
@@ -110,7 +115,7 @@ function stackOption(opts: {
         lane: i + 1,
         segments: [
           i < opts.publicLanes
-            ? { start, end, access: 'PublicSwim', owner: null }
+            ? { start, end, access: 'PublicSwim', owner: opts.publicOwner ?? null }
             : { start, end, access: 'ClubReserved', owner: opts.owner ?? 'SC Oerlikon' },
         ],
       })),
@@ -238,9 +243,46 @@ test('ownerLabelFits measures the text — it never guesses from the block width
   expect(ownerLabelFits(ctx, '', 900, 20)).toBe(false);
 });
 
+test('ownerLabelFits reserves its padding — the boundary is text + BOTH margins', () => {
+  // The cases above sit 130px clear of the decision, so the `OWNER_LABEL_PAD * 2` term
+  // could be dropped without failing one of them. These two straddle it: 'SC' measures
+  // 12px under this stub, so the label needs 12 + 3 + 3 = 18px of block to be drawn.
+  const ctx = { measureText: (s: string) => ({ width: s.length * 6 }) } as Pick<
+    Ctx2D,
+    'measureText'
+  >;
+  const need = 'SC'.length * 6 + OWNER_LABEL_PAD * 2;
+  expect(need).toBe(18);
+  expect(ownerLabelFits(ctx, 'SC', need, 10)).toBe(true);
+  // One pixel short: the word itself would still fit, but it would touch the block's edge
+  // and read as running into the lane beside it. Unpadded, this would return true.
+  expect(ownerLabelFits(ctx, 'SC', need - 1, 10)).toBe(false);
+});
+
 test('a public lane is never labelled with the holder of the lane beside it', () => {
   const calls = paint([optionRibbon(stackOption({ lanes: 2, publicLanes: 1, owner: 'SC Oerlikon' }))]);
   expect(calls.filter((c) => c.op === 'fillText').length).toBe(1);
+});
+
+test('a NAMED public hold is still drawn unlabelled — the name is not a reservation', () => {
+  // The renderer suppresses the owner on a public block (`seg.public ? null : seg.owner`).
+  // Nothing tested that: every fixture, and every Belegungsplan parsed so far, leaves a
+  // public hold's owner null, so the guard could be deleted without a single failure.
+  //
+  // It matters because a Belegungsplan MAY name the party a public hold was booked under
+  // (a Verein hosting an open session). Painting that name over the teal would read as
+  // "this lane belongs to SV Limmat" on a lane anyone may swim in — the opposite of true.
+  const calls = paint([
+    optionRibbon(
+      stackOption({ lanes: 2, publicLanes: 1, publicOwner: 'SV Limmat', owner: 'SC Oerlikon' }),
+    ),
+  ]);
+  const labels = calls.filter((c) => c.op === 'fillText');
+  // Exactly one label: the reserved lane's. The public lane carries a name and shows none.
+  expect(labels.map((c) => c.text)).toEqual(['SC Oerlikon']);
+  expect(labels.some((c) => c.text === 'SV Limmat')).toBe(false);
+  // …and it is still painted as public water, not quietly reclassified as reserved.
+  expect(calls.filter((c) => c.op === 'fillRect' && c.fill === 'LANEPUBLIC').length).toBe(1);
 });
 
 // --- AC6: the best-public band -------------------------------------------------------

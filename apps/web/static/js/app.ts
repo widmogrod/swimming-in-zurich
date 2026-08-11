@@ -39,6 +39,7 @@ import {
   createBoard,
   dayRows,
   rowBasinName,
+  rowFacilityOf,
   type BoardAnswer,
 } from "./blocks/board.js";
 import {
@@ -318,11 +319,10 @@ async function main() {
     // The row states its facility directly (Day mode keys rows by facility + basin, so it
     // is authoritative); a Pool-mode day row falls back to whatever its own sessions carry,
     // which lets it name its pool even before /pools backfills the selection's label.
-    const rowFacility =
-      row.facility ||
-      row.options.find((o) => o.facility)?.facility ||
-      row.statuses.find((s) => s.facility)?.facility ||
-      null;
+    // Via the pure seam in board.ts, for the same reason as `rowBasinName` below: the rule
+    // — including that a week row's EMPTY facility means absent — belongs where it is
+    // testable, not in a browser-only module no test imports.
+    const rowFacility = rowFacilityOf(row);
     // The BASIN this row is about, via the pure seam in board.ts (app.ts is browser-only
     // and imported by no test, so the rule cannot live here).
     const rowBasin = rowBasinName(row);

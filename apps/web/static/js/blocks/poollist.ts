@@ -58,10 +58,14 @@ function factsFor(ranked: RankedRow): string[] {
   const options = ranked.row.options ?? [];
   const first = options[0];
   const basin = typeof first?.basin === 'string' ? first.basin : null;
-  // …but not when the heading already ends in `· <basin>`. Since S3 a multi-basin pool's
-  // label carries its basin (rule L1), and repeating it below reads as a stutter:
+  // …but not when the heading already names it. Since S3 a multi-basin pool's label
+  // carries its basin (rule L1), and repeating it below reads as a stutter:
   // "Hallenbad City · Schwimmerbecken" over "1.2 km · Schwimmerbecken".
-  if (basin && !ranked.row.label.endsWith(`· ${basin}`)) facts.push(basin);
+  //
+  // The row TELLS us (`basinInLabel`, set where L1 is applied); this block does not read
+  // the label back to find out. Parsing it here was a third private definition of the
+  // label's format, and the format is exactly the thing L1 is free to change.
+  if (basin && !ranked.row.basinInLabel) facts.push(basin);
   return facts.slice(0, 4);
 }
 

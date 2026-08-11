@@ -25,6 +25,7 @@ import {
   publicAt,
   peakPublic,
   hhmmToMin,
+  isPublicSegment,
   minToHhmm,
   type Basin,
 } from './cursor.js';
@@ -111,7 +112,9 @@ function publicSpan(basin: BasinPlan): { lo: number; hi: number } | null {
   let hi = -Infinity;
   for (const strip of basin.strips) {
     for (const seg of strip.segments) {
-      if (seg.access !== 'PublicSwim') continue;
+      // The ONE definition of "a public lane" (cursor.js) — the same predicate the
+      // headline's `publicAt` counts with, so this span and that count cannot disagree.
+      if (!isPublicSegment(seg)) continue;
       lo = Math.min(lo, hhmmToMin(seg.start));
       hi = Math.max(hi, hhmmToMin(seg.end));
     }

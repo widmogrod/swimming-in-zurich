@@ -1,6 +1,6 @@
 {
   "_note": "FROZEN pre-change reference for lane-stack-board S2 AC5: the lane_availability + lane_timeline every plan-bearing /swim option carried at commit 659c76a (S1), BEFORE any S2 code existed. Never regenerate it to make a test pass — that would turn the reference into a copy of the code under test. Two captures on purpose: City is a single all-day session, Leimbach 2026-05-05 is TWO sessions, so a change that only holds for a day-spanning session cannot slip through.",
-  "_recipe": "git stash push -- src apps; then for each capture below GET /swim ?at=<at>&gender=female&age=34&eligible_only=false against a gold DB built by swimzh.cli.build(data_dir=data/, clients=tests.pipeline_clients.recorded_build_clients()), keeping start/end/lane_availability/lane_timeline of the named facility+basin; git stash pop.",
+  "_recipe": "uv run python scripts/fixtures/gen_swim_lane_fields_pre_s2.py — extracts commit 659c76a with `git archive`, builds a gold DB from that tree via swimzh.cli.build(data_dir=data/, clients=tests.pipeline_clients.recorded_build_clients()), GETs /swim?at=<at>&gender=female&age=34&eligible_only=false for each capture below, and keeps start/end/lane_availability/lane_timeline of the named facility+basin. It VERIFIES by default and refuses to overwrite without --force.",
   "captures": [
     {
       "at": "2026-08-12T12:00",

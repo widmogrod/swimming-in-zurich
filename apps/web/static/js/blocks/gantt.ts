@@ -16,7 +16,14 @@
 
 import { asDoc, type El } from '../domtypes.js';
 import { t } from '../i18n.js';
-import { cursorX, hhmmToMin, minToHhmm, publicAt, type Basin } from './cursor.js';
+import {
+  cursorX,
+  hhmmToMin,
+  isPublicSegment,
+  minToHhmm,
+  publicAt,
+  type Basin,
+} from './cursor.js';
 
 // The left label gutter (GL): lane names sit here; the plot starts at GL. A segment
 // at minute `min` is drawn at `GL + timescale.X(min)`; the cursor at the same x.
@@ -130,7 +137,10 @@ export function createGantt<T extends El>(el: T, opts: GanttOpts) {
     lane.appendChild(label);
 
     for (const seg of strip.segments) {
-      const isPublic = seg.access === 'PublicSwim';
+      // The ONE definition of "a public lane" (cursor.js), shared with the board's lane
+      // stack and the panel — a local `access === 'PublicSwim'` here could disagree with
+      // the "N of M lanes public" readout drawn a few pixels above it.
+      const isPublic = isPublicSegment(seg);
       const box = doc.createElement('span');
       box.className = `gantt__seg ${isPublic ? 'is-public' : 'is-reserved'}`;
       const x0 = trackX(hhmmToMin(seg.start));

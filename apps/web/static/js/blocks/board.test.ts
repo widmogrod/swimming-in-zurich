@@ -15,11 +15,14 @@ import {
   rowStatusLine,
   rowEligibility,
   rowBasinName,
+  rowFacilityOf,
   hhmmToMin,
   BOARD_PLOT,
   type BoardAnswer,
   type BoardWeek,
 } from './board.js';
+import { rowKeyFor } from './rowkey.js';
+import { rowKey } from './poolrank.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const FIXTURES = join(HERE, '..', '..', '..', 'tests', 'fixtures');
@@ -165,6 +168,74 @@ test('L1 is per-ANSWER: the same pool loses its suffix on a day one basin is clo
   expect(oneBasin[0].basin_id).toBe(twoBasins[0].basin_id);
 });
 
+test('`basinInLabel` is set on exactly the rows whose LABEL carries the basin (L1)', () => {
+  // The biconditional the phone list depends on. `poollist.ts` used to re-read the label
+  // (`label.endsWith('· ' + basin)`) to decide whether to repeat the basin on the fact
+  // line; it now reads this flag, so the flag must agree with the label on EVERY shape a
+  // row comes in — suffixed, unsuffixed, nameless-basin, and status-only.
+  const answers: BoardAnswer[] = [
+    // two named basins: both suffixed
+    {
+      options: [
+        opt('Hallenbad City', 'city-main', 'Hauptbecken'),
+        opt('Hallenbad City', 'city-50m', 'Schwimmerbecken'),
+      ],
+      statuses: [],
+    },
+    // one basin: no suffix
+    { options: [opt('Hallenbad City', 'city-50m', 'Schwimmerbecken')], statuses: [] },
+    // two basins, one unnamed: only the named one is suffixed
+    {
+      options: [
+        opt('Hallenbad City', 'city-main', 'Hauptbecken'),
+        opt('Hallenbad City', 'city-50m', ''),
+      ],
+      statuses: [],
+    },
+    // status only: names no water at all
+    { options: [], statuses: [{ facility: 'Seebad Utoquai', status: 'closed' }] },
+  ];
+  for (const answer of answers) {
+    for (const row of dayRows(answer)) {
+      const suffixed = row.label !== row.facility;
+      expect(row.basinInLabel === true).toBe(suffixed);
+      if (suffixed) expect(row.label).toBe(`${row.facility} \u00b7 ${row.basin}`);
+    }
+  }
+});
+
+test('a Pool-mode week row never claims a basin in its label', () => {
+  // Week rows are days, not basins (I4), and they skip `applyLabelRule` entirely — so the
+  // flag must be absent rather than stale-true from some earlier answer.
+  const rows = weekRows(WEEK);
+  expect(rows.length).toBeGreaterThan(0);
+  for (const row of rows) expect(row.basinInLabel).toBe(undefined);
+});
+
+test('the phone list keys a row exactly as the board grouped it — ONE definition', () => {
+  // `board.ts` mints the grouping key and `poolrank.ts` re-derives it for the open-card
+  // state. The two strings never meet at runtime, so only a test can catch them drifting.
+  const rows = dayRows({
+    options: [
+      opt('Hallenbad City', 'city-main', 'Hauptbecken'),
+      opt('Hallenbad City', 'city-50m', 'Schwimmerbecken'),
+      opt('Hallenbad Bläsi', undefined, undefined),
+    ],
+    statuses: [],
+  });
+  for (const row of rows) expect(rowKey(row)).toBe(rowKeyFor(row.facility, row.basin_id));
+  expect(new Set(rows.map(rowKey)).size).toBe(rows.length);
+});
+
+test('the row key separator cannot let two different rows collide', () => {
+  // A space separator would make `facility="A B" + basin="C"` and `facility="A" +
+  // basin="B C"` the same string — one row silently rendered as the other.
+  expect(rowKeyFor('A B', 'C')).not.toBe(rowKeyFor('A', 'B C'));
+  // …and an absent basin is its own row, not a prefix of a named one.
+  expect(rowKeyFor('A', undefined)).toBe(rowKeyFor('A', ''));
+  expect(rowKeyFor('A', undefined)).not.toBe(rowKeyFor('A', 'main'));
+});
+
 test('a basin with no NAME is labelled by its pool alone — never by its internal id', () => {
   // `OptionOut.basin` is a plain `str` the wire does not constrain non-empty. Falling back
   // to `basin_id` would put "Hallenbad City \u00b7 city-50m" — a database key — in front of a
@@ -195,6 +266,56 @@ test('an answer with no basin_id at all degrades to one row per facility, unsuff
   });
   expect(rows.length).toBe(1);
   expect(rows[0].label).toBe('Hallenbad City');
+});
+
+// --- rowFacilityOf: the pure seam behind app.ts's row → pool join --------------------
+
+test('rowFacilityOf reads a Day row straight off its own facility', () => {
+  const rows = dayRows({
+    options: [opt('Hallenbad City', 'city-50m', 'Schwimmerbecken')],
+    statuses: [],
+  });
+  expect(rowFacilityOf(rows[0])).toBe('Hallenbad City');
+});
+
+test("a week that does NOT name its pool still names it from the day's own sessions", () => {
+  // `BoardRow.facility` is required, so `weekRows` writes `''` for a week with no facility
+  // — a URL-restored `?view=pool&pool=<id>` arrives with an id and no name until /pools
+  // backfills it. `''` must read as ABSENT, not as an answer: `??` here instead of `||`
+  // would hand the panel a nameless pool and it would find no facts and no official link.
+  const rows = weekRows({
+    days: [
+      {
+        label: 'Monday',
+        date: '2026-08-10',
+        answer: { options: [opt('Hallenbad Oerlikon', 'oerlikon-50m', '50m-Becken')], statuses: [] },
+      },
+    ],
+  });
+  expect(rows[0].facility).toBe('');
+  expect(rowFacilityOf(rows[0])).toBe('Hallenbad Oerlikon');
+});
+
+test('a row with nothing naming a pool answers null rather than an empty name', () => {
+  const rows = weekRows({
+    days: [{ label: 'Monday', date: '2026-08-10', answer: { options: [], statuses: [] } }],
+  });
+  expect(rowFacilityOf(rows[0])).toBeNull();
+});
+
+test('a nameless week falls back to a STATUS facility when it has no options', () => {
+  // A shut pool's week is all statuses and no sessions — the case that would otherwise
+  // render a pool page with no pool name on it.
+  const rows = weekRows({
+    days: [
+      {
+        label: 'Monday',
+        date: '2026-08-10',
+        answer: { options: [], statuses: [{ facility: 'Seebad Utoquai', status: 'closed' }] },
+      },
+    ],
+  });
+  expect(rowFacilityOf(rows[0])).toBe('Seebad Utoquai');
 });
 
 // --- rowBasinName: the pure seam behind app.ts's row → panelForBasin join (AC4) -------

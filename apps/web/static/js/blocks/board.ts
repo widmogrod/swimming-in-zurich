@@ -37,6 +37,7 @@ import { createEligibilityBadge } from '../components/eligibilitybadge.js';
 import { dayParts } from '../datefmt.js';
 import { asDoc, type El } from '../domtypes.js';
 import { locale, t } from '../i18n.js';
+import { rowKeyFor } from './rowkey.js';
 
 
 // ---- Local structural types (the urlstate.ts convention) ---------------------------
@@ -79,6 +80,11 @@ export interface BoardRow {
   basin_id?: string;
   /** The basin NAME — what `panelForBasin` matches on. Absent for the same rows. */
   basin?: string;
+  /** Did rule L1 put `· <basin>` in this row's LABEL? Set by `applyLabelRule`, the one
+   *  place that decides it. Consumers that must not repeat the basin (the phone card's
+   *  fact line) read this flag; NONE may re-derive it by parsing the label, which would
+   *  be a fourth private definition of the label's format (invariant I6 in spirit). */
+  basinInLabel?: boolean;
   options: BoardOption[];
   statuses: BoardStatus[];
 }
@@ -151,14 +157,6 @@ const AXIS_H = 20; // axis header canvas + head-label height, matched for alignm
 export { hhmmToMin };
 
 // ---- Row derivation (pure, exported for unit tests) -----------------------------
-
-// The row key's separator. NUL rather than a space: a space would let
-// `facility="A B" + basin="C"` collide with `facility="A" + basin="B C"`, and a
-// collided row is a silently mis-rendered one.
-const ROW_KEY_SEP = '\u0000';
-
-const rowKeyFor = (facility: string, basinId: string | undefined): string =>
-  `${facility}${ROW_KEY_SEP}${basinId ?? ''}`;
 
 /** Day mode: group a `/swim` answer into one row per facility + BASIN, preserving
  *  first-seen order (the API already orders nearest-first).
@@ -242,8 +240,32 @@ function applyLabelRule(rows: BoardRow[]): BoardRow[] {
     if ((basinsPerFacility.get(row.facility)?.size ?? 0) < 2) continue;
     // The separator is punctuation between two proper nouns, not copy.
     row.label = `${row.facility} · ${suffix}`;
+    // The same decision, carried as a FACT rather than left to be re-read off the label.
+    row.basinInLabel = true;
   }
   return rows;
+}
+
+/** The POOL a row is about, or null when nothing on the row names one.
+ *
+ *  The pure seam behind `app.ts`'s row → pool join, and the ONE reader that has to know
+ *  `BoardRow.facility` can be the EMPTY string. `facility` is required — a Day-mode row is
+ *  a basin OF a pool and always names it — but a Pool-mode week row inherits the week's
+ *  facility, and a week whose pool has not been named yet (a URL-restored
+ *  `?view=pool&pool=<id>` arrives with an id and no name until `/pools` backfills) has
+ *  none. `weekRows` writes `''` for that, and `''` MUST mean absent here: falling through
+ *  to the row's own sessions is what lets such a week name its pool on the first paint.
+ *
+ *  Hence `||`, never `??` — `??` would accept the empty string as an answer and hand the
+ *  caller a nameless pool. That used to be an unwritten dependency of `app.ts` on the zero
+ *  value `weekRows` happens to emit; here it is one expression, stated, and under test. */
+export function rowFacilityOf(row: BoardRow): string | null {
+  return (
+    row.facility ||
+    row.options.find((o) => o.facility)?.facility ||
+    row.statuses.find((s) => s.facility)?.facility ||
+    null
+  );
 }
 
 /** The BASIN a row is about, or null when it is about no particular water (a status-only
@@ -270,6 +292,11 @@ export function weekRows(week: BoardWeek): BoardRow[] {
     // Every row of a week is a day of the ONE selected pool, so the week's facility is
     // the row's. No `basin_id`: a week row spans whatever basins that day published —
     // splitting Pool mode per basin is deliberately out of scope (invariant I4).
+    //
+    // `''` is the "this week does not name its pool" zero — the only way a `BoardRow` can
+    // express absence, since `facility` is required so that Day-mode rows (which ALWAYS
+    // name a pool) need no null check. Reading it back is `rowFacilityOf`'s job, and it
+    // treats `''` as absent; nothing else may read a week row's `facility` directly.
     facility: week.facility ?? '',
     options: d.answer.options || [],
     statuses: d.answer.statuses || [],
