@@ -1,6 +1,9 @@
 ---
 type: plan
-status: approved         # owner approved 2026-08-11; draft -> approved -> in-progress -> done
+status: in-progress      # owner approved 2026-08-11;
+branch: plan/board-order-and-defects
+worktree: .claude/worktrees/plan-board-order-and-defects
+base_branch: feat/new-ui draft -> approved -> in-progress -> done
 created: 2026-08-11
 feature: board-order-and-defects
 gates:
