@@ -302,8 +302,71 @@ Appended by /dev:implement after each slice — never rewritten. Newest row last
 | date | slice | status | divergence from plan | tech debt created | human review? |
 |------|-------|--------|----------------------|-------------------|---------------|
 | 2026-08-12 | S1 | done | (1) `compose.py` gained `carry_lane_plans` + `_lane_key`, beyond the plan's "only if the branch comment needs correcting" — the curated rebuild strands attached lane plans otherwise. (2) `etl/build.py` split into `assemble_curated` + `write_curated_store`; `build_store`'s signature and behaviour unchanged (verified byte-identical over all 57 blobs). (3) `build` runs the roster fetch and curated assemble BEFORE `atomic_swap` — neither writes, failure paths identical, now covered. (4) `_compose_schedules` writes a SUBSET of `composition.facilities` — the adjudicated fix for the deletion door. | `CuratedAssembly.facilities`/`keyed_facilities` re-run `codec.loads` over all 57 blobs on every access; called at most twice per run. | yes |
+| 2026-08-12 | S2 | done | (1) `_distance_km(query, facility)` became `_distance_km(query, geo)` — the roster half has no `Facility`, and a second entry-shaped helper is how the two halves would drift apart. (2) `_option_order`/`_status_order` extracted to module level — the two inline lambdas pushed `find_swim_options` to CRAP 28.6 against a 30 gate; extracted it is 26.5. No behaviour change to the option key. (3) `service._km_out` added so AC4's equality is structural, not two independently-written `round(...,2)` calls. (4) `poollist.ts`/`appdata.test.ts` named in Touches needed no change; `phonelist.test.ts` pinned the user-visible result instead (a closed card now states its km). | `find_swim_options` at CRAP 26.5 / CC 26 against a 30 gate; this slice added ~2, so the next change there needs a genuine extraction. `groupByOpenToday`'s CALL SITE has a permanently-surviving mutant while `dayRows` builds options before statuses — proven identity, documented at the site. `_schedule_less_statuses` still does not apply `query.radius_km` while the in-loop half does (pre-existing, now more visible). `appdata.classifyPools` still derives distance from options only, so the pool-picker shows no km for a closed pool while the board and phone list now do. | yes |
 
 ## Decisions & divergences
+
+**2026-08-12 — S2: what the slice actually delivers, measured, because it is NOT what the plan's
+Context implied.** Recorded before any summary distils it into a success story.
+
+The Context leads with "34 of 57 facilities change position". **This slice does not move that number.**
+Measured by the critic, Wed 2026-08-12 → Thu 2026-08-13 at `PLACE_PRESETS[0]`, before and after:
+
+| | before | after |
+|---|---|---|
+| facilities changing board position | 43 of 55 | **43 of 55** |
+| open group, stable indices | 12 / 18 | 12 / 18 |
+| closed group, stable indices | 17 / 36 | **0 / 36** |
+| Tannenrauch | 15 → 39 | 15 → 40 |
+
+Closed-group indices got *less* stable, because Tannenrauch now inserts at its true distance rank
+instead of being appended at an arbitrary slot. That is O2 working as chosen, not a regression.
+
+**What the slice does deliver** is that the order became explicable. The closed group was never
+sorted at all — it was in facility-iteration order:
+
+| closed group | before | after |
+|---|---|---|
+| first three | Altstetten, Bläsi, Leimbach — all `null` km | Riedtli 1.22, Bäckeranlage 1.27, Letten 1.36 |
+| last | Seebad Enge (`null`) | Hallenbad Leimbach **6.07 km** |
+
+Leimbach — the FURTHEST shut pool — was served 3rd of 38. That was the real defect. A pool that shuts
+overnight still moves groups, because it genuinely changed; the boundary is now named rather than
+silent. If the owner later wants a row that never moves, that is the interleave option rejected at
+plan time and it remains available.
+
+**AC1 did not discriminate — self-reported by the implementer, unprompted, then verified.** The
+plan's literal criterion (relative order per group across two dates) is **green before the fix**:
+facility iteration order is itself stable, so an unranked status list is consistently unranked day to
+day. 11 of 12 new Python tests are red pre-fix; that one is not. It was kept as a non-regression
+guard and now says so *inside the test*, naming `test_each_group_is_served_in_distance_order` as the
+assertion that earns the fix. **Third non-discriminating criterion in this plan** — the orchestrator's
+"0 moves" was impossible, "relative order" is trivially true, and the Pool-mode guard test below could
+not fail. Every one was caught by mutation, none by reading.
+
+**A blocking finding: a test that could not fail.** `'Pool mode draws no divider (I4)'` fed
+`swim_week_oerlikon.json`, whose seven days all carry options (`2,2,3,2,2,2,1`), so `dividerIndex`
+returned `null` regardless of the guard. Deleting `board.ts:630`'s mode guard left all 93 TS tests
+green. The guard is load-bearing on real input: four pools in the shipped store have an open first day
+and a later shut day (Bungertwies `[4,4,4,2,0,0,2]`, Riedtli, Tannenrauch, Aemtler), each of which
+would draw "No sessions published today" mid-week inside a single pool's week. Rebuilt against a
+constructed `BoardWeek` — which the critic found is *more* faithful than the committed fixture, since
+it supplies `{label, iso, answer}` exactly as `api.ts:194-199 fetchWeek` does and therefore exercises
+the live `d.date ?? d.iso` branch the committed one never reaches.
+
+**Two predicates were untestable through the door they were being tested from.** `isOpenToday(row)`
+and `row.statuses.length === 0` are equivalent on anything `dayRows` produces (options and statuses
+are disjoint there), so no test iterating `dayRows` output could tell them apart. Same for
+`groupByOpenToday`, provably the identity on that output. Both now called directly on hand-built rows
+`dayRows` cannot produce; both mutants die.
+
+**One rebuttal accepted on evidence.** The orchestrator asked for the `groupByOpenToday` *call site*
+to be pinned. The implementer showed it cannot be, and proved why rather than asserting it: `dayRows`
+builds its Map in two sequential loops and a status for an option-bearing facility joins the existing
+row, so every list it can emit is already partitioned. It delivered a two-factor guard instead —
+reordering `dayRows` to build statuses first keeps the suite green *with* the call (it absorbs the
+change) and reddens three tests *without* it. The hole as stated is closed; the single-mutant kill is
+impossible. Kept the call, with the proof written at the site.
 
 **2026-08-12 — S1: the fix opened a second silent-deletion door, and closing it is the real result of
 this slice.** Critic verdict `revise`, accepted without rebuttal.

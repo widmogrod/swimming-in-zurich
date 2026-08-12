@@ -154,6 +154,12 @@ class StatusOut(BaseModel):
     # phrase, and `detail_params.text` carries it verbatim so the UI stays truthful.
     closure_code: str | None = None
     detail_params: dict[str, str] = {}
+    # board-order-and-defects S2 (rule O1): the SAME distance an `OptionOut` for this facility
+    # carries on a day it is open, rounded identically — so a pool's row sits in the same place
+    # whether or not it happens to be open today. `null` is UNKNOWN (no lat/lon in the request,
+    # or the pool publishes no position), never a stand-in zero: the client sorts an unknown
+    # LAST within its group (O4). Statuses are served distance-ordered.
+    distance_km: float | None = None
 
 
 class NoticeOut(BaseModel):

@@ -213,6 +213,7 @@ export const it = {
   "detail.liveOpen": "aperto",
   "detail.liveClosed": "chiuso",
   "board.nearestFirst": "Prima le più vicine",
+  "board.noSessionsGroup": "Nessun orario pubblicato oggi",
   "detail.waterNotPublished": "Temperatura dell’acqua non pubblicata",
   "detail.tempMeasured": "misurata",
   "detail.liveMeasuredAgo": "misurata {age} fa",

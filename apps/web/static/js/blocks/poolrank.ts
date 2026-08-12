@@ -57,6 +57,9 @@ export interface RankLaneSegment {
 
 export interface RankStatus {
   status: string;
+  /** The pool's distance, which a status carries since board-order-and-defects S2. Without it
+   *  a status-only row had NO distance at all and sank to the bottom of its tier. */
+  distance_km?: number | null;
 }
 
 export interface RankRow {
@@ -244,9 +247,22 @@ export interface RankedRow {
   distanceKm: number | null;
 }
 
+/**
+ * How far away the row's pool is — read from EITHER shape the answer carries it in.
+ *
+ * The options are asked first because an open row has them; but a `closed` / `unknown` row has
+ * no options at all, and reading only `options[].distance_km` left every such row at `null` →
+ * `Infinity` in `rankRows`, i.e. sorted last within its tier by a missing number rather than by
+ * the real one. The whole shut half of the phone list was ordered by nothing a reader could
+ * see. `StatusOut` gaining a distance does not fix that on its own — this function is the
+ * reader, and it had to learn the second shape.
+ */
 function rowDistance(row: RankRow): number | null {
   for (const o of row.options ?? []) {
     if (typeof o.distance_km === 'number') return o.distance_km;
+  }
+  for (const s of row.statuses ?? []) {
+    if (typeof s.distance_km === 'number') return s.distance_km;
   }
   return null;
 }

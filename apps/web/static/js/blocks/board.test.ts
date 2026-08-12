@@ -9,6 +9,9 @@ import { must } from '../testutil.js';
 import {
   createBoard,
   dayRows,
+  dividerIndex,
+  groupByOpenToday,
+  isOpenToday,
   weekRows,
   boardRows,
   rowStatus,
@@ -19,6 +22,7 @@ import {
   hhmmToMin,
   BOARD_PLOT,
   type BoardAnswer,
+  type BoardRow,
   type BoardWeek,
 } from './board.js';
 import { rowKeyFor } from './rowkey.js';
@@ -666,4 +670,213 @@ test('a public holiday names ITSELF, in each of the three tiers', () => {
   );
   // Unrecognised — the curated name rides through verbatim, never a blank.
   expect(closure('Sechseläuten', 'unknown')).toBe('Closed · Sechseläuten');
+});
+
+// --- board-order-and-defects S2: two groups, one visible boundary (rules O2/O3) -------
+
+const closedRow = (facility: string): BoardRow => ({
+  label: facility,
+  facility,
+  options: [],
+  statuses: [{ facility, status: 'closed' }],
+});
+
+const openRow = (facility: string): BoardRow => ({
+  label: facility,
+  facility,
+  options: [opt(facility, undefined, undefined)],
+  statuses: [],
+});
+
+test('isOpenToday asks for OPTIONS, not for the ABSENCE of a status', () => {
+  // The two predicates are equivalent on every answer `dayRows` can build — there, statuses
+  // and options are disjoint (board.ts:196-207) — so a `dayRows`-shaped test cannot tell them
+  // apart and `row.statuses.length === 0` survives as a silent mutant. The row below is the
+  // case that defensive branch exists for, and it is the one that separates them: a pool with
+  // water you can plan AND a status about the same pool is OPEN. Reading the status instead
+  // would file it under "nothing to plan today" while its ribbons are being drawn.
+  const both: BoardRow = {
+    label: 'Hallenbad City',
+    facility: 'Hallenbad City',
+    basin_id: 'city-50m',
+    options: [opt('Hallenbad City', 'city-50m', 'Schwimmerbecken')],
+    statuses: [{ facility: 'Hallenbad City', status: 'closed' }],
+  };
+  expect(isOpenToday(both)).toBe(true);
+  expect(isOpenToday({ ...both, options: [] })).toBe(false);
+  // …and a row with neither is not open either — the absence of OPTIONS is the whole test.
+  expect(isOpenToday({ label: 'X', facility: 'X', options: [], statuses: [] })).toBe(false);
+});
+
+test('groupByOpenToday partitions open-before-closed, stably inside each group', () => {
+  // Asserted on an input `dayRows` CANNOT produce: on its output this function is the identity
+  // (option rows are built before status rows), so a `dayRows`-level test proves nothing about
+  // it. `dividerIndex` assumes the partition, so the partition must be a real assertion.
+  const rows = [closedRow('Shut A'), openRow('Open A'), closedRow('Shut B'), openRow('Open B')];
+  expect(groupByOpenToday(rows).map((r) => r.facility)).toEqual([
+    'Open A',
+    'Open B',
+    'Shut A',
+    'Shut B',
+  ]);
+  // Order WITHIN each group is preserved — it is the API's distance order and must not be
+  // re-sorted here; a comparator on a boolean would be free to permute it.
+  expect(groupByOpenToday([openRow('B'), openRow('A')]).map((r) => r.facility)).toEqual(['B', 'A']);
+  expect(groupByOpenToday([]).length).toBe(0);
+});
+
+test('isOpenToday agrees with the options on every row dayRows builds', () => {
+  // No `BoardRow.openToday` field exists on purpose: a stored flag can disagree with the very
+  // options it describes. This is the biconditional the divider then relies on.
+  const answer: BoardAnswer = {
+    options: [opt('Hallenbad City', 'city-50m', 'Schwimmerbecken')],
+    statuses: [
+      { facility: 'Seebad Utoquai', status: 'closed' },
+      { facility: 'Schulschwimmanlage Hardau', status: 'no_source' },
+    ],
+  };
+  for (const row of dayRows(answer)) {
+    expect(isOpenToday(row)).toBe(row.options.length > 0);
+  }
+  expect(dayRows(answer).filter(isOpenToday).length).toBe(1);
+});
+
+test('dayRows puts every open row before every row with nothing to plan (O2)', () => {
+  // The statuses below are NEARER than the options (1.22 / 1.43 km against 2.59 / 3.12), so the
+  // answer's own distance order would interleave them. The board still shows every open pool
+  // first: O2 groups, and ranks only INSIDE a group.
+  //
+  // This is `dividerIndex`'s PRECONDITION — that the list is partitioned before a boundary is
+  // drawn into it — asserted on the OUTPUT rather than assumed from how `dayRows` happens to
+  // loop. See the note on `groupByOpenToday`'s call site: today the loops guarantee it and the
+  // grouping call is provably the identity here, so this test cannot redden on that call alone.
+  // It reddens the moment the guarantee AND the call are both gone, which is the actual hole.
+  const rows = dayRows({
+    options: [
+      opt('Hallenbad City', 'city-50m', 'Schwimmerbecken', { distance_km: 2.59 }),
+      opt('Hallenbad Oerlikon', 'oerlikon-50m', '50m-Becken', { distance_km: 3.12 }),
+    ],
+    statuses: [
+      { facility: 'Seebad Utoquai', status: 'closed', distance_km: 1.22 },
+      { facility: 'Schulschwimmanlage Hardau', status: 'no_source', distance_km: 1.43 },
+    ],
+  });
+  const groups = rows.map(isOpenToday);
+  expect(groups).toEqual([true, true, false, false]);
+  // …and the API's order is preserved INSIDE each group — since S2 that order is distance.
+  expect(rows.map((r) => r.facility)).toEqual([
+    'Hallenbad City',
+    'Hallenbad Oerlikon',
+    'Seebad Utoquai',
+    'Schulschwimmanlage Hardau',
+  ]);
+});
+
+test('dividerIndex points at the first closed row — and is null unless BOTH groups exist (O3)', () => {
+  // O3 in full: an empty group must never leave a dangling header. Both empty cases are
+  // pinned, because they are the two the boundary is most likely to be drawn wrongly in.
+  expect(dividerIndex([openRow('A'), openRow('B'), closedRow('C')])).toBe(2);
+  expect(dividerIndex([closedRow('C'), closedRow('D')])).toBeNull(); // nothing open above it
+  expect(dividerIndex([openRow('A'), openRow('B')])).toBeNull(); // nothing closed below it
+  expect(dividerIndex([])).toBeNull();
+  // The very smallest board that HAS a boundary still gets one.
+  expect(dividerIndex([openRow('A'), closedRow('C')])).toBe(1);
+});
+
+test('the board draws the divider once, between the groups, in BOTH columns', () => {
+  const el = mount();
+  createBoard(el, {
+    data: { day: DAY },
+    filter: { mode: 'day', gender: '', age: null },
+    matchMedia: () => ({ matches: false }),
+    requestAnimationFrame: () => {},
+  });
+  expect(el.queryAll(hasClass('board__divider')).length).toBe(1);
+  // The track spacer is not decoration: the label stack and the canvas track are PARALLEL
+  // lists, so a divider in only the label column would drift every row below it out of line
+  // with its own canvas — the desync the whole shared-scroll layout exists to prevent.
+  expect(el.queryAll(hasClass('board__dividergap')).length).toBe(1);
+  const labelsBody = must(el.query(hasClass('board__labelsbody')), 'labels body');
+  const trackBody = must(el.query(hasClass('board__trackbody')), 'track body');
+  expect(labelsBody.children.length).toBe(trackBody.children.length);
+  const at = dividerIndex(dayRows(DAY));
+  expect(at).not.toBeNull();
+  const boundary = at as number;
+  expect(labelsBody.children[boundary].classList.contains('board__divider')).toBe(true);
+  expect(trackBody.children[boundary].classList.contains('board__dividergap')).toBe(true);
+  // The row that follows it is the FIRST row with nothing to plan, not some later one.
+  expect(isOpenToday(dayRows(DAY)[boundary])).toBe(false);
+  expect(isOpenToday(dayRows(DAY)[boundary - 1])).toBe(true);
+});
+
+test('the divider heading never calls an unknown schedule "closed"', () => {
+  // The group below it holds shut pools AND pools whose hours we simply do not have. This UI
+  // refuses to render an unknown as a closure anywhere else; the heading may not do it either.
+  const el = mount();
+  createBoard(el, {
+    data: { day: DAY },
+    filter: { mode: 'day', gender: '', age: null },
+    matchMedia: () => ({ matches: false }),
+    requestAnimationFrame: () => {},
+  });
+  const divider = must(el.query(hasClass('board__divider')), 'divider');
+  expect(divider.textContent).toBe('No sessions published today');
+  expect(divider.textContent.toLowerCase()).not.toContain('closed');
+});
+
+test('a board with only one group carries no divider at all (O3, through the DOM)', () => {
+  const build = (day: BoardAnswer) => {
+    const el = mount();
+    createBoard(el, {
+      data: { day },
+      filter: { mode: 'day', gender: '', age: null },
+      matchMedia: () => ({ matches: false }),
+      requestAnimationFrame: () => {},
+    });
+    return el;
+  };
+  const allOpen = build({ options: [opt('Hallenbad City', 'city-50m', 'Schwimmerbecken')], statuses: [] });
+  expect(allOpen.queryAll(hasClass('board__divider')).length).toBe(0);
+  expect(allOpen.queryAll(hasClass('board__dividergap')).length).toBe(0);
+  const allClosed = build({ options: [], statuses: [{ facility: 'Seebad Utoquai', status: 'closed' }] });
+  expect(allClosed.queryAll(hasClass('board__divider')).length).toBe(0);
+  expect(allClosed.queryAll(hasClass('board__dividergap')).length).toBe(0);
+});
+
+test('Pool mode draws no divider — its rows are days of ONE pool, not two groups (I4)', () => {
+  // The week MUST have an open day followed by a shut one, or this test cannot fail: the
+  // committed `swim_week_oerlikon.json` has options on all seven days, so `dividerIndex` would
+  // answer null whatever the mode guard did. Pool mode focuses the week on ONE pool
+  // (`appdata.focusWeekOnPool`), so a day that pool is shut yields `options: []` — against the
+  // shipped store for week 2026-08-10 that is Bungertwies [4,4,4,2,0,0,2], Riedtli [2,0,0,1,0,
+  // 0,0], Tannenrauch [1,1,2,0,2,0,0] and Aemtler [3,0,0,2,2,0,0]. Each would otherwise draw
+  // "No sessions published today" across the middle of one pool's own week, which says nothing
+  // true: these rows are DAYS, and Thursday is not a different pool from Monday.
+  const week: BoardWeek = {
+    facility: 'Hallenbad Bungertwies',
+    days: [
+      { label: 'Mon', iso: '2026-08-10', answer: { options: [opt('Hallenbad Bungertwies', 'bungertwies-25m', '25m')], statuses: [] } },
+      { label: 'Tue', iso: '2026-08-11', answer: { options: [], statuses: [{ facility: 'Hallenbad Bungertwies', status: 'closed' }] } },
+      { label: 'Wed', iso: '2026-08-12', answer: { options: [opt('Hallenbad Bungertwies', 'bungertwies-25m', '25m')], statuses: [] } },
+    ],
+  };
+  // The guard is load-bearing precisely because this is NOT null.
+  expect(dividerIndex(weekRows(week))).toBe(1);
+
+  const el = mount();
+  createBoard(el, {
+    data: { week },
+    filter: { mode: 'pool', gender: '', age: null },
+    matchMedia: () => ({ matches: false }),
+    requestAnimationFrame: () => {},
+  });
+  expect(el.queryAll(hasClass('board__divider')).length).toBe(0);
+  expect(el.queryAll(hasClass('board__dividergap')).length).toBe(0);
+  // …and the shut Tuesday stays IN THE MIDDLE of the week: week rows are never regrouped.
+  expect(weekRows(week).map((r) => r.label)).toEqual(['Mon', 'Tue', 'Wed']);
+  expect(el.queryAll(hasClass('board__rowname')).map((n) => n.textContent)).toEqual([
+    'Mon · 10 Aug',
+    'Tue · 11 Aug',
+    'Wed · 12 Aug',
+  ]);
 });

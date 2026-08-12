@@ -249,3 +249,24 @@ test('picking a day reports it and moves the selection', () => {
   const sel = bar.dayButtons.filter((b) => b.getAttribute('aria-selected') === 'true');
   expect(sel[0].dataset.date).toBe('2026-07-26');
 });
+
+test('a closed card now states how far away the pool is (board-order-and-defects S2)', () => {
+  // A status carries a distance since S2, and `rowDistance` reads it — so the fact line of a
+  // shut pool stops being blank. Without this the card said nothing at all about WHERE it is,
+  // which is the one thing that still matters when you are choosing tomorrow instead.
+  const el = mount();
+  createPoolList(el, {
+    rows: [
+      {
+        label: 'Seebad Utoquai',
+        facility: 'Seebad Utoquai',
+        options: [],
+        statuses: [{ status: 'closed', distance_km: 1.87 }],
+      },
+    ],
+    nowMin: M(10),
+    reducedMotion: true,
+  });
+  const meta = must(fake(el).query((c: FakeElement) => c.classList.contains('plist__meta')));
+  expect(meta.textContent).toContain('1.9 km'); // `formatKm` renders one decimal
+});

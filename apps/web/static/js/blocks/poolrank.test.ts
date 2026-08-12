@@ -228,3 +228,68 @@ test('tierCounts reports every tier, including the empty ones', () => {
     closed: 1,
   });
 });
+
+// --- board-order-and-defects S2 (AC5): a status-only row ranks on its REAL distance -----
+//
+// `poolrank.ts` keeps its FOUR tiers (now/soon/unknown/closed) — this slice does not collapse
+// them, and the header above records why they exist. What changed is the READER: `rowDistance`
+// consulted only `options[].distance_km`, so a row with no options stayed `null` → `Infinity`
+// however much `StatusOut` gained, and the whole shut half of the list sorted by a missing
+// number instead of by the one the server now sends.
+
+const closedAt = (label: string, km: number | null): RankRow => ({
+  label,
+  facility: label,
+  options: [],
+  statuses: [{ status: 'closed', distance_km: km }],
+});
+
+test('a status-only row carries the distance its status states', () => {
+  const [ranked] = rankRows([closedAt('Seebad Utoquai', 1.87)], M(10));
+  expect(ranked.tier).toBe('closed');
+  expect(ranked.distanceKm).toBe(1.87);
+});
+
+test('closed rows sort nearest-first INSIDE their tier, not by arrival order', () => {
+  const rows = [closedAt('Far', 6.07), closedAt('Near', 1.22), closedAt('Mid', 3.82)];
+  expect(rankRows(rows, M(10)).map((r) => r.row.label)).toEqual(['Near', 'Mid', 'Far']);
+});
+
+test('a status-only row still sorts below every OPEN row — the tiers are untouched', () => {
+  // The nearest pool in the city is of no use if it is shut, so distance ranks WITHIN a tier
+  // and never across one. A closed pool 0.1 km away must not outrank an open pool 6 km away.
+  const ranked = rankRows([closedAt('Shut next door', 0.1), city()], M(10));
+  expect(ranked.map((r) => r.tier)).toEqual(['now', 'closed']);
+  expect(ranked[0].row.label).toBe('Hallenbad City');
+});
+
+test('a schedule-less row ranks by distance too — unknown hours, known place', () => {
+  const unlisted = (label: string, km: number): RankRow => ({
+    label,
+    facility: label,
+    options: [],
+    statuses: [{ status: 'no_source', distance_km: km }],
+  });
+  const rows = [unlisted('Isengrind', 5.41), unlisted('Letten', 1.36)];
+  expect(rankRows(rows, M(10)).map((r) => r.row.label)).toEqual(['Letten', 'Isengrind']);
+});
+
+test('a row whose status states no distance still sorts LAST in its tier, never first', () => {
+  // O4 through to the phone list: absence must never outrank a real, worse value, and a
+  // missing number must never be read as zero.
+  const rows = [closedAt('Unknown place', null), closedAt('Far', 6.07)];
+  const ranked = rankRows(rows, M(10));
+  expect(ranked.map((r) => r.row.label)).toEqual(['Far', 'Unknown place']);
+  expect(ranked[1].distanceKm).toBeNull();
+});
+
+test('an OPEN row still reads its distance off the option, not the status', () => {
+  // Options are asked first: on a row that has both, the option is the more specific fact
+  // (it is per-basin), and this ordering is what keeps every pre-S2 payload behaving.
+  const both: RankRow = {
+    label: 'Hallenbad City',
+    options: [opt('09:00', '21:00', { distance_km: 0.83 })],
+    statuses: [{ status: 'closed', distance_km: 9.99 }],
+  };
+  expect(rankRows([both], M(10))[0].distanceKm).toBe(0.83);
+});

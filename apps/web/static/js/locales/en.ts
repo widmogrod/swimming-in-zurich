@@ -282,6 +282,10 @@ export const en = {
   "detail.liveOpen": "open",
   "detail.liveClosed": "closed",
   "board.nearestFirst": "Nearest first",
+  // The O2 group divider on the board: everything below it has no session to plan today —
+  // shut pools, pools whose hours we do not have, and pools open with no published timetable.
+  // It must NOT say "closed": an unknown schedule is not a closure (each row states its own).
+  "board.noSessionsGroup": "No sessions published today",
   "detail.waterNotPublished": "Water temperature not published",
   "detail.tempMeasured": "measured",
   "detail.liveMeasuredAgo": "measured {age} ago",

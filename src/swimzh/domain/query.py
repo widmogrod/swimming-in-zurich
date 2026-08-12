@@ -331,6 +331,15 @@ class FacilityStatus:
     #: For a closure, WHICH closure (S4). None for a schedule-less status.
     closure: ClosureCode | None = None
     params: Mapping[str, str] = field(default_factory=dict)
+    #: Rule O1 (board-order-and-defects S2): km from `query.near`, the SAME value an option
+    #: for this facility carries on a day it is open. A status used to carry no distance at
+    #: all, so a pool's board position was decided by whether it happened to be open today
+    #: rather than by where it is — the defect this field exists to remove.
+    #:
+    #: `None` means UNKNOWN (no `near` in the query, or the facility publishes no geo). It is
+    #: never a fabricated `0.0` (invariant O4): an unknown position sorts LAST within its
+    #: group, by name, because absence must not outrank a real, worse value.
+    distance_km: float | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -353,10 +362,44 @@ class QueryResult:
         return tuple(o for o in self.options if o.eligibility.allowed)
 
 
-def _distance_km(query: SwimQuery, facility: Facility) -> float | None:
-    if query.near is None or facility.geo is None:
+def _distance_km(query: SwimQuery, geo: GeoPoint | None) -> float | None:
+    """Km from the query's `near` to a published position, or `None` when either is unknown.
+
+    Takes the GEO, not a `Facility`: the schedule-less statuses are built from `RosterEntry`
+    (which carries `PoolCatalogEntry.geo`) OUTSIDE the facility loop, and they must rank on
+    exactly the same number as an option does (O1). A second, entry-shaped distance helper is
+    how the two halves of the answer would drift apart.
+    """
+    if query.near is None or geo is None:
         return None
-    return haversine_km(query.near, facility.geo)
+    return haversine_km(query.near, geo)
+
+
+def _option_order(option: SwimOption) -> tuple[float, time, str]:
+    """The option row key, unchanged: nearest first, then the earliest session, then the name.
+
+    The session-start tie-break means two basins of one pool order by their earliest session —
+    latent rather than live (0 flips measured over 60 days), but it is the real key.
+    """
+    return (
+        option.distance_km if option.distance_km is not None else float("inf"),
+        option.session.time.start,
+        option.facility_name,
+    )
+
+
+def _status_order(status: FacilityStatus) -> tuple[float, str]:
+    """Rule O1's key for a status row: the SAME geography an option ranks on, then the name.
+
+    An unknown distance sorts LAST (O4) via `inf`, never as a fabricated 0 — absence must not
+    outrank a real, worse value. The name tie-break is the only part a reader can predict when
+    two pools are equidistant, and ties are real: the served answer has several pairs metres
+    apart.
+    """
+    return (
+        status.distance_km if status.distance_km is not None else float("inf"),
+        status.facility_name,
+    )
 
 
 def _read_occupancy(
@@ -389,7 +432,7 @@ def _price_of(admission: Admission, age: int | None) -> PriceEntry | None:
 
 
 def _seasonal_status(
-    facility: Facility, season: OperatingSeason, schedule: DaySchedule
+    facility: Facility, season: OperatingSeason, schedule: DaySchedule, distance: float | None
 ) -> FacilityStatus:
     """Project a rule-less season-carrying facility's day resolution onto a `/swim` status.
 
@@ -416,6 +459,7 @@ def _seasonal_status(
                 status="open_unscheduled",
                 code=StatusCode.OPEN_UNSCHEDULED,
                 params=params,
+                distance_km=distance,
             )
         case ClosedDay():
             return FacilityStatus(
@@ -425,6 +469,7 @@ def _seasonal_status(
                 code=StatusCode.CLOSED_REASON,
                 closure=schedule.code,
                 params=dict(schedule.params),
+                distance_km=distance,
             )
         case OpenDay():
             # A rule-less, exception-less resolution cannot produce sessions; reaching this
@@ -436,7 +481,7 @@ def _seasonal_status(
 
 
 def _seasonal_status_for(
-    facility: Facility, day: date, calendar: ZurichCalendar
+    facility: Facility, day: date, calendar: ZurichCalendar, distance: float | None
 ) -> FacilityStatus | None:
     """The facility-level SEASON GATE (sharedsource-fanout S1): a rule-less facility whose
     page states an operating season resolves at FACILITY level — `/swim` reports it as
@@ -449,6 +494,7 @@ def _seasonal_status_for(
         facility,
         facility.operating_season,
         resolve_hours(facility, (), (), day, calendar),
+        distance,
     )
 
 
@@ -547,7 +593,7 @@ def find_swim_options(
     unverified_holiday_pools: set[str] = set()
 
     for facility in facilities:
-        distance = _distance_km(query, facility)
+        distance = _distance_km(query, facility.geo)
         if query.radius_km is not None and distance is not None and distance > query.radius_km:
             continue
 
@@ -605,7 +651,7 @@ def find_swim_options(
                 case _ as unreachable:
                     assert_never(unreachable)
 
-        seasonal = _seasonal_status_for(facility, day, calendar)
+        seasonal = _seasonal_status_for(facility, day, calendar, distance)
         if seasonal is not None:
             statuses.append(seasonal)
 
@@ -621,6 +667,7 @@ def find_swim_options(
                     code=StatusCode.CLOSED_REASON,
                     closure=facility_closed.code if facility_closed else None,
                     params=dict(facility_closed.params) if facility_closed else {},
+                    distance_km=distance,
                 )
             )
 
@@ -628,15 +675,14 @@ def find_swim_options(
     # facilities we just resolved carries its `ScheduleFreshness` status (roster − scheduled) —
     # `awaiting_scrape` or `no_source`, never merged with `closed`. An empty roster yields no such
     # rows (callers that only exercise options pass none), so this stays a single uniform path.
-    statuses.extend(_schedule_less_statuses(facilities, roster))
+    statuses.extend(_schedule_less_statuses(query, facilities, roster))
 
-    options.sort(
-        key=lambda o: (
-            o.distance_km if o.distance_km is not None else float("inf"),
-            o.session.time.start,
-            o.facility_name,
-        )
-    )
+    options.sort(key=_option_order)
+    # Rule O1: a status ranks on the SAME geography an option does, so a pool sits in the same
+    # place on the day it is shut as on the day it is open. Statuses used to ship in facility
+    # iteration order carrying no distance at all, which is why the shut half of the board was
+    # ordered by nothing a reader could see.
+    statuses.sort(key=_status_order)
     if unverified_holiday_pools:
         named = ", ".join(sorted(unverified_holiday_pools))
         warnings.append(
@@ -752,7 +798,7 @@ _FRESHNESS_STATUS_CODE: dict[ScheduleFreshness, StatusCode] = {
 
 
 def _schedule_less_statuses(
-    facilities: tuple[Facility, ...], roster: tuple[RosterEntry, ...]
+    query: SwimQuery, facilities: tuple[Facility, ...], roster: tuple[RosterEntry, ...]
 ) -> list[FacilityStatus]:
     """`schedule-less = roster − scheduled`: every roster pool whose canonical id is not among the
     facilities resolved this query. Identity is known (the roster), the schedule is not — so it
@@ -769,7 +815,14 @@ def _schedule_less_statuses(
     seasonal path already reported it (`open_unscheduled` / `closed`), and the two statuses are
     exclusive — the facility appears exactly once per query, never also as a `no_source` ghost.
     (`ScheduleFreshness` itself is untouched: the season is not a timetable, so the pool's
-    `/pools` freshness stays `no_source` — the honest answer about its SCHEDULE.)"""
+    `/pools` freshness stays `no_source` — the honest answer about its SCHEDULE.)
+
+    Takes the QUERY because these statuses must rank on distance like every other row (O1).
+    This half runs OUTSIDE the facility loop and builds from `RosterEntry`, not `Facility`, so
+    it is the half a distance fix silently misses: on 2026-08-12 it emits 18 of the 38 statuses,
+    and leaving them at `distance_km=None` would strand nearly half the closed board in O4's
+    unranked tail while the other half ranked correctly — the defect, half-fixed and invisible.
+    `PoolCatalogEntry.geo` is the position the roster already carries."""
     scheduled_ids = {
         str(f.identity.facility_id)
         for f in facilities
@@ -781,6 +834,7 @@ def _schedule_less_statuses(
             facility_name=row.entry.name,
             status=row.freshness.value,
             code=_FRESHNESS_STATUS_CODE[row.freshness],
+            distance_km=_distance_km(query, row.entry.geo),
         )
         for row in roster
         if row.entry.pool_id not in scheduled_ids and row.freshness is not ScheduleFreshness.SCRAPED

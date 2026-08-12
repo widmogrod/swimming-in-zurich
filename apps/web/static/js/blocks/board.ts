@@ -35,7 +35,7 @@ import { cursorX as sharedCursorX, hhmmToMin } from './cursor.js';
 import { fairWeatherText, isUnlisted, unlistedLabelKey } from '../appdata.js';
 import { createEligibilityBadge } from '../components/eligibilitybadge.js';
 import { dayParts } from '../datefmt.js';
-import { asDoc, type El } from '../domtypes.js';
+import { asDoc, type Doc, type El } from '../domtypes.js';
 import { locale, t } from '../i18n.js';
 import { rowKeyFor } from './rowkey.js';
 
@@ -63,6 +63,9 @@ export interface BoardStatus {
   facility: string;
   status: string;
   detail?: string | null;
+  /** Since board-order-and-defects S2 a status carries the SAME distance an option does, so a
+   *  pool that is shut today still ranks by where it is (rule O1). `null`/absent is UNKNOWN. */
+  distance_km?: number | null;
 }
 
 /** One board row: a facility + basin (Day mode) or a day (Pool mode).
@@ -151,6 +154,7 @@ export const BOARD_PLOT = 900;
 const REDUCED_MOTION_QUERY = '(prefers-reduced-motion: reduce)';
 const ROW_H = 46; // row canvas height in CSS px (label cells match this exactly)
 const AXIS_H = 20; // axis header canvas + head-label height, matched for alignment
+const DIVIDER_H = 22; // the O2 group divider — one height, spanning BOTH columns
 
 // "HH:MM" → minutes-of-day. Re-exported from the shared cursor leaf so the board,
 // the Gantt, and the panel all parse times through ONE function.
@@ -214,7 +218,44 @@ export function dayRows(answer: BoardAnswer): BoardRow[] {
     row.statuses.push(s);
   }
 
-  return applyLabelRule([...rows.values()]);
+  return applyLabelRule(groupByOpenToday([...rows.values()]));
+}
+
+/** Which of the two groups a row is in — DERIVED, never stored.
+ *
+ *  A row is in the open group exactly when it has OPTIONS — deliberately not "it has no
+ *  statuses", which is the same predicate only while the two are disjoint (`board.ts:196-207`
+ *  records that they are, on shipped input). A row carrying both is the case that defensive
+ *  branch exists for, and such a row is OPEN: it has water you can plan, and the status beside
+ *  it is a second fact about the same pool, not a contradiction of the first.
+ *
+ *  A stored `openToday` field would be a second, mutable answer to a question the row already
+ *  answers, free to desync from the very options it describes. */
+export function isOpenToday(row: BoardRow): boolean {
+  return row.options.length > 0;
+}
+
+/** Rule O2: open rows first, then the closed / schedule-less ones — each group keeping the
+ *  order the API served it in, which since S2 is distance order on BOTH sides.
+ *
+ *  On `dayRows`' own output this is the IDENTITY function: option rows are built before any
+ *  status row, so the partition already holds. That is precisely why it is a named, exported,
+ *  separately-tested function rather than a comment — an accident is not a contract, and
+ *  `dividerIndex` below draws a boundary that assumes one. Exported so the property can be
+ *  asserted on an input `dayRows` itself cannot produce. */
+export function groupByOpenToday(rows: BoardRow[]): BoardRow[] {
+  return [...rows.filter(isOpenToday), ...rows.filter((row) => !isOpenToday(row))];
+}
+
+/** The row index the O2 divider is drawn BEFORE, or `null` when it must not be drawn at all.
+ *
+ *  Invariant O3: a divider renders only when BOTH groups are non-empty — a board of nothing
+ *  but open pools, or nothing but shut ones, must not carry a heading for a group that has no
+ *  rows under it. Both empty cases collapse into the one comparison: `findIndex` answers -1
+ *  when every row is open, and 0 when every row is closed. */
+export function dividerIndex(rows: BoardRow[]): number | null {
+  const firstClosed = rows.findIndex((row) => !isOpenToday(row));
+  return firstClosed > 0 ? firstClosed : null;
 }
 
 /** Rule L1, in one place. A row's label is the pool name; the `· <basin>` suffix is
@@ -445,6 +486,37 @@ function drawAxis(canvas: CanvasEl, ts: Timescale, pal: Palette | null) {
   ctx.restore();
 }
 
+/** Draw the O2 divider into BOTH columns at the current end of each.
+ *
+ * Two cells of equal height, not one: the board is a 2-column grid whose label stack and
+ * canvas track are parallel lists, so a divider inserted into only the label column would
+ * shift every label below it out of line with its own canvas — the same desync the shared
+ * scroll track exists to prevent. The track side is a plain spacer with no canvas: the
+ * boundary is a fact about the LIST, and painting it onto the time axis would read as a claim
+ * about a time of day.
+ */
+function appendDivider(doc: Doc, labelsBody: El, trackBody: El, plot: number): void {
+  const cell = doc.createElement('div');
+  cell.className = 'board__divider';
+  cell.style.height = `${DIVIDER_H}px`;
+  cell.setAttribute('role', 'separator');
+  // The group below holds every row with no session to plan: shut pools, pools whose hours we
+  // do not have, and pools open with no published timetable. So the heading says exactly that
+  // and NOT "closed" — calling an unknown schedule closed is the one thing this UI refuses to
+  // do (each row keeps its own honest sub-line beneath).
+  const text = doc.createElement('span');
+  text.textContent = t('board.noSessionsGroup');
+  cell.appendChild(text);
+  labelsBody.appendChild(cell);
+
+  const gap = doc.createElement('div');
+  gap.className = 'board__dividergap';
+  gap.style.height = `${DIVIDER_H}px`;
+  gap.style.width = `${plot}px`;
+  gap.setAttribute('aria-hidden', 'true');
+  trackBody.appendChild(gap);
+}
+
 // ---- DOM build + lifecycle ------------------------------------------------------
 
 /**
@@ -552,8 +624,14 @@ export function createBoard<T extends El>(el: T, opts: BoardOpts = {}) {
     canvases.length = 0;
     const rows = boardRows(data, filter);
     headLabel.textContent = headCaption(rows);
+    // Day mode only. A Pool-mode row is a DAY of one pool (invariant I4), so "open" and
+    // "closed" are not two groups of pools there — they alternate down the week, and a
+    // boundary drawn through them would be meaningless.
+    const divider = filter.mode === 'pool' ? null : dividerIndex(rows);
 
-    for (const row of rows) {
+    for (let index = 0; index < rows.length; index += 1) {
+      const row = rows[index];
+      if (index === divider) appendDivider(doc, labelsBody, trackBody, ts.PLOT);
       // --- label cell (column 1, non-scrolling) ---
       const label = doc.createElement('div');
       label.className = 'board__rowlabel';

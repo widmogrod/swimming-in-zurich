@@ -224,6 +224,53 @@ describe("the fair-weather session marker is translated everywhere", () => {
   );
 });
 
+describe("the board's group divider is translated everywhere", () => {
+  // Same reasoning as the access legend: cross-comparing the five catalogues is green when all
+  // five lack a key, so this one (board-order-and-defects S2) is asserted BY NAME.
+  const DIVIDER_KEY = "board.noSessionsGroup";
+
+  test.each(LOCALES)("%s carries the divider label, non-empty", (locale) => {
+    const entry = CATALOGS[locale][DIVIDER_KEY];
+    expect(entry, `${locale} is missing ${DIVIDER_KEY}`).toBeDefined();
+    expect(
+      typeof entry,
+      `${locale}/${DIVIDER_KEY} must be a plain string`,
+    ).toBe("string");
+    expect(
+      (entry as string).trim().length,
+      `${locale}/${DIVIDER_KEY} is blank`,
+    ).toBeGreaterThan(0);
+  });
+
+  test.each(LOCALES.filter((l) => l !== "en"))(
+    "%s is actually translated, not left as English",
+    (locale) => {
+      expect(CATALOGS[locale][DIVIDER_KEY]).not.toBe(en[DIVIDER_KEY]);
+    },
+  );
+
+  test.each(LOCALES)("%s does not call the group closed", (locale) => {
+    // The group below the divider holds shut pools AND pools whose hours are simply unknown.
+    // Every other surface here refuses to render an unknown schedule as a closure (the three
+    // ghost states, `isUnlisted`, `status.no_source`); a heading that said "closed" would undo
+    // all of it in one word, for the whole group at once.
+    const label = (CATALOGS[locale][DIVIDER_KEY] as string).toLocaleLowerCase();
+    for (const shut of [
+      "closed",
+      "geschlossen",
+      "fermé",
+      "chius",
+      "zamkni",
+      "nieczynn",
+    ]) {
+      expect(
+        label,
+        `${locale}: the divider calls the group closed`,
+      ).not.toContain(shut);
+    }
+  });
+});
+
 describe("plural entries carry exactly the categories their locale uses", () => {
   test.each(LOCALES)("%s", (locale) => {
     const expected = [...PLURAL_CATEGORIES[locale]].sort();

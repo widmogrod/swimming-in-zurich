@@ -216,6 +216,7 @@ export const fr = {
   "detail.liveOpen": "ouvert",
   "detail.liveClosed": "fermé",
   "board.nearestFirst": "Les plus proches d’abord",
+  "board.noSessionsGroup": "Aucun horaire publié aujourd’hui",
   "detail.waterNotPublished": "Température de l’eau non publiée",
   "detail.tempMeasured": "mesurée",
   "detail.liveMeasuredAgo": "mesurée il y a {age}",

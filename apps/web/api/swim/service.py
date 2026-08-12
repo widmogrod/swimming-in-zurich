@@ -106,6 +106,14 @@ def _public_window_out(window: PublicWindow | None) -> PublicWindowOut | None:
     )
 
 
+def _km_out(km: float | None) -> float | None:
+    """The ONE wire rounding for a distance. Options and statuses now both carry one (S2/O1),
+    and AC4 asserts a closed pool's `distance_km` EQUALS the value its option carries on a day
+    it is open — two independently-written `round(..., 2)` calls would make that equality a
+    coincidence rather than a property."""
+    return round(km, 2) if km is not None else None
+
+
 def _option_out(option: SwimOption) -> OptionOut:
     valid = option.provenance.valid_as_of
     return OptionOut(
@@ -124,7 +132,7 @@ def _option_out(option: SwimOption) -> OptionOut:
         reason_code=option.eligibility.code.value,
         reason_params=dict(option.eligibility.params),
         price=option.price.display if option.price is not None else None,
-        distance_km=round(option.distance_km, 2) if option.distance_km is not None else None,
+        distance_km=_km_out(option.distance_km),
         open_now=option.open_at_query_time,
         valid_as_of=valid.isoformat() if valid is not None else None,
         source=option.provenance.source,
@@ -169,6 +177,7 @@ def build_answer(
                 detail_code=s.code.value,
                 closure_code=s.closure.value if s.closure else None,
                 detail_params=dict(s.params),
+                distance_km=_km_out(s.distance_km),
             )
             for s in result.statuses
         ],

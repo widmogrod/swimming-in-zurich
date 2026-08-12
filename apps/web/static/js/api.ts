@@ -52,6 +52,10 @@ export interface SwimStatus {
   facility: string;
   status: string;
   detail?: string | null;
+  /** Km from the requested place — the SAME value an `OptionOut` for this pool carries on a
+   *  day it is open (rule O1, board-order-and-defects S2). `null` when the request named no
+   *  place, or the pool publishes no position; never a stand-in zero. */
+  distance_km?: number | null;
 }
 
 /** A single `/swim` AnswerOut, read structurally. */
