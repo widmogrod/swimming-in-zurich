@@ -14,6 +14,7 @@ import {
   isOpenToday,
   weekRows,
   boardRows,
+  rowHeight,
   rowStatus,
   rowStatusLine,
   rowEligibility,
@@ -27,6 +28,8 @@ import {
 } from './board.js';
 import { rowKeyFor } from './rowkey.js';
 import { rowKey } from './poolrank.js';
+import { laneBands, OWNER_LABEL_MIN_H } from './ribbonrender.js';
+import { ribbonsFor } from './ribbonmodel.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const FIXTURES = join(HERE, '..', '..', '..', 'tests', 'fixtures');
@@ -38,6 +41,9 @@ const WEEK = load<BoardWeek>('swim_week_oerlikon.json');
 
 const isCanvas = (e: FakeElement) => e.tagName === 'CANVAS';
 const hasClass = (c: string) => (e: FakeElement) => e.classList.contains(c);
+/** A canvas' INTRINSIC pixel size — the board sets `canvas.width`/`canvas.height` as plain
+ *  properties, which are not part of the structural `El` surface the fake DOM declares. */
+const intrinsic = (e: FakeElement) => e as unknown as { width: number; height: number };
 
 test('hhmmToMin parses times to minutes-of-day', () => {
   expect(hhmmToMin('06:00')).toBe(360);
@@ -879,4 +885,241 @@ test('Pool mode draws no divider — its rows are days of ONE pool, not two grou
     'Tue · 11 Aug',
     'Wed · 12 Aug',
   ]);
+});
+
+// --- board-order-and-defects S3: the owner name renders (height is the fix) ----------
+//
+// [[lane-stack-board]] shipped `ROW_H = 46` AND "the owner is written inside its lane
+// block". From five lanes up those two are arithmetically incompatible, so the owner
+// rendered on NO real Zürich basin — City has 6 lanes, Oerlikon 8. The fix is the row's
+// HEIGHT, which is the only free variable: `laneBands` divides `h * 0.8` between the lanes.
+
+/** An option with a `lane_day_view` of `lanes` lanes, the last two held by a named club.
+ *  The strips span the option's OWN window (`laneStackFor` clips the day view to the
+ *  session, so a plan written over some other hours would arrive as empty lanes). */
+const laneOpt = (lanes: number, extra: Record<string, unknown> = {}) => {
+  const start = typeof extra.start === 'string' ? extra.start : '09:00';
+  const end = typeof extra.end === 'string' ? extra.end : '12:00';
+  return {
+    facility: 'Hallenbad City',
+    basin_id: 'city-50m',
+    basin: 'Schwimmerbecken',
+    access: 'PublicSwim',
+    start,
+    end,
+    lane_day_view: {
+      weekday: 2,
+      lane_count: lanes,
+      strips: Array.from({ length: lanes }, (_, i) => ({
+        lane: i + 1,
+        segments: [
+          i + 2 < lanes
+            ? { start, end, access: 'PublicSwim', owner: null }
+            : { start, end, access: 'ClubReserved', owner: 'SC Uster' },
+        ],
+      })),
+    },
+    ...extra,
+  };
+};
+
+const stackRow = (lanes: number, extra: Record<string, unknown> = {}): BoardRow => ({
+  label: 'Hallenbad City',
+  facility: 'Hallenbad City',
+  basin_id: 'city-50m',
+  options: [laneOpt(lanes, extra)],
+  statuses: [],
+});
+
+test('AC2 · rowHeight is max(46, 10 × lanes) — the floor holds to 4 lanes, then it grows', () => {
+  // Every case, n = 1..10, spelled out rather than recomputed from the same formula the
+  // implementation uses: a test that re-derives `10 * n` cannot catch `10` becoming 9 or 11.
+  const heights = Array.from({ length: 10 }, (_, i) => rowHeight(stackRow(i + 1)));
+  expect(heights).toEqual([46, 46, 46, 46, 50, 60, 70, 80, 90, 100]);
+  // The four real shapes, named: this is the table the plan was approved on.
+  expect(rowHeight(stackRow(8))).toBe(80); // Oerlikon 50m
+  expect(rowHeight(stackRow(6))).toBe(60); // City Schwimmerbecken
+  expect(rowHeight(stackRow(5))).toBe(50); // Bläsi 25m, Leimbach 25m
+  expect(rowHeight(stackRow(4))).toBe(46); // Bungertwies, Käferberg — unchanged
+  expect(rowHeight(stackRow(2))).toBe(46); // Oerlikon Sprungbecken — unchanged
+});
+
+test('AC2 · a row with no lane plan keeps ROW_H — 46, byte-identical to before', () => {
+  const plain: BoardRow = {
+    label: 'Hallenbad City',
+    facility: 'Hallenbad City',
+    options: [opt('Hallenbad City', 'city-50m', 'Schwimmerbecken')],
+    statuses: [],
+  };
+  expect(rowHeight(plain)).toBe(46);
+  expect(rowHeight(closedRow('Seebad Utoquai'))).toBe(46);
+  expect(rowHeight({ label: 'x', facility: 'x', options: [], statuses: [] })).toBe(46);
+  // ~50 of 57 pools will never have a lane plan. The board they see must not move at all.
+  for (const row of dayRows(DAY).filter((r) => !r.options.some((o) => o.lane_day_view))) {
+    expect(rowHeight(row)).toBe(46);
+  }
+});
+
+test('AC2 · rowHeight is PURE: same row, same answer, and the row is not touched', () => {
+  const row = stackRow(6);
+  const before = JSON.stringify(row);
+  expect(rowHeight(row)).toBe(rowHeight(row));
+  expect(JSON.stringify(row)).toBe(before);
+});
+
+test('the height is read from the ribbons the row PAINTS, never from its raw options', () => {
+  // `optionRibbon` refuses to build a stack for a session with no hours (invariant I5) and
+  // falls back to the "not published" ribbon. A height derived from `option.lane_day_view`
+  // instead would grow this row to 80px and then paint a 46px-worth hatch in it — a hole
+  // in the board explained by nothing. Same row, same lane_day_view, no hours.
+  const noHours = stackRow(8, { start: undefined, end: undefined });
+  expect(noHours.options[0].lane_day_view).toBeTruthy();
+  expect(rowHeight(noHours)).toBe(46);
+  // …and with the hours present it is the one that grows, so the difference is the HOURS.
+  expect(rowHeight(stackRow(8))).toBe(80);
+});
+
+test('a row with two plan-bearing sessions is sized by the TALLEST stack, not the first', () => {
+  // A row is a BASIN, and a basin's day carries as many sessions as the city publishes —
+  // the committed answer gives Hallenbad Oerlikon two, both 8-lane. They need not agree:
+  // a morning block on 4 lanes and an afternoon one on the full 8 is one row that has to
+  // hold 8 bands. Sized by the first (or the last) it would clip half the plan.
+  const twoSessions: BoardRow = {
+    label: 'Hallenbad City',
+    facility: 'Hallenbad City',
+    basin_id: 'city-50m',
+    options: [laneOpt(4, { start: '06:00', end: '09:00' }), laneOpt(8, { start: '09:00', end: '12:00' })],
+    statuses: [],
+  };
+  expect(rowHeight(twoSessions)).toBe(80);
+  // …and the same row with the sessions the other way round answers the same.
+  expect(rowHeight({ ...twoSessions, options: [...twoSessions.options].reverse() })).toBe(80);
+});
+
+test('the height follows the PAINTER\'s dispatch — only a lanestack ribbon carries a lane count', () => {
+  // `stackLaneCount` gates on `variant === 'lanestack'`, the very key `drawRibbons`
+  // dispatches on, and only then reads `lane_count`. Today the gate is REDUNDANT: the stack
+  // branch of `optionRibbon` is the only one that emits a `lane_count`, so deleting it
+  // changes no answer and no test could kill that mutant through `rowHeight` — the same
+  // shape of hole S2 hit with `groupByOpenToday`. So the identity it is redundant under is
+  // asserted directly instead of left implicit. The day a `lanes` ribbon hoists its
+  // `segments[].lane_count` to the top level, this reddens and the gate starts carrying
+  // weight — a counts-only ribbon draws ONE body about the mid-line and must NOT grow a row.
+  const shapes = [
+    laneOpt(6), // → lanestack
+    opt('P', 'p-1', 'b', {
+      lane_timeline: { segments: [{ start: '09:00', end: '12:00', lane_count: 6, public_lanes: 3, reserved_lanes: 3 }] },
+    }), // → lanes
+    opt('P', 'p-1', 'b'), // → unpublished
+  ];
+  const ribbons = ribbonsFor({
+    options: shapes,
+    statuses: [{ facility: 'P', status: 'closed' }, { facility: 'P', status: 'no_source' }],
+  });
+  expect(ribbons.map((r) => r.variant)).toEqual([
+    'closed',
+    'ghost',
+    'lanestack',
+    'lanes',
+    'unpublished',
+  ]);
+  for (const r of ribbons) {
+    expect('lane_count' in r, `${String(r.variant)} carries a lane_count`).toBe(
+      r.variant === 'lanestack',
+    );
+  }
+});
+
+test('the grown height is exactly what the owner-label gate needs — no more, no less', () => {
+  // The three constants are set in two different files (`rowHeight`'s 10 here,
+  // `STACK_BOX`/`OWNER_LABEL_MIN_H` in ribbonrender.ts) and only agree by arithmetic:
+  // band = h·0.8/n − 1 ≥ 7 ⟺ h ≥ 10n. Moving any one of them without the others silently
+  // un-fixes the defect, so the relation is asserted rather than written in a comment.
+  for (let n = 1; n <= 12; n += 1) {
+    const h = rowHeight(stackRow(n));
+    const band = laneBands(n, h / 2, h)[0];
+    expect(band.height, `${n} lanes at ${h}px`).toBeGreaterThanOrEqual(OWNER_LABEL_MIN_H);
+  }
+  // And the counterfactual that makes the growth load-bearing: at the old fixed 46 a
+  // five-lane band is 6.36px and the gate refuses it. This is the defect, reproduced.
+  expect(laneBands(5, 23, 46)[0].height).toBeLessThan(OWNER_LABEL_MIN_H);
+  expect(laneBands(6, 23, 46)[0].height).toBeLessThan(OWNER_LABEL_MIN_H);
+  expect(laneBands(8, 23, 46)[0].height).toBeLessThan(OWNER_LABEL_MIN_H);
+});
+
+test('AC3/H1 · every label cell is exactly as tall as its own canvas, at MIXED heights', () => {
+  // The real desync risk under variable height is NOT the x-mapping (`ts.X` takes no height,
+  // and the cursor routes through the shared `cursorX`, so a test on those is vacuous by
+  // construction). It is column 1 drifting from column 2: the label stack and the canvas
+  // track are PARALLEL lists rendered into two scroll boxes, so one cell that is a different
+  // height from its twin shifts every row below it against the wrong pool's ribbons.
+  const day: BoardAnswer = {
+    options: [
+      laneOpt(8, { facility: 'Hallenbad Oerlikon', basin_id: 'oerlikon-50m' }), // 80
+      laneOpt(6), // City — 60
+      opt('Hallenbad Bungertwies', 'bungertwies-25m', '25m'), // no plan — 46
+    ],
+    statuses: [{ facility: 'Seebad Utoquai', status: 'closed' }], // 46, below the divider
+  };
+  const el = mount();
+  createBoard(el, {
+    data: { day },
+    filter: { mode: 'day', gender: '', age: null },
+    matchMedia: () => ({ matches: false }),
+    requestAnimationFrame: () => {},
+  });
+  const labelsBody = must(el.query(hasClass('board__labelsbody')), 'labels body');
+  const trackBody = must(el.query(hasClass('board__trackbody')), 'track body');
+  expect(labelsBody.children.length).toBe(trackBody.children.length);
+  // The divider is in BOTH columns (S2), so the two lists stay index-aligned and the pair
+  // at the boundary is compared like any other — its two cells are the one place where the
+  // equality was previously unpinned (both read DIVIDER_H, and nothing said they must).
+  expect(labelsBody.children.length).toBe(5); // 3 open rows + divider + 1 closed row
+  const heights = labelsBody.children.map((c) => c.style.height);
+  expect(heights).toEqual(['80px', '60px', '46px', '22px', '46px']);
+  // MIXED — an all-46 board would make every assertion below true for the wrong reason.
+  expect(new Set(heights).size).toBeGreaterThan(1);
+  // …and each row cell is the height `rowHeight` answers for ITS row, so the exported pure
+  // function and the one the DOM is actually built from cannot drift apart.
+  expect(heights.filter((_, i) => i !== 3)).toEqual(
+    dayRows(day).map((r) => `${rowHeight(r)}px`),
+  );
+  for (const [i, label] of labelsBody.children.entries()) {
+    const twin = trackBody.children[i];
+    expect(twin.style.height, `column 2 cell ${i}`).toBe(label.style.height);
+    // The canvas' INTRINSIC height is the third copy of the same number: a canvas sized in
+    // CSS but not in pixels would rescale the ribbon rather than move it.
+    if (twin.tagName === 'CANVAS') expect(`${intrinsic(twin).height}px`).toBe(label.style.height);
+  }
+  // The divider pair, named: a separator for assistive tech in column 1, and a silent
+  // spacer in column 2 (the boundary is a fact about the LIST, not about a time of day).
+  expect(labelsBody.children[3].attributes.role).toBe('separator');
+  expect(trackBody.children[3].attributes['aria-hidden']).toBe('true');
+  expect(trackBody.children[3].attributes.role).toBe(undefined);
+  // H1: taller rows do not move the shared timescale. The axis header keeps its own height
+  // and the plot its width, so no mark moves sideways.
+  const axis = must(el.query(hasClass('board__axiscanvas')), 'axis canvas');
+  expect(intrinsic(axis).height).toBe(20);
+  expect(axis.style.width).toBe(`${BOARD_PLOT}px`);
+  for (const canvas of el.queryAll(hasClass('board__canvas'))) {
+    expect(intrinsic(canvas).width).toBe(BOARD_PLOT);
+  }
+});
+
+test('AC3 · a rebuild re-derives every height — a filter change cannot strand a tall row', () => {
+  // `buildRows` runs again on setFilter/setData with a fresh `h` per row. If the height were
+  // captured once at mount, switching filters would leave 80px labels beside 46px canvases.
+  const el = mount();
+  const board = createBoard(el, {
+    data: { day: { options: [laneOpt(8), opt('Hallenbad Bungertwies', 'b-25m', '25m')], statuses: [] } },
+    filter: { mode: 'day', gender: '', age: null },
+    matchMedia: () => ({ matches: false }),
+    requestAnimationFrame: () => {},
+  });
+  board.setData({ day: { options: [opt('Hallenbad Bungertwies', 'b-25m', '25m'), laneOpt(6)], statuses: [] } });
+  const labelsBody = must(el.query(hasClass('board__labelsbody')), 'labels body');
+  const trackBody = must(el.query(hasClass('board__trackbody')), 'track body');
+  expect(labelsBody.children.map((c) => c.style.height)).toEqual(['46px', '60px']);
+  expect(trackBody.children.map((c) => c.style.height)).toEqual(['46px', '60px']);
+  expect(trackBody.children.map((c) => intrinsic(c).height)).toEqual([46, 60]);
 });

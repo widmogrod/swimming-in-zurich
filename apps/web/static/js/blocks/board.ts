@@ -152,7 +152,7 @@ export const BOARD_DAY1 = 22;
 export const BOARD_PLOT = 900;
 
 const REDUCED_MOTION_QUERY = '(prefers-reduced-motion: reduce)';
-const ROW_H = 46; // row canvas height in CSS px (label cells match this exactly)
+const ROW_H = 46; // the FLOOR for a row's height in CSS px (label cells match it exactly)
 const AXIS_H = 20; // axis header canvas + head-label height, matched for alignment
 const DIVIDER_H = 22; // the O2 group divider — one height, spanning BOTH columns
 
@@ -433,6 +433,63 @@ function weekdayDateLabel(row: BoardRow): string {
   return `${weekday} · ${day} ${month}`;
 }
 
+// ---- Row height (pure, exported for unit tests) ---------------------------------
+
+/** The lane count the row's STACK will paint — 0 when the row carries no lane plan.
+ *
+ * Read off the ribbons the row actually renders, never off the raw options: `optionRibbon`
+ * refuses to build a stack for a session with no hours (invariant I5) and falls back to the
+ * "not published" ribbon. A row grown for a stack that is not painted would be a 60px gap
+ * holding a 46px ribbon — the height and the paint have to answer the same question, so
+ * they are made to ask it of the same object.
+ *
+ * The MAX across the row's ribbons, because a row is a basin and a basin's day can carry
+ * more than one plan-bearing session: the tallest stack is the one that has to fit.
+ *
+ * THE VARIANT GATE CANNOT BE KILLED BY A TEST TODAY, and that is recorded rather than left
+ * to be discovered: `optionRibbon`'s stack branch is currently the ONLY one that emits a
+ * `lane_count`, so `variant === 'lanestack'` and "carries a lane_count" are the same
+ * predicate and deleting the gate changes no answer. It stays because it is the one that is
+ * RIGHT — the height must follow the same key `drawRibbons` dispatches on, and a
+ * counts-only `lanes` ribbon (whose segments each carry a `lane_count`) draws one body about
+ * the mid-line and must never grow a row. board.test.ts asserts the identity itself, so the
+ * day a ribbon hoists `segments[].lane_count` the suite reddens there instead. */
+function stackLaneCount(ribbons: Ribbon[]): number {
+  let lanes = 0;
+  for (const r of ribbons) {
+    if (r.variant !== 'lanestack') continue;
+    const n = Math.floor(Number(r.lane_count));
+    if (Number.isFinite(n) && n > lanes) lanes = n;
+  }
+  return lanes;
+}
+
+function heightForLanes(lanes: number): number {
+  return Math.max(ROW_H, 10 * lanes);
+}
+
+/**
+ * rowHeight(row) → the row's height in CSS px: `max(ROW_H, 10 × lanes)`.
+ *
+ * `ROW_H = 46` and "the owner is written inside its lane block" are arithmetically
+ * incompatible at six lanes, and [[lane-stack-board]] shipped BOTH — which is why the owner
+ * name renders on no real Zürich basin today. `laneBands` splits `h * STACK_BOX` (0.8) between
+ * the lanes and spends 1px of it on a separator, so a band is `h * 0.8 / n - 1`, and
+ * `ownerLabelFits` refuses any band under `OWNER_LABEL_MIN_H` (7px). Solving
+ * `h * 0.8 / n - 1 >= 7` gives `h >= 10n`; at exactly `10n` the band is exactly 7px, which the
+ * gate admits (`bandH < OWNER_LABEL_MIN_H` is false). The link between the three constants is
+ * asserted in board.test.ts rather than left as a comment.
+ *
+ * Against the seven real lane plans four rows grow (Oerlikon 50m 8 → 80, City Schwimmerbecken
+ * 6 → 60, Bläsi and Leimbach 5 → 50) and three keep 46; every row with no plan is untouched.
+ *
+ * HEIGHT ONLY (invariant H1). The x-axis, the axis header and the cursor are functions of the
+ * shared timescale, which no row owns — a taller row moves no mark sideways.
+ */
+export function rowHeight(row: BoardRow): number {
+  return heightForLanes(stackLaneCount(ribbonsFor(row) as Ribbon[]));
+}
+
 // ---- Colour resolution (runtime, browser only) ----------------------------------
 
 
@@ -440,21 +497,26 @@ function weekdayDateLabel(row: BoardRow): string {
 
 // Draw one row's ribbons. The ribbon painting itself lives in ribbonrender.ts (shared
 // with the phone day tail); what stays here is board-specific chrome: the row hairline
-// and the ROW_H box. `phase` animates the waterline (0 when frozen).
+// and the row box. `phase` animates the waterline (0 when frozen).
+//
+// `h` is PASSED, not read from a constant: since the owner-name fix a row's height is
+// `rowHeight(row)`, and the one place it is computed is `buildRows` — where the same value
+// is written to the canvas AND to the label cell. Handing it down keeps the paint box and
+// the two DOM boxes provably the same number rather than three that happen to agree.
 function drawRow(
   canvas: CanvasEl,
   ribbons: Ribbon[],
   ts: Timescale,
   pal: Palette | null,
+  h: number,
   phase: number,
 ): void {
   const ctx = canvas.getContext ? canvas.getContext('2d') : null;
   if (!ctx || !pal) return; // headless / no canvas → nothing to paint (logic already tested)
   const w = ts.PLOT;
-  const h = ROW_H;
   ctx.clearRect(0, 0, w, h);
   // A faint top hairline separates rows (drawn here so the canvas keeps its exact
-  // ROW_H height — a CSS border would shrink the drawing box and blur the ribbon).
+  // row height — a CSS border would shrink the drawing box and blur the ribbon).
   ctx.save();
   ctx.strokeStyle = pal.hair || pal.axis;
   ctx.globalAlpha = 0.9;
@@ -595,10 +657,16 @@ export function createBoard<T extends El>(el: T, opts: BoardOpts = {}) {
   track.appendChild(trackBody);
 
   const pal = resolveFamilyPalette(doc, board);
-  // One entry per data row: { canvas, row, ribbons, animated }. `ribbons` is computed
+  // One entry per data row: { canvas, row, ribbons, h, animated }. `ribbons` is computed
   // ONCE here (not per frame); only the ~1–2 rows carrying a flowing lane ribbon are
   // redrawn in the RAF loop — the static ghost/closed/unpublished rows are painted once.
-  const canvases: { canvas: CanvasEl; row: BoardRow; ribbons: Ribbon[]; animated: boolean }[] = [];
+  const canvases: {
+    canvas: CanvasEl;
+    row: BoardRow;
+    ribbons: Ribbon[];
+    h: number;
+    animated: boolean;
+  }[] = [];
 
   function isAnimated(ribbons: Ribbon[]): boolean {
     return ribbons.some((r: Ribbon) => r.kind !== 'status' && r.variant === 'lanes');
@@ -632,10 +700,15 @@ export function createBoard<T extends El>(el: T, opts: BoardOpts = {}) {
     for (let index = 0; index < rows.length; index += 1) {
       const row = rows[index];
       if (index === divider) appendDivider(doc, labelsBody, trackBody, ts.PLOT);
+      // The row's ribbons and its HEIGHT are computed together, once, before either column
+      // is built: the label cell and the canvas are parallel lists, so the single thing that
+      // must never differ between them is this number. One `h`, three consumers.
+      const ribbons = ribbonsFor(row) as Ribbon[];
+      const h = heightForLanes(stackLaneCount(ribbons));
       // --- label cell (column 1, non-scrolling) ---
       const label = doc.createElement('div');
       label.className = 'board__rowlabel';
-      label.style.height = `${ROW_H}px`;
+      label.style.height = `${h}px`;
       const dot = doc.createElement('span');
       dot.className = `board__dot board__dot--${rowStatus(row)}`;
       dot.setAttribute('aria-hidden', 'true');
@@ -699,14 +772,13 @@ export function createBoard<T extends El>(el: T, opts: BoardOpts = {}) {
       const canvas = asCanvas(doc.createElement('canvas'));
       canvas.className = 'board__canvas';
       canvas.width = ts.PLOT;
-      canvas.height = ROW_H;
+      canvas.height = h;
       canvas.style.width = `${ts.PLOT}px`;
-      canvas.style.height = `${ROW_H}px`;
+      canvas.style.height = `${h}px`;
       if (elig === 'no' && eligEngaged(filter)) canvas.classList.add('board__canvas--noelig');
       trackBody.appendChild(canvas);
 
-      const ribbons = ribbonsFor(row) as Ribbon[];
-      canvases.push({ canvas, row, ribbons, animated: isAnimated(ribbons) });
+      canvases.push({ canvas, row, ribbons, h, animated: isAnimated(ribbons) });
     }
     return rows;
   }
@@ -715,12 +787,12 @@ export function createBoard<T extends El>(el: T, opts: BoardOpts = {}) {
 
   function paintStatic(phase = 0) {
     drawAxis(axisCanvas, ts, pal);
-    for (const { canvas, ribbons } of canvases) drawRow(canvas, ribbons, ts, pal, phase);
+    for (const { canvas, ribbons, h } of canvases) drawRow(canvas, ribbons, ts, pal, h, phase);
   }
 
   function paintAnimated(phase: number) {
-    for (const { canvas, ribbons, animated } of canvases) {
-      if (animated) drawRow(canvas, ribbons, ts, pal, phase);
+    for (const { canvas, ribbons, h, animated } of canvases) {
+      if (animated) drawRow(canvas, ribbons, ts, pal, h, phase);
     }
   }
 

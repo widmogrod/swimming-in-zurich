@@ -281,17 +281,23 @@ function drawUnpublishedRibbon(
 
 // ---- The lane stack (variant C) --------------------------------------------------
 //
-// One hairline sub-row per lane, inside the SAME ROW_H the other variants use: the row
-// does not grow, it subdivides. Public vs reserved fill says which lanes are free; the
-// owner is written INSIDE its block wherever the block is wide enough to hold the whole
-// word, and omitted (never clipped mid-word) where it is not.
+// One hairline sub-row per lane, inside the SAME row box the other variants use: within a
+// row the stack subdivides rather than adding rows. (What the row's HEIGHT is, is the
+// caller's business and not this file's: `board.ts::rowHeight` grows a plan-bearing row to
+// `10 x lanes` so these bands can carry type, while the phone tail keeps its 46px `TAIL_H`.
+// This module has always taken `h` and never seen either constant.) Public vs reserved fill
+// says which lanes are free; the owner is written INSIDE its block wherever the block is
+// wide enough to hold the whole word, and omitted (never clipped mid-word) where it is not.
 
 /** The stack's box is the same 0.8h envelope `drawLaneRibbon` fills at full capacity. */
 const STACK_BOX = 0.8;
 /** A band shorter than this cannot carry legible type, so its blocks stay unlabelled.
- *  The width gate's vertical twin, and the binding one on real data: at ROW_H 46 a 6-lane
- *  basin gives each lane ~5px, so its owners are read in the DetailPanel's Gantt (one
- *  click away) rather than painted as mush across the board's sub-rows. */
+ *  The width gate's vertical twin. It is what SETS the board's row height: solving
+ *  `h * STACK_BOX / n - 1 >= OWNER_LABEL_MIN_H` gives `h >= 10n`, which is exactly
+ *  `board.ts::rowHeight` (a 6-lane basin at the old fixed 46 gave each lane ~5px and its
+ *  owners never rendered — the defect board-order-and-defects S3 fixed). Where a surface
+ *  cannot grow — the phone tail at `TAIL_H` 46 — the label is still dropped rather than
+ *  painted as mush, and the owner is read in the DetailPanel's Gantt one click away. */
 export const OWNER_LABEL_MIN_H = 7;
 /** Horizontal breathing room inside a block, per side. */
 export const OWNER_LABEL_PAD = 3;
@@ -299,8 +305,8 @@ const OWNER_FONT = '600 8.5px system-ui, sans-serif';
 
 /**
  * laneBands(laneCount, mid, h) → the sub-row geometry: `laneCount` bands, top to bottom,
- * inside the row's own box. PURE — the "six distinct sub-bands within ROW_H" property is
- * asserted here rather than inferred from a canvas.
+ * inside the row's own box, whatever height that box is. PURE — the "n distinct sub-bands
+ * within h" property is asserted here rather than inferred from a canvas.
  *
  * The 1px separator is dropped once the pitch is too tight to spare it: at 20 lanes a gap
  * would eat a third of each band, and touching bands still read as bands.

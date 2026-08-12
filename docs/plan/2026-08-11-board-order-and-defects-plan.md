@@ -303,8 +303,39 @@ Appended by /dev:implement after each slice — never rewritten. Newest row last
 |------|-------|--------|----------------------|-------------------|---------------|
 | 2026-08-12 | S1 | done | (1) `compose.py` gained `carry_lane_plans` + `_lane_key`, beyond the plan's "only if the branch comment needs correcting" — the curated rebuild strands attached lane plans otherwise. (2) `etl/build.py` split into `assemble_curated` + `write_curated_store`; `build_store`'s signature and behaviour unchanged (verified byte-identical over all 57 blobs). (3) `build` runs the roster fetch and curated assemble BEFORE `atomic_swap` — neither writes, failure paths identical, now covered. (4) `_compose_schedules` writes a SUBSET of `composition.facilities` — the adjudicated fix for the deletion door. | `CuratedAssembly.facilities`/`keyed_facilities` re-run `codec.loads` over all 57 blobs on every access; called at most twice per run. | yes |
 | 2026-08-12 | S2 | done | (1) `_distance_km(query, facility)` became `_distance_km(query, geo)` — the roster half has no `Facility`, and a second entry-shaped helper is how the two halves would drift apart. (2) `_option_order`/`_status_order` extracted to module level — the two inline lambdas pushed `find_swim_options` to CRAP 28.6 against a 30 gate; extracted it is 26.5. No behaviour change to the option key. (3) `service._km_out` added so AC4's equality is structural, not two independently-written `round(...,2)` calls. (4) `poollist.ts`/`appdata.test.ts` named in Touches needed no change; `phonelist.test.ts` pinned the user-visible result instead (a closed card now states its km). | `find_swim_options` at CRAP 26.5 / CC 26 against a 30 gate; this slice added ~2, so the next change there needs a genuine extraction. `groupByOpenToday`'s CALL SITE has a permanently-surviving mutant while `dayRows` builds options before statuses — proven identity, documented at the site. `_schedule_less_statuses` still does not apply `query.radius_km` while the in-loop half does (pre-existing, now more visible). `appdata.classifyPools` still derives distance from options only, so the pool-picker shows no km for a closed pool while the board and phone list now do. | yes |
+| 2026-08-12 | S3 | done | (1) `board_render.test.ts` edited, not named in Touches — its "inside ROW_H" test hard-codes 46 and went RED after the fix, so it was a THIRD shipped test encoding S3's opposite (the two the plan named use a local `H` and stayed green). (2) `ribbonrender.ts` comment-only edit, against "board.ts ONLY for production code" — three comments asserted "the row does not grow" and "its owners are read in the DetailPanel", now false; `git diff -U0` with comment lines filtered yields zero lines, verified by the critic. | At exactly `10n` the band is **exactly 7.00px** and `ownerLabelFits` admits it with no margin — verified exact, not epsilon-lucky (`h*0.8` is representable at every real n; no DPR in the path). Guarded: mutating STACK_BOX 0.8→0.75, OWNER_LABEL_MIN_H 7→7.5, the separator 1→2, or `<`→`<=` each redden 2-3 tests. **Not eyeballed in a real browser** — every check is headless, and a 7.00px band under an 8.5px 600-weight face is the one thing arithmetic cannot settle. `stackLaneCount`'s `variant === 'lanestack'` gate and its `Number.isFinite` guard are permanently-surviving mutants (`optionRibbon` only emits lanestack under `lane_count > 0`). `daytail.ts:33` still says TAIL_H "matches the board's ROW_H" — true of the floor, no longer of every row. | yes |
 
 ## Decisions & divergences
+
+**2026-08-12 — S3: the owner name renders, verified on painted strings rather than on assertions.**
+Critic verdict `approve`.
+
+The critic did not settle for "a test asserts it". It built a store from the committed fixtures the
+way `conftest.py::gold_db` does, served four dates through `build_answer` at `PLACE_PRESETS[0]`, and
+drove the **compiled** board (`static/dist/blocks/board.js`) with a recording 2D context whose
+`measureText` uses a realistic 8.5px advance (0.56em) rather than the test harness' generous
+6px/char. Painted labels on 2026-08-12: `ASVZ`, `Schwimmverein Zürileu`, `Trigether`, `Sportaktiv`,
+on 60px rows. **Variant C's "whose" now ships.**
+
+Of 20 owner-bearing reserved segments that day, 16 clear the label gate; the 4 drops are all
+`Aquatic Masters Team` (84.4px block vs 101.2px needed) — the pre-existing *horizontal* gate, which
+S3 never claimed to move.
+
+**The plan's Design table does not describe the store today.** It says Oerlikon 8 / Bungertwies 4 /
+Käferberg 4 / Bläsi-Leimbach 5. The offline build attaches **6** plans, and serves 6-lane views for
+City, Bungertwies and Käferberg, with Oerlikon 50m carrying no `lane_day_view` on the sampled dates.
+`max(46, 10n)` handles the actual shapes correctly either way — but the table was written from the
+*base* checkout's store, and reconciling it is exactly S4's attachment-count criterion.
+
+**One report inaccuracy, corrected here.** The implementer said it *fixed* the two mutants that first
+survived. `max` is genuinely fixed; the `variant === 'lanestack'` gate still survives, and the
+report's own tech-debt paragraph contradicts its acceptance paragraph two paragraphs later. The code
+comment is the honest version. Recorded because a report that claims a mutant died is worse than one
+that discloses it lived — the next reader trusts the wrong sentence.
+
+**This is the first slice where the implementer mutation-tested itself before reporting**, and it
+found two survivors that way and fixed one rather than shipping them silently. The critic re-ran all
+nine claimed mutations independently and every one reddened as reported.
 
 **2026-08-12 — S2: what the slice actually delivers, measured, because it is NOT what the plan's
 Context implied.** Recorded before any summary distils it into a success story.

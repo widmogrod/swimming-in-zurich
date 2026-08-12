@@ -10,14 +10,26 @@
 // self-consistent, not to pin an image.
 
 import { expect, test } from "vitest";
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import { dirname, join } from "node:path";
 import { FakeDocument, type FakeElement } from "../components/_fakedom.js";
 import {
   createBoard,
+  dayRows,
+  rowHeight,
   rowStatusLine,
   type BoardAnswer,
   type BoardWeek,
 } from "./board.js";
 import type { El } from "../domtypes.js";
+
+const HERE = dirname(fileURLToPath(import.meta.url));
+/** The committed `/swim` answer: its Hallenbad Oerlikon row carries a real 8-lane
+ *  Belegungsplan with four named holders — the basin AC1 is actually about. */
+const DAY = JSON.parse(
+  readFileSync(join(HERE, "..", "..", "..", "tests", "fixtures", "swim_day.json"), "utf-8"),
+) as BoardAnswer;
 
 interface Call {
   op: string;
@@ -117,43 +129,91 @@ test("a lane-split option paints ribbon geometry onto the row canvas", () => {
   expect(calls.some((c) => c.op === "fillRect" || c.op === "fill")).toBe(true);
 });
 
-test("AC2 · a row with a lane plan paints its stack THROUGH the board, inside ROW_H", () => {
+/** Hallenbad City's Schwimmerbecken as `/swim` serves it: 6 lanes, the last two held by a
+ *  named club. Shared by the geometry smoke test and AC1 — the same option has to produce
+ *  both the 60px row and the two owner labels inside it. */
+const stackOption = {
+  facility: "Hallenbad City",
+  basin: "Schwimmerbecken",
+  basin_id: "city-50m",
+  access: "PublicSwim",
+  start: "09:00",
+  end: "12:00",
+  lane_day_view: {
+    weekday: 2,
+    lane_count: 6,
+    strips: Array.from({ length: 6 }, (_, i) => ({
+      lane: i + 1,
+      segments: [
+        i < 4
+          ? { start: "09:00", end: "12:00", access: "PublicSwim", owner: null }
+          : { start: "09:00", end: "12:00", access: "ClubReserved", owner: "SC Uster" },
+      ],
+    })),
+  },
+  lane_best_public: { start: "09:00", end: "11:00", public_lanes: 4 },
+};
+
+test("AC2 · a row with a lane plan paints its stack THROUGH the board, inside its OWN row box", () => {
+  // [[lane-stack-board]]'s AC2, SUPERSEDED IN PART by board-order-and-defects S3 — which is
+  // why the title says "its own row box" where it used to say ROW_H.
+  // As shipped this asserted the stack stayed inside 46px — and it did, at the cost of 5.13px
+  // lane bands that could not carry an owner name on any real basin. A row with a plan is now
+  // `rowHeight(row)` tall (6 lanes → 60), so the box this stays inside is the row's own, and
+  // the constant it is measured against is the one the board actually sized the canvas with.
+  //
   // The smoke half of AC2: the pure geometry is asserted in ribbonrender.test.ts; what this
   // adds is that a real `/swim` option reaches `drawLaneStack` through `createBoard` — row
-  // derivation, palette probe, dispatch and all — and stays inside the 46px row box.
-  const stackOption = {
-    facility: "Hallenbad City",
-    basin: "Schwimmerbecken",
-    basin_id: "city-50m",
-    access: "PublicSwim",
-    start: "09:00",
-    end: "12:00",
-    lane_day_view: {
-      weekday: 2,
-      lane_count: 6,
-      strips: Array.from({ length: 6 }, (_, i) => ({
-        lane: i + 1,
-        segments: [
-          i < 4
-            ? { start: "09:00", end: "12:00", access: "PublicSwim", owner: null }
-            : { start: "09:00", end: "12:00", access: "ClubReserved", owner: "SC Uster" },
-        ],
-      })),
-    },
-    lane_best_public: { start: "09:00", end: "11:00", public_lanes: 4 },
-  };
+  // derivation, palette probe, dispatch and all.
   const calls: Call[] = [];
   mountBoard(calls, { day: answer([stackOption]) });
   const rects = calls.filter((c) => c.op === "fillRect");
   // 6 lane tracks + 6 lane blocks + the best-public band, at least.
   expect(rects.length).toBeGreaterThanOrEqual(13);
-  const ROW_H = 46;
+  // The box is the ROW's, not a constant copied into the test: six lanes → 60px.
+  const h6 = rowHeight(dayRows(answer([stackOption]))[0]);
+  expect(h6).toBe(60);
   for (const c of rects) {
     const y = c.args[1] as number;
     const h = c.args[3] as number;
     expect(y).toBeGreaterThanOrEqual(-1);
-    expect(y + h).toBeLessThanOrEqual(ROW_H + 1);
+    expect(y + h).toBeLessThanOrEqual(h6 + 1);
   }
+});
+
+test("AC1 · City's 6 lanes and Oerlikon's 8 both paint their owners' NAMES", () => {
+  // The defect this slice exists for. [[lane-stack-board]] shipped the owner label and the
+  // 46px row together; at 6 lanes a band is 5.13px, `ownerLabelFits` refuses anything under
+  // 7px, and so the name rendered on NO real Zürich basin — City has 6 lanes, Oerlikon 8.
+  // Asserted end to end (fixture → dayRows → rowHeight → canvas → drawLaneStack), because
+  // every part of that chain has to agree for a single word to land on the board.
+  // Every string the board writes onto a canvas EXCEPT the axis' own "HH:00" hour ticks.
+  const written = (calls: Call[]) =>
+    calls
+      .filter((c) => c.op === "fillText")
+      .map((c) => String(c.args[0]))
+      .filter((s) => !/^\d\d:00$/.test(s));
+
+  const city: Call[] = [];
+  mountBoard(city, { day: answer([stackOption]) }); // 6 lanes, lanes 5-6 held by SC Uster
+  expect(written(city)).toEqual(["SC Uster", "SC Uster"]);
+
+  // Oerlikon, from the COMMITTED `/swim` fixture: 8 lanes, four different real holders.
+  const oerlikon: Call[] = [];
+  mountBoard(oerlikon, { day: DAY });
+  const names = new Set(written(oerlikon));
+  for (const owner of ["SV Limmat", "Schule Liguster", "Wasserball ZH", "SC Oerlikon"]) {
+    expect(names.has(owner), `${owner} is named on the board`).toBe(true);
+  }
+  // EXHAUSTIVE, so a public lane cannot quietly acquire a label as the row grows: the four
+  // holders, and the Aemtler row's "no lane split published" caption — nothing else.
+  expect([...names].sort()).toEqual([
+    'Hours not published yet',
+    'SC Oerlikon',
+    'SV Limmat',
+    'Schule Liguster',
+    'Wasserball ZH',
+  ]);
 });
 
 test("a closed row paints a DASHED status ribbon (never a solid public block)", () => {

@@ -30,12 +30,18 @@ import {
   type Palette,
   type RenderRibbon,
 } from './ribbonrender.js';
-import { tailTimescale } from './daytail.js';
+import { tailTimescale, TAIL_H } from './daytail.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 
-const H = 46; // the board's ROW_H, and the phone tail's TAIL_H
+// The board's row-height FLOOR, and the phone tail's TAIL_H. Since board-order-and-defects
+// S3 a board row carrying a lane plan is `max(46, 10 × lanes)` tall (`board.ts::rowHeight`),
+// so 46 is no longer the only height a stack is painted at — the tests that care say which.
+const H = 46;
 const MID = H / 2;
+/** The height the BOARD gives a 6-lane basin (City) and an 8-lane one (Oerlikon). */
+const H6 = 60;
+const H8 = 80;
 const TS = makeTimescale(6, 22, 900);
 
 /** Distinct, nameable colours — a real palette is resolved from tokens at runtime. */
@@ -124,9 +130,9 @@ function stackOption(opts: {
   };
 }
 
-const paint = (ribbons: RenderRibbon[], ts = TS) => {
+const paint = (ribbons: RenderRibbon[], ts = TS, h = H) => {
   const { calls, ctx } = recorder();
-  drawRibbons(ctx, ribbons, ts, PAL, MID, H, 0);
+  drawRibbons(ctx, ribbons, ts, PAL, h / 2, h, 0);
   return calls;
 };
 
@@ -159,20 +165,31 @@ test('every ink the stack paints is probed from a class that blocks.css actually
 // --- AC2: the geometry, pure ---------------------------------------------------------
 
 test('AC2 · six lanes become six DISTINCT sub-bands inside the row, not six rows', () => {
-  const bands = laneBands(6, MID, H);
-  expect(bands.length).toBe(6);
-  for (const [i, b] of bands.entries()) {
-    // Inside the row's own box — the row does not grow to fit the stack.
-    expect(b.top).toBeGreaterThanOrEqual(MID - H * 0.4 - 0.001);
-    expect(b.top + b.height).toBeLessThanOrEqual(MID + H * 0.4 + 0.001);
-    expect(b.height).toBeGreaterThan(1);
-    // SEPARATED, not merely adjacent: at six lanes there is room for the hairline gap, and
-    // six touching fills read as one block with colour changes, not as six lanes.
-    if (i + 1 < bands.length) expect(bands[i + 1].top).toBeGreaterThan(b.top + b.height);
+  // SUPERSEDED IN PART by board-order-and-defects S3. As shipped, this said the bands stay
+  // "inside the row's own box — the row does not grow to fit the stack", which was a claim
+  // about the BOARD and is now false there: a plan-bearing row IS grown, to `10 × lanes`,
+  // because 46px could not carry an owner name on any real basin. What survives — and is
+  // what this file is actually about — is that `laneBands` subdivides whatever height it is
+  // handed and never paints outside it. So the property is asserted at BOTH heights: the
+  // phone tail's 46 (unchanged, `TAIL_H`) and the board's 60 for a 6-lane basin.
+  for (const h of [H, H6]) {
+    const mid = h / 2;
+    const bands = laneBands(6, mid, h);
+    expect(bands.length).toBe(6);
+    for (const [i, b] of bands.entries()) {
+      expect(b.top).toBeGreaterThanOrEqual(mid - h * 0.4 - 0.001);
+      expect(b.top + b.height).toBeLessThanOrEqual(mid + h * 0.4 + 0.001);
+      expect(b.height).toBeGreaterThan(1);
+      // SEPARATED, not merely adjacent: at six lanes there is room for the hairline gap, and
+      // six touching fills read as one block with colour changes, not as six lanes.
+      if (i + 1 < bands.length) expect(bands[i + 1].top).toBeGreaterThan(b.top + b.height);
+    }
+    // Evenly pitched — no lane is drawn fatter than its neighbours.
+    const pitches = bands.slice(1).map((b, i) => b.top - bands[i].top);
+    for (const p of pitches) expect(p).toBeCloseTo(pitches[0], 6);
   }
-  // Evenly pitched — no lane is drawn fatter than its neighbours.
-  const pitches = bands.slice(1).map((b, i) => b.top - bands[i].top);
-  for (const p of pitches) expect(p).toBeCloseTo(pitches[0], 6);
+  // A taller row spends the extra pixels on the BANDS, not on padding around them.
+  expect(laneBands(6, H6 / 2, H6)[0].height).toBeGreaterThan(laneBands(6, MID, H)[0].height);
 });
 
 test('an absurd lane count still yields that many bands, each at least a hairline', () => {
@@ -224,15 +241,55 @@ test('AC3 · an owner is written where the whole word fits, and OMITTED where it
 });
 
 test('a band too SHORT for type carries no owner either — and still paints its block', () => {
-  // The width gate has a vertical twin. At ROW_H 46 a 6-lane basin gives each lane ~5px,
-  // which cannot hold legible type: the label is dropped rather than drawn as mush. The
-  // owner is not lost — the DetailPanel's Gantt, one click away, is where a lane is read
-  // by name. Measured, not assumed: this is the case every real Zürich basin falls into
-  // (City 6 lanes, Oerlikon 8), so the board's stack is a SHAPE, and the panel names it.
+  // SUPERSEDED by board-order-and-defects S3. As shipped this test said the 46px case "is the
+  // case every real Zürich basin falls into (City 6 lanes, Oerlikon 8), so the board's stack
+  // is a SHAPE, and the panel names it". That was true of the board and is no longer: it was
+  // the DEFECT, not the design — a feature chosen for "which lane, AND whose" that never
+  // showed a whose. On the board a 6-lane row is now 60px and the name is drawn (asserted
+  // below, and end-to-end in board_render.test.ts).
+  //
+  // The vertical gate itself is unchanged and still load-bearing, on two surfaces the fix
+  // deliberately does not grow: the PHONE TAIL (`TAIL_H` 46, variant D is its own question)
+  // and any basin whose plan is wider than its row. There the label is dropped rather than
+  // drawn as mush, and the owner is read in the DetailPanel's Gantt one click away.
+  expect(TAIL_H).toBe(46);
   expect(laneBands(6, MID, H)[0].height).toBeLessThan(OWNER_LABEL_MIN_H);
   const calls = paint([optionRibbon(stackOption({ lanes: 6, publicLanes: 4, owner: 'SC Oerlikon' }))]);
   expect(calls.some((c) => c.op === 'fillText')).toBe(false);
   expect(calls.filter((c) => c.op === 'fillRect' && c.fill === 'LANERESERVED').length).toBe(2);
+});
+
+test('S3 · at the height the BOARD now gives it, the same stack writes its owners', () => {
+  // The other side of the gate, and the whole point of the slice: nothing about the renderer
+  // changed, only the `h` it is handed. City (6 lanes → 60px) and Oerlikon (8 → 80px), the
+  // two basins the shipped board could never name.
+  for (const [lanes, h] of [[6, H6], [8, H8]] as const) {
+    expect(laneBands(lanes, h / 2, h)[0].height).toBeGreaterThanOrEqual(OWNER_LABEL_MIN_H);
+    const calls = paint(
+      [optionRibbon(stackOption({ lanes, publicLanes: lanes - 2, owner: 'SC Oerlikon' }))],
+      TS,
+      h,
+    );
+    const labels = calls.filter((c) => c.op === 'fillText');
+    expect(labels.map((c) => c.text), `${lanes} lanes at ${h}px`).toEqual([
+      'SC Oerlikon',
+      'SC Oerlikon',
+    ]);
+    // …each written inside its OWN band, not stacked on one line.
+    const bands = laneBands(lanes, h / 2, h);
+    expect(labels.map((c) => c.args[1])).toEqual([
+      bands[lanes - 2].top + bands[lanes - 2].height / 2,
+      bands[lanes - 1].top + bands[lanes - 1].height / 2,
+    ]);
+  }
+  // One pixel short of the board's height and the name is gone again — so `10 × lanes` is
+  // the load-bearing number, not a round one that happens to be big enough.
+  const tooShort = paint(
+    [optionRibbon(stackOption({ lanes: 6, publicLanes: 4, owner: 'SC Oerlikon' }))],
+    TS,
+    H6 - 1,
+  );
+  expect(tooShort.some((c) => c.op === 'fillText')).toBe(false);
 });
 
 test('ownerLabelFits measures the text — it never guesses from the block width alone', () => {
