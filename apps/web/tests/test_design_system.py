@@ -66,6 +66,46 @@ def test_board_grid_guarantees_overflow_containment() -> None:
     assert "[canvas] 1fr" not in normalized, "a bare 1fr canvas column would overflow the page"
 
 
+def test_gantt_readout_is_placed_over_its_cursor_not_parked_in_a_corner() -> None:
+    """The readout rides above the cursor, so the CSS must let it be positioned at all.
+
+    As shipped it was a plain block `div` with only font/colour/margin: `gantt.ts` wrote a
+    `left` on it every frame and CSS threw the number away, which is exactly the defect the
+    owner reported ("it does not move ... to align with current time, or with selection or
+    hover"). The JS half is asserted in `gantt.test.ts`; there is no layout engine here, so
+    this is the mechanical proxy for the CSS half:
+
+      * `.gantt__readout` is `position: absolute` — without it `left` is inert;
+      * `.gantt__track` reserves a strip for it (`padding-top: var(--gantt-readout-h)`),
+        so the readout does not land on top of the hour ticks;
+      * the cursor and the best-public band measure DOWN from that same custom property
+        rather than from their own copies of the number.
+    """
+    blocks = _declarations_only((_STATIC / "blocks.css").read_text(encoding="utf-8"))
+    normalized = re.sub(r"\s+", " ", blocks)
+
+    def rule(selector: str) -> str:
+        """The declarations of ONE rule. Scoped, because `padding-top: var(--x)` contains
+        `top: var(--x)` as a substring — a whole-file grep would pass on the wrong rule."""
+        assert f"{selector} {{" in normalized, f"blocks.css declares {selector}"
+        return normalized.split(f"{selector} {{")[1].split("}")[0]
+
+    assert "position: absolute" in rule(".gantt__readout"), (
+        "an unpositioned readout ignores its `left`"
+    )
+    assert "padding-top: var(--gantt-readout-h)" in rule(".gantt__track"), (
+        "the track must reserve the readout's strip, or it overlaps the axis"
+    )
+    assert "--gantt-readout-h:" in rule(".gantt"), "the strip height is one named value"
+    # Everything below the strip measures from it — never a second copy of `1.5rem`.
+    assert "top: var(--gantt-readout-h)" in rule(".gantt__cursor"), (
+        "the cursor starts below the strip"
+    )
+    assert "top: calc(var(--gantt-readout-h) + var(--gantt-axis-h))" in rule(".gantt__band"), (
+        "the best-public band starts below the strip AND the axis"
+    )
+
+
 def _declarations_only(css: str) -> str:
     """CSS with `/* ... */` comments removed, so a grep-gate reads declarations only."""
     return re.sub(r"/\*.*?\*/", "", css, flags=re.S)

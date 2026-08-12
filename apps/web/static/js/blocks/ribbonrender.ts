@@ -30,12 +30,17 @@ export interface RenderRibbonSegment {
   [k: string]: unknown;
 }
 
-/** One drawable block of one lane sub-row (ribbonmodel's `RibbonStackBlock`). */
+/** One drawable block of one lane sub-row (ribbonmodel's `RibbonStackBlock`).
+ *
+ *  No `owner`: this interface lists only the fields the RENDERER reads, and since the stack
+ *  became text-free that is a block's start, end and public-ness — nothing else. The
+ *  producer still carries the owner (`ribbonmodel`'s `RibbonStackBlock` keeps it, and the
+ *  DetailPanel's Gantt writes it); it simply arrives here through the index signature and
+ *  goes unread, which is what this type should say. */
 export interface RenderStackBlock {
   start: string;
   end: string;
   public?: boolean;
-  owner?: string | null;
   [k: string]: unknown;
 }
 
@@ -136,7 +141,6 @@ export function resolveFamilyPalette(doc: Doc, host: El): Palette | null {
   // The lane stack's own inks (lane-stack-board S4). Tokens, like every other fill here.
   pal.lanepublic = read('fam-lanepublic');
   pal.lanereserved = read('fam-lanereserved');
-  pal.laneowner = read('fam-laneowner');
   pal.lanetrack = read('fam-lanetrack');
   pal.bestband = read('fam-bestband');
   pal.bestedge = read('fam-bestedge');
@@ -284,24 +288,27 @@ function drawUnpublishedRibbon(
 // One hairline sub-row per lane, inside the SAME row box the other variants use: within a
 // row the stack subdivides rather than adding rows. (What the row's HEIGHT is, is the
 // caller's business and not this file's: `board.ts::rowHeight` grows a plan-bearing row to
-// `10 x lanes` so these bands can carry type, while the phone tail keeps its 46px `TAIL_H`.
-// This module has always taken `h` and never seen either constant.) Public vs reserved fill
-// says which lanes are free; the owner is written INSIDE its block wherever the block is
-// wide enough to hold the whole word, and omitted (never clipped mid-word) where it is not.
+// `10 x lanes` so each band stays legible as a band, while the phone tail keeps its 46px
+// `TAIL_H`. This module has always taken `h` and never seen either constant.)
+//
+// The stack paints NO TEXT. Public vs reserved fill says which lanes are free; WHOSE a
+// reserved lane is, is read in the DetailPanel's Gantt (`gantt.ts` writes the owner into
+// each segment box), one click away. The board's job at row scale is the shape.
 
 /** The stack's box is the same 0.8h envelope `drawLaneRibbon` fills at full capacity. */
 const STACK_BOX = 0.8;
-/** A band shorter than this cannot carry legible type, so its blocks stay unlabelled.
- *  The width gate's vertical twin. It is what SETS the board's row height: solving
- *  `h * STACK_BOX / n - 1 >= OWNER_LABEL_MIN_H` gives `h >= 10n`, which is exactly
- *  `board.ts::rowHeight` (a 6-lane basin at the old fixed 46 gave each lane ~5px and its
- *  owners never rendered — the defect board-order-and-defects S3 fixed). Where a surface
- *  cannot grow — the phone tail at `TAIL_H` 46 — the label is still dropped rather than
- *  painted as mush, and the owner is read in the DetailPanel's Gantt one click away. */
-export const OWNER_LABEL_MIN_H = 7;
-/** Horizontal breathing room inside a block, per side. */
-export const OWNER_LABEL_PAD = 3;
-const OWNER_FONT = '600 8.5px system-ui, sans-serif';
+/**
+ * The shortest a lane band may be and still read as its own band rather than as a hairline
+ * in a hatch. It is what SETS the board's row height: solving `h * STACK_BOX / n - 1 >=
+ * LANE_BAND_MIN_H` gives `h >= 10n`, which is exactly `board.ts::rowHeight`.
+ *
+ * HISTORY, because the number is unchanged and its REASON is not: 7 first entered as
+ * `OWNER_LABEL_MIN_H`, the height below which an owner name could not be set in type. The
+ * board no longer writes owner names, so that gate is gone and the constant is re-founded
+ * on the bands themselves — at six lanes a 46px row gives 5.13px bands, which stripe into
+ * mush, against 8.2px at `10n`. Same arithmetic, a reason that still exists.
+ */
+export const LANE_BAND_MIN_H = 7;
 
 /**
  * laneBands(laneCount, mid, h) → the sub-row geometry: `laneCount` bands, top to bottom,
@@ -325,23 +332,6 @@ export function laneBands(
     top: top + i * pitch,
     height: Math.max(1, pitch - gap),
   }));
-}
-
-/**
- * ownerLabelFits(ctx, owner, width, bandH) — may this block carry its owner's name?
- *
- * Measured, not guessed: the label is drawn only when the WHOLE word fits inside the block
- * with padding, so a narrow block is drawn unlabelled rather than clipped mid-word (a
- * half-written club name is worse than none — it reads as a different club).
- */
-export function ownerLabelFits(
-  ctx: Pick<Ctx2D, 'measureText'>,
-  owner: string,
-  width: number,
-  bandH: number,
-): boolean {
-  if (!owner || bandH < OWNER_LABEL_MIN_H) return false;
-  return ctx.measureText(owner).width + OWNER_LABEL_PAD * 2 <= width;
 }
 
 /** The best-public window, painted BEHIND the stack (a band, never a lane). Absent when
@@ -385,9 +375,6 @@ function drawLaneStack(
   const bands = laneBands(Number(r.lane_count) || strips.length, mid, h);
   drawBestPublicBand(ctx, r, ts, pal, mid, h);
   ctx.save();
-  ctx.textBaseline = 'middle';
-  ctx.textAlign = 'left';
-  ctx.font = OWNER_FONT;
   for (const [i, band] of bands.entries()) {
     // The lane's own track: the capacity envelope, per lane. An EMPTY sub-row therefore
     // still shows a lane exists — "nobody holds it" reads differently from "no data".
@@ -401,7 +388,7 @@ function drawLaneStack(
   ctx.restore();
 }
 
-/** One lane's holds: public vs reserved fill, and the owner where the word fits.
+/** One lane's holds: public vs reserved fill, and NOTHING ELSE — no text.
  *
  * DELIBERATELY drops `r.family`, unlike its two sibling painters (`drawLaneRibbon`,
  * `drawUnpublishedRibbon`), which both resolve `(r.family ? pal[r.family] : undefined) ||
@@ -427,12 +414,6 @@ function drawLaneBlocks(
     ctx.globalAlpha = seg.public ? 0.9 : 0.75;
     ctx.fillStyle = seg.public ? pal.lanepublic : pal.lanereserved;
     ctx.fillRect(sx, band.top, sw, band.height);
-    const owner = seg.public ? null : (seg.owner ?? null);
-    if (owner && ownerLabelFits(ctx, owner, sw, band.height)) {
-      ctx.globalAlpha = 1;
-      ctx.fillStyle = pal.laneowner;
-      ctx.fillText(owner, sx + OWNER_LABEL_PAD, band.top + band.height / 2);
-    }
   }
 }
 

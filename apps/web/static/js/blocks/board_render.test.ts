@@ -181,12 +181,18 @@ test("AC2 · a row with a lane plan paints its stack THROUGH the board, inside i
   }
 });
 
-test("AC1 · City's 6 lanes and Oerlikon's 8 both paint their owners' NAMES", () => {
-  // The defect this slice exists for. [[lane-stack-board]] shipped the owner label and the
-  // 46px row together; at 6 lanes a band is 5.13px, `ownerLabelFits` refuses anything under
-  // 7px, and so the name rendered on NO real Zürich basin — City has 6 lanes, Oerlikon 8.
-  // Asserted end to end (fixture → dayRows → rowHeight → canvas → drawLaneStack), because
-  // every part of that chain has to agree for a single word to land on the board.
+test("the board writes NO lane owner — the swimlanes carry no text at all", () => {
+  // SUPERSEDES "AC1 · City's 6 lanes and Oerlikon's 8 both paint their owners' NAMES"
+  // ([[board-order-and-defects]] S3), which asserted the exact opposite end to end: that
+  // "SC Uster" landed twice on the City row and that all four of Oerlikon's real holders
+  // appeared. Owner review after seeing it running: the names crowd the board's swimlanes
+  // and say nothing the DetailPanel's Gantt does not say better one click away, at real DOM
+  // type size instead of 8.5px squeezed into an 8px band. So the stack is now shape-only.
+  //
+  // Same chain (fixture → dayRows → rowHeight → canvas → drawLaneStack), same fixtures,
+  // opposite expectation — and stated EXHAUSTIVELY, because "no owner names" is only a real
+  // guarantee if nothing else can creep onto a lane either.
+  //
   // Every string the board writes onto a canvas EXCEPT the axis' own "HH:00" hour ticks.
   const written = (calls: Call[]) =>
     calls
@@ -196,24 +202,29 @@ test("AC1 · City's 6 lanes and Oerlikon's 8 both paint their owners' NAMES", ()
 
   const city: Call[] = [];
   mountBoard(city, { day: answer([stackOption]) }); // 6 lanes, lanes 5-6 held by SC Uster
-  expect(written(city)).toEqual(["SC Uster", "SC Uster"]);
+  // Not vacuous: the row IS a lane stack and IS painted — it just carries no type.
+  expect(city.filter((c) => c.op === "fillRect").length).toBeGreaterThan(6);
+  expect(written(city)).toEqual([]);
 
-  // Oerlikon, from the COMMITTED `/swim` fixture: 8 lanes, four different real holders.
+  // Oerlikon, from the COMMITTED `/swim` fixture: 8 lanes, four real holders, none written.
   const oerlikon: Call[] = [];
   mountBoard(oerlikon, { day: DAY });
   const names = new Set(written(oerlikon));
   for (const owner of ["SV Limmat", "Schule Liguster", "Wasserball ZH", "SC Oerlikon"]) {
-    expect(names.has(owner), `${owner} is named on the board`).toBe(true);
+    expect(names.has(owner), `${owner} is NOT written on the board`).toBe(false);
   }
-  // EXHAUSTIVE, so a public lane cannot quietly acquire a label as the row grows: the four
-  // holders, and the Aemtler row's "no lane split published" caption — nothing else.
-  expect([...names].sort()).toEqual([
-    'Hours not published yet',
-    'SC Oerlikon',
-    'SV Limmat',
-    'Schule Liguster',
-    'Wasserball ZH',
-  ]);
+  // EXHAUSTIVE. Exactly one caption survives, and it belongs to a STATUS row, not to any
+  // ribbon on a lane-bearing one: `drawStatusRibbon` writes `t(unlistedLabelKey(r.status))`
+  // centred inside its dotted envelope, which for the fixture's `awaiting_scrape` rows is
+  // "Hours not published yet" — a statement that the pool has no schedule at all, on a row
+  // with no lane stack to label.
+  //
+  // NOT the `unpublished` ribbon ("hours published, lane split not"): that one paints a
+  // hatch and a dotted outline and NO text — `drawUnpublishedRibbon` contains no `fillText`.
+  // An earlier version of this comment credited it with this caption, which would have sent
+  // a future failure of this line to the wrong painter. The three states invariant I5 keeps
+  // apart are three different functions; the caption comes from the third.
+  expect([...names].sort()).toEqual(['Hours not published yet']);
 });
 
 test("a closed row paints a DASHED status ribbon (never a solid public block)", () => {

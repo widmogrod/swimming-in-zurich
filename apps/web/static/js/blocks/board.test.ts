@@ -28,7 +28,7 @@ import {
 } from './board.js';
 import { rowKeyFor } from './rowkey.js';
 import { rowKey } from './poolrank.js';
-import { laneBands, OWNER_LABEL_MIN_H } from './ribbonrender.js';
+import { laneBands, LANE_BAND_MIN_H } from './ribbonrender.js';
 import { ribbonsFor } from './ribbonmodel.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -1030,21 +1030,28 @@ test('the height follows the PAINTER\'s dispatch — only a lanestack ribbon car
   }
 });
 
-test('the grown height is exactly what the owner-label gate needs — no more, no less', () => {
-  // The three constants are set in two different files (`rowHeight`'s 10 here,
-  // `STACK_BOX`/`OWNER_LABEL_MIN_H` in ribbonrender.ts) and only agree by arithmetic:
-  // band = h·0.8/n − 1 ≥ 7 ⟺ h ≥ 10n. Moving any one of them without the others silently
-  // un-fixes the defect, so the relation is asserted rather than written in a comment.
+test('the grown height is exactly what a LEGIBLE BAND needs — no more, no less', () => {
+  // SUPERSEDED IN ITS REASON, not its arithmetic. As shipped this was "the grown height is
+  // exactly what the owner-label gate needs" and measured against `OWNER_LABEL_MIN_H` — the
+  // height a club name needed to be set in type inside its block. The board no longer writes
+  // owner names (the DetailPanel's Gantt does; the stack is text-free), so that gate is gone
+  // and with it the constant. The row height STAYS, re-founded on `LANE_BAND_MIN_H`: the
+  // shortest a band may be and still read as its own lane rather than one stripe of a hatch.
+  //
+  // The two constants are still set in two different files (`rowHeight`'s 10 here,
+  // `STACK_BOX`/`LANE_BAND_MIN_H` in ribbonrender.ts) and only agree by arithmetic:
+  // band = h·0.8/n − 1 ≥ 7 ⟺ h ≥ 10n. Moving one without the other silently shrinks the
+  // bands back to mush, so the relation is asserted rather than written in a comment.
   for (let n = 1; n <= 12; n += 1) {
     const h = rowHeight(stackRow(n));
     const band = laneBands(n, h / 2, h)[0];
-    expect(band.height, `${n} lanes at ${h}px`).toBeGreaterThanOrEqual(OWNER_LABEL_MIN_H);
+    expect(band.height, `${n} lanes at ${h}px`).toBeGreaterThanOrEqual(LANE_BAND_MIN_H);
   }
   // And the counterfactual that makes the growth load-bearing: at the old fixed 46 a
-  // five-lane band is 6.36px and the gate refuses it. This is the defect, reproduced.
-  expect(laneBands(5, 23, 46)[0].height).toBeLessThan(OWNER_LABEL_MIN_H);
-  expect(laneBands(6, 23, 46)[0].height).toBeLessThan(OWNER_LABEL_MIN_H);
-  expect(laneBands(8, 23, 46)[0].height).toBeLessThan(OWNER_LABEL_MIN_H);
+  // five-lane band is 6.36px and a six-lane one 5.13. That is the row the user was reading.
+  expect(laneBands(5, 23, 46)[0].height).toBeLessThan(LANE_BAND_MIN_H);
+  expect(laneBands(6, 23, 46)[0].height).toBeLessThan(LANE_BAND_MIN_H);
+  expect(laneBands(8, 23, 46)[0].height).toBeLessThan(LANE_BAND_MIN_H);
 });
 
 test('AC3/H1 · every label cell is exactly as tall as its own canvas, at MIXED heights', () => {

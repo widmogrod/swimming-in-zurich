@@ -2,9 +2,9 @@
 //
 // `board_render.test.ts` mounts the whole board to prove the painters execute; this file
 // drives `drawRibbons` directly with a recording context, because the S4 properties are
-// about WHICH marks land where: one band per lane inside the same row height, an owner
-// written only where the whole word fits, a best-public band that is absent rather than
-// zero-width — and, above all, that the three degraded states stay three (invariant I5).
+// about WHICH marks land where: one band per lane inside the same row height, a best-public
+// band that is absent rather than zero-width, NO TEXT anywhere on the stack — and, above
+// all, that the three degraded states stay three (invariant I5).
 //
 // The recorder snapshots `fillStyle`/`globalAlpha` AT CALL TIME, so an assertion can name
 // the colour a rectangle was actually painted in rather than the last one assigned.
@@ -22,10 +22,8 @@ import { optionRibbon, type RibbonOption } from './ribbonmodel.js';
 import {
   drawRibbons,
   laneBands,
-  ownerLabelFits,
   resolveFamilyPalette,
-  OWNER_LABEL_MIN_H,
-  OWNER_LABEL_PAD,
+  LANE_BAND_MIN_H,
   type Ctx2D,
   type Palette,
   type RenderRibbon,
@@ -48,7 +46,7 @@ const TS = makeTimescale(6, 22, 900);
 const PAL: Palette = {
   public: 'PUBLIC', lane: 'LANE', other: 'OTHER', sheath: 'SHEATH', muted: 'MUTED',
   unknown: 'UNKNOWN', closed: 'CLOSED', axis: 'AXIS', hair: 'HAIR',
-  lanepublic: 'LANEPUBLIC', lanereserved: 'LANERESERVED', laneowner: 'LANEOWNER',
+  lanepublic: 'LANEPUBLIC', lanereserved: 'LANERESERVED',
   lanetrack: 'LANETRACK', bestband: 'BESTBAND', bestedge: 'BESTEDGE',
 };
 
@@ -64,6 +62,10 @@ interface Call {
 
 function recorder() {
   const calls: Call[] = [];
+  /** Every TYPE-related thing the painter touches: the text state it assigns and any text
+   *  it measures. `fillText` alone would miss a painter that sets up a font and then decides
+   *  not to draw — and, more to the point, a text-free stack should touch none of it. */
+  const textState: string[] = [];
   const state = { fillStyle: '', strokeStyle: '', globalAlpha: 1, dash: [] as number[], font: '' };
   const rec = (op: string, args: number[], text?: string) => {
     calls.push({
@@ -85,16 +87,22 @@ function recorder() {
     clearRect(...a: number[]) { rec('clearRect', a); },
     fillText(text: string, x: number, y: number) { rec('fillText', [x, y], text); },
     setLineDash(d: number[]) { state.dash = d; },
-    measureText: (s: string) => ({ width: s.length * 6 }),
+    measureText(s: string) { textState.push(`measureText(${s})`); return { width: s.length * 6 }; },
     set fillStyle(v: string) { state.fillStyle = v; },
     get fillStyle() { return state.fillStyle; },
     set strokeStyle(v: string) { state.strokeStyle = v; },
     get strokeStyle() { return state.strokeStyle; },
     set globalAlpha(v: number) { state.globalAlpha = v; },
     get globalAlpha() { return state.globalAlpha; },
-    lineWidth: 1, font: '', textAlign: '', textBaseline: '',
+    set font(v: string) { textState.push(`font=${v}`); state.font = v; },
+    get font() { return state.font; },
+    set textAlign(v: string) { textState.push(`textAlign=${v}`); },
+    get textAlign() { return ''; },
+    set textBaseline(v: string) { textState.push(`textBaseline=${v}`); },
+    get textBaseline() { return ''; },
+    lineWidth: 1,
   };
-  return { calls, ctx: ctx as unknown as Ctx2D };
+  return { calls, textState, ctx: ctx as unknown as Ctx2D };
 }
 
 /** A `/swim` option with a per-lane day view: `lanes` public lanes, the rest held. */
@@ -130,11 +138,13 @@ function stackOption(opts: {
   };
 }
 
-const paint = (ribbons: RenderRibbon[], ts = TS, h = H) => {
-  const { calls, ctx } = recorder();
+const paintAll = (ribbons: RenderRibbon[], ts = TS, h = H) => {
+  const { calls, textState, ctx } = recorder();
   drawRibbons(ctx, ribbons, ts, PAL, h / 2, h, 0);
-  return calls;
+  return { calls, textState };
 };
+
+const paint = (ribbons: RenderRibbon[], ts = TS, h = H) => paintAll(ribbons, ts, h).calls;
 
 // --- The palette: every ink traces back to a token ------------------------------------
 
@@ -157,7 +167,9 @@ test('every ink the stack paints is probed from a class that blocks.css actually
   const css = readFileSync(join(HERE, '..', '..', 'blocks.css'), 'utf-8');
   for (const cls of new Set(asked)) expect(css, `blocks.css defines .${cls}`).toContain(`.${cls} {`);
   // And the stack's own inks are all there, distinctly named.
-  for (const key of ['lanepublic', 'lanereserved', 'laneowner', 'lanetrack', 'bestband', 'bestedge']) {
+  // No `laneowner`: the stack paints no text, so it probes no ink for one — and the
+  // `.fam-laneowner` class went with it. Adding it back needs a class behind it again.
+  for (const key of ['lanepublic', 'lanereserved', 'lanetrack', 'bestband', 'bestedge']) {
     expect(pal[key]).toBe(`fam-${key}`);
   }
 });
@@ -222,124 +234,90 @@ test('a stack where NO lane is public still paints every lane — it is not an e
   expect(calls.some((c) => c.fill === 'LANEPUBLIC')).toBe(false);
 });
 
-// --- AC3: the owner label ------------------------------------------------------------
+// --- The stack is text-free ----------------------------------------------------------
+//
+// SUPERSEDES the whole "AC3 · the owner label" section of [[lane-stack-board]] S4 and its
+// [[board-order-and-defects]] S3 follow-ups. Five tests lived here and asserted the
+// OPPOSITE of what ships now:
+//
+//   • "AC3 · an owner is written where the whole word fits, and OMITTED where it does not"
+//   • "a band too SHORT for type carries no owner either — and still paints its block"
+//   • "S3 · at the height the BOARD now gives it, the same stack writes its owners"
+//   • "ownerLabelFits measures the text — it never guesses from the block width alone"
+//   • "ownerLabelFits reserves its padding — the boundary is text + BOTH margins"
+//   • "a public lane is never labelled with the holder of the lane beside it"
+//
+// They are gone, not adjusted, because their subject is: the board's stack no longer writes
+// the owner at all, and `ownerLabelFits` / `OWNER_LABEL_MIN_H` / `OWNER_LABEL_PAD` / the
+// owner font no longer exist to be tested. Owner-review reason: the name is already read in
+// the DetailPanel's Gantt, which sets it in real DOM type at full size, so at row scale on
+// the board it was duplicated information paid for in 8.5px glyphs squeezed into an 8px
+// band. What the row height buys now is the BANDS (`LANE_BAND_MIN_H`), asserted below and
+// in board.test.ts.
+//
+// What survives from those tests is the non-text half — a hold too narrow for a word is
+// still PAINTED, a public hold that carries a name is still public water — kept below so
+// the deletion cannot take real coverage with it.
 
-test('AC3 · an owner is written where the whole word fits, and OMITTED where it does not', () => {
-  const wide = paint([optionRibbon(stackOption({ lanes: 3, publicLanes: 1, owner: 'SC Oerlikon' }))]);
-  const labels = wide.filter((c) => c.op === 'fillText');
-  expect(labels.length).toBe(2); // one per reserved lane
-  expect(labels.every((c) => c.text === 'SC Oerlikon')).toBe(true);
-  expect(labels.every((c) => c.fill === 'LANEOWNER')).toBe(true);
+test('the board lane stack paints NO TEXT — at any height, any width, any holder', () => {
+  // The regression guard for this change. It is deliberately stated over the exact cases
+  // that used to produce labels: the three heights (phone/board 46, City 60, Oerlikon 80),
+  // a hold wide enough for the word, and a public hold carrying an owner name.
+  const cases: [string, ReturnType<typeof paintAll>][] = [
+    ['3 lanes, wide hold, 46px', paintAll([optionRibbon(stackOption({ lanes: 3, publicLanes: 1, owner: 'SC Oerlikon' }))])],
+    ['6 lanes at the board height', paintAll([optionRibbon(stackOption({ lanes: 6, publicLanes: 4, owner: 'SC Uster' }))], TS, H6)],
+    ['8 lanes at the board height', paintAll([optionRibbon(stackOption({ lanes: 8, publicLanes: 6, owner: 'SV Limmat' }))], TS, H8)],
+    ['a 15-minute hold', paintAll([optionRibbon(stackOption({ lanes: 3, publicLanes: 1, owner: 'SC Oerlikon', start: '08:00', end: '08:15' }))])],
+    ['a NAMED public hold', paintAll([optionRibbon(stackOption({ lanes: 2, publicLanes: 1, publicOwner: 'SV Limmat', owner: 'SC Oerlikon' }))])],
+  ];
+  for (const [label, { calls, textState }] of cases) {
+    expect(calls.filter((c) => c.op === 'fillText'), `${label}: fillText`).toEqual([]);
+    // …and it never even sets up to write: no font, no alignment, no measurement. Restoring
+    // the label needs all of this back, so a half-restoration cannot slip through either.
+    expect(textState, `${label}: text state touched`).toEqual([]);
+    // Not a vacuous pass on an empty canvas: the stack really did paint.
+    expect(calls.filter((c) => c.op === 'fillRect').length, `${label}: blocks`).toBeGreaterThan(0);
+  }
+});
 
-  // A 15-minute hold is far too narrow for the name: it is drawn UNLABELLED, never
-  // clipped mid-word — half a club's name reads as a different club.
+test('a hold too narrow for any word is still painted as a block', () => {
+  // The surviving half of the old AC3 test. A 15-minute hold used to be the "unlabelled,
+  // never clipped mid-word" case; what still matters is that it is a visible reservation.
   const narrow = paint([
     optionRibbon(stackOption({ lanes: 3, publicLanes: 1, owner: 'SC Oerlikon', start: '08:00', end: '08:15' })),
   ]);
-  expect(narrow.some((c) => c.op === 'fillText')).toBe(false);
   expect(narrow.filter((c) => c.op === 'fillRect' && c.fill === 'LANERESERVED').length).toBe(2);
 });
 
-test('a band too SHORT for type carries no owner either — and still paints its block', () => {
-  // SUPERSEDED by board-order-and-defects S3. As shipped this test said the 46px case "is the
-  // case every real Zürich basin falls into (City 6 lanes, Oerlikon 8), so the board's stack
-  // is a SHAPE, and the panel names it". That was true of the board and is no longer: it was
-  // the DEFECT, not the design — a feature chosen for "which lane, AND whose" that never
-  // showed a whose. On the board a 6-lane row is now 60px and the name is drawn (asserted
-  // below, and end-to-end in board_render.test.ts).
-  //
-  // The vertical gate itself is unchanged and still load-bearing, on two surfaces the fix
-  // deliberately does not grow: the PHONE TAIL (`TAIL_H` 46, variant D is its own question)
-  // and any basin whose plan is wider than its row. There the label is dropped rather than
-  // drawn as mush, and the owner is read in the DetailPanel's Gantt one click away.
-  expect(TAIL_H).toBe(46);
-  expect(laneBands(6, MID, H)[0].height).toBeLessThan(OWNER_LABEL_MIN_H);
-  const calls = paint([optionRibbon(stackOption({ lanes: 6, publicLanes: 4, owner: 'SC Oerlikon' }))]);
-  expect(calls.some((c) => c.op === 'fillText')).toBe(false);
-  expect(calls.filter((c) => c.op === 'fillRect' && c.fill === 'LANERESERVED').length).toBe(2);
-});
-
-test('S3 · at the height the BOARD now gives it, the same stack writes its owners', () => {
-  // The other side of the gate, and the whole point of the slice: nothing about the renderer
-  // changed, only the `h` it is handed. City (6 lanes → 60px) and Oerlikon (8 → 80px), the
-  // two basins the shipped board could never name.
-  for (const [lanes, h] of [[6, H6], [8, H8]] as const) {
-    expect(laneBands(lanes, h / 2, h)[0].height).toBeGreaterThanOrEqual(OWNER_LABEL_MIN_H);
-    const calls = paint(
-      [optionRibbon(stackOption({ lanes, publicLanes: lanes - 2, owner: 'SC Oerlikon' }))],
-      TS,
-      h,
-    );
-    const labels = calls.filter((c) => c.op === 'fillText');
-    expect(labels.map((c) => c.text), `${lanes} lanes at ${h}px`).toEqual([
-      'SC Oerlikon',
-      'SC Oerlikon',
-    ]);
-    // …each written inside its OWN band, not stacked on one line.
-    const bands = laneBands(lanes, h / 2, h);
-    expect(labels.map((c) => c.args[1])).toEqual([
-      bands[lanes - 2].top + bands[lanes - 2].height / 2,
-      bands[lanes - 1].top + bands[lanes - 1].height / 2,
-    ]);
-  }
-  // One pixel short of the board's height and the name is gone again — so `10 × lanes` is
-  // the load-bearing number, not a round one that happens to be big enough.
-  const tooShort = paint(
-    [optionRibbon(stackOption({ lanes: 6, publicLanes: 4, owner: 'SC Oerlikon' }))],
-    TS,
-    H6 - 1,
-  );
-  expect(tooShort.some((c) => c.op === 'fillText')).toBe(false);
-});
-
-test('ownerLabelFits measures the text — it never guesses from the block width alone', () => {
-  const ctx = { measureText: (s: string) => ({ width: s.length * 6 }) } as Pick<Ctx2D, 'measureText'>;
-  expect(ownerLabelFits(ctx, 'SC Oerlikon', 200, 10)).toBe(true);
-  expect(ownerLabelFits(ctx, 'SC Oerlikon', 40, 10)).toBe(false); // 11 chars = 66px > 40
-  expect(ownerLabelFits(ctx, 'SC', 200, OWNER_LABEL_MIN_H - 0.1)).toBe(false); // band too short
-  expect(ownerLabelFits(ctx, '', 900, 20)).toBe(false);
-});
-
-test('ownerLabelFits reserves its padding — the boundary is text + BOTH margins', () => {
-  // The cases above sit 130px clear of the decision, so the `OWNER_LABEL_PAD * 2` term
-  // could be dropped without failing one of them. These two straddle it: 'SC' measures
-  // 12px under this stub, so the label needs 12 + 3 + 3 = 18px of block to be drawn.
-  const ctx = { measureText: (s: string) => ({ width: s.length * 6 }) } as Pick<
-    Ctx2D,
-    'measureText'
-  >;
-  const need = 'SC'.length * 6 + OWNER_LABEL_PAD * 2;
-  expect(need).toBe(18);
-  expect(ownerLabelFits(ctx, 'SC', need, 10)).toBe(true);
-  // One pixel short: the word itself would still fit, but it would touch the block's edge
-  // and read as running into the lane beside it. Unpadded, this would return true.
-  expect(ownerLabelFits(ctx, 'SC', need - 1, 10)).toBe(false);
-});
-
-test('a public lane is never labelled with the holder of the lane beside it', () => {
-  const calls = paint([optionRibbon(stackOption({ lanes: 2, publicLanes: 1, owner: 'SC Oerlikon' }))]);
-  expect(calls.filter((c) => c.op === 'fillText').length).toBe(1);
-});
-
-test('a NAMED public hold is still drawn unlabelled — the name is not a reservation', () => {
-  // The renderer suppresses the owner on a public block (`seg.public ? null : seg.owner`).
-  // Nothing tested that: every fixture, and every Belegungsplan parsed so far, leaves a
-  // public hold's owner null, so the guard could be deleted without a single failure.
-  //
-  // It matters because a Belegungsplan MAY name the party a public hold was booked under
-  // (a Verein hosting an open session). Painting that name over the teal would read as
-  // "this lane belongs to SV Limmat" on a lane anyone may swim in — the opposite of true.
+test('a NAMED public hold is still painted as public water, never reclassified as reserved', () => {
+  // The surviving half of "a NAMED public hold is still drawn unlabelled". A Belegungsplan
+  // MAY name the party a public hold was booked under (a Verein hosting an open session).
+  // The renderer must key the ink off `seg.public`, so that lane stays teal.
   const calls = paint([
     optionRibbon(
       stackOption({ lanes: 2, publicLanes: 1, publicOwner: 'SV Limmat', owner: 'SC Oerlikon' }),
     ),
   ]);
-  const labels = calls.filter((c) => c.op === 'fillText');
-  // Exactly one label: the reserved lane's. The public lane carries a name and shows none.
-  expect(labels.map((c) => c.text)).toEqual(['SC Oerlikon']);
-  expect(labels.some((c) => c.text === 'SV Limmat')).toBe(false);
-  // …and it is still painted as public water, not quietly reclassified as reserved.
   expect(calls.filter((c) => c.op === 'fillRect' && c.fill === 'LANEPUBLIC').length).toBe(1);
+  expect(calls.filter((c) => c.op === 'fillRect' && c.fill === 'LANERESERVED').length).toBe(1);
+});
+
+test('LANE_BAND_MIN_H is what the board row height buys — bands, not labels', () => {
+  // The re-founded constant. The arithmetic is the one the owner-label gate used to justify
+  // (`h·0.8/n − 1 ≥ 7 ⟺ h ≥ 10n`), on a reason that still exists: below 7px a band stops
+  // reading as its own lane and the stack stripes into a hatch. Same counterfactual as
+  // before — at the old fixed 46 a 6-lane basin gave 5.13px bands — now stated about the
+  // bands themselves. The rowHeight ↔ laneBands link across the two files is in board.test.ts.
+  expect(TAIL_H).toBe(46);
+  expect(laneBands(6, MID, H)[0].height).toBeLessThan(LANE_BAND_MIN_H);
+  for (const [lanes, h] of [[6, H6], [8, H8]] as const) {
+    expect(laneBands(lanes, h / 2, h)[0].height, `${lanes} lanes at ${h}px`).toBeGreaterThanOrEqual(
+      LANE_BAND_MIN_H,
+    );
+    // One pixel short and the band drops below the floor again — `10 × lanes` is the
+    // load-bearing number, not a round one that happens to be big enough.
+    expect(laneBands(lanes, (h - 1) / 2, h - 1)[0].height).toBeLessThan(LANE_BAND_MIN_H);
+  }
 });
 
 // --- AC6: the best-public band -------------------------------------------------------

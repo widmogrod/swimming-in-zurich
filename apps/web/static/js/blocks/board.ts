@@ -471,14 +471,16 @@ function heightForLanes(lanes: number): number {
 /**
  * rowHeight(row) → the row's height in CSS px: `max(ROW_H, 10 × lanes)`.
  *
- * `ROW_H = 46` and "the owner is written inside its lane block" are arithmetically
- * incompatible at six lanes, and [[lane-stack-board]] shipped BOTH — which is why the owner
- * name renders on no real Zürich basin today. `laneBands` splits `h * STACK_BOX` (0.8) between
- * the lanes and spends 1px of it on a separator, so a band is `h * 0.8 / n - 1`, and
- * `ownerLabelFits` refuses any band under `OWNER_LABEL_MIN_H` (7px). Solving
- * `h * 0.8 / n - 1 >= 7` gives `h >= 10n`; at exactly `10n` the band is exactly 7px, which the
- * gate admits (`bandH < OWNER_LABEL_MIN_H` is false). The link between the three constants is
- * asserted in board.test.ts rather than left as a comment.
+ * A row grows so its LANE BANDS stay legible as bands. `laneBands` splits `h * STACK_BOX`
+ * (0.8) between the lanes and spends 1px of it on a separator, so a band is `h * 0.8 / n - 1`,
+ * and `LANE_BAND_MIN_H` (7px) is the shortest that still reads as its own band rather than as
+ * one stripe of a hatch. Solving `h * 0.8 / n - 1 >= 7` gives `h >= 10n`. The link between the
+ * three constants is asserted in board.test.ts rather than left as a comment.
+ *
+ * The `10` originally came from a DIFFERENT gate — the height an owner name needed to be set
+ * in type inside its block. The board no longer writes owner names (that reading is the
+ * DetailPanel's Gantt), so the number is re-founded on the bands themselves; the arithmetic is
+ * identical and at six lanes it buys 8.2px bands against the old fixed 46px row's 5.13.
  *
  * Against the seven real lane plans four rows grow (Oerlikon 50m 8 → 80, City Schwimmerbecken
  * 6 → 60, Bläsi and Leimbach 5 → 50) and three keep 46; every row with no plan is untouched.
@@ -499,7 +501,7 @@ export function rowHeight(row: BoardRow): number {
 // with the phone day tail); what stays here is board-specific chrome: the row hairline
 // and the row box. `phase` animates the waterline (0 when frozen).
 //
-// `h` is PASSED, not read from a constant: since the owner-name fix a row's height is
+// `h` is PASSED, not read from a constant: since rows became lane-count-sized a row's height is
 // `rowHeight(row)`, and the one place it is computed is `buildRows` — where the same value
 // is written to the canvas AND to the label cell. Handing it down keeps the paint box and
 // the two DOM boxes provably the same number rather than three that happen to agree.

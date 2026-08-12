@@ -40,8 +40,10 @@ Both halves now carry it, and both mutate independently under test.
 - **O3** — the divider renders only when both groups are non-empty, and never in Pool mode.
 - **O4** — a facility genuinely without geo keeps `None`, sorts last by name, and is never given a
   fabricated 0.
-- **`rowHeight(row) = max(ROW_H, 10 × lanes)`** — plan-bearing rows grow so the owner label clears its
-  7px gate. `ribbonrender` needed no change; `drawLaneStack` already took `h`.
+- **`rowHeight(row) = max(ROW_H, 10 × lanes)`** — plan-bearing rows grow so each band clears
+  `LANE_BAND_MIN_H`. `ribbonrender` needed no change; `drawLaneStack` already took `h`.
+  *(S3 introduced this to fit the owner label; the label was removed on review and the constant was
+  re-founded on band legibility — see the follow-up below.)*
 
 ## What it delivers — measured, and NOT what the plan implied
 
@@ -77,9 +79,11 @@ the only safe narrowing point**. One deliberate deletion path remains: re-pointi
 `lane_plan_source` in `data/` drops the stale plan until the next `scrape-lanes`.
 
 **The owner name never rendered.** [[lane-stack-board]] fixed both `ROW_H = 46` and "owner inline",
-which are arithmetically incompatible at six lanes (5.13px bands, gate binds at n ≤ 4). Now verified
-on **painted strings** through the compiled board with a realistic 8.5px `measureText`: `ASVZ`,
-`Schwimmverein Zürileu`, `Trigether`, `Sportaktiv`.
+which are arithmetically incompatible at six lanes (5.13px bands, gate binds at n ≤ 4). S3 made it
+render, verified on **painted strings** through the compiled board with a realistic 8.5px
+`measureText`: `ASVZ`, `Schwimmverein Zürileu`, `Trigether`, `Sportaktiv`. **The owner then removed
+it from the board on review** — the Gantt already names them — so what survives from S3 is the row
+height, not the label. See the follow-up below.
 
 **The "6 vs 7 lane plans" anomaly is a test-double artifact.** `tests/providers/wfs_snapshot.py`
 serves `city-schwimmerbecken.pdf` for **every** `.pdf` URL. The join is URL-keyed so five single-basin
@@ -93,9 +97,11 @@ It also explains why City, Bungertwies and Käferberg were all seen serving iden
   test asserts over the whole answer, per source count, so a missed half fails loudly.
 - **`_compose_schedules` writes only what it scraped.** Widening it silently reintroduces the deletion
   door; `compose` cannot be made safe from the caller side.
-- **The 7.00px owner band has no margin.** At `10n` the band is exactly 7.00 and the gate admits it.
-  Changing `STACK_BOX` (0.8), the 1px separator or `OWNER_LABEL_MIN_H` flips every real basin back to
-  unlabelled — each mutation reddens 2–3 tests, so it fails loudly rather than silently.
+- **The 7.00px band has no margin.** At `10n` the band is exactly 7.00 and `LANE_BAND_MIN_H` admits
+  it. Changing `STACK_BOX` (0.8), the 1px separator or `LANE_BAND_MIN_H` drops every real basin back
+  under the legible floor — each mutation reddens 2–3 tests, so it fails loudly rather than silently.
+  (Until the review this constant gated the owner *label*; the arithmetic is unchanged, the reason is
+  not.)
 
 ## What this plan should be remembered for
 
@@ -114,12 +120,49 @@ Two agents also **built a fix and then declined to ship it** on hitting a gate �
 filename routing, and the lane-plan routing that would have left a pre-change baseline permanently
 red. Mutation-testing the *tests*, not just the code, is the practice that earned this plan.
 
+## Follow-up from the owner's review (2026-08-12)
+
+Two changes after seeing the board running, neither a plan slice:
+
+- **The board's swimlanes carry no text.** The owner names S3 added are gone from the canvas stack;
+  the DetailPanel's Gantt still names them, which is what makes the removal safe rather than a loss.
+  Verified over real data: the compiled board driven across 42 live `/swim` answers — 1695 options,
+  228 lane-stack ribbons at heights {46, 50, 60, 80}, **732 owner-bearing segments** — writes zero
+  owner names. Only two `fillText` sites remain on the board path: the axis hours, and
+  `drawStatusRibbon`'s "Hours not published yet" caption.
+- **Row heights STAY at `max(46, 10 × lanes)`**, re-founded on a new reason. `OWNER_LABEL_MIN_H`
+  became `LANE_BAND_MIN_H`: the extra height now buys band *legibility* (8.2px at 6 lanes instead of
+  5.13) rather than room for a font. `ownerLabelFits`, `OWNER_LABEL_PAD`, `OWNER_FONT`,
+  `pal.laneowner` and `.fam-laneowner` were deleted rather than left as dead exports.
+- **The Gantt readout follows the cursor.** It was a static block whose text changed while its
+  position never did. It now sits above the moment it describes, placed off the same `trackX` the
+  cursor line uses — there is no second derivation, so the two cannot drift apart. Exported as the
+  pure `readoutLeft(x, width, lo, hi)`.
+
+**Found in the browser, not by the tests:** clamping to the track width is correct and useless in the
+desktop panel — a ~1020px track inside a ~290px column meant `.gantt__scroll` cut the readout in
+half. The clamp is against the **visible window** (`scrollLeft`/`clientWidth`) and needs a `scroll`
+listener. Two of the three real defects in this follow-up were only visible by running the app.
+
+**Two comments asserted falsehoods about their own mechanism** and were corrected: `gantt.ts` argued
+the design worked "with no scroll listener" twenty lines above the scroll listener added when the
+browser proved otherwise; and the new no-text guard credited the caption to `drawUnpublishedRibbon`,
+which contains no `fillText` at all — it is `drawStatusRibbon` painting `awaiting_scrape`. The second
+mattered against invariant I5: `unpublished` (hatch, no text) and `ghost`/status (dotted envelope +
+caption) are easy to conflate by name, and only one of them writes.
+
+**Known, unresolved:** the readout is a `role="status"` live region whose text is rewritten on every
+hovered minute. That predates this change, but scrubbing makes it prominent — whether polite
+announcements on every pointer move are wanted is an open a11y decision. Placement is also not
+re-evaluated on window `resize` (any hover re-places it), and a `clientWidth` of 0 at mount falls back
+to the full track until the next cursor move.
+
 ## Entry points
 
 `domain/query.py` — `FacilityStatus.distance_km`, `_status_order`, `_option_order`,
 `_schedule_less_statuses` · `apps/web/api/swim/service.py::_km_out` ·
 `blocks/board.ts` — `isOpenToday`, `groupByOpenToday`, `dividerIndex`, `appendDivider`, `rowHeight` ·
-`blocks/poolrank.ts::rowDistance` · `cli.py::_compose_schedules` ·
+`blocks/gantt.ts::readoutLeft` · `blocks/poolrank.ts::rowDistance` · `cli.py::_compose_schedules` ·
 `build/compose.py::carry_lane_plans` · `tests/etl/test_lane_attachment_pin.py`
 
 ## Backlog

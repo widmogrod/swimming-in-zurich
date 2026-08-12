@@ -29,6 +29,34 @@ import {
 // at minute `min` is drawn at `GL + timescale.X(min)`; the cursor at the same x.
 export const GANTT_LABEL_W = 120;
 
+/** Fallback width for the readout where the DOM cannot measure one: the headless suites'
+ *  FakeElement has no layout, and a real element has no `offsetWidth` until it is in a
+ *  rendered document. Used ONLY to place the readout; a browser reports its real width. */
+export const READOUT_NOMINAL_W = 180;
+
+/**
+ * readoutLeft(x, width, lo, hi) → the readout's left edge, in TRACK px.
+ *
+ * The readout names the moment the cursor is on, so it is CENTRED on the cursor's x — the
+ * same `trackX` the cursor line is placed at, never a second derivation (a readout that
+ * disagrees with its own cursor is worse than one that never moves).
+ *
+ * `[lo, hi]` is the VISIBLE window of the track, not the track. Clamping to the track's own
+ * ends is not enough: in the desktop detail panel a ~1020px track lives inside a ~290px
+ * column, so a centred readout is cut in half by `.gantt__scroll` for most of the day —
+ * observed in the running app, which is why this takes a window and not a width. Clamped to
+ * the window the readout stops flush with the visible edge and the cursor keeps travelling
+ * past its middle: always wholly readable, at the cost of not being centred at the extremes.
+ * That trade is deliberate — a half-clipped number is not a number. A window narrower than
+ * the readout has no non-overflowing placement at all, so it sits flush at `lo`, which at
+ * least keeps the beginning of the sentence (the time itself) readable.
+ */
+export function readoutLeft(x: number, width: number, lo: number, hi: number): number {
+  const maxLeft = hi - width;
+  if (maxLeft <= lo) return lo;
+  return Math.min(Math.max(x - width / 2, lo), maxLeft);
+}
+
 /**
  * createGantt(el, opts) — mount a LaneGantt into `el`.
  * @param {object} opts
@@ -81,21 +109,36 @@ export function createGantt<T extends El>(el: T, opts: GanttOpts) {
 
   el.classList.add('gantt');
 
-  // --- live readout: "T · N of M lanes public" ---
-  const readout = doc.createElement('div');
-  readout.className = 'gantt__readout tnum';
-  readout.setAttribute('role', 'status');
-  readout.setAttribute('aria-live', 'polite');
-  el.appendChild(readout);
-
   // --- horizontally-scrollable track (own overflow container on mobile) ---
   const scroll = doc.createElement('div');
   scroll.className = 'gantt__scroll';
   const track = doc.createElement('div');
   track.className = 'gantt__track';
-  track.style.width = `${GL + ts.PLOT}px`;
+  const trackW = GL + ts.PLOT;
+  track.style.width = `${trackW}px`;
   scroll.appendChild(track);
   el.appendChild(scroll);
+
+  // --- live readout: "T · N of M lanes public", riding above the cursor ---
+  //
+  // It lives INSIDE the track, not beside it, so that it shares the cursor's coordinate
+  // space: one number in track px places both, and `scrollLeft` never enters the alignment.
+  // Parked in `el` the readout would need `scrollLeft` subtracted from every placement just
+  // to sit over the line it names.
+  //
+  // That buys ALIGNMENT only, not visibility — see `placeReadout` below, which clamps to the
+  // VISIBLE window and therefore does need a scroll listener, because scrolling moves that
+  // window without moving the cursor. Track parenthood and the scroll listener answer two
+  // different questions; neither replaces the other.
+  //
+  // It is still a live region — `role=status` / `aria-live=polite` are on the element, which
+  // is created once and only ever has its text rewritten, so moving it changes where it is
+  // painted and nothing about what a screen reader announces.
+  const readout = doc.createElement('div');
+  readout.className = 'gantt__readout tnum';
+  readout.setAttribute('role', 'status');
+  readout.setAttribute('aria-live', 'polite');
+  track.appendChild(readout);
 
   // axis row: ticks aligned to the board's (same timescale, drawn at GL + X(h)).
   const axis = doc.createElement('div');
@@ -167,13 +210,57 @@ export function createGantt<T extends El>(el: T, opts: GanttOpts) {
   // readoutAt(min) → { public, total } at `min` — the SAME publicAt the panel uses.
   const readoutAt = (min: number) => publicAt(basin, min);
 
+  /** The readout's own width: measured where the DOM can measure it, nominal where it
+   *  cannot. Only the placement uses it; the text is unaffected. */
+  const readoutWidth = (): number => {
+    const w = (readout as El & { offsetWidth?: number }).offsetWidth;
+    return typeof w === 'number' && w > 0 ? w : READOUT_NOMINAL_W;
+  };
+
+  /** The slice of the track the reader can currently see, in track px. Read off the scroll
+   *  container on every placement rather than cached: it changes on scroll AND on resize,
+   *  and it is two property reads.
+   *
+   *  Two degenerate readings both fall back to the whole track, `[0, trackW]`. Headless
+   *  there is no layout at all, and "nothing is clipping this" is the honest answer for a
+   *  surface with no viewport. In a browser `clientWidth` can also be 0 for one beat — the
+   *  element is in the DOM but not yet laid out at the first `paintCursor` — which places
+   *  the readout as if unclipped; the next cursor move or scroll re-reads a real width and
+   *  corrects it, so the wrong value cannot persist past the first interaction. */
+  const visibleWindow = (): [number, number] => {
+    const box = scroll as El & { scrollLeft?: number; clientWidth?: number };
+    const w = box.clientWidth;
+    if (typeof w !== 'number' || w <= 0) return [0, trackW];
+    const lo = typeof box.scrollLeft === 'number' ? box.scrollLeft : 0;
+    return [lo, Math.min(lo + w, trackW)];
+  };
+
+  function placeReadout() {
+    const [lo, hi] = visibleWindow();
+    // Off the SAME `trackX` the cursor line is drawn at — never a second derivation.
+    readout.style.left = `${readoutLeft(trackX(cursorMin), readoutWidth(), lo, hi)}px`;
+  }
+
   function paintCursor() {
     cursor.style.left = `${trackX(cursorMin)}px`;
     const { public: n, total: m } = readoutAt(cursorMin);
     // Was a hardcoded English template — the `gantt.readout` key already existed in all
     // five catalogues and simply was not used, so this line stayed English on a Polish page.
     readout.textContent = t('gantt.readout', { hhmm: minToHhmm(cursorMin), public: n, total: m });
+    // Placed AFTER the text is written, so a browser measures the sentence it will show.
+    placeReadout();
   }
+
+  // Scrolling the track moves the visible window under a stationary readout, so the clamp
+  // has to be re-evaluated — otherwise scrolling away from the cursor drags the readout off
+  // screen with it, which is the same "can't read the number" the placement exists to fix.
+  //
+  // DELIBERATELY no `resize` listener to go with it. A resize can leave the readout clamped
+  // to a window one size stale, but this surface is driven by hover: the board re-places the
+  // readout on every cursor minute, so a stale clamp is corrected by the first mouse
+  // movement over the very Gantt whose number the reader is trying to read. Add a
+  // ResizeObserver only if a surface appears that resizes while nobody is pointing at it.
+  scroll.addEventListener('scroll', placeReadout);
   paintCursor();
 
   function setCursor(min: number) {

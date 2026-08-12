@@ -291,7 +291,8 @@ body {
    sub-rows and the panel's Gantt cannot state the same fact in two different colours. */
 .fam-lanepublic { color: var(--lane-public-ink); }
 .fam-lanereserved { color: var(--lane-res-fill); }
-.fam-laneowner { color: var(--lane-res-ink); }
+/* No `.fam-laneowner`: the board's stack paints no text, so it probes no ink for one.
+   The owner is read in the panel's Gantt, which styles it in CSS (`.gantt__seg`). */
 .fam-lanetrack { color: var(--hair-2); }
 .fam-bestband { color: var(--best-band); }
 .fam-bestedge { color: var(--best-edge); }
@@ -307,13 +308,25 @@ body {
 
 .gantt {
   margin-top: var(--s3);
+
+  /* The track reserves a strip along its top for the readout, which rides above the
+     cursor rather than sitting in a corner. Both the reservation and everything measured
+     from below it read these, so the strip cannot be widened in one place only. */
+  --gantt-readout-h: 1.5rem;
+  --gantt-axis-h: 1.25rem;
 }
 
+/* The live readout — absolutely placed INSIDE the track (gantt.ts::readoutLeft), centred on
+   the cursor's x and clamped at both track edges. In the track, not beside it, so it stays
+   over its cursor while the track scrolls under the phone's finger. */
 .gantt__readout {
+  position: absolute;
+  top: 0;
+  left: 0;
   font-size: var(--fs-caption);
   font-weight: var(--fw-caption);
   color: var(--ink-2);
-  margin-bottom: var(--s2);
+  white-space: nowrap;
 }
 
 /* The wide lane track scrolls INSIDE this container (mobile), never the page. */
@@ -325,11 +338,12 @@ body {
 
 .gantt__track {
   position: relative;               /* the origin for absolutely-placed segments/cursor */
+  padding-top: var(--gantt-readout-h);  /* the readout's strip */
 }
 
 .gantt__axis {
   position: relative;
-  height: 1.25rem;
+  height: var(--gantt-axis-h);
   border-bottom: 1px solid var(--hair-2);
   color: var(--muted);
 }
@@ -345,7 +359,7 @@ body {
 /* Best-public window: a calm highlighted band spanning the "best time to come". */
 .gantt__band {
   position: absolute;
-  top: 1.25rem;
+  top: calc(var(--gantt-readout-h) + var(--gantt-axis-h));
   bottom: 0;
   background: var(--best-band);
   border-left: 1px solid var(--best-edge);
@@ -403,7 +417,7 @@ body {
 /* The vertical time cursor — the SAME x as the board cursor (shared timescale). */
 .gantt__cursor {
   position: absolute;
-  top: 0;
+  top: var(--gantt-readout-h);      /* starts just under the readout it is labelled by */
   bottom: 0;
   width: 2px;
   margin-left: -1px;
