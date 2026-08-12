@@ -151,11 +151,35 @@ which contains no `fillText` at all — it is `drawStatusRibbon` painting `await
 mattered against invariant I5: `unpublished` (hatch, no text) and `ghost`/status (dotted envelope +
 caption) are easy to conflate by name, and only one of them writes.
 
+- **The panel scrolls to follow the cursor.** `setCursor` moved the cursor line and re-placed the
+  readout but never scrolled `.gantt__scroll` — a ~1020px track in a ~318px column, so for most of the
+  day the cursor and the lanes at that time were simply off-screen. The pure `scrollToCentre(x,
+  viewportW, trackW)` centres it, clamped at both ends, instant (hover-driven — a smooth scroll would
+  lag the pointer). It fires on cursor change ONLY: a reader who scrolls by hand is never yanked back.
+- **The lane-label gutter is sticky**, which scrolling made necessary. Before, labels were always
+  visible and the cursor never was; scrolling alone would have traded one invisibility for the other.
+  Its cost is named at the site: whenever `scrollLeft > 0` the gutter occludes the leftmost 120px of
+  visible plot, so a ~318px column shows ~200px of timeline.
+
+**Two guards that guarded nothing, both found by mutation.** The sticky-gutter CSS shipped with **zero**
+tests — five mutations, including reverting it to the exact bug it was added to fix, all stayed green
+through both suites. `apps/web/tests/test_design_system.py` exists precisely for CSS with no layout
+engine to test it, and the test immediately above it had been written **one commit earlier for the
+previous report on this same block**. And the construction-time `scrollCursorIntoView()` — the only
+thing centring the panel when it opens — was documented as an accepted no-op on the grounds that the
+element is not yet in the document. It is: `detailpanel.ts:625` appends the host **before**
+`createGantt` at `:627`, so `clientWidth` reads ~318, and nothing re-enters the Gantt afterwards.
+Deleting that line left all 480 tests green. The tell was in the implementer's own report — it observed
+the panel opening centred, which only the line it called a no-op could have done.
+`mountWithViewport` stamped layout *after* construction, so no test could ever see the opening paint;
+`mountWithViewportFromBirth` closes that class.
+
 **Known, unresolved:** the readout is a `role="status"` live region whose text is rewritten on every
 hovered minute. That predates this change, but scrubbing makes it prominent — whether polite
 announcements on every pointer move are wanted is an open a11y decision. Placement is also not
-re-evaluated on window `resize` (any hover re-places it), and a `clientWidth` of 0 at mount falls back
-to the full track until the next cursor move.
+re-evaluated on window `resize` (any hover re-places it). A hand-scrolled reader can still park the
+cursor behind the gutter until the next cursor move — accepted, since the alternative is the
+re-centre-on-manual-scroll yank the block deliberately refuses.
 
 ## Entry points
 

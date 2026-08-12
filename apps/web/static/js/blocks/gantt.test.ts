@@ -6,9 +6,15 @@ import { dirname, join } from 'node:path';
 import { mount } from '../components/_fakedom.js';
 import type { FakeElement } from '../components/_fakedom.js';
 import { makeTimescale } from '../timescale.js';
-import { basinFromPanel, cursorX, publicAt, type LanePanel } from './cursor.js';
+import { basinFromPanel, cursorX, hhmmToMin, publicAt, type LanePanel } from './cursor.js';
 import { BOARD_DAY0, BOARD_DAY1, BOARD_PLOT } from './board.js';
-import { createGantt, readoutLeft, READOUT_NOMINAL_W, GANTT_LABEL_W } from './gantt.js';
+import {
+  createGantt,
+  readoutLeft,
+  scrollToCentre,
+  READOUT_NOMINAL_W,
+  GANTT_LABEL_W,
+} from './gantt.js';
 import { must } from '../testutil.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -229,33 +235,211 @@ function mountWithViewport(clientWidth: number) {
   const el = mount();
   const g = createGantt(el, { basin: BASIN, timescale: ts });
   const scroll = must(el.query(hasClass('gantt__scroll')));
-  Object.assign(scroll, { clientWidth, scrollLeft: 0 });
+  // `clientWidth` only: `scrollLeft` is FakeElement's own property, already 0 as a real
+  // node's is. Stamped AFTER construction, so this mount says nothing about the OPENING
+  // paint — `mountWithViewportFromBirth` below is the one that does.
+  Object.assign(scroll, { clientWidth });
   return { el, g, scroll, readout: must(el.query(hasClass('gantt__readout'))) };
 }
 
 test('a readout in a narrow column stays wholly inside the column', () => {
-  const { g, readout } = mountWithViewport(290);
+  const { g, scroll, readout } = mountWithViewport(290);
   for (const T of SAMPLES) {
     g.setCursor(T);
     const left = Number.parseFloat(readout.style.left);
-    expect(left, `${T}: left edge`).toBeGreaterThanOrEqual(0);
+    // Bounded by the window the reader can SEE — which, since the cursor now scrolls the
+    // track under it, is `[scrollLeft, scrollLeft + 290]` and not `[0, 290]`. (It was
+    // written as `[0, 290]` when the window could not move; that is now only the state at
+    // the day's left end.)
+    expect(left, `${T}: left edge`).toBeGreaterThanOrEqual(scroll.scrollLeft);
     // The whole sentence fits in the visible 290px — never clipped by `.gantt__scroll`.
-    expect(left + READOUT_NOMINAL_W, `${T}: right edge`).toBeLessThanOrEqual(290);
+    expect(left + READOUT_NOMINAL_W, `${T}: right edge`).toBeLessThanOrEqual(
+      scroll.scrollLeft + 290,
+    );
   }
 });
 
 test('scrolling the track re-places the readout — it does not slide out of view with it', () => {
   const { g, scroll, readout } = mountWithViewport(290);
-  g.setCursor(1200); // 20:00 — far to the right of a 290px window, so the clamp binds
+  g.setCursor(1200); // 20:00 — the cursor move brings its own window with it
   const parked = Number.parseFloat(readout.style.left);
-  expect(parked + READOUT_NOMINAL_W).toBeLessThanOrEqual(290);
-  // The reader scrolls the track towards the cursor. The window moves; the readout follows.
-  Object.assign(scroll, { scrollLeft: 800 });
+  expect(parked + READOUT_NOMINAL_W).toBeLessThanOrEqual(scroll.scrollLeft + 290);
+  // The reader now drags the track AWAY from the cursor, back to the start of the day —
+  // the one way the window and the cursor can still part company, since the Gantt itself
+  // only ever scrolls when the cursor moves. The window moves; the readout follows it,
+  // rather than staying over a cursor that is no longer on screen.
+  scroll.scrollLeft = 0;
   scroll.dispatch('scroll');
   const scrolled = Number.parseFloat(readout.style.left);
   expect(scrolled).not.toBe(parked);
-  expect(scrolled).toBeGreaterThanOrEqual(800); // never behind the window's left edge
-  expect(scrolled + READOUT_NOMINAL_W).toBeLessThanOrEqual(TRACK_W);
-  // …and now that the cursor is genuinely inside the window, it is centred on it again.
-  expect(scrolled + READOUT_NOMINAL_W / 2).toBe(g.trackX(1200));
+  expect(scrolled).toBeGreaterThanOrEqual(0); // never behind the window's left edge
+  expect(scrolled + READOUT_NOMINAL_W).toBeLessThanOrEqual(290); // nor past its right one
+  // The cursor is off to the right of this window, so the readout is flush against the
+  // visible right edge rather than centred on a line the reader cannot see.
+  expect(scrolled + READOUT_NOMINAL_W).toBe(290);
+  expect(g.trackX(1200)).toBeGreaterThan(290);
+});
+
+// --- the TRACK follows the cursor too -------------------------------------------------
+//
+// The second half of the same report, again from the running app: "it does not scroll
+// sidebar view to match vertical line representing time selection/hover". Clamping the
+// readout into the visible window kept the NUMBER on screen; the cursor line it names, and
+// the lane segments at that minute, were still 700px off to the right in a 290px column.
+
+const VIEW_W = 290; // the desktop detail-panel column
+const MAX_SCROLL = TRACK_W - VIEW_W; // 730
+
+test('scrollToCentre centres the cursor, and clamps at BOTH ends of the scroll range', () => {
+  // Room on both sides → the cursor lands exactly in the middle of the viewport.
+  expect(scrollToCentre(500, 290, 1020)).toBe(355);
+  expect(scrollToCentre(500, 290, 1020) + 145).toBe(500);
+  // The day's left end: cannot centre, so the window stands still at 0 and the cursor
+  // travels across it.
+  expect(scrollToCentre(120, 290, 1020)).toBe(0);
+  expect(scrollToCentre(0, 290, 1020)).toBe(0);
+  // The right end: flush against the track's end, never past it.
+  expect(scrollToCentre(1020, 290, 1020)).toBe(730);
+  expect(scrollToCentre(900, 290, 1020)).toBe(730);
+  // One px inside each clamp is still centred — the clamps cannot be widened inward.
+  expect(scrollToCentre(146, 290, 1020)).toBe(1);
+  expect(scrollToCentre(874, 290, 1020)).toBe(729);
+});
+
+test('scrollToCentre answers 0 for every viewport that cannot scroll', () => {
+  expect(scrollToCentre(500, 1020, 1020)).toBe(0); // exactly as wide as the track
+  expect(scrollToCentre(500, 2000, 1020)).toBe(0); // wider — a negative scrollLeft is not a thing
+  expect(scrollToCentre(500, 0, 1020)).toBe(0); // unmeasured (pre-layout)
+  expect(scrollToCentre(500, Number.NaN, 1020)).toBe(0); // and never NaN through the guard
+  // (A NaN cursor x is deliberately NOT guarded: the cursor line would already be drawn at
+  // `left: NaNpx`, so inventing a scroll position here would hide the real bug — and a
+  // browser ignores a non-finite `scrollLeft` assignment outright.)
+});
+
+test('moving the cursor scrolls the track so the cursor is VISIBLE at every minute', () => {
+  // The defect itself: with a 1020px track in a 290px column, the cursor line spent most
+  // of the day outside [scrollLeft, scrollLeft + 290] and simply could not be seen.
+  const { g, scroll } = mountWithViewport(VIEW_W);
+  const cursor = must(scroll.query(hasClass('gantt__cursor')));
+  let moved = 0;
+  let previous = scroll.scrollLeft;
+  for (const T of SAMPLES) {
+    g.setCursor(T);
+    const x = Number.parseFloat(cursor.style.left);
+    expect(x, `${T}: cursor past the left edge`).toBeGreaterThanOrEqual(scroll.scrollLeft);
+    expect(x, `${T}: cursor past the right edge`).toBeLessThanOrEqual(scroll.scrollLeft + VIEW_W);
+    // …and the scroll position is a real, in-range number, never NaN or negative.
+    expect(scroll.scrollLeft).toBeGreaterThanOrEqual(0);
+    expect(scroll.scrollLeft).toBeLessThanOrEqual(MAX_SCROLL);
+    if (scroll.scrollLeft !== previous) moved += 1;
+    previous = scroll.scrollLeft;
+  }
+  // Not vacuous: the track genuinely moved for most of the samples, rather than one
+  // clamped position happening to contain them all.
+  expect(moved).toBeGreaterThan(5);
+});
+
+test('the cursor is CENTRED where it can be, and the window is still at the day\'s ends', () => {
+  const { g, scroll } = mountWithViewport(VIEW_W);
+  const cursor = must(scroll.query(hasClass('gantt__cursor')));
+  g.setCursor(780); // 13:00 — mid-day, room on both sides
+  expect(scroll.scrollLeft).toBe(scrollToCentre(g.trackX(780), VIEW_W, TRACK_W));
+  expect(scroll.scrollLeft + VIEW_W / 2).toBe(Number.parseFloat(cursor.style.left));
+  // 06:00 is only 120px into the track (the label gutter), so centring it would mean a
+  // negative scrollLeft: the window parks at 0 and the cursor sits left of centre.
+  g.setCursor(360);
+  expect(scroll.scrollLeft).toBe(0);
+  // 22:00 is the track's last px: the window parks at its end and the cursor sits right
+  // of centre. Both ends clamp, in opposite directions.
+  g.setCursor(1320);
+  expect(scroll.scrollLeft).toBe(MAX_SCROLL);
+  expect(Number.parseFloat(cursor.style.left)).toBe(TRACK_W);
+});
+
+test('a MANUAL scroll is left alone — the view is not yanked back under the reader', () => {
+  // The scroll listener re-places the readout and must NOT re-centre: if the reader drags
+  // the Gantt to study 19:00 while the cursor sits at 13:00, it stays where they put it.
+  const { g, scroll, readout } = mountWithViewport(VIEW_W);
+  g.setCursor(780);
+  const centred = scroll.scrollLeft;
+  expect(centred).toBeGreaterThan(0); // the cursor move DID scroll, so this test can fail
+  scroll.scrollLeft = 700; // the reader drags the track
+  scroll.dispatch('scroll');
+  expect(scroll.scrollLeft, 'manual scroll survived the scroll listener').toBe(700);
+  // The readout was still re-clamped into the window they scrolled to — that is the
+  // listener's job, and it is the reason this could regress into a re-centre.
+  const left = Number.parseFloat(readout.style.left);
+  expect(left).toBeGreaterThanOrEqual(700);
+  expect(left + READOUT_NOMINAL_W).toBeLessThanOrEqual(700 + VIEW_W);
+});
+
+test('the scroll happens BEFORE the readout is placed, so the readout clamps to the new window', () => {
+  // `placeReadout` reads `scrollLeft` to compute its clamp. Painting first would clamp the
+  // readout against the pre-scroll window: at 20:00, that window is still the day's start,
+  // so the readout would be parked at its right edge — nowhere near its own cursor.
+  const { g, scroll, readout } = mountWithViewport(VIEW_W);
+  g.setCursor(1200); // 20:00
+  const left = Number.parseFloat(readout.style.left);
+  expect(left).toBeGreaterThanOrEqual(scroll.scrollLeft);
+  expect(left + READOUT_NOMINAL_W).toBeLessThanOrEqual(scroll.scrollLeft + VIEW_W);
+  // Centred on its cursor, which is exactly what a stale clamp would prevent.
+  expect(left + READOUT_NOMINAL_W / 2).toBe(g.trackX(1200));
+});
+
+test('an UNMEASURED track is not scrolled at all (no NaN scrollLeft before first layout)', () => {
+  // Headless there is no layout, and in a browser `clientWidth` is 0 for the beat between
+  // being in the DOM and being laid out. Both must leave `scrollLeft` alone rather than
+  // dividing a real number by an imaginary viewport.
+  const ts = makeTimescale(BOARD_DAY0, BOARD_DAY1, BOARD_PLOT);
+  const el = mount();
+  const g = createGantt(el, { basin: BASIN, timescale: ts });
+  const scroll = must(el.query(hasClass('gantt__scroll')));
+  // A sentinel, not 0: "left alone" and "written 0" are different behaviours, and only the
+  // sentinel tells them apart — an unguarded `scrollToCentre` would answer 0 for an
+  // unmeasured viewport and quietly reset a position it had no business touching.
+  scroll.scrollLeft = 400;
+  g.setCursor(1200);
+  expect(scroll.scrollLeft).toBe(400);
+  expect(Number.isNaN(scroll.scrollLeft)).toBe(false);
+});
+
+// --- the OPENING paint ----------------------------------------------------------------
+//
+// `createGantt` calls `scrollCursorIntoView()` once before returning, and that call is the
+// only thing that centres a panel the reader has not touched yet: `detailpanel.ts` appends
+// the Gantt's host to the panel BEFORE constructing it, and the panel is built into a
+// document-attached rail host, so `.gantt__scroll` is laid out and `clientWidth` is real by
+// then. Nothing re-enters afterwards — `setCursor` comes only from hover/click.
+//
+// `mountWithViewport` above stamps its width AFTER construction, so it cannot see any of
+// this: delete the constructor's call and every test up to here stays green. Hence a mount
+// whose container reports layout from birth.
+
+/** A mount whose `.gantt__scroll` reports layout FROM BIRTH, as the real one does. */
+function mountWithViewportFromBirth(clientWidth: number) {
+  const el = mount();
+  const doc = el.ownerDocument;
+  const create = doc.createElement.bind(doc);
+  // Every element created from here on gets the width. Only `.gantt__scroll` ever reads
+  // one, and at creation time there is no class to discriminate on — `className` is
+  // assigned by the caller a line later.
+  doc.createElement = (tag: string) => Object.assign(create(tag), { clientWidth });
+  const ts = makeTimescale(BOARD_DAY0, BOARD_DAY1, BOARD_PLOT);
+  const g = createGantt(el, { basin: BASIN, timescale: ts });
+  return { el, g, scroll: must(el.query(hasClass('gantt__scroll'))) };
+}
+
+test('a Gantt that OPENS is already centred on its cursor — nobody has to hover first', () => {
+  const { g, scroll } = mountWithViewportFromBirth(290);
+  // NO setCursor anywhere in this test. The cursor is the opening default — the basin's
+  // best-public start (13:00 in this fixture) — and it is off screen in a 290px column, so
+  // an uncentred panel opens showing 06:00 and a cursor the reader cannot see.
+  expect(g.cursorMin).toBe(hhmmToMin(must(BASIN.best_public, 'fixture has a best window').start));
+  expect(scroll.scrollLeft).toBe(scrollToCentre(g.trackX(g.cursorMin), 290, TRACK_W));
+  // Not vacuous: the expected position is a real scroll, not the 0 an untouched track has.
+  expect(scroll.scrollLeft).toBeGreaterThan(0);
+  // …and the user-visible property it exists for: the cursor is inside the opening window.
+  const x = Number.parseFloat(must(scroll.query(hasClass('gantt__cursor'))).style.left);
+  expect(x).toBeGreaterThanOrEqual(scroll.scrollLeft);
+  expect(x).toBeLessThanOrEqual(scroll.scrollLeft + 290);
 });

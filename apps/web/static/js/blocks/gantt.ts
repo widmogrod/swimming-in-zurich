@@ -58,6 +58,45 @@ export function readoutLeft(x: number, width: number, lo: number, hi: number): n
 }
 
 /**
+ * scrollToCentre(x, viewportW, trackW) → the `scrollLeft` that puts track-x `x` in the
+ * MIDDLE of the viewport, clamped to the scrollable range `[0, trackW - viewportW]`.
+ *
+ * Clamping the readout into the visible window (above) made the NUMBER readable while the
+ * thing it names — the cursor line, and the lane segments under it — stayed off screen: a
+ * ~1020px track inside a ~290px column shows a quarter of the day at a time. This is the
+ * other half of that fix, and the two are independent: the readout clamp answers "can I
+ * read it", this answers "can I see what it points at".
+ *
+ * CENTRED rather than minimally scrolled into view. Minimal-scroll only moves when the
+ * cursor crosses an edge, and then moves by a whole column — scrubbing across a track 3.5×
+ * the viewport would jump a page at a time under the pointer. Centring makes the track
+ * glide, at the price of moving even when the cursor was already visible. At the day's two
+ * ends the clamp binds and the window stands still while the cursor travels across it;
+ * that is the correct behaviour there, not a failure to centre.
+ *
+ * The upper clamp is the TRACK's own scrollable range, `trackW - viewportW`. Measured in the
+ * running app that is ~15px short of the container's real `scrollWidth - clientWidth` (the
+ * scroll box carries a little slack past the track). The understatement is deliberate and
+ * harmless: it can only ever under-scroll, so the cursor is still inside the window at 22:00
+ * (the track's last px), and ~15px of range at the far right simply goes unused. Do NOT
+ * "fix" it by reaching for `scrollWidth` — that trades a pure function of three track-px
+ * numbers for a live DOM measurement, and an over-shot `scrollLeft` the browser clamps back,
+ * to buy 15px nobody can see.
+ *
+ * A viewport at least as wide as the track has nothing to scroll, and an unmeasured one
+ * (`viewportW` 0 or NaN before first layout) has nothing to centre IN — a zero-width window
+ * would otherwise "centre" by scrolling the cursor's whole x, which is a real number for a
+ * viewport that does not exist. Both answer 0 rather than a negative, absurd, or NaN
+ * `scrollLeft`. `>` is false for NaN, so every degenerate reading leaves by a guard.
+ */
+export function scrollToCentre(x: number, viewportW: number, trackW: number): number {
+  if (!(viewportW > 0)) return 0;
+  const maxScroll = trackW - viewportW;
+  if (!(maxScroll > 0)) return 0;
+  return Math.min(Math.max(x - viewportW / 2, 0), maxScroll);
+}
+
+/**
  * createGantt(el, opts) — mount a LaneGantt into `el`.
  * @param {object} opts
  * @param {{lane_count: number, strips: any[], best_public?: any, name?: string}} opts.basin canonical basin.
@@ -112,6 +151,12 @@ export function createGantt<T extends El>(el: T, opts: GanttOpts) {
   // --- horizontally-scrollable track (own overflow container on mobile) ---
   const scroll = doc.createElement('div');
   scroll.className = 'gantt__scroll';
+  /** The scroll container, plus the two layout properties the placement math reads and
+   *  writes. `El` deliberately does not model layout (a real node has it, FakeElement has
+   *  none), so both are optional and every read guards — but the cast itself is written
+   *  ONCE here and shared by `visibleWindow` and `scrollCursorIntoView`, which must agree
+   *  about what they are measuring. */
+  const box = scroll as El & { scrollLeft?: number; clientWidth?: number };
   const track = doc.createElement('div');
   track.className = 'gantt__track';
   const trackW = GL + ts.PLOT;
@@ -228,12 +273,34 @@ export function createGantt<T extends El>(el: T, opts: GanttOpts) {
    *  the readout as if unclipped; the next cursor move or scroll re-reads a real width and
    *  corrects it, so the wrong value cannot persist past the first interaction. */
   const visibleWindow = (): [number, number] => {
-    const box = scroll as El & { scrollLeft?: number; clientWidth?: number };
     const w = box.clientWidth;
     if (typeof w !== 'number' || w <= 0) return [0, trackW];
     const lo = typeof box.scrollLeft === 'number' ? box.scrollLeft : 0;
     return [lo, Math.min(lo + w, trackW)];
   };
+
+  /** Scroll the track so the cursor sits in the middle of the visible window.
+   *
+   *  Called ONLY when the cursor moves (and on the initial paint, where the cursor moves
+   *  from nothing to its opening value). NOT from `placeReadout`, and NOT from the scroll
+   *  listener: a reader who has dragged the track to somewhere they want to study must
+   *  keep it there while the cursor is stationary. Yanking the view back under a reader is
+   *  worse than the bug this fixes — and routing it through the scroll listener would also
+   *  be a scroll that triggers a scroll.
+   *
+   *  Instant, never `behavior: 'smooth'`: this is driven by hover, and a smooth scroll
+   *  animates towards a target the pointer has already left, so the track would lag a
+   *  fraction of a second behind the line it is chasing.
+   *
+   *  Unmeasured (`clientWidth` 0 headless, or before the first layout in a browser) it does
+   *  nothing at all — the same degradation `visibleWindow` makes, and for the same reason:
+   *  there is no window to centre anything in yet, and the next cursor move re-reads a real
+   *  width. */
+  function scrollCursorIntoView() {
+    const w = box.clientWidth;
+    if (typeof w !== 'number' || w <= 0) return;
+    box.scrollLeft = scrollToCentre(trackX(cursorMin), w, trackW);
+  }
 
   function placeReadout() {
     const [lo, hi] = visibleWindow();
@@ -261,10 +328,29 @@ export function createGantt<T extends El>(el: T, opts: GanttOpts) {
   // movement over the very Gantt whose number the reader is trying to read. Add a
   // ResizeObserver only if a surface appears that resizes while nobody is pointing at it.
   scroll.addEventListener('scroll', placeReadout);
+  // The opening cursor, centred on the same terms as every later one — and this call is the
+  // ONLY thing that centres a freshly opened panel. `detailpanel.ts` appends the Gantt's
+  // host to the panel BEFORE calling `createGantt`, and the panel itself is built into a
+  // document-attached rail host (`app.ts`), so `.gantt__scroll` is laid out by the time this
+  // runs and `clientWidth` reads a real ~318, not 0. Nothing re-enters afterwards:
+  // `setCursor` arrives only from hover/click, so a panel opened and merely READ would show
+  // track x 0 — the day's start — with its cursor off screen if this line were dropped.
+  // (Observed in the running app: a panel opens at `scrollLeft` 130 with its 09:00 cursor
+  // centred in the column, before any pointer touches it.)
+  //
+  // Headless it IS a no-op, because the fake DOM has no layout unless a test stamps a
+  // `clientWidth` on the container before construction — which the test named for this line
+  // does, precisely so that deleting the line reddens something.
+  scrollCursorIntoView();
   paintCursor();
 
   function setCursor(min: number) {
     cursorMin = min;
+    // ORDER IS LOAD-BEARING: scroll first, THEN paint. `placeReadout` clamps against the
+    // window it reads out of `scrollLeft`, so painting first would clamp the readout to the
+    // PRE-scroll window and leave it one frame out of place (and, at the ends of the day,
+    // visibly flush against an edge it is no longer near).
+    scrollCursorIntoView();
     paintCursor();
   }
 

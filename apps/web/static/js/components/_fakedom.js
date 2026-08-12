@@ -51,6 +51,12 @@ class FakeElement {
     this.checked = false;
     this.disabled = false;
     this.innerHTML = '';
+    // Scroll position. A real element always HAS one (0 until something scrolls it), and
+    // blocks that scroll a container into view both write and read it back, so the fake
+    // owns it rather than materialising it on first assignment. It is a plain number: the
+    // fake has no layout, so it does NOT clamp to a scrollable range and does NOT fire a
+    // `scroll` event — a test that cares about either dispatches `scroll` itself.
+    this.scrollLeft = 0;
     this.selectionCalls = 0;
     this._listeners = {};
     this._text = '';

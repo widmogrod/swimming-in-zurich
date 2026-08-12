@@ -367,19 +367,51 @@ body {
   pointer-events: none;
 }
 
+/* A flex LINE, so the lane label can be a sticky IN-FLOW item (sticky replaces absolute
+   positioning — an absolutely-placed label cannot stick). Flex rather than an inline box so
+   the row has no line box whose leading could push it past its fixed height. The segments
+   stay absolutely positioned against this row's padding box, so an in-flow sibling ahead of
+   them moves nothing: `trackX` still means "GANTT_LABEL_W + timescale.X(min)" and the
+   board↔Gantt alignment is untouched by any of this. */
 .gantt__lane {
   position: relative;
+  display: flex;
   height: 1.375rem;                 /* mirrors LANE_H in gantt.js */
 }
 
+/* The lane-name gutter STICKS to the left edge of `.gantt__scroll` while the plot scrolls
+   under it. The Gantt now scrolls itself to keep the cursor centred (gantt.ts::
+   scrollToCentre), so without this the reader spends most of the day looking at a stack of
+   anonymous bands — the labels are 120px wide and the track is 1020px.
+
+   It therefore sits ON TOP of scrolling content and needs an OPAQUE ground: `--surface` is
+   what the Gantt is mounted on (`.detail`), so the gutter reads as part of the panel rather
+   than as a card floating over it. A transparent gutter shows segments sliding under the
+   lane names, which is worse than either bug this replaces.
+
+   It costs what every sticky gutter costs: while `scrollLeft > 0` the leftmost 120px of the
+   VISIBLE plot is occluded, so a ~318px column shows ~200px of timeline instead of ~318.
+   That is the trade — a fifth less plot, in exchange for knowing which lane each band is.
+
+   Stacking, all in the track's one context (`.gantt__track` is relative with z-index auto,
+   as is `.gantt__lane`, so neither opens a new one): band and segments paint at auto, the
+   cursor at 1, this at 2. The cursor is deliberately BELOW the gutter, and while the Gantt
+   drives its own scroll it cannot be hidden by it: `scrollToCentre` holds the cursor at the
+   viewport's centre, and its left clamp is 06:00, where the cursor sits at x=120 — the
+   gutter's right edge. Improbable, not impossible: a reader scrolling BY HAND can put
+   `trackX(cursorMin) − scrollLeft` inside [0, 120) — a 13:00 cursor at `scrollLeft` 450 —
+   and lose the line behind the gutter until the next cursor move re-centres it. Accepted:
+   the alternative is re-centring on manual scroll, the one thing this block refuses to do. */
 .gantt__lanelabel {
-  position: absolute;
+  position: sticky;
   left: 0;
-  top: 0;
-  bottom: 0;
+  z-index: 2;
+  flex: 0 0 auto;
+  align-self: stretch;
   display: flex;
   align-items: center;
   padding-right: var(--s2);
+  background: var(--surface);
   font-size: var(--fs-micro);
   color: var(--muted);
   white-space: nowrap;
@@ -419,6 +451,8 @@ body {
   position: absolute;
   top: var(--gantt-readout-h);      /* starts just under the readout it is labelled by */
   bottom: 0;
+  z-index: 1;                       /* over the segments it crosses, UNDER the sticky
+                                       lane-name gutter (see .gantt__lanelabel) */
   width: 2px;
   margin-left: -1px;
   background: var(--cursor);

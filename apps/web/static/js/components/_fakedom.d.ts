@@ -20,6 +20,8 @@ export interface FakeElement extends El {
   attributes: Record<string, string>;
   children: FakeElement[];
   parentNode: FakeElement | null;
+  /** Always present, as on a real node; the fake neither clamps it nor fires `scroll`. */
+  scrollLeft: number;
   selectionCalls: number;
 
   appendChild(child: El): FakeElement;

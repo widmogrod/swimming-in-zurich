@@ -66,6 +66,24 @@ def test_board_grid_guarantees_overflow_containment() -> None:
     assert "[canvas] 1fr" not in normalized, "a bare 1fr canvas column would overflow the page"
 
 
+def _blocks_rules() -> str:
+    """blocks.css, comments stripped and whitespace collapsed — the form `_rule` splits.
+
+    Comments FIRST: the gantt rules are documented in prose that names the very
+    declarations these gates assert, and a grep that cannot tell an explanation from a
+    declaration would pass on the comment after someone deleted the property.
+    """
+    normalized = _declarations_only((_STATIC / "blocks.css").read_text(encoding="utf-8"))
+    return re.sub(r"\s+", " ", normalized)
+
+
+def _rule(normalized: str, selector: str) -> str:
+    """The declarations of ONE rule. Scoped, because `padding-top: var(--x)` contains
+    `top: var(--x)` as a substring — a whole-file grep would pass on the wrong rule."""
+    assert f"{selector} {{" in normalized, f"blocks.css declares {selector}"
+    return normalized.split(f"{selector} {{")[1].split("}")[0]
+
+
 def test_gantt_readout_is_placed_over_its_cursor_not_parked_in_a_corner() -> None:
     """The readout rides above the cursor, so the CSS must let it be positioned at all.
 
@@ -81,14 +99,10 @@ def test_gantt_readout_is_placed_over_its_cursor_not_parked_in_a_corner() -> Non
       * the cursor and the best-public band measure DOWN from that same custom property
         rather than from their own copies of the number.
     """
-    blocks = _declarations_only((_STATIC / "blocks.css").read_text(encoding="utf-8"))
-    normalized = re.sub(r"\s+", " ", blocks)
+    normalized = _blocks_rules()
 
     def rule(selector: str) -> str:
-        """The declarations of ONE rule. Scoped, because `padding-top: var(--x)` contains
-        `top: var(--x)` as a substring — a whole-file grep would pass on the wrong rule."""
-        assert f"{selector} {{" in normalized, f"blocks.css declares {selector}"
-        return normalized.split(f"{selector} {{")[1].split("}")[0]
+        return _rule(normalized, selector)
 
     assert "position: absolute" in rule(".gantt__readout"), (
         "an unpositioned readout ignores its `left`"
@@ -103,6 +117,47 @@ def test_gantt_readout_is_placed_over_its_cursor_not_parked_in_a_corner() -> Non
     )
     assert "top: calc(var(--gantt-readout-h) + var(--gantt-axis-h))" in rule(".gantt__band"), (
         "the best-public band starts below the strip AND the axis"
+    )
+
+
+def test_gantt_lane_names_stay_visible_while_the_track_scrolls_under_them() -> None:
+    """The lane-name gutter is STICKY, opaque, and above the plot — the CSS half of the
+    scroll-to-cursor fix, and the sibling of the readout gate above.
+
+    `gantt.ts` now scrolls the track to keep the cursor centred, which drags a 120px label
+    gutter off a 1020px track for most of the day: without this rule the reader sees a stack
+    of anonymous bands and cannot tell lane 1 from lane 6. There is no layout engine here,
+    so this is the mechanical proxy for the CSS half. Every assertion below corresponds to a
+    mutation that leaves both the Python and the vitest suites green but breaks the block on
+    screen:
+
+      * `position: sticky` + `left: 0` — reverted to `absolute`, the labels scroll away
+        (the defect itself);
+      * `.gantt__lane { display: flex }` — sticky is an IN-FLOW position, so the label
+        cannot simply keep the absolute placement it had; a block row would give it a line
+        box whose leading pushes past the row's fixed height;
+      * `background: var(--surface)` — a transparent gutter shows segments sliding under
+        the lane names, which is worse than the bug it replaces (and `--surface`, not a
+        literal: colour lives in tokens.css, asserted elsewhere in this file);
+      * `z-index: 2` on the label and `1` on the cursor — the ordering is deliberate and
+        opposite ways round: segments (auto) under the cursor, cursor under the gutter.
+        Dropping either lets DOM order win, and the cursor is created last.
+    """
+    normalized = _blocks_rules()
+    label = _rule(normalized, ".gantt__lanelabel")
+
+    assert "position: sticky" in label, "an absolute label scrolls away with the plot"
+    assert "position: absolute" not in label, "sticky and absolute are alternatives"
+    assert "left: 0" in label, "a sticky element with no inset never sticks"
+    assert "background: var(--surface)" in label, (
+        "an opaque ground, or segments slide under the lane names"
+    )
+    assert "z-index: 2" in label, "the gutter must outrank the cursor it overlaps"
+    assert "display: flex" in _rule(normalized, ".gantt__lane"), (
+        "sticky is an in-flow position: the lane row must lay the label out, not just contain it"
+    )
+    assert "z-index: 1" in _rule(normalized, ".gantt__cursor"), (
+        "the cursor sits over the segments and UNDER the gutter — DOM order would put it on top"
     )
 
 
