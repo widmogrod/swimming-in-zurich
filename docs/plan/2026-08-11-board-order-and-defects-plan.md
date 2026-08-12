@@ -1,6 +1,6 @@
 ---
 type: plan
-status: in-progress      # owner approved 2026-08-11;
+status: done             # owner approved 2026-08-11;
 branch: plan/board-order-and-defects
 worktree: .claude/worktrees/plan-board-order-and-defects
 base_branch: feat/new-ui draft -> approved -> in-progress -> done
@@ -304,8 +304,47 @@ Appended by /dev:implement after each slice — never rewritten. Newest row last
 | 2026-08-12 | S1 | done | (1) `compose.py` gained `carry_lane_plans` + `_lane_key`, beyond the plan's "only if the branch comment needs correcting" — the curated rebuild strands attached lane plans otherwise. (2) `etl/build.py` split into `assemble_curated` + `write_curated_store`; `build_store`'s signature and behaviour unchanged (verified byte-identical over all 57 blobs). (3) `build` runs the roster fetch and curated assemble BEFORE `atomic_swap` — neither writes, failure paths identical, now covered. (4) `_compose_schedules` writes a SUBSET of `composition.facilities` — the adjudicated fix for the deletion door. | `CuratedAssembly.facilities`/`keyed_facilities` re-run `codec.loads` over all 57 blobs on every access; called at most twice per run. | yes |
 | 2026-08-12 | S2 | done | (1) `_distance_km(query, facility)` became `_distance_km(query, geo)` — the roster half has no `Facility`, and a second entry-shaped helper is how the two halves would drift apart. (2) `_option_order`/`_status_order` extracted to module level — the two inline lambdas pushed `find_swim_options` to CRAP 28.6 against a 30 gate; extracted it is 26.5. No behaviour change to the option key. (3) `service._km_out` added so AC4's equality is structural, not two independently-written `round(...,2)` calls. (4) `poollist.ts`/`appdata.test.ts` named in Touches needed no change; `phonelist.test.ts` pinned the user-visible result instead (a closed card now states its km). | `find_swim_options` at CRAP 26.5 / CC 26 against a 30 gate; this slice added ~2, so the next change there needs a genuine extraction. `groupByOpenToday`'s CALL SITE has a permanently-surviving mutant while `dayRows` builds options before statuses — proven identity, documented at the site. `_schedule_less_statuses` still does not apply `query.radius_km` while the in-loop half does (pre-existing, now more visible). `appdata.classifyPools` still derives distance from options only, so the pool-picker shows no km for a closed pool while the board and phone list now do. | yes |
 | 2026-08-12 | S3 | done | (1) `board_render.test.ts` edited, not named in Touches — its "inside ROW_H" test hard-codes 46 and went RED after the fix, so it was a THIRD shipped test encoding S3's opposite (the two the plan named use a local `H` and stayed green). (2) `ribbonrender.ts` comment-only edit, against "board.ts ONLY for production code" — three comments asserted "the row does not grow" and "its owners are read in the DetailPanel", now false; `git diff -U0` with comment lines filtered yields zero lines, verified by the critic. | At exactly `10n` the band is **exactly 7.00px** and `ownerLabelFits` admits it with no margin — verified exact, not epsilon-lucky (`h*0.8` is representable at every real n; no DPR in the path). Guarded: mutating STACK_BOX 0.8→0.75, OWNER_LABEL_MIN_H 7→7.5, the separator 1→2, or `<`→`<=` each redden 2-3 tests. **Not eyeballed in a real browser** — every check is headless, and a 7.00px band under an 8.5px 600-weight face is the one thing arithmetic cannot settle. `stackLaneCount`'s `variant === 'lanestack'` gate and its `Number.isFinite` guard are permanently-surviving mutants (`optionRibbon` only emits lanestack under `lane_count > 0`). `daytail.ts:33` still says TAIL_H "matches the board's ROW_H" — true of the floor, no longer of every row. | yes |
+| 2026-08-12 | S4 | done | AC2 asked for ONE test pinning "7 attached, unmatched_sections empty". It ships as TWO, pinning two different worlds, and the production-shaped one pins **6** — the repo carries no `bungertwies.pdf`. Covered by AC2's own escape clause; the absence is asserted BY NAME via `report.misses`, and the critic proved the pin is not an encoded assumption by committing a stand-in sheet (two tests went red demanding a re-pin). No production code changed: `git diff src/` empty. | **The offline test double still serves `city-schwimmerbecken.pdf` for EVERY `.pdf` URL**, so five pools serve City's identical 6-lane plan in every offline suite and `oerlikon-sprungbecken` is plan-less there. Fixing it needs TWO things to move together: filename routing in `wfs_snapshot.py`, AND a human decision on `swim_lane_fields_pre_s2.json` — see Decisions, the deferral is non-negotiable. `find_unmatched_sections` returning `()` leaves the whole new pin module green; only `tests/test_cli.py`'s artifact test kills it (now stated in the module docstring). | yes |
 
 ## Decisions & divergences
+
+**2026-08-12 — S4: the "6 vs 7 lane plans" anomaly is a TEST-DOUBLE ARTIFACT, not a production
+defect.** Reported three times across two plans; now diagnosed and closed. Critic verdict `approve`.
+
+`tests/providers/wfs_snapshot.py::_LANE_PDF` serves **one sheet — `city-schwimmerbecken.pdf` — for
+every `.pdf` URL**. The lane join is URL-keyed, so the five single-basin sources still bind, but to
+City's plan rather than their own. `oerlikon-sprungbecken` is the exception: it declares
+`section: "sprungbecken"`, and `_bind_stacked` (`silver.py:220-232`) routes by containment against
+the sheet's **parsed header**, which reads `Hallenbad City Schwimmerbecken`. The token matches
+nothing, the basin is silently `None`, and six attach instead of seven.
+
+The critic re-derived this independently, parsing all eight committed sheets rather than reading the
+report: blaesi 5, city 6, city-vario 4, kaeferberg 4, leimbach 5, oerlikon-schwimmerbecken 8, and
+`oerlikon-nichtschwimmer-sprungbecken` yielding TWO sections (`Nichtschwimmer`, `Sprungbecken`) at 2
+lanes each — exactly the base checkout's rebuilt gold. **`silver.py` and `belegungsplan.py` are
+correct.** `git diff src/` is empty for this slice.
+
+This also explains, in full, S3's critic finding City, Bungertwies **and** Käferberg all serving
+identical six-lane views with Oerlikon 50m serving none. All three were serving City's sheet.
+
+**The fix was built, then reverted at a gate — and the deferral is non-negotiable, not a judgement
+call.** Filename routing reddens `test_the_existing_lane_count_fields_are_byte_identical_to_before_s2`,
+whose reference `swim_lane_fields_pre_s2.json` captures Leimbach 2026-05-05 — a capture that today
+holds City's plan. **Regeneration cannot rescue it**: `gen_swim_lane_fields_pre_s2.py` dumps from a
+`git archive` of 659c76a and sets `PYTHONPATH` to that tree, so `tests.providers.wfs_snapshot`
+resolves to the OLD single-sheet double by construction. Verified empirically both ways — under a
+routed working tree the generator still reports "reproduced EXACTLY from the frozen commit", while
+the test fails. So there is **no regenerated baseline that both preserves the pre-change reference
+and matches a routed tree**; reconciling them means deleting or re-founding a fixture that exists to
+prove S2's independence. That is a human decision, and correctly out of a slice's reach.
+
+Otherwise the routing fix is clean: under it the build reports `attached 7 lane plan(s)`, no invariant
+assertion fails, and the only other movement is `checked == 19` becoming 21 as Sprungbecken's two
+options enter the fence. **The pre-S2 baseline is the sole blocker.**
+
+**AC1** — `detailpanel.ts`'s `publicSpan` predicate, found unpinned by two separate critics across two
+plans, is now pinned: inverting it and deleting it each redden the two new tests, with the other 466
+noticing nothing. That silence is precisely the hole.
 
 **2026-08-12 — S3: the owner name renders, verified on painted strings rather than on assertions.**
 Critic verdict `approve`.
@@ -494,5 +533,34 @@ change [[data-sourcing-rule]] defers.
 
 ## Summary
 
-Written when the plan reaches `done`; then distilled into
-`docs/summaries/board-order-and-defects.md` (what EXISTS now, not what was intended).
+All four slices shipped 2026-08-12 through both QA chains and adversarial review (final: **967**
+Python tests at 96.36% against a 95 floor, **468** TypeScript, `npm run build` exit 0, CRAP clean both
+sides). Distilled into [[board-order-and-defects]].
+
+**The reported bug.** "when I switch dates order of swimming pools changes" — because a pool's
+position was decided by whether it happened to be open, not by where it is. Statuses carried no
+distance and were never sorted; `dayRows` rendered every option row before every status row. Both
+status sources now carry distance (including the 18 built outside the facility loop, which a half-fix
+would have missed invisibly), and the board is two distance-ordered groups with a named boundary.
+
+**Stated plainly, because the plan's framing implied otherwise:** this does NOT reduce cross-date
+positional churn — 43 of 55 facilities move both before and after. What it delivers is an *explicable*
+order. The closed group was never sorted at all: Hallenbad Leimbach, the furthest shut pool at 6.07
+km, was served 3rd of 38 and is now last.
+
+**Three defects fixed alongside it.** `scrape-gold` refreshed nothing already present, and the fix for
+that opened a second silent-deletion door which closing became the real result of S1. The owner name
+never rendered on any real basin (`ROW_H = 46` and "owner inline" are arithmetically incompatible at
+six lanes) — it now paints, verified on painted strings through the compiled board. And the "6 vs 7
+lane plans" anomaly, reported three times, is a test-double artifact rather than a production defect.
+
+**What this plan should be remembered for.** **Five** acceptance criteria across this plan and its
+predecessor turned out not to discriminate — "0 within-group moves" (impossible), "relative order"
+(trivially true), the Pool-mode divider guard (its fixture had no shut day), a `publicSpan` predicate
+two critics found unpinned, and a tautology caught in the final slice. **Every one was found by
+mutation; none by reading.** Two agents also built a fix and then declined to ship it on hitting a
+gate. Mutation-testing the tests, not just the code, is the practice that earned this plan.
+
+**Open:** the offline double still serves one sheet for every PDF (needs filename routing AND a
+decision on the pre-S2 baseline, which must move together); `find_swim_options` is at CRAP 26.5
+against a 30 gate; the 7.00px owner-label band has never been seen in a real browser.

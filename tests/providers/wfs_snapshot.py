@@ -87,7 +87,29 @@ _PAGE_BY_FILENAME: dict[str, str] = {
     "planschbecken.html": "planschbecken.html",
 }
 # A valid single-basin Belegungsplan sheet; the URL-keyed lane join binds by URL, not by content,
-# so serving one good plan for every discovered PDF attaches each authored single-basin source.
+# so serving one good plan for every discovered PDF attaches each authored SINGLE-BASIN source.
+#
+# **It does NOT attach the one STACKED source, and that is a known artifact of this double.**
+# `oerlikon.yaml` declares `oerlikon-sprungbecken` with `section: "sprungbecken"`, and
+# `silver._bind_stacked` routes a section by containment against the sheet's PARSED HEADER, not
+# by URL. Served City's sheet, the only header is `Hallenbad City Schwimmerbecken`, so the token
+# matches nothing: the offline build attaches SIX plans and reports one unmatched section, where
+# a build over the real per-pool sheets attaches SEVEN with none. It also makes every attached
+# plan City's, so five distinct pools serve an identical six-lane day view offline.
+#
+# Consequences for anyone writing a test on top of this double (board-order-and-defects S4):
+#   * never assert a POOL's lane content or lane COUNT from the offline store — it is City's;
+#   * never read `oerlikon-sprungbecken`'s missing plan as a production fact;
+#   * the double's own numbers are pinned, and labelled as artifacts, in
+#     `tests/test_cli.py::test_the_offline_build_doubles_lane_attachment_is_pinned_as_an_artifact`;
+#   * what the join REALLY does, over each URL's own committed sheet, is pinned in
+#     `tests/etl/test_lane_attachment_pin.py`.
+#
+# Routing this by filename is the fix, and the repo already carries five of the six sheets. It is
+# deliberately NOT done here: it changes what five pools serve in every downstream suite, and it
+# invalidates `apps/web/tests/fixtures/swim_lane_fields_pre_s2.json` — a baseline captured at
+# commit 659c76a whose whole value is that it predates the code under test and must never be
+# regenerated. That trade needs a plan and a human, not a slice.
 _LANE_PDF = "city-schwimmerbecken.pdf"
 _PRICE_FIXTURE = "preise_abos.html"
 

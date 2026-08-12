@@ -1849,3 +1849,51 @@ def test_a_non_cache_failure_in_the_live_wiring_is_not_reported_as_a_cache_error
     monkeypatch.setattr("swimzh.cli.live_transport", stub)
     with pytest.raises(ValueError, match="bad SSL configuration"):
         main(["build", "--db", str(tmp_path / "gold.sqlite"), "--data", str(DATA_DIR)])
+
+
+def test_the_offline_build_doubles_lane_attachment_is_pinned_as_an_artifact(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """board-order-and-defects S4 AC2, the half that pins THE DOUBLE — labelled as such.
+
+    `wfs_snapshot._LANE_PDF` serves ONE sheet (`city-schwimmerbecken.pdf`) for every `.pdf` URL.
+    The lane join is URL-keyed, so all five SINGLE-basin sources bind — to City's plan, not their
+    own. The one STACKED source does not: `oerlikon-sprungbecken` declares
+    `section: "sprungbecken"` and `_bind_stacked` routes by containment against the sheet's
+    parsed header, which here reads `Hallenbad City Schwimmerbecken`. So this build attaches SIX
+    and reports exactly one unmatched section.
+
+    **None of these numbers describe production.** A build over the real per-pool sheets attaches
+    seven with `unmatched_sections` empty — pinned, honestly, in
+    `tests/etl/test_lane_attachment_pin.py`. Read that module for what the join really does; this
+    one exists so the double cannot drift silently underneath every suite that consumes it. The
+    coincidence that both totals are six is exactly that: here Sprungbecken is lost and
+    Bungertwies binds a stand-in; there Sprungbecken binds and Bungertwies has no committed sheet.
+    """
+    db = tmp_path / "gold.sqlite"
+    assert build(db_path=db, data_dir=DATA_DIR, clients=_build_clients()) == 0
+    captured = capsys.readouterr()
+
+    # The audit line the CLI prints. A substring match, but over the WHOLE rendered count, so the
+    # number cannot drift: "attached 7 lane plan(s)" does not contain this string.
+    assert "attached 6 lane plan(s)" in captured.out
+
+    # Exactly one unmatched section, and it is NAMED — never an unasserted range.
+    unmatched = [line for line in captured.err.splitlines() if line.startswith("unmatched section")]
+    assert len(unmatched) == 1
+    assert "oerlikon-sprungbecken" in unmatched[0]
+    assert "'sprungbecken' matched no parsed header" in unmatched[0]
+
+    # …and the store agrees with the audit line: six basins carry a plan, and the plan-less one is
+    # the basin the unmatched section named. Asserted against the store because the printed count
+    # and the persisted store are two different things, and only the store is what `/swim` serves.
+    facilities = GoldRepository(open_db(db)).load_all()
+    with_plan = {
+        (str(f.identity.facility_id), str(b.basin_id))
+        for f in facilities
+        for b in f.basins
+        if isinstance(b.lane_plan, LanePlan)
+    }
+    assert len(with_plan) == 6
+    assert ("hallenbad-oerlikon", "oerlikon-sprungbecken") not in with_plan
+    assert ("hallenbad-oerlikon", "oerlikon-50m") in with_plan

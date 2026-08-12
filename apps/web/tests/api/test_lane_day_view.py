@@ -100,7 +100,15 @@ def test_a_lane_segment_spans_a_real_time_range_within_the_day() -> None:
 def test_a_basin_with_a_binding_but_no_parsed_plan_carries_neither_lane_field() -> None:
     """AC2: `oerlikon-sprungbecken` declares a `lane_plan_source` whose section matched no
     parsed header, so no plan attached. Both new fields must be null — asserted, not assumed —
-    and null must mean "not published", never "no lanes free"."""
+    and null must mean "not published", never "no lanes free".
+
+    WHY it matched no header is a property of the DOUBLE, not of production
+    (board-order-and-defects S4): the shared fixture serves City's sheet for this URL, so the
+    `'sprungbecken'` token has nothing to match. Against the real sheet it matches and the basin
+    gets a 2-lane plan — see `tests/etl/test_lane_attachment_pin.py`. The INVARIANT under test
+    here is unaffected and still worth pinning: whatever leaves a basin plan-less, all four lane
+    fields must degrade to null together.
+    """
     sprung = [o for o in _options(AT_OERLIKON) if o["basin_id"] == "oerlikon-sprungbecken"]
     assert sprung, "the plan-less lane basin produced no option to assert against"
     for option in sprung:

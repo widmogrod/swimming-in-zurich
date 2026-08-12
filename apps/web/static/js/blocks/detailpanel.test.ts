@@ -10,7 +10,7 @@ import { basinFromPanel, publicAt, peakPublic } from './cursor.js';
 import { BOARD_DAY0, BOARD_DAY1, BOARD_PLOT } from './board.js';
 import { createGantt } from './gantt.js';
 import { createDetailPanel } from './detailpanel.js';
-import type { FacilityDetail } from './detailpanel.js';
+import type { BasinPlan, FacilityDetail } from './detailpanel.js';
 import type { LanePanel } from './cursor.js';
 import { fake, must } from '../testutil.js';
 
@@ -426,4 +426,69 @@ test('a price row with no structured fields degrades to the curated display', ()
     'Price row',
   );
   expect(row.textContent).toContain('Erwachsene CHF 8.00');
+});
+
+// --- the "Today" pill's public span (pins `publicSpan`'s isPublicSegment filter) --------
+//
+// `publicSpan` narrows the day to the PUBLIC holds only, and the pill it feeds was the one
+// rendered string no suite read — inverting `if (!isPublicSegment(seg)) continue;` left the
+// whole vitest suite green. These two tests read that string, on a basin built so the public
+// span and the reserved span are DISJOINT: the public window is strictly inside the day, and
+// the reserved holds sit on both sides of it. Dropping the filter, or inverting it, moves the
+// printed range.
+
+const todayRow = (p: { el: FakeElement }) =>
+  must(
+    fake(p.el).queryAll(hasClass('detail__fact')).find((r) => r.textContent.startsWith('Today')),
+    'Today row',
+  );
+
+/** A basin whose reserved holds BRACKET its public ones (06:00–07:00 / 20:00–22:00 vs 08:00–10:00). */
+const BRACKETED: BasinPlan = {
+  id: 'synthetic-bracketed',
+  name: 'Bracketed',
+  lane_count: 2,
+  weekday: 2,
+  best_public: null,
+  strips: [
+    {
+      lane: 1,
+      segments: [
+        { start: '06:00', end: '07:00', access: 'Reserved', owner: 'Klub A' },
+        { start: '08:00', end: '10:00', access: 'PublicSwim' },
+      ],
+    },
+    {
+      lane: 2,
+      segments: [
+        { start: '08:30', end: '09:30', access: 'PublicSwim' },
+        { start: '20:00', end: '22:00', access: 'Reserved', owner: 'Klub B' },
+      ],
+    },
+  ],
+};
+
+test('the Today pill spans the PUBLIC holds only — reserved time on either side is excluded', () => {
+  const p = createDetailPanel(mount(), { detail: POOL, basin: BRACKETED, timescale: newTs() });
+  // The union of the public segments is 08:00–10:00. The union of ALL segments is 06:00–22:00,
+  // and the union of the reserved ones alone is 06:00–22:00 too — so this one string separates
+  // the correct predicate from both dropping it and inverting it.
+  expect(todayRow(p).textContent).toContain('Open · 08:00–10:00');
+  expect(todayRow(p).textContent).not.toContain('06:00');
+  expect(todayRow(p).textContent).not.toContain('22:00');
+});
+
+test('a basin that is never public says so, instead of printing its reserved hours as "Open"', () => {
+  const reservedOnly: BasinPlan = {
+    ...BRACKETED,
+    id: 'synthetic-reserved-only',
+    strips: BRACKETED.strips.map((s) => ({
+      ...s,
+      segments: s.segments.map((seg) => ({ ...seg, access: 'Reserved', owner: 'Klub A' })),
+    })),
+  };
+  const p = createDetailPanel(mount(), { detail: POOL, basin: reservedOnly, timescale: newTs() });
+  // Availability is never derived by complement: no public hold ⇒ no open range at all.
+  expect(todayRow(p).textContent).toContain('No public lanes today');
+  expect(todayRow(p).textContent).not.toContain('Open ·');
 });
