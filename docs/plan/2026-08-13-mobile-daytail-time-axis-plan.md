@@ -285,8 +285,44 @@ Appended by /dev:implement after each slice — never rewritten. Newest row last
 |------|-------|--------|----------------------|-------------------|---------------|
 | 2026-08-13 | S1 | done | (1) `.plist__tail`'s VERTICAL padding also changed — the plan's padding move deletes `.plist__btn`'s `var(--s2)` bottom, which supplied 8 of the 12px above the tail; new value reproduces the old rhythm exactly. (2) new `--focus-ring-inset` token + `border-radius` on `.plist__btn`, restoring focus indication the padding move destroyed. (3) `tokens.css` and `apps/web/tests/test_design_system.py` modified — both outside S1's listed files, same reason as (2). | focus-ring guard is grep-level, not pixel-level: it pins which token the selector uses, not that the ring is visible. No layout engine in the suite — same honesty as X3. | yes |
 | 2026-08-14 | S2 | done | none | the `pal.hair \|\| pal.axis` fallback arm is uncovered (daytail.ts branch 92.59% → 89.28%): no test short of a Proxy set-trap recorder can distinguish the arms, and one that only moves the number would assert nothing. | yes |
+| 2026-08-14 | S3 | done | Three, all forced by defects in THIS plan, not by the implementation: (1) S1's `tailBox.parentNode === btn` and S3's DOM contract are mutually exclusive — the test now asserts ancestry, preserving S1's actual guarantee; (2) the prescribed `resolvedOptions()` h23 pin is a tautology, replaced by an en-US discriminator, and `hourFormatter` dropped rather than exported; (3) `.plist__tail`'s BLOCK padding retuned `var(--s3)` → `var(--s1) var(--s3)` (the plan said "keeps its padding-block") — the strip occupies the space the old 12px top padding held. Also: `HOUR_OPTS` is an export not in the Design's signature block. | (a) the h23 pin guards the CONSTANT, not the call site — inlining the options at `formatHour` stays green until a h12-defaulting locale is added; no non-circular assertion closes it, so it is named in the doc comment. (b) `gantt.ts:194` still bypasses `datefmt`; the two shapes agree by convention plus the pinned literal. (c) that the `:first-child` CSS rule still exists is unasserted — only its premise (`STRIP_HOURS[0] === TAIL_DAY0`) is pinned. | yes |
 
 ## Decisions & divergences
+
+**2026-08-14 — S3: two defects in THIS PLAN, found by building it.** Both are recorded here because
+the plan text still carries the wrong instruction, and a later reader must not mistake the shipped
+code for a deviation from a correct spec.
+
+1. **The plan contradicts itself about the tail's parent.** S1's criterion says
+   `tailBox.parentNode === btn`; S3's own DOM contract inserts `.plist__plot` between them, making it
+   `tailBox.parentNode === plot`. Both are stated as acceptance criteria and they cannot both hold.
+   S3's criterion "existing phonelist tests pass unchanged, including S1's three" is therefore
+   unsatisfiable as written. Resolution: S1's test keeps its CLAIM — a tap on the bars reaches the
+   button — by asserting ancestry (`btn.query(c => c === tailBox) !== null`), with exact parentage
+   pinned separately by the S3 contract test. The critic verified the ancestry form still goes red
+   when the plot is moved out of the button, so nothing was weakened.
+
+2. **The prescribed h23 test could not fail.** The plan said to pin `hourCycle: 'h23'` "via
+   `resolvedOptions()`, NOT via output". That is backwards: all five `FORMAT_LOCALE` tags
+   (`en-GB`, `de-CH`, `fr-CH`, `it-CH`, `pl`) already *default* to h23, so the assertion passes with
+   the option deleted — demonstrated by deleting it and watching all 14 datefmt tests stay green.
+   `en-US` is the only tag that can tell (`"06:00 AM"` without, `"06:00"` with), and it is not one of
+   ours, so the test carries an explicit "do not tidy this foreign tag away" note in two places.
+   Options moved into an exported `HOUR_OPTS` so the test asserts the constant production actually
+   uses; `hourFormatter` was dropped rather than exported once its only justification evaporated —
+   `dtf` is already memoised per locale, so nothing was lost.
+
+   Residue, accepted: the pin guards the CONSTANT, not the call site. Inlining the options at
+   `formatHour` leaves the suite green until a h12-defaulting locale is added. No non-circular
+   assertion closes it, so it is named in the doc comment rather than chased with more machinery.
+
+**2026-08-14 — S3: a testing hazard worth knowing about in this codebase.** A failing
+`expect(nodeA).toBe(nodeB)` in a `FakeElement` suite makes vitest deep-diff both trees through their
+`parentNode` back-references: one red assertion took **262 seconds** to serialize (the critic
+reproduced it at 173s for the suite alone, against 0.3s green). It is indistinguishable from a hung
+test run. Node-identity assertions in these suites are therefore written as booleans
+(`a === b` → `toBe(true)`), with a `parentNode?.className` alongside so a red run still prints a
+readable diagnosis. This applies to any future test here that compares two DOM-ish nodes.
 
 **2026-08-14 — S2: three critic suggestions taken, two recorded instead.** Taken: (1) the mark ink
 was **unfalsifiable** — `Palette` is `Record<string, string>`, so mutating `pal.hair` to `pal.hairline`

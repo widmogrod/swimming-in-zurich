@@ -4,13 +4,16 @@ import {
   formatCelsius,
   formatDate,
   formatDay,
+  formatHour,
   formatKm,
+  HOUR_OPTS,
   isoDate,
   mondayOf,
   parseUtc,
   shiftIso,
   weekDates,
 } from "./datefmt.js";
+import { LOCALES } from "./plurals.js";
 
 // ---- date arithmetic (behaviour preserved from the three deduplicated copies) --------
 
@@ -97,4 +100,29 @@ test("km always shows one fraction digit, matching the previous toFixed(1)", () 
 test("celsius formats through Intl rather than string concatenation", () => {
   expect(formatCelsius(28, "en")).toContain("28");
   expect(formatCelsius(28, "en")).toContain("C");
+});
+
+// ---- the day tail's hour labels ------------------------------------------------------
+
+test("formatHour returns the same HH:00 shape the Gantt axis renders, in every locale", () => {
+  // Pinned as a LITERAL, in all five, because the collapsed card's strip and the expanded
+  // card's `gantt.ts` axis label the same hours and must not read differently.
+  for (const loc of LOCALES) {
+    expect(formatHour(6, loc)).toBe("06:00");
+  }
+  expect(formatHour(21, "pl")).toBe("21:00");
+});
+
+test("HOUR_OPTS pins h23 — asserted against en-US, the only tag that can tell", () => {
+  // en-US is NOT one of our locales, and that is exactly why it is here. DO NOT "tidy it
+  // away" as irrelevant: all five `FORMAT_LOCALE` tags already DEFAULT to h23, so against
+  // any of them this assertion holds whether or not `HOUR_OPTS` sets `hourCycle` — the
+  // output string and `resolvedOptions().hourCycle` alike. en-US defaults to h12, so it
+  // is the one tag where the option is observable: "06:00" with it, "06:00 AM" without.
+  // Delete `hourCycle` from HOUR_OPTS and this test — and only this test — goes red.
+  const us = new Intl.DateTimeFormat("en-US", {
+    ...HOUR_OPTS,
+    timeZone: "UTC",
+  });
+  expect(us.format(new Date(Date.UTC(1970, 0, 1, 6)))).toBe("06:00");
 });

@@ -62,6 +62,16 @@ test('the strip labels every third hour, and the canvas marks all but the left e
   expect(STRIP_HOURS.filter((h) => !TICK_HOURS.includes(h))).toEqual([TAIL_DAY0]);
 });
 
+test('the FIRST labelled hour is the window start — the premise of the CSS `:first-child` rule', () => {
+  // `blocks.css`'s `.plist__ticks span:first-child { transform: none }` un-centres the
+  // first label because it sits at 0% and would otherwise hang half outside the card;
+  // every other label is `translateX(-50%)`, centred on its mark. That rule is only
+  // correct while the first labelled hour IS the left edge. Nothing else asserts the
+  // coupling, so relabelling from (say) 07:00 would silently mis-centre one label per
+  // card with no gate firing. Change one of these two and you must change the other.
+  expect(STRIP_HOURS[0]).toBe(TAIL_DAY0);
+});
+
 test('tickPercent agrees with the canvas timescale at every labelled hour, at any width', () => {
   // X1. The DOM strip positions its labels in PERCENT and the canvas paints in px; they
   // line up only if these are the same mapping. Widths pinned deliberately: 320 (iPhone SE)
