@@ -11,35 +11,37 @@
 # `oerlikon`, …) are preserved LOSSLESSLY as aliases so every legacy id still resolves by
 # lookup (registry.resolve_name).
 #
-# geo_sport_id values are placeholders (null) until wired from the geo_sport provider.
+# `geo_sport_id` is NO LONGER a crosswalk field here: since S5b it is SOURCED from the WFS
+# `poi_id` by the roster/spine build, so it is intentionally absent from every identity below.
 
 facilities:
   # --- curated (have a schedule file under data/pools/) ---
   - facility_id: "hallenbad-city"
     name: "Hallenbad City"
     kind: "indoor"
-    geo_sport_id: null
     crowdmonitor_keys: ["City", "Hallenbad City", "Sportbad City"]
+    # Real Baditicker feed poiid (verified against tests/providers/fixtures/baditicker.xml).
+    # Baditicker covers the indoor Hallenbäder (City, Oerlikon, …) too.
+    baditicker_poiid: "hb001"
     aliases: ["city", "City", "Sportbad City"]
 
   - facility_id: "hallenbad-oerlikon"
     name: "Hallenbad Oerlikon"
     kind: "indoor"
-    geo_sport_id: null
     crowdmonitor_keys: ["Oerlikon", "Hallenbad Oerlikon"]
+    baditicker_poiid: "hb004"  # real feed poiid (tests/providers/fixtures/baditicker.xml)
     aliases: ["oerlikon", "Oerlikon"]
 
   - facility_id: "hallenbad-bungertwies"
     name: "Hallenbad Bungertwies"
     kind: "indoor"
-    geo_sport_id: null
     crowdmonitor_keys: ["Bungertwies", "Hallenbad Bungertwies"]
+    baditicker_poiid: "hb002"  # real feed poiid (tests/providers/fixtures/baditicker.xml)
     aliases: ["bungertwies", "Bungertwies"]
 
   - facility_id: "schulschwimmanlage-aemtler"
     name: "Schulschwimmanlage Aemtler"
     kind: "school"
-    geo_sport_id: null
     crowdmonitor_keys: []
     aliases: ["aemtler", "Aemtler", "Schulschwimmanlage Aemtler"]
 
@@ -52,14 +54,157 @@ facilities:
   - facility_id: "hallenbad-blaesi"
     name: "Hallenbad Bläsi"
     kind: "indoor"
+    baditicker_poiid: "hb005"  # real feed poiid (tests/providers/fixtures/baditicker.xml)
     aliases: ["blaesi", "Bläsi", "Blaesi"]
 
   - facility_id: "hallenbad-leimbach"
     name: "Hallenbad Leimbach"
     kind: "indoor"
+    baditicker_poiid: "hb006"  # real feed poiid (tests/providers/fixtures/baditicker.xml)
     aliases: ["leimbach", "Leimbach"]
 
   - facility_id: "waermebad-kaeferberg"
     name: "Wärmebad Käferberg"
     kind: "thermal"
+    baditicker_poiid: "hb007"  # real feed poiid (tests/providers/fixtures/baditicker.xml)
     aliases: ["kaeferberg", "Käferberg", "Kaeferberg", "Wärmebad Käferberg"]
+
+  # Outdoor pin, no curated schedule — but a registry identity so its external live-data keys
+  # (crowdmonitor today, baditicker next) survive onto the location-only facility the build
+  # mints for it. `crowdmonitor_keys` is empty (CrowdMonitor covers indoor baths only); the
+  # `aliases` prove the registry identity reaches the mint (S2 adds `baditicker_poiid: fb012`).
+  - facility_id: "freibad-heuried"
+    name: "Freibad Heuried"
+    kind: "outdoor"
+    crowdmonitor_keys: []
+    # Real Baditicker poiid (verified live 2026-07-25: fb012 = 23 °C). This uncurated pin has no
+    # curated schedule, yet its live water temp rides on the S1 location-only mint's registry
+    # identity through gold to `/pools/freibad-heuried`.
+    baditicker_poiid: "fb012"
+    aliases: ["heuried", "Freibad Heuried"]
+
+  # --- S4: Baditicker roster keys for the remaining reconcilable catalog pools -------------
+  # Minimal identity-only entries (no curated schedule) whose sole purpose is to carry the live
+  # water-temp `baditicker_poiid` onto the location-only facility the build mints. `facility_id`
+  # is the real catalog `pool_id`; `kind` matches the catalog kind verbatim (so the uncurated
+  # kind-from-catalog invariant holds); every `baditicker_poiid` is a real `<poiid>` in the
+  # recorded feed fixture (tests/providers/fixtures/baditicker.xml — a no-dangling-keys test
+  # asserts this). "Flussbad Unterer Letten" is deliberately OMITTED: the feed carries two
+  # poiids (flb6940 + flb8803) both titled identically, and the catalog carries two pools
+  # (flussbad-unterer-letten + …-flussteil) — nothing disambiguates which poiid is which pool,
+  # so mapping it would be a guess (see the S4 report / plan).
+
+  # Freibäder (outdoor)
+  - facility_id: "freibad-allenmoos"
+    name: "Freibad Allenmoos"
+    kind: "outdoor"
+    crowdmonitor_keys: []
+    baditicker_poiid: "fb006"
+    aliases: ["allenmoos", "Freibad Allenmoos"]
+
+  - facility_id: "freibad-auhof"
+    name: "Freibad Auhof"
+    kind: "outdoor"
+    crowdmonitor_keys: []
+    baditicker_poiid: "fb008"
+    aliases: ["auhof", "Freibad Auhof"]
+
+  - facility_id: "freibad-dolder"
+    name: "Freibad Dolder"
+    kind: "outdoor"
+    crowdmonitor_keys: []
+    baditicker_poiid: "fb016"
+    aliases: ["dolder", "Freibad Dolder"]
+
+  - facility_id: "freibad-letzigraben"
+    name: "Freibad Letzigraben"
+    kind: "outdoor"
+    crowdmonitor_keys: []
+    baditicker_poiid: "fb002"
+    aliases: ["letzigraben", "Freibad Letzigraben"]
+
+  - facility_id: "freibad-seebach"
+    name: "Freibad Seebach"
+    kind: "outdoor"
+    crowdmonitor_keys: []
+    baditicker_poiid: "fb013"
+    aliases: ["seebach", "Freibad Seebach"]
+
+  - facility_id: "freibad-zwischen-den-hoelzern"
+    name: "Freibad Zwischen den Hölzern"
+    kind: "outdoor"
+    crowdmonitor_keys: []
+    baditicker_poiid: "fb018"
+    aliases: ["zwischen-den-hoelzern", "Freibad Zwischen den Hölzern"]
+
+  # Flussbäder (river)
+  - facility_id: "flussbad-au-hoengg"
+    name: "Flussbad Au-Höngg"
+    kind: "river"
+    crowdmonitor_keys: []
+    baditicker_poiid: "flb6938"
+    aliases: ["au-hoengg", "Flussbad Au-Höngg"]
+
+  - facility_id: "flussbad-oberer-letten"
+    name: "Flussbad Oberer Letten"
+    kind: "river"
+    crowdmonitor_keys: []
+    baditicker_poiid: "flb6939"
+    aliases: ["oberer-letten", "Flussbad Oberer Letten"]
+
+  - facility_id: "frauenbad-stadthausquai"
+    name: "Frauenbad Stadthausquai"
+    kind: "river"
+    crowdmonitor_keys: []
+    baditicker_poiid: "flb6941"
+    aliases: ["stadthausquai", "Frauenbad Stadthausquai"]
+
+  - facility_id: "maennerbad-schanzengraben"
+    name: "Männerbad Schanzengraben"
+    kind: "river"
+    crowdmonitor_keys: []
+    baditicker_poiid: "flb6942"
+    aliases: ["schanzengraben", "Männerbad Schanzengraben"]
+
+  # Seebäder / Strandbäder (lake)
+  - facility_id: "seebad-enge"
+    name: "Seebad Enge"
+    kind: "lake"
+    crowdmonitor_keys: []
+    baditicker_poiid: "seb6943"
+    aliases: ["enge", "Seebad Enge"]
+
+  - facility_id: "seebad-katzensee"
+    name: "Seebad Katzensee"
+    kind: "lake"
+    crowdmonitor_keys: []
+    baditicker_poiid: "seb6944"
+    aliases: ["katzensee", "Seebad Katzensee"]
+
+  - facility_id: "seebad-utoquai"
+    name: "Seebad Utoquai"
+    kind: "lake"
+    crowdmonitor_keys: []
+    baditicker_poiid: "seb6945"
+    aliases: ["utoquai", "Seebad Utoquai"]
+
+  - facility_id: "strandbad-mythenquai"
+    name: "Strandbad Mythenquai"
+    kind: "lake"
+    crowdmonitor_keys: []
+    baditicker_poiid: "seb6946"
+    aliases: ["mythenquai", "Strandbad Mythenquai"]
+
+  - facility_id: "strandbad-tiefenbrunnen"
+    name: "Strandbad Tiefenbrunnen"
+    kind: "lake"
+    crowdmonitor_keys: []
+    baditicker_poiid: "seb6947"
+    aliases: ["tiefenbrunnen", "Strandbad Tiefenbrunnen"]
+
+  - facility_id: "strandbad-wollishofen"
+    name: "Strandbad Wollishofen"
+    kind: "lake"
+    crowdmonitor_keys: []
+    baditicker_poiid: "seb6948"
+    aliases: ["wollishofen", "Strandbad Wollishofen"]

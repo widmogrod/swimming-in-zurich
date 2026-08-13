@@ -7,15 +7,15 @@ from __future__ import annotations
 
 import dataclasses
 from datetime import date, datetime, time, timedelta
-from pathlib import Path
+from decimal import Decimal
 from zoneinfo import ZoneInfo
 
 import pytest
 
 from swimzh.core.errors import ProviderError, Timeout, describe
 from swimzh.core.result import Err, Ok, Result
-from swimzh.domain.access import ClubReserved, PublicSwim
-from swimzh.domain.catalog import PoolCatalogEntry, RosterEntry
+from swimzh.domain.access import ClubReserved, PublicSwim, ReasonCode
+from swimzh.domain.catalog import PoolCatalogEntry, RosterEntry, ScheduleFreshness
 from swimzh.domain.lane_plan import (
     LaneAvailability,
     LanePlan,
@@ -36,25 +36,24 @@ from swimzh.domain.models import (
 from swimzh.domain.person import Gender, Person
 from swimzh.domain.query import (
     LiveOccupancy,
+    LiveTemp,
     Occupancy,
     OccupancyUnavailable,
     QueryResult,
     SwimQuery,
+    TempReading,
+    TempUnavailable,
+    TempUnavailableCode,
     find_swim_options,
+    read_temperature,
 )
 from swimzh.domain.schedule import ScheduleRule, TimeRange, Weekday
-from swimzh.providers.curated import Dataset, load_dataset
+from swimzh.providers.curated import Dataset
 
-DATA_DIR = Path(__file__).resolve().parents[2] / "data"
+# The `dataset` fixture (the illustrative curated schedules, now committed as test fixtures) lives
+# in tests/domain/conftest.py — see the note there on why it is no longer read from `data/pools/`.
 ZURICH = ZoneInfo("Europe/Zurich")
 ADULT = Person(gender=Gender.MALE, age=40)
-
-
-@pytest.fixture(scope="module")
-def dataset() -> Dataset:
-    result = load_dataset(DATA_DIR)
-    assert isinstance(result, Ok), result
-    return result.value
 
 
 def test_dataset_loads_curated_and_lane_plan_only_pools(dataset: Dataset) -> None:
@@ -70,14 +69,16 @@ def test_dataset_loads_curated_and_lane_plan_only_pools(dataset: Dataset) -> Non
         "Hallenbad Bläsi",
         "Wärmebad Käferberg",
     }
-    # Registry knows more than we have curated.
-    assert len(dataset.registry.identities) == 8
+    # Registry knows more than we have curated (25 since S4 added identity-only entries for every
+    # reconcilable Baditicker pool so their live water-temp `baditicker_poiid` survives onto the
+    # location-only facility the build mints — 9 through S1/S2 + 16 new outdoor/river/lake pins).
+    assert len(dataset.registry.identities) == 25
 
 
 def _roster(dataset: Dataset) -> tuple[RosterEntry, ...]:
     """The roster the app feeds `find_swim_options`, here derived from the curated dataset's
-    registry (8 known pools) so the three-state `uncurated = roster − scheduled` answer is
-    exercised without a gold DB."""
+    registry (25 known pools after S4) so the three-state `uncurated = roster − scheduled` answer
+    is exercised without a gold DB."""
     return tuple(
         RosterEntry(
             entry=PoolCatalogEntry(
@@ -90,7 +91,14 @@ def _roster(dataset: Dataset) -> tuple[RosterEntry, ...]:
                 description=None,
                 phone=None,
             ),
-            curated=False,
+            # Mirror `codec.schedule_freshness`'s kind branch for a schedule-less row (this
+            # synthetic roster has no blob): indoor → awaiting_scrape, else no_source. Scheduled
+            # pools are filtered out by `roster − scheduled`, so their freshness is immaterial here.
+            freshness=(
+                ScheduleFreshness.AWAITING_SCRAPE
+                if identity.kind is PoolKind.INDOOR
+                else ScheduleFreshness.NO_SOURCE
+            ),
         )
         for identity in dataset.registry.identities.values()
     )
@@ -105,15 +113,36 @@ def _query(dataset: Dataset, when: datetime, person: Person = ADULT) -> QueryRes
     )
 
 
-def test_uncurated_facilities_are_distinguished_from_closed(dataset: Dataset) -> None:
+def test_schedule_less_facilities_are_distinguished_from_closed(dataset: Dataset) -> None:
     # A normal Wednesday afternoon in term.
     result = _query(dataset, datetime(2026, 3, 11, 14, 0, tzinfo=ZURICH))
-    uncurated = [s for s in result.statuses if s.status == "uncurated"]
-    assert {s.facility_name for s in uncurated} == {
+    schedule_less = [s for s in result.statuses if s.status in {"awaiting_scrape", "no_source"}]
+    assert {s.facility_name for s in schedule_less} == {
+        # Registry-known but not scheduled (identity-only or lane-plan-only) → a freshness status
+        # (awaiting_scrape / no_source), never "closed". S4 grew this set: every reconcilable
+        # Baditicker pool now carries a registry identity so its water-temp key survives.
         "Hallenbad Altstetten",
         "Hallenbad Bläsi",
         "Hallenbad Leimbach",
         "Wärmebad Käferberg",
+        "Freibad Heuried",  # S1: registry-known outdoor pin, no schedule → uncurated (not closed)
+        # S4: the outdoor/river/lake pins that gained a Baditicker `baditicker_poiid`.
+        "Freibad Allenmoos",
+        "Freibad Auhof",
+        "Freibad Dolder",
+        "Freibad Letzigraben",
+        "Freibad Seebach",
+        "Freibad Zwischen den Hölzern",
+        "Flussbad Au-Höngg",
+        "Flussbad Oberer Letten",
+        "Frauenbad Stadthausquai",
+        "Männerbad Schanzengraben",
+        "Seebad Enge",
+        "Seebad Katzensee",
+        "Seebad Utoquai",
+        "Strandbad Mythenquai",
+        "Strandbad Tiefenbrunnen",
+        "Strandbad Wollishofen",
     }
 
 
@@ -125,7 +154,9 @@ def test_evening_public_swim_is_open_and_eligible(dataset: Dataset) -> None:
     city = [o for o in open_eligible if o.facility_name == "Hallenbad City"]
     assert city, "City should be open Tuesday 18:00"
     assert city[0].price is not None
-    assert city[0].price.display == "Erwachsene CHF 8.00"
+    # The bound the tariff prints travels in the display string, so a reader can check it.
+    assert city[0].price.display == "Erwachsene (ab 20 J.) CHF 8.00"
+    assert city[0].price.min_age == 20
     assert city[0].provenance.curated is True
     assert city[0].provenance.valid_as_of is not None
 
@@ -174,7 +205,8 @@ def test_school_pool_adults_only_window_rejects_child(dataset: Dataset) -> None:
     option = open_aemtler[0]
     assert option.eligibility.allowed is False
     assert option.eligibility.rule == "adults-only"
-    assert "requires age 18+" in option.eligibility.reason
+    assert option.eligibility.code is ReasonCode.ADULTS_ONLY_TOO_YOUNG
+    assert option.eligibility.params == {"min_age": 18}
     # The same window admits an adult.
     adult = _query(dataset, when)
     open_adult = [
@@ -321,6 +353,90 @@ def test_facility_without_crowdmonitor_keys_is_unavailable(dataset: Dataset) -> 
     assert result.options
     assert result.options[0].live_occupancy == OccupancyUnavailable(reason="no crowdmonitor key")
     assert provider.calls == []  # never asked without a key
+
+
+# --- Live water temperature attach (fake provider — the real Baditicker adapter is deferred
+# --- to a later slice) -------------------------------------------------------------------
+
+
+class _FakeTemperatureProvider:
+    """In-memory `TemperatureProvider`: returns a canned Result and records the poiids asked."""
+
+    def __init__(self, result: Result[TempReading, ProviderError]) -> None:
+        self._result = result
+        self.calls: list[str] = []
+
+    def read(self, poiid: str) -> Result[TempReading, ProviderError]:
+        self.calls.append(poiid)
+        return self._result
+
+
+def _temp_reading(measured_at: datetime, celsius: Decimal | None = Decimal("23.0")) -> TempReading:
+    return TempReading(measured_at=measured_at, celsius=celsius, is_open=True, source="baditicker")
+
+
+def _keyed_identity(poiid: str | None) -> PoolIdentity:
+    return PoolIdentity(
+        facility_id=PoolId("temp-test"),
+        name="Freibad Temp-Test",
+        kind=PoolKind.OUTDOOR,
+        baditicker_poiid=poiid,
+    )
+
+
+def test_read_temperature_attaches_live_temp_with_derived_age() -> None:
+    now = datetime.now(ZURICH)
+    provider = _FakeTemperatureProvider(Ok(_temp_reading(now - timedelta(minutes=42))))
+    result = read_temperature(provider, _keyed_identity("fb012"), now)
+    assert isinstance(result, LiveTemp)
+    assert result.reading.celsius == Decimal("23.0")
+    # age is derived at attach time from measured_at (~42 min ago), not stored upstream.
+    assert timedelta(minutes=41) < result.age < timedelta(minutes=43)
+    assert result.is_stale() is False  # well within the 6h default limit
+    assert provider.calls == ["fb012"]  # keyed by the identity's baditicker poiid, once
+
+
+def test_read_temperature_empty_cell_is_live_temp_with_none_celsius() -> None:
+    # Pinned: an empty feed cell (measured nothing yet) is still a LiveTemp — we know
+    # open/closed + freshness — NEVER a TempUnavailable.
+    now = datetime.now(ZURICH)
+    provider = _FakeTemperatureProvider(Ok(_temp_reading(now - timedelta(minutes=5), celsius=None)))
+    result = read_temperature(provider, _keyed_identity("fb012"), now)
+    assert isinstance(result, LiveTemp)
+    assert result.reading.celsius is None
+
+
+def test_read_temperature_without_key_is_unavailable() -> None:
+    provider = _FakeTemperatureProvider(Ok(_temp_reading(datetime.now(ZURICH))))
+    result = read_temperature(provider, _keyed_identity(None), datetime.now(ZURICH))
+    assert result == TempUnavailable(reason="no baditicker key", code=TempUnavailableCode.NO_KEY)
+    # The CODE is what the UI renders — "no baditicker key" is operator jargon, and the
+    # pseudolocale pass caught it being shown to users verbatim.
+    assert result.code is TempUnavailableCode.NO_KEY
+    assert provider.calls == []  # never asked without a key
+
+
+def test_read_temperature_provider_error_becomes_unavailable() -> None:
+    error = Timeout(url="https://www.stadt-zuerich.ch/stzh/bathdatadownload", after_s=3.0)
+    provider = _FakeTemperatureProvider(Err(error))
+    result = read_temperature(provider, _keyed_identity("fb012"), datetime.now(ZURICH))
+    # No exception escapes the errors-as-values surface; the cause is described.
+    assert result == TempUnavailable(reason=describe(error))
+
+
+def test_temp_reading_naive_measured_at_is_rejected_at_construction() -> None:
+    with pytest.raises(ValueError, match="tz-aware"):
+        _temp_reading(datetime(2026, 7, 25, 20, 39))
+
+
+def test_live_temp_staleness_is_derived_not_stored() -> None:
+    reading = _temp_reading(datetime(2026, 7, 25, 20, 39, tzinfo=ZURICH))
+    assert LiveTemp(reading=reading, age=timedelta(hours=5)).is_stale() is False
+    stale = LiveTemp(reading=reading, age=timedelta(hours=7))
+    assert stale.is_stale() is True
+    assert stale.is_stale(limit=timedelta(hours=8)) is False
+    # No stored freshness enum — freshness derives from the reading via `age`.
+    assert {f.name for f in dataclasses.fields(LiveTemp)} == {"reading", "age"}
 
 
 # --- Lane availability (query-time derivation of the STORED lane plan) -------------------
@@ -544,3 +660,37 @@ def test_staleness_is_derived_not_stored() -> None:
 def test_future_year_warns_about_calendar_coverage(dataset: Dataset) -> None:
     result = _query(dataset, datetime(2030, 3, 12, 18, 0, tzinfo=ZURICH))
     assert any("calendar data not available" in w for w in result.warnings)
+
+
+def test_holiday_with_no_published_policy_warns_instead_of_asserting_hours(
+    dataset: Dataset,
+) -> None:
+    """Karfreitag 2026-04-03. A pool whose source never states a holiday policy still shows
+    its weekday hours -- but the result says so, rather than presenting a guess as fact."""
+    # City publishes sunday_schedule; strip it to model a pool whose page is silent.
+    unknown = tuple(
+        dataclasses.replace(f, public_holiday_policy=None)
+        if f.identity.name == "Hallenbad City"
+        else f
+        for f in dataset.facilities
+    )
+    result = find_swim_options(
+        SwimQuery(person=ADULT, at=datetime(2026, 4, 3, 12, 0, tzinfo=ZURICH)),
+        unknown,
+        dataset.calendar,
+        _roster(dataset),
+    )
+
+    holiday_warnings = [w for w in result.warnings if "public holiday" in w]
+    assert len(holiday_warnings) == 1, result.warnings
+    assert "Hallenbad City" in holiday_warnings[0]
+    # Oerlikon STATES closed -- a known policy is never warned about.
+    assert "Hallenbad Oerlikon" not in holiday_warnings[0]
+    # The hours are still served: unknown must not hide an option.
+    assert any(o.facility_name == "Hallenbad City" for o in result.options)
+
+
+def test_no_holiday_warning_on_an_ordinary_day(dataset: Dataset) -> None:
+    result = _query(dataset, datetime(2026, 3, 10, 12, 0, tzinfo=ZURICH))
+
+    assert not [w for w in result.warnings if "public holiday" in w]

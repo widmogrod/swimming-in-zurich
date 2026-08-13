@@ -7,7 +7,9 @@ are auditable rather than hidden inside a boolean.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from collections.abc import Mapping
+from dataclasses import dataclass, field
+from enum import StrEnum
 from typing import assert_never
 
 from swimzh.domain.person import Gender, Person
@@ -66,6 +68,37 @@ class AdultsOnly:
     note: str = ""
 
 
+@dataclass(frozen=True, slots=True)
+class GirlsOnly:
+    """Session published *"für Mädchen"* — girls only.
+
+    No `min_age`/`max_age`: the city states neither, and inventing one would repeat the
+    unsourced `AdultsOnly.min_age = 18`. A woman is therefore *not determinable* rather
+    than welcome; only "not female" is decidable.
+    """
+
+
+@dataclass(frozen=True, slots=True)
+class GenderDiverse:
+    """Session published *"offen für trans und nicht-binäre Personen ab N Jahren"*.
+
+    `min_age` is required: the one cell citywide that produces this arm states its age, and
+    it is the ONLY checkable fact here — being trans is not a value of `Person.gender` (a
+    trans woman's gender is *female*), so this arm never hard-denies on gender.
+    """
+
+    min_age: int
+
+
+@dataclass(frozen=True, slots=True)
+class AccompaniedChildren:
+    """Session published *"für Kinder nur mit Erwachsenen"* — children, accompanied by an adult.
+
+    Deliberately fieldless: accompaniment is not an attribute of `Person`, so this arm is
+    never decidable either way and invents no adult threshold.
+    """
+
+
 type SessionAccess = (
     PublicSwim
     | LaneSwim
@@ -75,6 +108,9 @@ type SessionAccess = (
     | SchoolReserved
     | ClubReserved
     | AdultsOnly
+    | GirlsOnly
+    | GenderDiverse
+    | AccompaniedChildren
 )
 
 
@@ -140,6 +176,25 @@ def access_info(access: SessionAccess) -> AccessInfo:
                 f"Adults-only public window — reserved for guests aged {min_age} and over "
                 "(typical for school-pool evening swims).",
             )
+        case GirlsOnly():
+            return AccessInfo(
+                "girls-only",
+                "Girls only",
+                "Girls-only session (für Mädchen) — the pool publishes no age cutoff, "
+                "so confirm with the venue.",
+            )
+        case GenderDiverse(min_age):
+            return AccessInfo(
+                "gender-diverse",
+                "Trans and non-binary",
+                f"Session open to trans and non-binary people aged {min_age} and over.",
+            )
+        case AccompaniedChildren():
+            return AccessInfo(
+                "accompanied-children",
+                "Children with an adult",
+                "For children only when accompanied by an adult (für Kinder nur mit Erwachsenen).",
+            )
         case _ as unreachable:
             assert_never(unreachable)
 
@@ -156,16 +211,69 @@ REPRESENTATIVE_ACCESS: tuple[SessionAccess, ...] = (
     SchoolReserved(),
     ClubReserved(),
     AdultsOnly(),
+    GirlsOnly(),
+    # The one bound the city publishes ("ab 16 Jahren"); the legend needs a concrete instance.
+    GenderDiverse(min_age=16),
+    AccompaniedChildren(),
 )
 
 ACCESS_TYPES: tuple[AccessInfo, ...] = tuple(access_info(a) for a in REPRESENTATIVE_ACCESS)
 
 
+class ReasonCode(StrEnum):
+    """The message identity of an eligibility outcome — the i18n key space.
+
+    Distinct from `rule`, which names the ACCESS TYPE and is therefore too coarse to key a
+    message on: a women-only session yields four different sentences (welcome / excluded /
+    confirm with the venue / tell us your gender) that all share `rule="women-only"`.
+    Keying on `rule` would silently render "you're welcome" for "you're not".
+
+    Every arm of `eligibility()` returns exactly one of these, and
+    `tests/domain/test_eligibility.py` asserts the enum is fully reachable — a code nobody
+    produces is dead, and an outcome without one cannot exist because the compiler-checked
+    `assert_never` below covers every access type.
+    """
+
+    PUBLIC = "public"
+    LANE_SWIM = "lane_swim"
+    FAMILY = "family"
+
+    WOMEN_ONLY_WELCOME = "women_only_welcome"
+    WOMEN_ONLY_EXCLUDED = "women_only_excluded"
+    WOMEN_ONLY_CONFIRM = "women_only_confirm"
+    WOMEN_ONLY_NEEDS_GENDER = "women_only_needs_gender"
+
+    SENIORS_ONLY_WELCOME = "seniors_only_welcome"
+    SENIORS_ONLY_TOO_YOUNG = "seniors_only_too_young"
+    SENIORS_ONLY_NEEDS_AGE = "seniors_only_needs_age"
+
+    ADULTS_ONLY_WELCOME = "adults_only_welcome"
+    ADULTS_ONLY_TOO_YOUNG = "adults_only_too_young"
+    ADULTS_ONLY_NEEDS_AGE = "adults_only_needs_age"
+
+    SCHOOL_RESERVED = "school_reserved"
+    CLUB_RESERVED = "club_reserved"
+
+    GIRLS_ONLY_EXCLUDED = "girls_only_excluded"
+    GIRLS_ONLY_CONFIRM = "girls_only_confirm"
+    GIRLS_ONLY_NEEDS_GENDER = "girls_only_needs_gender"
+
+    GENDER_DIVERSE_TOO_YOUNG = "gender_diverse_too_young"
+    GENDER_DIVERSE_CONFIRM = "gender_diverse_confirm"
+
+    ACCOMPANIED_CHILDREN_CONFIRM = "accompanied_children_confirm"
+
+
 @dataclass(frozen=True, slots=True)
 class EligibilityResult:
     allowed: bool
+    #: The ACCESS TYPE this outcome came from. Kept for grouping/debugging; it is NOT a
+    #: message key — four women-only outcomes share `rule="women-only"`.
     rule: str
-    reason: str
+    #: The message key + its interpolation values. The English `reason` prose this
+    #: replaced was retired in S5: the server no longer decides the answer's language.
+    code: ReasonCode = ReasonCode.PUBLIC
+    params: Mapping[str, str | int] = field(default_factory=dict)
 
 
 def eligibility(person: Person, access: SessionAccess) -> EligibilityResult:
@@ -176,24 +284,44 @@ def eligibility(person: Person, access: SessionAccess) -> EligibilityResult:
     """
     match access:
         case PublicSwim():
-            return EligibilityResult(True, "public", "public swimming — open to all")
+            return EligibilityResult(True, "public", ReasonCode.PUBLIC)
         case LaneSwim():
-            return EligibilityResult(True, "lane-swim", "lane swimming — open to all")
+            return EligibilityResult(True, "lane-swim", ReasonCode.LANE_SWIM)
         case FamilyTime():
-            return EligibilityResult(True, "family", "family session — open to all")
+            return EligibilityResult(True, "family", ReasonCode.FAMILY)
         case WomenOnly():
             return _women_only(person)
         case SeniorsOnly(min_age):
             return _seniors_only(person, min_age)
         case SchoolReserved():
-            return EligibilityResult(False, "school-reserved", "reserved for schools — not public")
-        case ClubReserved(club):
-            who = f" ({club})" if club else ""
             return EligibilityResult(
-                False, "club-reserved", f"reserved for a club{who} — not public"
+                False,
+                "school-reserved",
+                ReasonCode.SCHOOL_RESERVED,
+            )
+        case ClubReserved(club):
+            # The club name rides as a PARAM, not spliced into a sentence — a translated
+            # message decides where the name goes.
+            return EligibilityResult(
+                False,
+                "club-reserved",
+                ReasonCode.CLUB_RESERVED,
+                {"club": club} if club else {},
             )
         case AdultsOnly(min_age):
             return _adults_only(person, min_age)
+        case GirlsOnly():
+            return _girls_only(person)
+        case GenderDiverse(min_age):
+            return _gender_diverse(person, min_age)
+        case AccompaniedChildren():
+            # Accompaniment is not an attribute of `Person`, so this is never decidable:
+            # `allowed=False` here means "check with the pool", never "you are excluded".
+            return EligibilityResult(
+                False,
+                "accompanied-children",
+                ReasonCode.ACCOMPANIED_CHILDREN_CONFIRM,
+            )
         case _ as unreachable:
             assert_never(unreachable)
 
@@ -202,17 +330,61 @@ def _women_only(person: Person) -> EligibilityResult:
     rule = "women-only"
     match person.gender:
         case Gender.FEMALE:
-            return EligibilityResult(True, rule, "women-only session")
+            return EligibilityResult(True, rule, ReasonCode.WOMEN_ONLY_WELCOME)
         case Gender.MALE:
-            return EligibilityResult(False, rule, "women-only session")
+            return EligibilityResult(False, rule, ReasonCode.WOMEN_ONLY_EXCLUDED)
         case Gender.DIVERSE:
             return EligibilityResult(
-                False, rule, "women-only session — please confirm admission with the venue"
+                False,
+                rule,
+                ReasonCode.WOMEN_ONLY_CONFIRM,
             )
         case None:
             return EligibilityResult(
-                False, rule, "women-only session — specify gender to determine eligibility"
+                False,
+                rule,
+                ReasonCode.WOMEN_ONLY_NEEDS_GENDER,
             )
+
+
+def _girls_only(person: Person) -> EligibilityResult:
+    """A *"für Mädchen"* session. Only the exclusion is decidable.
+
+    A female guest is NOT welcomed: the city publishes no age cutoff for "Mädchen", so an
+    adult woman cannot be told she may attend — that is a `..._CONFIRM` (check with the
+    pool), the same shape as `WOMEN_ONLY_CONFIRM`.
+    """
+    rule = "girls-only"
+    match person.gender:
+        case Gender.FEMALE:
+            return EligibilityResult(False, rule, ReasonCode.GIRLS_ONLY_CONFIRM)
+        case Gender.MALE | Gender.DIVERSE:
+            return EligibilityResult(False, rule, ReasonCode.GIRLS_ONLY_EXCLUDED)
+        case None:
+            return EligibilityResult(False, rule, ReasonCode.GIRLS_ONLY_NEEDS_GENDER)
+
+
+def _gender_diverse(person: Person, min_age: int) -> EligibilityResult:
+    """A *"offen für trans und nicht-binäre Personen ab N Jahren"* session.
+
+    NEVER a hard deny on gender: being trans is not a value of `Person.gender` (a trans
+    woman's gender is *female*), so deciding this session from that enum would wrongly
+    exclude her. The published age is the one checkable fact.
+    """
+    rule = "gender-diverse"
+    if person.age is not None and person.age < min_age:
+        return EligibilityResult(
+            False,
+            rule,
+            ReasonCode.GENDER_DIVERSE_TOO_YOUNG,
+            {"min_age": min_age},
+        )
+    return EligibilityResult(
+        False,
+        rule,
+        ReasonCode.GENDER_DIVERSE_CONFIRM,
+        {"min_age": min_age},
+    )
 
 
 def _adults_only(person: Person, min_age: int) -> EligibilityResult:
@@ -221,11 +393,22 @@ def _adults_only(person: Person, min_age: int) -> EligibilityResult:
         return EligibilityResult(
             False,
             rule,
-            f"adults-only session (age {min_age}+) — specify age to determine eligibility",
+            ReasonCode.ADULTS_ONLY_NEEDS_AGE,
+            {"min_age": min_age},
         )
     if person.age >= min_age:
-        return EligibilityResult(True, rule, f"adults-only session (age {min_age}+)")
-    return EligibilityResult(False, rule, f"adults-only session — requires age {min_age}+")
+        return EligibilityResult(
+            True,
+            rule,
+            ReasonCode.ADULTS_ONLY_WELCOME,
+            {"min_age": min_age},
+        )
+    return EligibilityResult(
+        False,
+        rule,
+        ReasonCode.ADULTS_ONLY_TOO_YOUNG,
+        {"min_age": min_age},
+    )
 
 
 def _seniors_only(person: Person, min_age: int) -> EligibilityResult:
@@ -234,8 +417,19 @@ def _seniors_only(person: Person, min_age: int) -> EligibilityResult:
         return EligibilityResult(
             False,
             rule,
-            f"seniors-only session (age {min_age}+) — specify age to determine eligibility",
+            ReasonCode.SENIORS_ONLY_NEEDS_AGE,
+            {"min_age": min_age},
         )
     if person.age >= min_age:
-        return EligibilityResult(True, rule, f"seniors-only session (age {min_age}+)")
-    return EligibilityResult(False, rule, f"seniors-only session — requires age {min_age}+")
+        return EligibilityResult(
+            True,
+            rule,
+            ReasonCode.SENIORS_ONLY_WELCOME,
+            {"min_age": min_age},
+        )
+    return EligibilityResult(
+        False,
+        rule,
+        ReasonCode.SENIORS_ONLY_TOO_YOUNG,
+        {"min_age": min_age},
+    )

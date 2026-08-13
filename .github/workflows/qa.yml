@@ -29,3 +29,40 @@ jobs:
         run: uv run pytest
       - name: CRAP gate
         run: uv run python scripts/crap.py
+
+  # Separate, self-contained TypeScript chain (its own Node toolchain). S3 extends this
+  # job with the crap gate; S2 added lint/fmt/vitest.
+  ts-qa:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/web/static/js
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install JS dependencies
+        run: npm ci
+
+      - name: Build (tsc emit static/js -> static/dist)
+        run: npm run build
+
+      - name: Type-check (strict, source + tests)
+        run: npm run type-check
+
+      - name: Lint (eslint, migrated .ts)
+        run: npm run lint
+
+      - name: Format check (prettier, migrated .ts + configs)
+        run: npm run fmt:check
+
+      - name: Test (vitest + V8 coverage)
+        run: npm run test
+
+      # CRAP reads the coverage vitest just wrote — must run AFTER test (mirrors pytest→crap).
+      - name: CRAP gate (TS, formula-parity with scripts/crap.py)
+        run: npm run crap

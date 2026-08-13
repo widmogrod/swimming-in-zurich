@@ -1,0 +1,1254 @@
+/* ============================================================================
+   blocks.css — LAYER 3: composite blocks.
+
+   Blocks compose primitives and lay them out. They introduce NO new color and
+   NO raw hex — color lives in tokens.css, primitive styling in components.css.
+   Blocks may add layout (grid/flex, spacing via --s* tokens) only.
+
+   Empty by design at S0 — this file establishes the layer boundary. The Part-3
+   blocks (IdentityHeader, FilterToolbar, InsightBar, RibbonBoard, LaneGantt,
+   DetailPanel/BottomSheet, BoardLegend, StateBlocks) land in S2+.
+   ============================================================================ */
+
+/* ---------------------------------------------------------------------------
+   Base / reset (the prototype's `*{box-sizing:border-box}` + body ground).
+
+   Two things every block depends on:
+     1. border-box everywhere — so a control's declared height/--ctl-h is its
+        BOX height (padding + border live INSIDE it). Without this the UA default
+        content-box makes `height + padding + border` overflow the token height
+        and the toolbar controls render at three mismatched heights.
+     2. the system-font stack + page ground applied at the root — otherwise the
+        UA serif (Times) and default white leak through everything that does not
+        re-declare font-family, and dark mode has no dark page background.
+   --------------------------------------------------------------------------- */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+html,
+body {
+  margin: 0;
+}
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--f);
+  font-size: var(--fs-base);
+  line-height: var(--lh-base);
+  letter-spacing: var(--track-tight);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+/* ---------------------------------------------------------------------------
+   RibbonBoard (Part 3 §4) — S2.
+
+   Layout ONLY (colour comes from tokens). The board is a card holding an axis
+   header and one row per pool (Day) / per day (Pool).
+
+   ONE SHARED HORIZONTAL SCROLL: the board is a single 2-column grid — a fixed,
+   non-scrolling label column + a single `overflow-x:auto` track that holds the
+   time-axis header canvas AND every row canvas stacked. So the axis and ALL rows
+   scroll together and the time labels stay aligned to the ribbons below (the old
+   per-row scroll moved a single row and desynced the axis).
+
+   CONTAINMENT (the prototype's page-overflow bug): the canvas column is
+   `minmax(0, 1fr)` — NOT `1fr`. With min=0 the column may shrink below its
+   content, so the wide (max-content) canvas track scrolls INSIDE its
+   `overflow-x: auto` cell instead of forcing the whole page sideways. The label
+   column stays put because only the canvas cell scrolls.
+   --------------------------------------------------------------------------- */
+
+.stage {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+}
+
+.board {
+  display: grid;
+  grid-template-columns: [label] var(--board-label-w) [canvas] minmax(0, 1fr);
+  align-items: start;
+  background: var(--surface);
+  border: 1px solid var(--hair);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow);
+  overflow: hidden;              /* clip the rounded corners over the scroll cell */
+  --board-label-w: 15rem;        /* shared RowLabel column width (keeps rows aligned) */
+}
+
+/* Column 1: the fixed, non-scrolling stack of the axis corner + one cell per row. */
+.board__labels {
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  border-right: 1px solid var(--hair-2);
+}
+
+/* Column 2 — the ONE shared scroll cell: the wide track scrolls horizontally here. */
+.board__scrollx {
+  overflow-x: auto;
+  overflow-y: hidden;
+  min-width: 0;                  /* belt-and-braces: allow the grid cell to shrink */
+}
+
+.board__track {
+  width: max-content;           /* the canvas' intrinsic width; wider than the cell */
+  position: relative;           /* origin for the overlaid shared time-cursor line */
+  display: flex;
+  flex-direction: column;
+}
+
+.board__labelsbody,
+.board__trackbody {
+  display: flex;
+  flex-direction: column;
+}
+
+.board__canvas,
+.board__axiscanvas {
+  display: block;
+}
+
+/* RowLabel cell — status dot + name + eligibility badge. Fixed height (set inline
+   from JS to match its canvas exactly); the row separator is an INSET box-shadow so
+   it never changes the cell's box height (a border would drift alignment row by row). */
+.board__rowlabel {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  padding: 0 var(--s3);
+  min-width: 0;
+  box-sizing: border-box;
+  background: var(--surface);
+  box-shadow: inset 0 1px 0 var(--hair-2);
+  cursor: pointer; /* EVERY row opens the DetailPanel (plan FIX 2) */
+}
+
+/* Hover affordance: the whole label is a click target for the panel. */
+.board__rowlabel:not(.board__rowlabel--head):hover {
+  background: var(--surface-2);
+}
+
+/* Name + optional status sub-line stack vertically inside the label. */
+.board__rowmeta {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 1px;
+}
+
+/* The compact terminal-state line on a closed/uncurated row (plan FIX 1). */
+.board__rowsub {
+  font-size: var(--fs-micro);
+  line-height: 1.15;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.board__rowsub--closed {
+  color: var(--closed);
+}
+.board__rowsub--unknown {
+  color: var(--unknown);
+}
+
+/* The fair-weather marker (seasonal-hours S4): the city publishes these spans only for
+   good weather. Muted like the status sub-line — it qualifies part of an OPEN row, so it
+   must not read as a terminal state of its own. */
+.board__rowfair {
+  font-size: var(--fs-micro);
+  line-height: 1.15;
+  color: var(--unknown);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.board__rowlabel--head {
+  box-shadow: none;
+  align-items: flex-end;
+  padding-bottom: 3px;
+  font-size: var(--fs-caption);
+  font-weight: var(--fw-caption);
+  color: var(--ink-2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* The current weekday in Pool mode: a calm highlight + a TODAY pill. */
+.board__rowlabel--today {
+  background: var(--best-band);
+}
+
+.board__todaytag {
+  flex: 0 0 auto;
+  font-size: var(--fs-micro);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--accent);
+  background: var(--surface);
+  border: 1px solid var(--best-edge);
+  border-radius: var(--r-sm);
+  padding: 1px 5px;
+}
+
+/* "Not for you" under the current gender/age filter: dim the row + its ribbon. */
+.board__rowlabel--noelig {
+  opacity: 0.5;
+}
+
+.board__canvas--noelig {
+  opacity: 0.45;
+}
+
+.board__rowname {
+  flex: 0 0 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--fs-body);
+  font-weight: var(--fw-body);
+  color: var(--ink);
+}
+
+.board__dot {
+  flex: 0 0 auto;
+  width: 9px;
+  height: 9px;
+  border-radius: var(--r-pill);
+  background: var(--unknown);
+}
+
+.board__dot--open { background: var(--accent); }
+.board__dot--closed { background: var(--closed); }
+.board__dot--unknown { background: var(--unknown); }
+
+.board__rowbadge {
+  flex: 0 0 auto;
+}
+
+/* The O2 group divider: open rows above, rows with nothing to plan below. A pool still moves
+   across this line the day it shuts — that is a real change in the world — but the move is now
+   EXPLAINED by a visible boundary instead of being a silent re-sort. It spans both columns as
+   two cells of equal height (`DIVIDER_H` in board.ts), because the label stack and the canvas
+   track are parallel lists: a cell in only one of them would drift every row below it out of
+   line with its own canvas. */
+.board__divider {
+  display: flex;
+  align-items: center;
+  padding: 0 var(--s3);
+  box-sizing: border-box;
+  background: var(--surface-2);
+  box-shadow: inset 0 1px 0 var(--hair-2);
+  font-size: var(--fs-micro);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+/* Its twin in the scroll track — a spacer, deliberately unpainted: the boundary is a fact
+   about the LIST, and drawing it across the time axis would read as a claim about a time. */
+.board__dividergap {
+  box-sizing: border-box;
+  background: var(--surface-2);
+  box-shadow: inset 0 1px 0 var(--hair-2);
+}
+
+/* Colour-family probes: board.js reads each computed `color` to paint the canvas,
+   so every ribbon hue traces back to a token and no hex lives in the JS. */
+.board__probe { position: absolute; visibility: hidden; pointer-events: none; }
+.fam-public { color: var(--fam-public); }
+.fam-lane { color: var(--fam-lane); }
+.fam-family { color: var(--fam-family); }
+.fam-women { color: var(--fam-women); }
+.fam-seniors { color: var(--fam-seniors); }
+.fam-adults { color: var(--fam-adults); }
+.fam-school { color: var(--fam-school); }
+.fam-club { color: var(--fam-club); }
+.fam-girls { color: var(--fam-girls); }
+.fam-diverse { color: var(--fam-diverse); }
+.fam-accompanied { color: var(--fam-accompanied); }
+.fam-closed { color: var(--fam-closed); }
+.fam-unknown { color: var(--fam-unknown); }
+.fam-sheath { color: var(--fam-sheath); }
+.fam-axis { color: var(--fam-axis); }
+.fam-hair { color: var(--hair-2); }
+.fam-muted { color: var(--muted); }
+/* Lane-stack probes (lane-stack-board S4). The stack reuses the LaneGantt's lane
+   vocabulary — the same public/reserved inks, the same best-window band — so the board's
+   sub-rows and the panel's Gantt cannot state the same fact in two different colours. */
+.fam-lanepublic { color: var(--lane-public-ink); }
+.fam-lanereserved { color: var(--lane-res-fill); }
+/* No `.fam-laneowner`: the board's stack paints no text, so it probes no ink for one.
+   The owner is read in the panel's Gantt, which styles it in CSS (`.gantt__seg`). */
+.fam-lanetrack { color: var(--hair-2); }
+.fam-bestband { color: var(--best-band); }
+.fam-bestedge { color: var(--best-edge); }
+
+/* ---------------------------------------------------------------------------
+   LaneGantt (Part 3 §5) — S3.
+
+   A per-basin, lane-by-lane plan on the SAME timescale as the board (gantt.js
+   positions every segment/tick/cursor via the injected timescale). Layout ONLY;
+   colour comes from tokens. The lane track scrolls horizontally in its own
+   overflow container on mobile — never the page.
+   --------------------------------------------------------------------------- */
+
+.gantt {
+  margin-top: var(--s3);
+
+  /* The track reserves a strip along its top for the readout, which rides above the
+     cursor rather than sitting in a corner. Both the reservation and everything measured
+     from below it read these, so the strip cannot be widened in one place only. */
+  --gantt-readout-h: 1.5rem;
+  --gantt-axis-h: 1.25rem;
+}
+
+/* The live readout — absolutely placed INSIDE the track (gantt.ts::readoutLeft), centred on
+   the cursor's x and clamped at both track edges. In the track, not beside it, so it stays
+   over its cursor while the track scrolls under the phone's finger. */
+.gantt__readout {
+  position: absolute;
+  top: 0;
+  left: 0;
+  font-size: var(--fs-caption);
+  font-weight: var(--fw-caption);
+  color: var(--ink-2);
+  white-space: nowrap;
+}
+
+/* The wide lane track scrolls INSIDE this container (mobile), never the page. */
+.gantt__scroll {
+  overflow-x: auto;
+  overflow-y: hidden;
+  min-width: 0;
+}
+
+.gantt__track {
+  position: relative;               /* the origin for absolutely-placed segments/cursor */
+  padding-top: var(--gantt-readout-h);  /* the readout's strip */
+}
+
+.gantt__axis {
+  position: relative;
+  height: var(--gantt-axis-h);
+  border-bottom: 1px solid var(--hair-2);
+  color: var(--muted);
+}
+
+.gantt__tick {
+  position: absolute;
+  top: 0;
+  font-size: var(--fs-micro);
+  color: var(--muted);
+  transform: translateX(-50%);
+}
+
+/* Best-public window: a calm highlighted band spanning the "best time to come". */
+.gantt__band {
+  position: absolute;
+  top: calc(var(--gantt-readout-h) + var(--gantt-axis-h));
+  bottom: 0;
+  background: var(--best-band);
+  border-left: 1px solid var(--best-edge);
+  border-right: 1px solid var(--best-edge);
+  pointer-events: none;
+}
+
+/* A flex LINE, so the lane label can be a sticky IN-FLOW item (sticky replaces absolute
+   positioning — an absolutely-placed label cannot stick). Flex rather than an inline box so
+   the row has no line box whose leading could push it past its fixed height. The segments
+   stay absolutely positioned against this row's padding box, so an in-flow sibling ahead of
+   them moves nothing: `trackX` still means "GANTT_LABEL_W + timescale.X(min)" and the
+   board↔Gantt alignment is untouched by any of this. */
+.gantt__lane {
+  position: relative;
+  display: flex;
+  height: 1.375rem;                 /* mirrors LANE_H in gantt.js */
+}
+
+/* The lane-name gutter STICKS to the left edge of `.gantt__scroll` while the plot scrolls
+   under it. The Gantt now scrolls itself to keep the cursor centred (gantt.ts::
+   scrollToCentre), so without this the reader spends most of the day looking at a stack of
+   anonymous bands — the labels are 120px wide and the track is 1020px.
+
+   It therefore sits ON TOP of scrolling content and needs an OPAQUE ground: `--surface` is
+   what the Gantt is mounted on (`.detail`), so the gutter reads as part of the panel rather
+   than as a card floating over it. A transparent gutter shows segments sliding under the
+   lane names, which is worse than either bug this replaces.
+
+   It costs what every sticky gutter costs: while `scrollLeft > 0` the leftmost 120px of the
+   VISIBLE plot is occluded, so a ~318px column shows ~200px of timeline instead of ~318.
+   That is the trade — a fifth less plot, in exchange for knowing which lane each band is.
+
+   Stacking, all in the track's one context (`.gantt__track` is relative with z-index auto,
+   as is `.gantt__lane`, so neither opens a new one): band and segments paint at auto, the
+   cursor at 1, this at 2. The cursor is deliberately BELOW the gutter, and while the Gantt
+   drives its own scroll it cannot be hidden by it: `scrollToCentre` holds the cursor at the
+   viewport's centre, and its left clamp is 06:00, where the cursor sits at x=120 — the
+   gutter's right edge. Improbable, not impossible: a reader scrolling BY HAND can put
+   `trackX(cursorMin) − scrollLeft` inside [0, 120) — a 13:00 cursor at `scrollLeft` 450 —
+   and lose the line behind the gutter until the next cursor move re-centres it. Accepted:
+   the alternative is re-centring on manual scroll, the one thing this block refuses to do. */
+.gantt__lanelabel {
+  position: sticky;
+  left: 0;
+  z-index: 2;
+  flex: 0 0 auto;
+  align-self: stretch;
+  display: flex;
+  align-items: center;
+  padding-right: var(--s2);
+  background: var(--surface);
+  font-size: var(--fs-micro);
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.gantt__seg {
+  position: absolute;
+  top: 2px;
+  bottom: 2px;
+  display: flex;
+  align-items: center;
+  padding: 0 var(--s1);
+  border-radius: var(--r-sm);
+  font-size: var(--fs-micro);
+  line-height: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.gantt__seg.is-public {
+  background: var(--lane-public-fill);
+  border: 1px solid var(--lane-public-edge);
+  color: var(--lane-public-ink);
+}
+
+.gantt__seg.is-reserved {
+  background: var(--lane-res-fill);
+  border: 1px solid var(--lane-res-edge);
+  color: var(--lane-res-ink);
+}
+
+/* The vertical time cursor — the SAME x as the board cursor (shared timescale). */
+.gantt__cursor {
+  position: absolute;
+  top: var(--gantt-readout-h);      /* starts just under the readout it is labelled by */
+  bottom: 0;
+  z-index: 1;                       /* over the segments it crosses, UNDER the sticky
+                                       lane-name gutter (see .gantt__lanelabel) */
+  width: 2px;
+  margin-left: -1px;
+  background: var(--cursor);
+  pointer-events: none;
+}
+
+/* ---------------------------------------------------------------------------
+   DetailPanel / BottomSheet (Part 3 §6) — S3.
+
+   ≥960px: a sticky side panel. Below that the phone surface replaces it entirely
+   (variant E's inline expansion), so there is no sheet and no backdrop. Layout ONLY.
+   --------------------------------------------------------------------------- */
+
+.detail {
+  background: var(--surface);
+  border: 1px solid var(--hair);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow);
+  padding: var(--s4);
+}
+
+.detail__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--s3);
+  margin-bottom: var(--s3);
+}
+
+.detail__headtext {
+  min-width: 0;
+}
+
+/* "See this pool's week →" — the Day→Pool continuity affordance. Token-styled
+   pill matching the header theme button; never a raw hex here. */
+.detail__weekbtn {
+  flex: none;
+  height: var(--ctl-h);
+  padding: 0 var(--s3);
+  border: 1px solid var(--hair);
+  border-radius: var(--r-pill);
+  background: var(--surface);
+  color: var(--accent);
+  font: inherit;
+  font-size: var(--fs-caption);
+  font-weight: var(--fw-caption);
+  white-space: nowrap;
+  cursor: pointer;
+}
+.detail__weekbtn:hover {
+  border-color: var(--accent);
+}
+.detail__weekbtn:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+.detail__title {
+  margin: 0;
+  font-size: var(--fs-head);
+  font-weight: var(--fw-head);
+  color: var(--ink);
+}
+
+.detail__sub {
+  font-size: var(--fs-caption);
+  font-weight: var(--fw-caption);
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.detail__headline {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: var(--s2);
+  padding: var(--s3) 0;
+  border-top: 1px solid var(--hair-2);
+  border-bottom: 1px solid var(--hair-2);
+}
+
+.detail__bignum {
+  font-size: var(--fs-title);
+  font-weight: var(--fw-head);
+  color: var(--accent);
+}
+
+.detail__bigunit {
+  font-size: var(--fs-body);
+  color: var(--ink-2);
+}
+
+.detail__pips {
+  display: inline-flex;
+  gap: 3px;
+  flex-basis: 100%;
+}
+
+.detail__pip {
+  width: 10px;
+  height: 10px;
+  border-radius: var(--r-sm);
+  background: var(--track);
+}
+
+.detail__pip.is-on {
+  background: var(--accent);
+}
+
+.detail__peaknote {
+  font-size: var(--fs-caption);
+  color: var(--muted);
+}
+
+.detail__facts {
+  display: grid;
+  gap: var(--s2);
+  padding: var(--s3) 0;
+}
+
+.detail__fact {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s3);
+  font-size: var(--fs-body);
+}
+
+.detail__factlabel {
+  color: var(--muted);
+  flex: 0 0 auto;
+}
+
+.detail__factval {
+  color: var(--ink);
+  text-align: right;
+  min-width: 0;
+}
+
+.detail__factnote {
+  color: var(--faint);
+  font-size: var(--fs-caption);
+}
+
+/* Facility-level LIVE water temperature (Baditicker). A muted variant de-emphasises the
+   "not yet measured" / unavailable states (honest, not a number); the stale variant marks a
+   reading older than the freshness limit so a fresh reading never reads as identical to an
+   old one. */
+.detail__live--muted {
+  color: var(--muted);
+}
+.detail__live--stale {
+  color: var(--muted);
+  font-style: italic;
+}
+
+.detail__prov {
+  margin-top: var(--s2);
+}
+
+/* An honest degradation note inside a populated panel (plan FIX 3): the lane plan
+   is absent / the pool is closed / uncurated — stated as a note, never as the whole
+   panel. Each variant tints its left rule so the three states read distinctly. */
+.detail__note {
+  margin-top: var(--s3);
+  padding: var(--s2) var(--s3);
+  border: 1px solid var(--hair);
+  border-left-width: 3px;
+  border-radius: var(--r-md);
+  background: var(--surface);
+  font-size: var(--fs-caption);
+  color: var(--muted);
+}
+.detail__note--lanes-unknown {
+  border-left-color: var(--unknown);
+}
+.detail__note--closed {
+  border-left-color: var(--closed);
+}
+.detail__note--uncurated {
+  border-left-color: var(--unknown);
+}
+
+/* --- side panel vs bottom sheet ------------------------------------------- */
+
+/* ≥960px: the panel is a sticky sidebar riding alongside the board. */
+@media (min-width: 960px) {
+  .detail {
+    position: sticky;
+    top: var(--s4);
+  }
+}
+
+/* <960px: there is no sheet. The phone shows the ranked pool list (variant E) and the
+   DetailPanel is not built at all — see app.ts's `isPhone`.
+
+   What used to live here was a complete slide-up bottom sheet: `.detail` fixed at
+   `bottom:0` with `transform: translateY(100%)`, rising on `.is-open` over a
+   `.detail__backdrop`. Nothing in the codebase ever added `is-open`, and the backdrop
+   element was never created — so on a phone the panel sat parked one full height below
+   the fold with no mechanism that could bring it back, and tapping a pool appeared to do
+   nothing. Deleting it is the fix: the phone's detail is an inline expansion, so there is
+   no sheet to open, dismiss or trap focus in. */
+@media (max-width: 959px) {
+  /* The Gantt lane track keeps its own horizontal scroll on the phone. */
+  .gantt__scroll {
+    -webkit-overflow-scrolling: touch;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   App shell (plan S4) — the unified two-mode page frame.
+
+   Layout ONLY (colour via tokens). A single column stack of blocks; the board +
+   panel become a two-column split on wide screens (the panel is a sticky side
+   rail ≥960px, matching the DetailPanel's own responsive contract; below that the
+   phone surface replaces the whole two-column split).
+   --------------------------------------------------------------------------- */
+.app {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: var(--s4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--s4);
+}
+.app__main {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--s4);
+  align-items: start;
+}
+.app__board {
+  min-width: 0;
+}
+/* The panel-rail helper shown until a pool is opened (plan FIX 4) — never a blank
+   rail. Auto-open replaces it with the nearest plannable pool on first paint. */
+.app__panelempty {
+  color: var(--muted);
+  font-size: var(--fs-body);
+  margin: 0;
+  padding: var(--s4);
+  border: 1px dashed var(--hair);
+  border-radius: var(--r-md);
+}
+/* The board-level no-pools empty state (StateBlocks), rendered inside the board host
+   when a /swim answer has neither options nor statuses (plan FIX 1). */
+.app__boardempty {
+  margin-top: var(--s3);
+}
+@media (min-width: 960px) {
+  .app__main {
+    grid-template-columns: minmax(0, 1fr) 22rem;
+  }
+  .app__panel {
+    position: sticky;
+    top: var(--s4);
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   IdentityHeader (Part 3 §1) — brand + absolute date/week + theme toggle.
+   --------------------------------------------------------------------------- */
+.apphdr {
+  display: flex;
+  align-items: center;
+  gap: var(--s4);
+  flex-wrap: wrap;
+}
+.apphdr__brand {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  margin-right: auto;
+}
+.apphdr__logo {
+  font-size: var(--fs-head);
+}
+.apphdr__title {
+  font-size: var(--fs-title);
+  font-weight: var(--fw-title);
+  color: var(--ink);
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+  margin: 0;
+}
+.apphdr__datebox {
+  font-size: var(--fs-body);
+  font-weight: var(--fw-caption);
+  color: var(--ink-2);
+}
+.apphdr__theme,
+.apphdr__copy {
+  height: var(--ctl-h);
+  padding: 0 var(--s3);
+  border: 1px solid var(--hair);
+  border-radius: var(--r-pill);
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-size: var(--fs-caption);
+  cursor: pointer;
+}
+/* Copy-link: icon + label sit inline; hover borrows the accent hairline like the
+   other pill controls. The label swaps to "Copied" briefly on click (JS-driven). */
+.apphdr__copy {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s1);
+}
+.apphdr__copy:hover {
+  border-color: var(--accent);
+  color: var(--accent-ink);
+}
+/* Language switcher: no chrome of its own. It is the shared `.ui-select--pill`
+   primitive (components.css) — border, caret, hover and focus ring all come from
+   there, which is what keeps it in the same family as the two buttons beside it. */
+.apphdr__theme:focus-visible,
+.apphdr__copy:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+/* ---------------------------------------------------------------------------
+   FilterToolbar (Part 3 §2) — the global context spine. On a wide screen the
+   fields sit in one wrapping row; on a phone (S5 breakpoints below) every field
+   stacks full-width and its control stretches edge-to-edge.
+   --------------------------------------------------------------------------- */
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--s3) var(--s4);
+  padding: var(--s3) var(--s4);
+  background: var(--surface);
+  border: 1px solid var(--hair);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow);
+}
+.toolbar__field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s1);
+  min-width: 0;
+}
+.toolbar__caption {
+  font-size: var(--fs-micro);
+  font-weight: var(--fw-caption);
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.toolbar__context {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--s2);
+  min-width: 0;
+}
+
+/* --- Phone breakpoints (mirrors the prototype's ≤720 / ≤560 behaviour) -------
+   ≤720px: every field stacks full-width and its control stretches — the
+   segmented controls (mode/gender) fill the row with equal-width options, the
+   DateStepper spans full-width with a growing centred label, and the place +
+   pool comboboxes fill the row (their intrinsic min-width is released). The
+   board (S2) and the bottom-sheet (S3) already contain their own overflow, so
+   only the toolbar needs to reflow here. */
+@media (max-width: 720px) {
+  .toolbar {
+    align-items: stretch;
+  }
+  .toolbar__field {
+    flex: 1 1 100%;
+  }
+  /* segmented controls (mode + gender) stretch, options share the row equally */
+  .toolbar__field .ui-seg {
+    display: flex;
+    width: 100%;
+  }
+  .toolbar__field .ui-seg__opt {
+    flex: 1 1 0;
+    text-align: center;
+  }
+  /* the DateStepper spans full-width, label grows to fill the middle */
+  .toolbar__field .ui-datestepper {
+    display: flex;
+    width: 100%;
+  }
+  .toolbar__field .ui-datestepper__label {
+    flex: 1 1 auto;
+  }
+  /* place typeahead + pool combobox fill the row (release their 12rem min-width) */
+  .toolbar__context,
+  .toolbar__context > div,
+  .toolbar__field .ui-combo,
+  .toolbar__field .ui-place {
+    display: flex;
+    width: 100%;
+  }
+  .toolbar__field .ui-combo input,
+  .toolbar__field .ui-place input {
+    flex: 1 1 auto;
+    width: 100%;
+    min-width: 0;
+  }
+}
+
+/* ≤560px: tighten the strip and let the age chips share the row full-width so a
+   narrow phone never forces a horizontal scroll on the toolbar itself. */
+@media (max-width: 560px) {
+  .toolbar {
+    padding: var(--s3);
+    gap: var(--s2);
+  }
+  .toolbar__field .ui-chipgroup {
+    display: flex;
+    width: 100%;
+  }
+  .toolbar__field .ui-chip {
+    flex: 1 1 auto;
+    text-align: center;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   InsightBar (Part 3 §3) — one mode-aware summary line.
+   --------------------------------------------------------------------------- */
+.insight {
+  padding: var(--s3) var(--s4);
+  background: linear-gradient(180deg, var(--best-band), transparent);
+  border: 1px solid var(--hair);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow);
+}
+.insight:empty {
+  display: none; /* no summary line yet → no empty card */
+}
+.insight__line {
+  margin: 0;
+  font-size: var(--fs-body);
+  font-weight: var(--fw-body);
+  color: var(--ink-2);
+  letter-spacing: var(--track-tight);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------------------------------------------------------------------------
+   BoardLegend (Part 3 §7) — metro-style key. The swatch colours are tokens via
+   the shared .fam-* classes and the three .legend__state modifiers.
+   --------------------------------------------------------------------------- */
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s5);
+  padding: var(--s3) var(--s4);
+  border-top: 1px solid var(--hair);
+}
+.legend__group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s1);
+  min-width: 0;
+}
+.legend__grouptitle {
+  font-size: var(--fs-caption);
+  font-weight: var(--fw-caption);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.legend__row {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  font-size: var(--fs-caption);
+  color: var(--ink-2);
+}
+.legend__swatch {
+  width: 14px;
+  height: 14px;
+  border-radius: var(--r-sm);
+  background: currentColor; /* the .fam-* class sets `color`; this fills the chip */
+  flex: none;
+}
+.legend__state--open {
+  color: var(--accent);
+}
+.legend__state--closed {
+  color: var(--closed);
+}
+.legend__state--unknown {
+  color: var(--unknown);
+}
+/* The lane stack's key (S4). Each swatch shows the sub-row encoding literally: a solid
+   public lane, a filled reserved lane, the best-window band, and the HATCH a pool with no
+   published lane split still paints — three states that must never read as one. */
+.legend__lane--public {
+  color: var(--lane-public-ink);
+}
+.legend__lane--reserved {
+  color: var(--lane-res-fill);
+  box-shadow: inset 0 0 0 1px var(--lane-res-edge);
+}
+.legend__lane--best {
+  color: var(--best-band);
+  box-shadow: inset 0 0 0 1px var(--best-edge);
+}
+.legend__lane--unpublished {
+  color: transparent;
+  box-shadow: inset 0 0 0 1px var(--muted);
+  background-image: repeating-linear-gradient(
+    45deg,
+    var(--muted) 0 1px,
+    transparent 1px 4px
+  );
+}
+.legend__note {
+  flex: 1 1 100%;
+  margin: 0;
+  font-size: var(--fs-caption);
+  color: var(--muted);
+}
+
+/* ---------------------------------------------------------------------------
+   StateBlocks (Part 3 §8) — closed / hours-not-listed / no-pools empty states,
+   each visually DISTINCT so a blank never reads as "closed".
+   --------------------------------------------------------------------------- */
+.stateblocks {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+}
+.stateblock {
+  padding: var(--s3) var(--s4);
+  border: 1px solid var(--hair);
+  border-left-width: 3px;
+  border-radius: var(--r-md);
+  background: var(--surface);
+}
+.stateblock__title {
+  font-size: var(--fs-body);
+  font-weight: var(--fw-head);
+  color: var(--ink);
+}
+.stateblock__body {
+  margin: var(--s1) 0 0;
+  font-size: var(--fs-caption);
+  color: var(--muted);
+}
+.stateblock--closed {
+  border-left-color: var(--closed);
+}
+.stateblock--hours-not-listed {
+  border-left-color: var(--unknown);
+}
+.stateblock--no-pools {
+  border-left-color: var(--hair-2);
+}
+
+/* ---------------------------------------------------------------------------
+   Phone surface (variant E) — the ranked pool list, its day tails, and the
+   context bar. Mounted only below --phone-max; the desktop board and its
+   sticky side panel are untouched above it.
+
+   Layout + tokens only. The tails' colour comes from the `.fam-*` probes the
+   shared renderer reads, exactly as the board's does.
+   --------------------------------------------------------------------------- */
+
+/* --- context bar: a day strip that scrolls away, over a PINNED summary ------
+   Only one thing is pinned. Two sticky bars at top:0 stack, and the taller one
+   paints over the other — the day strip hid the filter row outright. The
+   summary wins because it is the state you cannot afford to lose; the chosen
+   day still rides in the summary as a tag. */
+/* The BAR is the sticky element, offset upward by exactly the day strip's height, so the
+   strip scrolls out of view and the summary lands at top:0 and stays. Pinning the summary
+   alone does not work: `position: sticky` is bounded by its parent, so it scrolled away
+   the moment .pbar did — which is exactly what happened in the first build. */
+.pbar {
+  position: sticky;
+  top: calc(-1 * var(--pbar-strip-h));
+  z-index: 25;
+  background: var(--bg);
+  --pbar-strip-h: 60px;          /* 44px tap target + var(--s2) padding block */
+}
+
+.pbar__days {
+  display: flex;
+  min-height: var(--pbar-strip-h);
+  gap: var(--s1);
+  overflow-x: auto;
+  scrollbar-width: none;
+  padding: var(--s2) 0;
+}
+.pbar__days::-webkit-scrollbar { display: none; }
+.pbar__day {
+  flex: none;
+  min-width: 52px;
+  min-height: 44px;             /* the phone tap floor, not --ctl-h */
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  padding: var(--s1) var(--s2);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--r-md);
+  color: var(--muted);
+  font: inherit;
+  line-height: 1.1;
+  cursor: pointer;
+}
+.pbar__day:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.pbar__dow {
+  font-size: var(--fs-micro);
+  font-weight: var(--fw-caption);
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+.pbar__num { font-size: 16px; font-weight: var(--fw-caption); color: var(--ink-2); }
+.pbar__day.is-today .pbar__num { color: var(--accent-ink); }
+.pbar__day.is-sel {
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  border-color: var(--accent);
+}
+.pbar__day.is-sel .pbar__dow { color: var(--accent-ink); }
+.pbar__day.is-sel .pbar__num { color: var(--ink); }
+
+.pbar__summary {
+  position: sticky;
+  top: 0;
+  z-index: 25;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  min-height: 44px;
+  padding: var(--s2) var(--s3);
+  background: var(--surface-2);
+  border: 0;
+  border-block: 1px solid var(--hair);
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.pbar__summary:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.pbar__tags { display: flex; gap: var(--s1); overflow-x: auto; scrollbar-width: none; flex: 1; min-width: 0; }
+.pbar__tags::-webkit-scrollbar { display: none; }
+.pbar__tag {
+  flex: none;
+  font-size: var(--fs-caption);
+  font-weight: var(--fw-caption);
+  padding: 3px 9px;
+  border-radius: var(--r-pill);
+  background: var(--chip);
+  color: var(--chip-ink);
+  white-space: nowrap;
+}
+.pbar__tag--lead {
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+  color: var(--accent-ink);
+}
+.pbar__caret { flex: none; color: var(--muted); font-size: var(--fs-caption); }
+.pbar__caret::before { content: "\25BE"; }
+.pbar.is-filtersopen .pbar__caret { transform: rotate(180deg); }
+
+/* --- the ranked list ------------------------------------------------------- */
+.plist { display: flex; flex-direction: column; gap: var(--s2); }
+.plist__group {
+  position: sticky;
+  top: 44px;                     /* clears the pinned summary above */
+  z-index: 20;
+  display: flex;
+  align-items: baseline;
+  gap: var(--s2);
+  padding: var(--s3) var(--s1) var(--s2);
+  /* Opaque, not a fade: a sticky heading rides OVER the cards below it, and a gradient
+     let the card title bleed through it as it scrolled under. */
+  background: var(--bg);
+  font-size: var(--fs-micro);
+  font-weight: var(--fw-caption);
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.plist__group b { color: var(--ink-2); font-weight: var(--fw-caption); }
+
+.plist__card {
+  background: var(--surface);
+  border: 1px solid var(--hair);
+  border-radius: var(--r-md);
+  overflow: hidden;
+  content-visibility: auto;
+  contain-intrinsic-size: auto 150px;
+}
+.plist__card.is-muted { opacity: .72; }
+.plist__btn {
+  display: block;
+  width: 100%;
+  padding: var(--s3) var(--s3) var(--s2);
+  background: transparent;
+  border: 0;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.plist__btn:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.plist__head { display: flex; align-items: flex-start; gap: var(--s2); }
+.plist__text { min-width: 0; }
+.plist__name {
+  margin: 0;
+  font-size: 15px;
+  font-weight: var(--fw-caption);
+  line-height: 1.25;
+  color: var(--ink);
+}
+.plist__verdict { margin: 2px 0 0; font-size: var(--fs-body); color: var(--ink-2); }
+.plist__verdict b { color: var(--ink); }
+.plist__vtail { color: var(--muted); }
+/* The fair-weather marker (seasonal-hours S4) — the phone twin of `.board__rowfair`. */
+.plist__fair {
+  margin: 2px 0 0;
+  font-size: var(--fs-caption);
+  color: var(--unknown);
+}
+.plist__meta {
+  margin: var(--s2) 0 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s1) var(--s3);
+  font-size: var(--fs-caption);
+  color: var(--muted);
+}
+.plist__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex: none;
+  margin-top: 6px;
+  background: var(--unknown);
+}
+.plist__dot.is-now { background: var(--accent); }
+.plist__dot.is-soon { background: var(--best); }
+.plist__dot.is-closed { background: var(--closed); }
+
+/* The day tail: laid out by CSS, painted by the SHARED renderer. Its height is
+   set inline from TAIL_H so the canvas box and the drawing agree exactly. */
+.plist__tail { padding: var(--s1) var(--s3) var(--s3); }
+.plist__tail canvas { display: block; width: 100%; }
+
+/* --- the responsive switch -------------------------------------------------
+   Below this width the phone surface is shown and the board + side panel are
+   not built at all (app.ts checks the same query, so nothing paints offscreen).
+   Above it, the phone surface is absent and the desktop board is unchanged. */
+.app__phone { display: none; }
+@media (max-width: 959px) {
+  .app__phone { display: block; }
+  .app__main { display: none; }
+}
+@media (min-width: 960px) {
+  .app__phone { display: none; }
+}
+
+/* The filter drawer: the desktop toolbar, disclosed. A plain show/hide rather than an
+   animated height — a `grid-template-rows` transition wedges at its start value in a
+   throttled frame, and a filter drawer that can never open is worse than an abrupt one. */
+.pbar__drawer { display: none; }
+.pbar.is-filtersopen .pbar__drawer { display: block; }
+.pbar__drawer .toolbar { border-radius: 0; border-inline: 0; }
+
+/* The expanded card body: the SAME DetailPanel the desktop rail mounts, inline. Hidden
+   until the card is open — no sheet to slide, nothing parked off-screen. */
+.plist__more { display: none; }
+.plist__card.is-open .plist__more { display: block; }
+/* createDetailPanel stamps `.detail` on the HOST it is given, so the card body itself
+   carries it — the override targets `.plist__more`, not a descendant. */
+.plist__more.detail {
+  border: 0;
+  border-top: 1px solid var(--hair-2);
+  border-radius: 0;
+  box-shadow: none;
+  position: static;
+  padding: var(--s3);
+}
+
+/* The phone drawer hides the two fields the phone owns by other means: the day strip IS
+   the date control, and Pool (week) mode has no phone surface yet — leaving its switch
+   reachable showed stale Day cards under a Pool heading. */
+.pbar__drawer .toolbar__field--view,
+.pbar__drawer .toolbar__field--context {
+  display: none;
+}
+
+/* The shared time cursor, as a probe class like the families — the phone tail draws its
+   own cursor and was falling back to the muted axis grey for want of this token. */
+.fam-cursor { color: var(--cursor); }

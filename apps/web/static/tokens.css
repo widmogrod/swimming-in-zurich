@@ -1,0 +1,271 @@
+/* ============================================================================
+   tokens.css — the single source of visual truth (design-system Part 1).
+
+   Ground truth: the "flowing water" prototype's :root custom properties.
+   Every value is a CSS custom property. Light defaults live on :root; the dark
+   ramp is re-declared under @media (prefers-color-scheme: dark) AND under
+   :root[data-theme="dark"], with an explicit :root[data-theme="light"] block so
+   a viewer's theme toggle wins in BOTH directions (forced light beats OS dark,
+   forced dark beats OS light).
+
+   Components consume these tokens only — no raw hex, no magic px — see
+   components.css / blocks.css. This is the ONLY file permitted to carry raw
+   color literals (grep-asserted).
+   ============================================================================ */
+
+:root {
+  color-scheme: light dark;
+
+  /* --- 1.1 Color · light --------------------------------------------------- */
+  /* Ground */
+  --bg: #eef2f3;
+  --surface: #ffffff;
+  --surface-2: #f6f9fa;
+  /* Ink ramp (4 steps) */
+  --ink: #15242c;
+  --ink-2: #3a4e58;
+  --muted: #5f727c;
+  --faint: #8a99a3;
+  /* Hairline */
+  --hair: #d9e1e4;
+  --hair-2: #e7edee;
+  /* Accent (single saturated hue) */
+  --accent: #0e8ea0;
+  --accent-ink: #0a6675;
+  /* Semantic — availability (never-merged states) */
+  --closed: #b0563f;
+  --unknown: #8a99a2;
+  /* Women-only ribbon hue — its OWN violet, NOT the closed terracotta (a women-only
+     session is a restricted access family, not a closed pool; sharing --closed would
+     read as "shut"). Distinct from accent-aqua and closed-red. */
+  --women: #8a5cc4;
+  /* Support */
+  --chip: #eef4f5;
+  --chip-ink: #3a5560;
+  --envfill: #b9c7cd;
+  --track: rgba(20, 40, 50, .09);
+  /* Shadow */
+  --shadow: 0 1px 2px rgba(20, 40, 50, .06), 0 8px 24px rgba(20, 40, 50, .07);
+  --shadow-lg: 0 12px 40px rgba(20, 40, 50, .16);
+  --shadow-sm: 0 1px 2px rgba(20, 40, 50, .12);
+  /* Lane split */
+  --lane-public-fill: rgba(14, 142, 160, .16);
+  --lane-public-edge: rgba(14, 142, 160, .42);
+  --lane-public-ink: #0c7a76;
+  --lane-res-fill: #eef0f3;
+  --lane-res-edge: #d0d5dd;
+  --lane-res-ink: #5f6672;
+  /* Board best-window + shared cursor */
+  --best: #0a84ff;
+  --best-band: rgba(10, 132, 255, .10);
+  --best-edge: rgba(10, 132, 255, .5);
+  --cursor: #0a84ff;
+  /* Access-family ribbon hues (S2 RibbonBoard). ALIASES over the existing palette —
+     no new raw hue is introduced, and because each is a var() reference it resolves
+     per-theme automatically (no dark re-declaration needed). "Open to you" families
+     (public/lane/family) read as the aqua accent; the restricted families reuse
+     the muted held/reserved inks. Exact hues are provisional — polished at S5. */
+  --fam-public: var(--accent);
+  --fam-lane: var(--lane-public-ink);
+  --fam-family: var(--accent-ink);
+  --fam-women: var(--women);
+  --fam-seniors: var(--badge-chk);
+  --fam-adults: var(--best);
+  --fam-school: var(--lane-res-ink);
+  --fam-club: var(--lane-res-ink);
+  /* The school-pool vocabulary. Aliases again — no new raw hue. A girls-only session is
+     the same gendered restriction as a women-only one, so it takes the same violet;
+     gender-diverse deliberately does NOT (it is not a women's session) and takes the chip
+     slate; accompanied-children takes the reserved ink, like school/club, because
+     attendance depends on a condition we cannot check. Provisional, like the eight above. */
+  --fam-girls: var(--women);
+  --fam-diverse: var(--chip-ink);
+  --fam-accompanied: var(--lane-res-ink);
+  --fam-closed: var(--closed);
+  --fam-unknown: var(--unknown);
+  --fam-sheath: var(--envfill);
+  --fam-axis: var(--muted);
+
+  /* --- 1.2 Typography ------------------------------------------------------ */
+  --f: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  /* Base reading size for prose/body copy (the prototype's 15px body). Interactive
+     controls use the slightly smaller --fs-body so the toolbar stays compact. */
+  --fs-base: 15px;
+  --lh-base: 1.45;
+  --track-tight: -.006em;
+  --fs-title: 25px;
+  --fw-title: 680;
+  --fs-head: 19px;
+  --fw-head: 660;
+  --fs-body: 14px;
+  --fw-body: 560;
+  --fs-caption: 12px;
+  --fw-caption: 600;
+  --fs-micro: 10.5px;
+
+  /* --- 1.3 Spacing / radius / shadow / motion ------------------------------ */
+  --s1: 4px;
+  --s2: 8px;
+  --s3: 12px;
+  --s4: 16px;
+  --s5: 24px;
+  --s6: 32px;
+  --r-sm: 8px;
+  --r-md: 10px;
+  --r-lg: 16px;
+  --r-xl: 18px;
+  --r-pill: 999px;
+  --ctl-h: 36px;
+  --ease-sheet: cubic-bezier(.32, .72, 0, 1);
+  --dur-sheet: .26s;
+
+  /* --- EligibilityBadge semantic tokens ------------------------------------
+     The MUTED Part-1 values (✓ green / ? gold / ✕ grey), NEVER alarm red.
+     (The S0 re-skin compat --elig-* block that once held the legacy alarm-red
+     palette was retired in S5 along with the legacy UI.) Dark values are
+     lightened for AA on the dark ground. */
+  --badge-in: #1a9d54; /* ✓ you're in */
+  --badge-chk: #b7791f; /* ? check — gold, distinct from ✕ */
+  --badge-no: #8a909c; /* ✕ not for you — muted grey, never red */
+  /* One accent-derived focus ring every interactive primitive shares. The inner
+     var(--accent) resolves per-theme at use, so this adapts without redeclaring. */
+  --focus-ring: 0 0 0 3px color-mix(in srgb, var(--accent) 45%, transparent);
+}
+
+/* --- 1.4 Theming contract: dark ramp ------------------------------------- */
+/* OS-preference dark (only the color ramp changes; type/space/radius/motion are
+   theme-invariant). */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0d1418;
+    --surface: #111c22;
+    --surface-2: #0f191e;
+    --ink: #e7eef1;
+    --ink-2: #bcccd3;
+    --muted: #8ea1ab;
+    --faint: #5f727c;
+    --hair: #22323a;
+    --hair-2: #1a272e;
+    --accent: #3fc2d4;
+    --accent-ink: #8fe0ea;
+    --closed: #dd8f79;
+    --unknown: #6d7d86;
+    --women: #b79be0;
+    --chip: #17252c;
+    --chip-ink: #9db3bc;
+    --envfill: #33454d;
+    --track: rgba(255, 255, 255, .10);
+    --shadow: 0 1px 2px rgba(0, 0, 0, .4), 0 10px 30px rgba(0, 0, 0, .35);
+    --shadow-lg: 0 16px 46px rgba(0, 0, 0, .6);
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, .45);
+    --lane-public-fill: rgba(63, 194, 212, .16);
+    --lane-public-edge: rgba(63, 194, 212, .40);
+    --lane-public-ink: #8fe0ea;
+    --lane-res-fill: #1a252b;
+    --lane-res-edge: #2c3b44;
+    --lane-res-ink: #9aa1ad;
+    --best: #4aa3ff;
+    --best-band: rgba(74, 163, 255, .14);
+    --best-edge: rgba(74, 163, 255, .6);
+    --cursor: #4aa3ff;
+    /* EligibilityBadge — lightened for AA on the dark ground. */
+    --badge-in: #34c374;
+    --badge-chk: #d9a441;
+    --badge-no: #9aa3ac;
+  }
+}
+
+/* Viewer toggle → forced dark. Applied at :root (whole-page toggle) AND on any
+   subtree carrying [data-theme="dark"] (e.g. the gallery's dark panel), so a
+   single panel can render dark while the page around it stays light. Custom
+   properties set here inherit into the matched element's subtree. */
+:root[data-theme="dark"],
+[data-theme="dark"] {
+  --bg: #0d1418;
+  --surface: #111c22;
+  --surface-2: #0f191e;
+  --ink: #e7eef1;
+  --ink-2: #bcccd3;
+  --muted: #8ea1ab;
+  --faint: #5f727c;
+  --hair: #22323a;
+  --hair-2: #1a272e;
+  --accent: #3fc2d4;
+  --accent-ink: #8fe0ea;
+  --closed: #dd8f79;
+  --unknown: #6d7d86;
+  --women: #b79be0;
+  --chip: #17252c;
+  --chip-ink: #9db3bc;
+  --envfill: #33454d;
+  --track: rgba(255, 255, 255, .10);
+  --shadow: 0 1px 2px rgba(0, 0, 0, .4), 0 10px 30px rgba(0, 0, 0, .35);
+  --shadow-lg: 0 16px 46px rgba(0, 0, 0, .6);
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, .45);
+  --lane-public-fill: rgba(63, 194, 212, .16);
+  --lane-public-edge: rgba(63, 194, 212, .40);
+  --lane-public-ink: #8fe0ea;
+  --lane-res-fill: #1a252b;
+  --lane-res-edge: #2c3b44;
+  --lane-res-ink: #9aa1ad;
+  --best: #4aa3ff;
+  --best-band: rgba(74, 163, 255, .14);
+  --best-edge: rgba(74, 163, 255, .6);
+  --cursor: #4aa3ff;
+  --badge-in: #34c374;
+  --badge-chk: #d9a441;
+  --badge-no: #9aa3ac;
+}
+
+/* Viewer toggle → forced light. Applied at :root AND on any [data-theme="light"]
+   subtree (the gallery's light panel), so a panel can force light under OS dark. */
+:root[data-theme="light"],
+[data-theme="light"] {
+  --bg: #eef2f3;
+  --surface: #ffffff;
+  --surface-2: #f6f9fa;
+  --ink: #15242c;
+  --ink-2: #3a4e58;
+  --muted: #5f727c;
+  --faint: #8a99a3;
+  --hair: #d9e1e4;
+  --hair-2: #e7edee;
+  --accent: #0e8ea0;
+  --accent-ink: #0a6675;
+  --closed: #b0563f;
+  --unknown: #8a99a2;
+  --women: #8a5cc4;
+  --chip: #eef4f5;
+  --chip-ink: #3a5560;
+  --envfill: #b9c7cd;
+  --track: rgba(20, 40, 50, .09);
+  --shadow: 0 1px 2px rgba(20, 40, 50, .06), 0 8px 24px rgba(20, 40, 50, .07);
+  --shadow-lg: 0 12px 40px rgba(20, 40, 50, .16);
+  --shadow-sm: 0 1px 2px rgba(20, 40, 50, .12);
+  --lane-public-fill: rgba(14, 142, 160, .16);
+  --lane-public-edge: rgba(14, 142, 160, .42);
+  --lane-public-ink: #0c7a76;
+  --lane-res-fill: #eef0f3;
+  --lane-res-edge: #d0d5dd;
+  --lane-res-ink: #5f6672;
+  --best: #0a84ff;
+  --best-band: rgba(10, 132, 255, .10);
+  --best-edge: rgba(10, 132, 255, .5);
+  --cursor: #0a84ff;
+  --badge-in: #1a9d54;
+  --badge-chk: #b7791f;
+  --badge-no: #8a909c;
+}
+
+/* Tabular numerals utility (token .tnum) — times/counts that must align. */
+.tnum {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Motion honesty: freeze all animation when the viewer asks for reduced motion. */
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0s !important;
+    transition-duration: 0s !important;
+  }
+}

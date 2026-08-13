@@ -24,8 +24,15 @@ from swimzh.core.errors import JsonValue
 _Weekday = Literal["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
 _Scope = Literal["always", "school_term", "school_holiday"]
 _HolidayPolicy = Literal["normal", "sunday_schedule", "closed"]
+_Weather = Literal["any", "fair_only"]
+_DatePrecision = Literal["day", "month"]
 _PoolKind = Literal["indoor", "outdoor", "river", "lake", "school", "paddling", "thermal"]
-_PriceCategory = Literal["child", "youth", "adult", "senior"]
+_PriceCategory = Literal["child", "youth", "adult"]
+#: The stored-blob discriminant for the `Free` arm of the admission union. `"free"` is its only
+#: value: `Tariff` is discriminated by a non-null `prices` table and `Unknown` by the absence of
+#: both, so a pre-union blob (`prices: null`, no `admission_state` key) loads as `Unknown` — the
+#: honest reading of a blob that predates the distinction.
+_AdmissionState = Literal["free"]
 _BasinKind = Literal[
     "lap", "non_swimmer", "diving", "vario", "teaching", "children", "outdoor", "other"
 ]
@@ -36,6 +43,12 @@ _FeatureKind = Literal[
 ]
 _LockerCategory = Literal["wardrobe", "valuables", "laundry"]
 _LockerMechanism = Literal["coin", "key", "chip", "wristband", "other"]
+_RentalKind = Literal["towel", "swimwear", "goggles", "cabin", "sunlounger", "parasol", "other"]
+#: The stored discriminant for the `Gratis` arm of the rental-fee union. `"gratis"` is its only
+#: value: `Priced` is discriminated by a non-null `fee_chf` and `Unstated` by the absence of
+#: both — the `admission_state` pattern at rental scale (the page STATING free-ness and the
+#: page stating nothing are different facts and never share a serialization).
+_RentalFeeState = Literal["gratis"]
 
 
 class _Strict(BaseModel):
@@ -84,6 +97,20 @@ class AdultsOnlyDTO(_Strict):
     note: str = ""
 
 
+class GirlsOnlyDTO(_Strict):
+    type: Literal["girls_only"]
+
+
+class GenderDiverseDTO(_Strict):
+    type: Literal["gender_diverse"]
+    #: Required, mirroring the domain: the page states the bound, so nothing may default it.
+    min_age: int
+
+
+class AccompaniedChildrenDTO(_Strict):
+    type: Literal["accompanied_children"]
+
+
 AccessDTO = Annotated[
     PublicDTO
     | LaneSwimDTO
@@ -92,12 +119,45 @@ AccessDTO = Annotated[
     | SeniorsOnlyDTO
     | SchoolReservedDTO
     | ClubReservedDTO
-    | AdultsOnlyDTO,
+    | AdultsOnlyDTO
+    | GirlsOnlyDTO
+    | GenderDiverseDTO
+    | AccompaniedChildrenDTO,
     Field(discriminator="type"),
 ]
 
 
 # --- schedule ---------------------------------------------------------------------
+
+
+class SeasonDTO(_Strict):
+    """A year-free part of the year. `start_*` > `end_*` wraps New Year.
+
+    The day fields are always present and always meaningful; `precision` decides whether they
+    are *read*. `"month"` means whole months inclusive, so the days carry the natural bounds
+    (1st and last of the month) and a consumer that ignored `precision` would still be close
+    rather than wrong.
+    """
+
+    start_month: int = Field(ge=1, le=12)
+    start_day: int = Field(ge=1, le=31)
+    end_month: int = Field(ge=1, le=12)
+    end_day: int = Field(ge=1, le=31)
+    precision: _DatePrecision = "day"
+
+
+class OperatingSeasonDTO(_Strict):
+    """A facility-level, timetable-free operating season (sharedsource-fanout).
+
+    Mirrors `domain.models.OperatingSeason`: the annual window a page states with no hours
+    attached, plus the weather condition qualifying the whole season. `weather` is required
+    (never defaulted) — it is read off the page, and the domain refuses a silent all-weather
+    claim; the codec pops the whole key when the facility has no season, so this DTO never
+    rides a blob that lacks the fact.
+    """
+
+    window: SeasonDTO
+    weather: _Weather
 
 
 class RuleDTO(_Strict):
@@ -106,12 +166,42 @@ class RuleDTO(_Strict):
     end: time
     access: AccessDTO
     scope: _Scope = "always"
+    #: The verbatim source cell the access was classified from. Empty for every rule that
+    #: came from a source without a category column (and for every hand-authored rule).
+    source_text: str = ""
+    #: The part of the year this rule applies to; `None` == all year round.
+    season: SeasonDTO | None = None
+    weather: _Weather = "any"
+
+    @model_serializer(mode="wrap")
+    def _serialize(self, handler: SerializerFunctionWrapHandler) -> dict[str, Any]:
+        # Additive-and-invisible: a defaulted field must not appear in the payload, so a rule
+        # that predates it serialises to exactly the same bytes as before it. Note this pops BY
+        # NAME — every new defaulted field has to be added here, or it leaks into every blob.
+        data: dict[str, Any] = handler(self)
+        if not self.source_text:
+            data.pop("source_text", None)
+        if self.season is None:
+            data.pop("season", None)
+        if self.weather == "any":
+            data.pop("weather", None)
+        return data
 
 
 class ResolvedSessionDTO(_Strict):
     start: time
     end: time
     access: AccessDTO
+    weather: _Weather = "any"
+
+    @model_serializer(mode="wrap")
+    def _serialize(self, handler: SerializerFunctionWrapHandler) -> dict[str, Any]:
+        # This DTO had NO serializer before `weather`: it is reached via `ExceptionDTO.sessions`,
+        # so a bare additive field would have added a key to every exception-bearing blob.
+        data: dict[str, Any] = handler(self)
+        if self.weather == "any":
+            data.pop("weather", None)
+        return data
 
 
 class ExceptionDTO(_Strict):
@@ -297,7 +387,10 @@ class LanePlanDTO(_Strict):
 class BasinDTO(_Strict):
     basin_id: str
     name: str
-    rules: list[RuleDTO]
+    # Optional (default empty) since S1 of delete-curated-schedule-tier: a stripped pool file
+    # carries only the crosswalk binding (`basin_id`/`name`/`lane_plan_source`), no schedule.
+    # A rule-less basin derives `awaiting_scrape`/`no_source` freshness, never a `/swim` option.
+    rules: list[RuleDTO] = []
     exceptions: list[ExceptionDTO] = []
     kind: _BasinKind = "other"
     dimensions: DimensionsDTO | None = None
@@ -348,6 +441,30 @@ class LockerOptionDTO(_Strict):
     raw: str = ""
 
 
+class RentalItemDTO(_Strict):
+    """The non-locker half of the same `Mietobjekt | Preis` table (mietobjekt-extraction S2).
+
+    The domain's closed `RentalFee` union rides two keys, mirroring how `Admission` rides
+    `prices` + `admission_state`: `Priced(n)` -> `fee_chf: n`; `Gratis` -> `fee_state:
+    "gratis"`; `Unstated` -> neither (the `fee_state` key is POPPED when None — the
+    `admission_state`/`min_age` precedent — so only stated-gratis rows carry it).
+    """
+
+    kind: _RentalKind
+    fee_chf: Decimal | None = None
+    fee_state: _RentalFeeState | None = None
+    deposit_chf: Decimal | None = None
+    period: str | None = None
+    raw: str = ""
+
+    @model_serializer(mode="wrap")
+    def _serialize(self, handler: SerializerFunctionWrapHandler) -> dict[str, Any]:
+        data: dict[str, Any] = handler(self)
+        if self.fee_state is None:
+            data.pop("fee_state", None)
+        return data
+
+
 # --- pricing ----------------------------------------------------------------------
 
 
@@ -355,6 +472,16 @@ class PriceEntryDTO(_Strict):
     category: _PriceCategory
     amount_chf: Decimal
     display: str
+    min_age: int | None = None
+
+    @model_serializer(mode="wrap")
+    def _serialize(self, handler: SerializerFunctionWrapHandler) -> dict[str, Any]:
+        # Additive-and-invisible: an entry with no published bound serialises to exactly the
+        # bytes it did before `min_age` existed.
+        data: dict[str, Any] = handler(self)
+        if self.min_age is None:
+            data.pop("min_age", None)
+        return data
 
 
 class PriceTableDTO(_Strict):
@@ -376,19 +503,23 @@ class GeoDTO(_Strict):
 
 class FacilityDTO(_Strict):
     facility_id: str
-    address: str
-    source: str
+    # Optional since S1 of delete-curated-schedule-tier: a stripped pool file omits `address`
+    # (sourced from the WFS roster in the build/seed path — never defaulted to "") and `source`
+    # (build-assigned). Physical basin fields already default (see `BasinDTO`), so a blob reduced
+    # to `facility_id` + basins-with-only-`lane_plan_source` validates.
+    address: str | None = None
+    source: str | None = None
     valid_as_of: date | None = None
     geo: GeoDTO | None = None
-    amenities: list[str] = Field(default_factory=list)
-    public_holiday_policy: _HolidayPolicy = "normal"
+    #: `None` (the default) == the author did not state it. Previously defaulted to "normal",
+    #: which turned silence into a positive claim that the resolver then acted on.
+    public_holiday_policy: _HolidayPolicy | None = None
     prices: PriceTableDTO | None = None
     closures: list[ClosureDTO] = []
     basins: list[BasinDTO]
     website: str | None = None
     features: list[FeatureDTO] = []
     lockers: list[LockerOptionDTO] = []
-    accessibility: str | None = None
     last_admission_before: timedelta | None = None
 
 
@@ -399,8 +530,10 @@ class IdentityDTO(_Strict):
     facility_id: str
     name: str
     kind: _PoolKind
-    geo_sport_id: str | None = None
+    # `geo_sport_id` is no longer a registry-crosswalk field: since S5b it is SOURCED from the
+    # WFS `poi_id` by the roster/spine build (`build_spine`), so it is deliberately absent here.
     crowdmonitor_keys: list[str] = Field(default_factory=list)
+    baditicker_poiid: str | None = None  # Baditicker water-temp feed poiid; None when unmapped
     aliases: list[str] = Field(default_factory=list)
 
 

@@ -1,0 +1,547 @@
+/* ============================================================================
+   components.css — LAYER 2: primitive components.
+
+   Primitives are styled PURELY through the tokens in tokens.css: no raw hex, no
+   raw alpha-colour literals, no magic theme values. Colour tints are composed
+   with color-mix() over token colours (still token-only). Every interactive
+   primitive is --ctl-h tall, keyboard-accessible, and theme-aware by reading
+   tokens only.
+
+   Layer rule: this file imports nothing and defines no colour of its own; the
+   grep gate asserts zero raw colour literals here (all colour lives in
+   tokens.css).
+   ============================================================================ */
+
+/* --- Shared: focus ring + disabled affordance ---------------------------- */
+.ui-seg__opt:focus-visible,
+.ui-chip:focus-visible,
+.ui-combo input:focus-visible,
+.ui-place input:focus-visible,
+.ui-place__geo:focus-visible,
+.ui-datestepper__nav:focus-visible,
+.ui-toggle input:focus-visible,
+.ui-sourcestrip__chip:focus-visible,
+.ui-combo__opt.is-active,
+/* Select focuses its inner <select>, but the chrome lives on the wrapper, so the
+   ring must too — otherwise keyboard focus reads differently from every neighbour. */
+.ui-select:focus-within {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+.is-disabled,
+[aria-disabled="true"] {
+  opacity: .55;
+  cursor: not-allowed;
+}
+
+/* --- SegmentedControl (.ui-seg) ------------------------------------------ */
+.ui-seg {
+  display: inline-flex;
+  align-items: center;
+  height: var(--ctl-h);
+  padding: var(--s1);
+  gap: var(--s1);
+  background: var(--surface-2);
+  border: 1px solid var(--hair);
+  border-radius: var(--r-md);
+  font-family: var(--f);
+}
+.ui-seg__opt {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: var(--fs-body);
+  font-weight: var(--fw-body);
+  padding: 0 var(--s3);
+  border-radius: var(--r-sm);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.ui-seg__opt.is-selected {
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: var(--shadow-sm);
+}
+/* Mode switch active tab: a raised surface pill with accent-ink text (not a filled
+   accent block — accent-ink on accent reads as low-contrast mush). Matches the
+   prototype's `.modeseg button[aria-pressed=true]{background:surface;color:accent-ink}`. */
+.ui-seg--mode .ui-seg__opt {
+  font-weight: var(--fw-caption);
+}
+.ui-seg--mode .ui-seg__opt.is-selected {
+  background: var(--surface);
+  color: var(--accent-ink);
+}
+
+/* --- ChipGroup (.ui-chipgroup) ------------------------------------------- */
+.ui-chipgroup {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: var(--s2);
+  min-height: var(--ctl-h);
+  align-items: center;
+  font-family: var(--f);
+}
+.ui-chip {
+  appearance: none;
+  height: var(--ctl-h);
+  padding: 0 var(--s3);
+  background: var(--chip);
+  color: var(--chip-ink);
+  border: 1px solid var(--hair);
+  border-radius: var(--r-pill);
+  font: inherit;
+  font-size: var(--fs-body);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.ui-chip.is-selected {
+  background: var(--accent);
+  color: var(--surface);
+  border-color: transparent;
+}
+
+/* --- Select (.ui-select) — the one dropdown skin ------------------------- */
+/* Chrome on the WRAPPER, flat control inside: see components/select.ts for why.
+   `field` (default) matches the toolbar inputs; `--pill` matches the header
+   controls. The caret is ours (currentColor), so it follows the theme. */
+.ui-select {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s2);
+  height: var(--ctl-h);
+  /* room on the right for the caret drawn by ::after */
+  padding: 0 calc(var(--s3) + var(--s3)) 0 var(--s3);
+  background: var(--surface-2);
+  color: var(--ink);
+  border: 1px solid var(--hair);
+  border-radius: var(--r-sm);
+  font-family: var(--f);
+  font-size: var(--fs-body);
+  cursor: pointer;
+}
+.ui-select:hover {
+  border-color: var(--accent);
+  color: var(--accent-ink);
+}
+.ui-select__icon {
+  display: inline-flex;
+  align-items: center;
+  color: var(--muted);
+}
+.ui-select:hover .ui-select__icon {
+  color: inherit;
+}
+.ui-select::after {
+  content: "▾";
+  position: absolute;
+  right: var(--s3);
+  font-size: var(--fs-caption);
+  opacity: .7;
+  pointer-events: none;
+}
+/* The native control is stripped flat: a <select> ignores `background` on macOS
+   unless `appearance` is reset, which is what otherwise rendered it as a light
+   box against dark chrome. Its own outline is suppressed — the wrapper rings. */
+.ui-select__control {
+  appearance: none;
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: inherit;
+}
+.ui-select__control:focus {
+  outline: none;
+}
+/* Pill variant — the header control family (theme toggle, copy link). */
+.ui-select--pill {
+  border-radius: var(--r-pill);
+  background: var(--surface);
+  gap: var(--s1);
+  font-size: var(--fs-caption);
+}
+
+/* --- Combobox (.ui-combo) ------------------------------------------------ */
+.ui-combo {
+  position: relative;
+  display: inline-block;
+  font-family: var(--f);
+}
+.ui-combo input {
+  height: var(--ctl-h);
+  padding: 0 var(--s3);
+  min-width: 12rem;
+  background: var(--surface-2);
+  color: var(--ink);
+  border: 1px solid var(--hair);
+  border-radius: var(--r-sm);
+  font: inherit;
+  font-size: var(--fs-body);
+}
+.ui-combo [role="listbox"] {
+  position: absolute;
+  z-index: 20;
+  left: 0;
+  right: 0;
+  margin: var(--s1) 0 0;
+  padding: var(--s1);
+  list-style: none;
+  max-height: 16rem;
+  overflow-y: auto;
+  background: var(--surface);
+  border: 1px solid var(--hair);
+  border-radius: var(--r-md);
+  box-shadow: var(--shadow-lg);
+}
+.ui-combo__opt {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s2);
+  padding: var(--s2) var(--s3);
+  border-radius: var(--r-sm);
+  color: var(--ink);
+  cursor: pointer;
+  font-size: var(--fs-body);
+}
+.ui-combo__opt.is-active {
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+}
+.ui-combo__opt[aria-selected="true"] {
+  color: var(--accent-ink);
+  font-weight: var(--fw-caption);
+}
+.ui-combo__closed {
+  font-size: var(--fs-micro);
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  color: var(--closed);
+  border: 1px solid color-mix(in srgb, var(--closed) 45%, transparent);
+  border-radius: var(--r-pill);
+  padding: 0 var(--s2);
+}
+.ui-combo__empty {
+  padding: var(--s2) var(--s3);
+  color: var(--faint);
+  font-size: var(--fs-body);
+  font-style: italic;
+  list-style: none;
+}
+
+/* --- PlaceTypeahead (.ui-place) ------------------------------------------ */
+.ui-place {
+  position: relative;
+  display: inline-flex;
+  gap: var(--s2);
+  align-items: center;
+  font-family: var(--f);
+}
+.ui-place input {
+  height: var(--ctl-h);
+  padding: 0 var(--s3);
+  min-width: 12rem;
+  background: var(--surface-2);
+  color: var(--ink);
+  border: 1px solid var(--hair);
+  border-radius: var(--r-sm);
+  font: inherit;
+  font-size: var(--fs-body);
+}
+.ui-place__geo {
+  appearance: none;
+  height: var(--ctl-h);
+  padding: 0 var(--s3);
+  background: transparent;
+  color: var(--accent-ink);
+  border: 1px solid var(--hair);
+  border-radius: var(--r-sm);
+  font: inherit;
+  font-size: var(--fs-caption);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.ui-place [role="listbox"] {
+  position: absolute;
+  top: calc(var(--ctl-h) + var(--s1));
+  left: 0;
+  z-index: 20;
+  min-width: 12rem;
+  margin: 0;
+  padding: var(--s1);
+  list-style: none;
+  background: var(--surface);
+  border: 1px solid var(--hair);
+  border-radius: var(--r-md);
+  box-shadow: var(--shadow-lg);
+}
+.ui-place__opt {
+  padding: var(--s2) var(--s3);
+  border-radius: var(--r-sm);
+  color: var(--ink);
+  cursor: pointer;
+  font-size: var(--fs-body);
+}
+.ui-place__opt:hover {
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+
+/* --- Toggle (.ui-toggle) ------------------------------------------------- */
+.ui-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s2);
+  min-height: var(--ctl-h);
+  font-family: var(--f);
+  font-size: var(--fs-body);
+  color: var(--ink);
+}
+.ui-toggle input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+}
+.ui-toggle__track {
+  position: relative;
+  width: 2.6rem;
+  height: 1.5rem;
+  border-radius: var(--r-pill);
+  background: var(--hair);
+  transition: background var(--dur-sheet) var(--ease-sheet);
+  flex: none;
+}
+.ui-toggle__track::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: calc(1.5rem - 4px);
+  height: calc(1.5rem - 4px);
+  border-radius: var(--r-pill);
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+  transition: transform var(--dur-sheet) var(--ease-sheet);
+}
+.ui-toggle.is-on .ui-toggle__track {
+  background: var(--accent);
+}
+.ui-toggle.is-on .ui-toggle__track::after {
+  transform: translateX(1.1rem);
+}
+.ui-toggle input:focus-visible + .ui-toggle__track {
+  box-shadow: var(--focus-ring);
+}
+
+/* --- DateStepper (.ui-datestepper) --------------------------------------- */
+.ui-datestepper {
+  display: inline-flex;
+  align-items: center;
+  height: var(--ctl-h);
+  gap: var(--s1);
+  padding: 0 var(--s1);
+  background: var(--surface-2);
+  border: 1px solid var(--hair);
+  border-radius: var(--r-md);
+  font-family: var(--f);
+}
+.ui-datestepper__nav:hover {
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  color: var(--accent-ink);
+}
+.ui-datestepper__nav {
+  appearance: none;
+  width: var(--ctl-h);
+  height: calc(var(--ctl-h) - var(--s2));
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  font-size: var(--fs-head);
+  line-height: 1;
+  border-radius: var(--r-sm);
+  cursor: pointer;
+}
+.ui-datestepper__label {
+  min-width: 7rem;
+  text-align: center;
+  color: var(--ink);
+  font-size: var(--fs-body);
+  font-weight: var(--fw-caption);
+}
+.ui-datestepper__today {
+  font-size: var(--fs-micro);
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  color: var(--accent-ink);
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  border-radius: var(--r-pill);
+  padding: 0 var(--s2);
+}
+
+/* --- StatePill (.ui-statepill) — dot + word, never opacity-only ---------- */
+.ui-statepill {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s2);
+  height: calc(var(--ctl-h) - var(--s2));
+  padding: 0 var(--s3);
+  border-radius: var(--r-pill);
+  font-family: var(--f);
+  font-size: var(--fs-caption);
+  font-weight: var(--fw-caption);
+}
+.ui-statepill__dot {
+  width: .5rem;
+  height: .5rem;
+  border-radius: var(--r-pill);
+  flex: none;
+}
+.ui-statepill.is-open {
+  color: var(--accent-ink);
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+}
+.ui-statepill.is-open .ui-statepill__dot { background: var(--accent); }
+.ui-statepill.is-later {
+  color: var(--best);
+  background: var(--best-band);
+}
+.ui-statepill.is-later .ui-statepill__dot { background: var(--best); }
+.ui-statepill.is-closed {
+  color: var(--closed);
+  background: color-mix(in srgb, var(--closed) 14%, transparent);
+}
+.ui-statepill.is-closed .ui-statepill__dot { background: var(--closed); }
+.ui-statepill.is-unknown {
+  color: var(--unknown);
+  background: color-mix(in srgb, var(--unknown) 16%, transparent);
+}
+.ui-statepill.is-unknown .ui-statepill__dot { background: var(--unknown); }
+
+/* --- EligibilityBadge (.ui-eligbadge) — MUTED --badge-* values ----------- */
+.ui-eligbadge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s1);
+  font-family: var(--f);
+  font-size: var(--fs-caption);
+  font-weight: var(--fw-caption);
+}
+.ui-eligbadge__mark { font-weight: 700; }
+.ui-eligbadge.is-in { color: var(--badge-in); }
+.ui-eligbadge.is-chk { color: var(--badge-chk); }
+.ui-eligbadge.is-no { color: var(--badge-no); }
+/* board-tag variant: a filled pill for the ribbon row label */
+.ui-eligbadge--tag {
+  padding: 0 var(--s2);
+  border-radius: var(--r-pill);
+  color: var(--surface);
+}
+.ui-eligbadge--tag.is-in { background: var(--badge-in); }
+.ui-eligbadge--tag.is-chk { background: var(--badge-chk); }
+.ui-eligbadge--tag.is-no { background: var(--badge-no); }
+.ui-eligbadge--tag .ui-eligbadge__word,
+.ui-eligbadge--tag .ui-eligbadge__mark { color: var(--surface); }
+
+/* --- LengthLanesBadge (.ui-lenlanes) ------------------------------------- */
+.ui-lenlanes {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s2);
+  font-family: var(--f);
+  font-size: var(--fs-caption);
+  color: var(--ink-2);
+}
+.ui-lenlanes__len { font-weight: var(--fw-caption); }
+.ui-lenlanes__lanes { color: var(--muted); }
+.ui-lenlanes.is-degraded .ui-lenlanes__degrade {
+  color: var(--muted);
+  font-style: italic;
+}
+
+/* --- ProvenanceStamp (.ui-provstamp) ------------------------------------- */
+.ui-provstamp {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s2);
+  font-family: var(--f);
+  font-size: var(--fs-caption);
+  color: var(--muted);
+}
+.ui-provstamp__icon { color: var(--faint); }
+.ui-provstamp.is-illustrative .ui-provstamp__text { font-style: italic; }
+
+/* --- IconSet (.ui-icon / .ui-iconset) — line glyphs, currentColor -------- */
+.ui-icon {
+  display: inline-block;
+  vertical-align: -0.125em;
+  color: var(--ink-2);
+}
+.ui-iconset {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: var(--s4);
+  align-items: center;
+  font-family: var(--f);
+}
+.ui-iconset__cell {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--s1);
+  font-size: var(--fs-head);
+  color: var(--ink-2);
+}
+.ui-iconset__cap {
+  font-size: var(--fs-micro);
+  color: var(--faint);
+}
+
+/* --- SourceStrip (.ui-sourcestrip) — outbound "verify at the source" chips */
+.ui-sourcestrip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s2);
+  align-items: center;
+  font-family: var(--f);
+}
+.ui-sourcestrip__chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s1);
+  padding: 0 var(--s3);
+  height: var(--ctl-h);
+  background: var(--chip);
+  color: var(--chip-ink);
+  border: 1px solid var(--hair);
+  border-radius: var(--r-pill);
+  font-size: var(--fs-caption);
+  line-height: 1;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.ui-sourcestrip__chip:hover {
+  border-color: var(--accent);
+  color: var(--ink);
+}
+.ui-sourcestrip__icon {
+  display: inline-flex;
+  color: var(--faint);
+}
+.ui-sourcestrip__tag {
+  padding: 0 var(--s1);
+  border: 1px solid var(--hair);
+  border-radius: var(--r-sm);
+  font-size: var(--fs-micro);
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+.ui-sourcestrip__ext {
+  color: var(--faint);
+}

@@ -8,6 +8,7 @@ from datetime import date, time
 
 from swimzh.domain.access import LaneSwim, PublicSwim, SeniorsOnly
 from swimzh.domain.calendar import HolidayRange, ZurichCalendar
+from swimzh.domain.closure import ClosureCode
 from swimzh.domain.models import (
     Basin,
     BasinId,
@@ -69,7 +70,7 @@ def _basin() -> Basin:
     )
 
 
-def _facility(policy: HolidayPolicy = HolidayPolicy.SUNDAY_SCHEDULE) -> Facility:
+def _facility(policy: HolidayPolicy | None = HolidayPolicy.SUNDAY_SCHEDULE) -> Facility:
     return Facility(
         identity=PoolIdentity(PoolId("f"), "Test", PoolKind.INDOOR),
         address="",
@@ -112,23 +113,71 @@ def test_public_holiday_closed_policy() -> None:
     facility = _facility(policy=HolidayPolicy.CLOSED)
     result = resolve_basin(facility, facility.basins[0], date(2026, 4, 3), _calendar())
     assert isinstance(result, ClosedDay)
-    assert "Karfreitag" in result.reason
+    # The holiday NAME is a param, not prose baked into a sentence — that is what lets a
+    # translated closure say "Good Friday" while an untranslatable one stays German.
+    assert result.code is ClosureCode.PUBLIC_HOLIDAY
+    assert result.params["holiday"] == "Karfreitag"
 
 
 def test_maintenance_closure_wins() -> None:
     # 2026-07-20 is inside the Revision closure.
     result = resolve_basin(_facility(), _facility().basins[0], date(2026, 7, 20), _calendar())
     assert isinstance(result, ClosedDay)
-    assert "Revision" in result.reason
+    assert result.code is ClosureCode.SEASONAL_BREAK_MAINTENANCE
 
 
 def test_one_off_exception_closes_day() -> None:
     result = resolve_basin(_facility(), _facility().basins[0], date(2026, 12, 24), _calendar())
     assert isinstance(result, ClosedDay)
-    assert result.reason == "Heiligabend"
+    assert result.code is ClosureCode.CHRISTMAS_EVE
 
 
 def test_calendar_coverage_boundary() -> None:
     cal = _calendar()
     assert cal.covers(date(2026, 3, 10)) is True
     assert cal.covers(date(2030, 3, 10)) is False
+
+
+# --- unknown holiday policy -----------------------------------------------------------
+#
+# `public_holiday_policy` used to default to NORMAL on every facility, supplied by no
+# provider — so on a public holiday the resolver fell straight through to the ordinary
+# weekday rules and presented them as fact. `None` is the honest unknown; the sessions are
+# still returned (they may well hold) but the day is flagged.
+
+
+def test_unknown_policy_on_a_holiday_returns_hours_but_flags_them() -> None:
+    # 2026-04-03 is Karfreitag, a Friday — the one public holiday this calendar declares.
+    facility = _facility(policy=None)
+    result = resolve_basin(facility, facility.basins[0], date(2026, 4, 3), _calendar())
+
+    assert isinstance(result, OpenDay)
+    assert result.sessions, "the weekday hours are still reported — unknown is not closed"
+    assert result.holiday_policy_unverified is True
+
+
+def test_unknown_policy_on_an_ordinary_day_is_not_flagged() -> None:
+    # 2026-03-10 is a Tuesday and no holiday at all: nothing to be unsure about.
+    facility = _facility(policy=None)
+    result = resolve_basin(facility, facility.basins[0], date(2026, 3, 10), _calendar())
+
+    assert isinstance(result, OpenDay)
+    assert result.holiday_policy_unverified is False
+
+
+def test_a_sourced_policy_on_a_holiday_is_never_flagged() -> None:
+    # Karfreitag with a STATED sunday-schedule policy: we know what happens, so no warning.
+    facility = _facility(policy=HolidayPolicy.SUNDAY_SCHEDULE)
+    result = resolve_basin(facility, facility.basins[0], date(2026, 4, 3), _calendar())
+
+    assert isinstance(result, OpenDay)
+    assert result.holiday_policy_unverified is False
+
+
+def test_unknown_policy_never_turns_a_holiday_into_a_closure() -> None:
+    """The chosen posture: an unverified holiday must not read as 'closed'. A pool that IS
+    open would otherwise be hidden on ~9 days a year."""
+    facility = _facility(policy=None)
+
+    result = resolve_basin(facility, facility.basins[0], date(2026, 4, 3), _calendar())
+    assert not isinstance(result, ClosedDay)

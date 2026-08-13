@@ -7,11 +7,17 @@ gold SQLite store (built by `swimzh build`) — no curated `data/` files are rea
 
 from __future__ import annotations
 
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
+from datetime import datetime
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
+import httpx
 from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
+from starlette.requests import Request
+from starlette.responses import Response
 
 from apps.web.api.access.router import router as access_router
 from apps.web.api.health.router import router as health_router
@@ -20,7 +26,48 @@ from apps.web.api.swim.router import router as swim_router
 from apps.web.api.ui.router import router as ui_router
 from apps.web.config import Config
 from apps.web.services.gold_store import GoldSwimStore
-from apps.web.services.ports import SwimStore
+from apps.web.services.ports import SwimStore, TemperatureProvider
+from swimzh.core.http import HttpClient
+from swimzh.core.httpcache import (
+    DEFAULT_CACHE_ROOT,
+    CacheMode,
+    CacheStore,
+    DiskCacheTransport,
+)
+from swimzh.providers.baditicker import BaditickerProvider
+
+_STATIC_DIR = Path(__file__).resolve().parent / "static"
+_HTTP_TIMEOUT_S = 10.0
+_ZURICH = ZoneInfo("Europe/Zurich")
+
+
+def build_http_transport() -> DiskCacheTransport:
+    """The web runtime's outbound transport: the provider disk cache wired **OFF**.
+
+    The cache is a *build* accelerator, not a runtime tier. At request time the app must not
+    serve bytes an operator can only invalidate with `rm -rf`, and the one live provider here
+    (Baditicker) already has its own in-process 2-minute TTL. `CacheMode.OFF` is a straight
+    passthrough — nothing is read, nothing is written — so this is the seam made explicit and
+    assertable rather than an omission that a future edit could silently flip.
+    """
+    return DiskCacheTransport(
+        httpx.HTTPTransport(),
+        CacheStore(DEFAULT_CACHE_ROOT),
+        CacheMode.OFF,
+        now=lambda: datetime.now(_ZURICH),
+    )
+
+
+def build_temperature_provider(config: Config) -> TemperatureProvider | None:
+    """Wire the real Baditicker adapter when a feed URL is configured, else `None` (fail-open).
+
+    `None` is a valid state: `/pools/{id}` reports `TempUnavailable("live temperature not
+    configured")` rather than raising. The single place a concrete live provider is constructed."""
+    if config.baditicker_url is None:
+        return None
+    inner = httpx.Client(timeout=_HTTP_TIMEOUT_S, transport=build_http_transport())
+    client = HttpClient(inner, source="baditicker", timeout_s=_HTTP_TIMEOUT_S)
+    return BaditickerProvider(client, url=config.baditicker_url)
 
 
 def _missing_db_message(gold_db: Path) -> str:
@@ -59,25 +106,86 @@ def _load_swim_data(config: Config) -> SwimStore:
     return GoldSwimStore.open(config.gold_db)
 
 
-@asynccontextmanager
-async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-    config = Config.from_env()
-    _require_gold_db(config.gold_db)
-    app.state.config = config
-    app.state.swim_data = _load_swim_data(config)
-    yield
+def create_app(config: Config | None = None) -> FastAPI:
+    """Build the ASGI app. The composition root: the only place adapters are wired
+    and the only place routers are registered.
+
+    `config` defaults to `Config.from_env()`. The dev-only `/ui/gallery` route is
+    registered ONLY when `config.dev_ui` is set, so it is absent in production
+    (a route is always mounted once included — the flag gates the include itself).
+
+    The gold store is resolved LAZILY in the lifespan (env read at startup, not at
+    import), so the module-level `app` picks up `SWIMZH_GOLD_DB` set after import
+    (e.g. by the test fixtures). Route registration, by contrast, must happen now,
+    at build time — so `dev_ui` is read here."""
+
+    @asynccontextmanager
+    async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+        cfg = config or Config.from_env()
+        _require_gold_db(cfg.gold_db)
+        app.state.config = cfg
+        app.state.swim_data = _load_swim_data(cfg)
+        # Live water-temperature provider (OPTIONAL, fail-open). The real Baditicker adapter is
+        # wired when `SWIMZH_BADITICKER_URL` is set; otherwise the app runs with `None`, which
+        # `/pools/{id}` reports as `TempUnavailable("live temperature not configured")`. Tests
+        # override `app.state.temperature` with an in-memory fake.
+        app.state.temperature = build_temperature_provider(cfg)
+        yield
+
+    app = FastAPI(title="Swimming in Zürich", lifespan=lifespan)
+    # Static design-system assets (tokens/components CSS + ES modules) — net-new
+    # infra this slice adds; first consumer is the dev gallery.
+    app.mount("/static", StaticFiles(directory=str(_STATIC_DIR)), name="static")
+    app.include_router(ui_router)
+    app.include_router(health_router)
+    app.include_router(swim_router)
+    app.include_router(pools_router)
+    app.include_router(access_router)
+    if (config or Config.from_env()).dev_ui:
+        # Dev: never let the browser cache the design-system assets, so an edit to a
+        # CSS/JS module is seen on the next reload instead of a stale cached module
+        # (ES modules are cached aggressively otherwise). Production keeps default caching.
+        @app.middleware("http")
+        async def _no_cache_static(
+            request: Request,
+            call_next: Callable[[Request], Awaitable[Response]],
+        ) -> Response:
+            response = await call_next(request)
+            if request.url.path.startswith("/static/"):
+                response.headers["Cache-Control"] = "no-store"
+            return response
+
+        from apps.web.api.board_preview.router import router as board_preview_router
+        from apps.web.api.detail_preview.router import router as detail_preview_router
+        from apps.web.api.gallery.router import router as gallery_router
+
+        app.include_router(gallery_router)
+        app.include_router(board_preview_router)
+        app.include_router(detail_preview_router)
+    return app
 
 
-app = FastAPI(title="Swimming in Zürich", lifespan=lifespan)
-app.include_router(ui_router)
-app.include_router(health_router)
-app.include_router(swim_router)
-app.include_router(pools_router)
-app.include_router(access_router)
+app = create_app()
+
+
+_JS_DIR = _STATIC_DIR / "js"
+
+
+def _build_static_assets() -> None:  # pragma: no cover
+    """Compile the TS/JS UI (`static/js` → `static/dist`) before serving, so a source
+    edit is reflected in what the browser loads. Fail fast if the build errors — a stale
+    or missing `dist/` would serve a blank SPA. Not run in `create_app()` (the test path):
+    `TestClient` serves the source `/static/js` tree, and `dist/` is a git-ignored artifact."""
+    import subprocess
+
+    subprocess.run(  # noqa: S603
+        ["npm", "--prefix", str(_JS_DIR), "run", "build"],  # noqa: S607
+        check=True,
+    )
 
 
 def main() -> None:  # pragma: no cover
-    """Clean dev entrypoint: preflight the gold store, then serve.
+    """Clean dev entrypoint: build the UI, preflight the gold store, then serve.
 
     Reports a one-line, actionable error and exits 1 if the store is missing/empty —
     no ASGI traceback. Run: `SWIMZH_GOLD_DB=gold.sqlite uv run python -m apps.web.main`."""
@@ -85,6 +193,7 @@ def main() -> None:  # pragma: no cover
 
     import uvicorn
 
+    _build_static_assets()
     config = Config.from_env()
     error = startup_error(config)
     if error is not None:

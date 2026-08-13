@@ -2,20 +2,31 @@
 
 from __future__ import annotations
 
+from typing import Literal
+
 from pydantic import BaseModel
+
+#: The closed admission union, projected: "free" (the pool's own page states it), "tariff"
+#: (the city rate its page links — `prices` carries the table), "unknown" (no source states it).
+AdmissionOut = Literal["free", "tariff", "unknown"]
 
 
 class PoolOut(BaseModel):
     pool_id: str
     name: str
     kind: str
-    address: str
+    # None when the source publishes no address at all (real JSON nulls in every WFS address
+    # part — e.g. planschbecken-pfingstweid): absence renders absent on the wire, never "".
+    address: str | None
     lat: float | None
     lon: float | None
     url: str | None
     description: str | None
     phone: str | None
-    curated: bool  # True = a curated timetable exists (derived); False = location only
+    # The derived three-state schedule freshness (delete-curated-schedule-tier S1): "scraped"
+    # (a real schedule), "awaiting_scrape" (indoor, scrapeable, no schedule yet), or "no_source"
+    # (no timetable source at all). Replaced the `curated` boolean; never "closed".
+    freshness: str
 
 
 class PoolsOut(BaseModel):
@@ -94,6 +105,10 @@ class BasinOut(BaseModel):
     diving_platforms_m: list[float]  # board/platform heights, e.g. [1, 3, 5]; empty when none
     # Honesty caveat: "curated" (hand-verified) vs "parsed_prose" (auto-extracted, unverified).
     physical_source: str
+    # The basin's declared Belegungsplan (lane-plan) PDF source URL; None when the basin
+    # declares no `lane_plan_source`. The `section` token stays in the domain (a sheet
+    # sub-section, not a URL fragment) — it has no UI use here.
+    lane_plan_url: str | None
 
 
 class FeatureStatusOut(BaseModel):
@@ -118,10 +133,26 @@ class LockerOut(BaseModel):
     raw: str
 
 
+#: The closed rental-fee union, projected: "priced" (`fee_chf` carries the amount), "gratis"
+#: (the page STATES the rental is free), "unstated" (the page states no fee — "auf Anfrage").
+#: Stated-free and unstated are different facts and never share a value on the wire.
+RentalFeeOut = Literal["priced", "gratis", "unstated"]
+
+
+class RentalOut(BaseModel):
+    kind: str  # RentalKind value: "towel" / "swimwear" / … / "other" (unmapped label, see raw)
+    fee: RentalFeeOut
+    fee_chf: float | None  # the amount; non-null exactly when fee == "priced"
+    deposit_chf: float | None  # refundable monetary Pfand; None also for a non-monetary one
+    period: str | None  # free text ("Saison", "Tages")
+    raw: str  # the exact source row — for "other" the only carrier of the label
+
+
 class PriceEntryOut(BaseModel):
     category: str  # PriceCategory value
     amount_chf: float
     display: str
+    min_age: int | None  # the lower bound the tariff itself prints; None = none printed
 
 
 class PriceTableOut(BaseModel):
@@ -137,21 +168,78 @@ class ProvenanceOut(BaseModel):
     fetched_at: str | None
 
 
+class LiveWaterTempOut(BaseModel):
+    """The facility-level LIVE water temperature (Baditicker), resolved at request time — NOT the
+    per-basin `measured_temp_c`/`nominal_temp_c` design values. Always present on the detail so
+    the UI can distinguish three states honestly:
+
+      * `available=True, celsius=<n>`  — a live reading; show "23 °C · measured N min ago".
+      * `available=True, celsius=None` — open but not yet measured (empty feed cell) — a live
+        answer, NOT unavailable.
+      * `available=False`              — `reason` says why (no key / provider error / not
+        configured); the UI shows the reason, never a stale number.
+    """
+
+    available: bool  # True = a live reading (LiveTemp); False = TempUnavailable
+    celsius: float | None  # the reading; None when open-but-unmeasured, or when unavailable
+    measured_at: str | None  # ISO tz-aware timestamp of the reading; None when unavailable
+    age_min: int | None  # whole minutes since the reading; None when unavailable
+    is_open: bool | None  # feed open/closed at read time; None when unavailable
+    is_stale: bool | None  # derived freshness (reading older than the staleness limit)
+    source: str | None  # e.g. "baditicker"; None when unavailable
+    reason: str | None  # technical detail for operators; None when available
+    # The i18n key for `reason` — the UI renders this, never the raw text (which may be a
+    # provider diagnostic like "HTTP 503: …", useless to a reader in any language).
+    reason_code: str | None = None
+
+
+class OperatingSeasonOut(BaseModel):
+    """The facility-level, timetable-free operating season a pool's own page states
+    (sharedsource-fanout): a month-or-day-granular annual window plus its weather condition.
+    `start_day`/`end_day` are named ONLY at `precision == "day"` — a `"month"` window is whole
+    months inclusive, and rendering it day-precise would overstate what the page published
+    (the annual-window month-rendering rule)."""
+
+    start_month: int
+    end_month: int
+    precision: str  # DatePrecision value: "month" (whole months inclusive) | "day"
+    weather: str  # Weather value: "any" | "fair_only" — qualifies the whole season
+    start_day: int | None = None  # only at DAY precision
+    end_day: int | None = None  # only at DAY precision
+
+
 class FacilityDetailOut(BaseModel):
     facility_id: str
     facility_name: str
-    address: str
-    website: str | None
+    # None when the facility has no published address (see PoolOut.address) — absent, not "".
+    address: str | None
+    # The SAME derived three-state schedule freshness `/pools` rows carry (domain
+    # `catalog.freshness_of` over this very facility) — so a detail panel and the list row beside
+    # it can never disagree about whether a pool has a schedule. This, not `provenance.curated`,
+    # is what the UI trusts: since every schedule is scraped, `curated` is False everywhere and
+    # said "illustrative" about a real, official timetable.
+    freshness: str
     # The physical statics the domain already computes — surfaced so water temperature, basin
     # size, sauna/lockers, and prices reach the swimmer (they existed in the store but were
     # dropped at this boundary before Slice C).
     basins: list[BasinOut]
     features: list[FeatureStatusOut]
     lockers: list[LockerOut]
-    prices: PriceTableOut | None  # the facility's price table; None when not curated
+    # The non-locker half of the same page table the lockers come from (`Mietobjekt | Preis`):
+    # towels/cabins/loungers…, unknown labels kept as "other" + raw (mietobjekt-extraction S2).
+    rentals: list[RentalOut]
+    # The admission kind + its table: `prices` is non-null exactly when `admission == "tariff"`.
+    # A "free" pool carries `prices: null` AND the fact that admission is free — no longer
+    # conflated with "unknown" (the 32 pools nobody has priced).
+    admission: AdmissionOut
+    prices: PriceTableOut | None  # the tariff table; None for free/unknown admission
+    # The page-stated season for a pool that publishes WHEN it operates but no timetable
+    # (the 13 Planschbecken, sharedsource-fanout S3); None when its page states none.
+    operating_season: OperatingSeasonOut | None
     provenance: ProvenanceOut
     # One panel per basin that carries a parsed Belegungsplan; empty when none do.
     lane_panels: list[BasinLanePanelOut]
-    amenities: list[str]  # facility amenity tags (sorted); empty when none recorded
-    accessibility: str | None  # free-text accessibility note; None when unknown
     last_admission_before_min: int | None  # minutes before closing that admission stops
+    # Facility-level LIVE water temperature (Baditicker), resolved at request time. Always
+    # present — additive and labelled, it never overwrites a basin's `measured_temp_c`.
+    live_water_temp: LiveWaterTempOut

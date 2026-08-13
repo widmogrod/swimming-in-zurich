@@ -21,7 +21,14 @@ FORBIDDEN = ("catalog.json", ".yaml", "load_dataset")
 
 
 def _config(gold_db: Path) -> Config:
-    return Config(gold_db=gold_db, host="127.0.0.1", port=8000, reload=False)
+    return Config(
+        gold_db=gold_db,
+        host="127.0.0.1",
+        port=8000,
+        reload=False,
+        dev_ui=False,
+        baditicker_url=None,
+    )
 
 
 def _runtime_source_files() -> list[Path]:
@@ -91,10 +98,10 @@ def test_swim_and_pools_read_the_same_store(gold_db: Path) -> None:
     assert detail.json()["facility_name"] == "Hallenbad City"
 
 
-def test_swim_emits_uncurated_statuses_live_for_catalog_pools(gold_db: Path) -> None:
-    """S3 acceptance: `/swim` returns `uncurated` statuses at runtime for catalog pools that
-    have no curated schedule — `uncurated = roster − scheduled`, identity known via the roster.
-    The three states stay un-merged: a curated pool never appears as `uncurated`."""
+def test_swim_emits_freshness_statuses_live_for_catalog_pools(gold_db: Path) -> None:
+    """`/swim` returns schedule-freshness statuses at runtime for catalog pools that have no
+    schedule — `schedule-less = roster − scheduled`, identity known via the roster. The states
+    stay un-merged: a scheduled pool never appears as a freshness status, and never "closed"."""
     with TestClient(app) as client:
         response = client.get(
             "/swim",
@@ -107,23 +114,52 @@ def test_swim_emits_uncurated_statuses_live_for_catalog_pools(gold_db: Path) -> 
         )
     assert response.status_code == 200
     statuses = response.json()["statuses"]
-    uncurated = {s["facility"] for s in statuses if s["status"] == "uncurated"}
-    # Most of the ~57 catalog pools carry no curated timetable → many live `uncurated` rows.
-    assert len(uncurated) >= 40
-    # A curated pool (City appears among the options) is never also reported `uncurated`.
-    assert "Hallenbad City" not in uncurated
-    # The states are distinct labels, never merged.
-    assert {s["status"] for s in statuses} <= {"closed", "uncurated"}
+    schedule_less = {
+        s["facility"] for s in statuses if s["status"] in {"awaiting_scrape", "no_source"}
+    }
+    # 18 of the 57 catalog pools serve a freshness ghost. (57 − the 26 declared sources − the
+    # 13 Planschbecken: sharedsource-fanout S3 gave those an `operating_season`, and a facility
+    # carrying one is REPLACED by its seasonal status — `open_unscheduled` at this mid-September
+    # instant — never doubled as a `no_source` ghost. The 18 are the 14 school pools on the
+    # shared overview URL, the two `flussbad-unterer-letten` entries that share a URL, and
+    # `seebad-enge` + `freibad-dolder`.)
+    assert len(schedule_less) == 18, sorted(schedule_less)
+    assert not any(name.startswith("Planschbecken") for name in schedule_less)
+    # A scheduled pool (City appears among the options) is never also a freshness status.
+    assert "Hallenbad City" not in schedule_less
+    # The states are distinct labels, never merged — a schedule-less pool is NEVER "closed"
+    # (a season-carrying pool inside its window is the honest `open_unscheduled`).
+    assert {s["status"] for s in statuses} <= {
+        "closed",
+        "awaiting_scrape",
+        "no_source",
+        "open_unscheduled",
+    }
 
 
-def test_pools_expose_the_derived_curation_flag(gold_db: Path) -> None:
-    """S3: `/pools` reads the one `pool` table and surfaces each pool's derived `curated` flag,
-    so the UI reads schedule status from the API rather than guessing it by name."""
+def test_pools_expose_the_derived_freshness(gold_db: Path) -> None:
+    """`/pools` reads the one `pool` table and surfaces each pool's derived three-state
+    `freshness`, so the UI reads schedule status from the API rather than guessing it by name.
+
+    Read against the shipping store (the atomic `build`): City's schedule is SCRAPED, and so is the
+    school pool `aemtler` since S2 admitted the four Schulschwimmanlagen that own their page. A
+    school pool without its own page (`hardau` shares the generic overview URL) is `no_source`, as
+    are the ~50 non-indoor roster pins. The `awaiting_scrape` state (a scrapeable indoor pool not
+    yet scraped) is exercised by the pre-scrape store in the S1 acceptance tests; here the shipping
+    mix is scraped + no_source. (The autouse fixture already points the app at `gold_db`.)
+    """
     with TestClient(app) as client:
         response = client.get("/pools")
     pools = {p["pool_id"]: p for p in response.json()["pools"]}
-    assert all(isinstance(p["curated"], bool) for p in pools.values())
-    # City is curated; the vast majority of catalog pools are locations only.
-    assert pools["hallenbad-city"]["curated"] is True
-    assert "hallenbad-altstetten" in pools and pools["hallenbad-altstetten"]["curated"] is False
-    assert sum(1 for p in pools.values() if not p["curated"]) >= 40
+    valid = {"scraped", "awaiting_scrape", "no_source"}
+    assert all(p["freshness"] in valid for p in pools.values())
+    assert pools["hallenbad-city"]["freshness"] == "scraped"
+    # A declared-source school pool IS scraped; one sharing the overview URL stays no_source.
+    assert pools["schulschwimmanlage-aemtler"]["freshness"] == "scraped"
+    assert pools["schulschwimmanlage-hardau"]["freshness"] == "no_source"
+    # An outdoor pool IS scraped now, unless it is one of the two whose operator page no parser
+    # understands — `freibad-dolder` stays `no_source`, and it is NOT `awaiting_scrape`: the
+    # `freshness_of` kind test deliberately did not widen with `_SCRAPEABLE_KINDS`.
+    assert pools["freibad-heuried"]["freshness"] == "scraped"
+    assert pools["freibad-dolder"]["freshness"] == "no_source"
+    assert sum(1 for p in pools.values() if p["freshness"] != "scraped") == 31

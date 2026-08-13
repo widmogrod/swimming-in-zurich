@@ -1,0 +1,330 @@
+{
+ "type": "FeatureCollection",
+ "features": [
+  {
+   "type": "Feature",
+   "id": "poi_planschbecken_view.1",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     8.512742,
+     47.388168
+    ]
+   },
+   "properties": {
+    "name": "Planschbecken Pfingstweid",
+    "namenzus": null,
+    "strasse": null,
+    "hausnummer": null,
+    "plz": null,
+    "ort": null,
+    "www": "https://www.stadt-zuerich.ch/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/sommerbaeder/planschbecken.html",
+    "tel": null,
+    "poi_id": null,
+    "kategorie": null,
+    "infrastruktur": "NULL",
+    "bemerkung": null
+   }
+  },
+  {
+   "type": "Feature",
+   "id": "poi_planschbecken_view.2",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     8.558334,
+     47.381961
+    ]
+   },
+   "properties": {
+    "name": "Planschbecken Schlössliareal",
+    "namenzus": null,
+    "strasse": "8044 Zürich",
+    "hausnummer": null,
+    "plz": null,
+    "ort": null,
+    "www": "https://www.stadt-zuerich.ch/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/sommerbaeder/planschbecken.html",
+    "tel": null,
+    "poi_id": null,
+    "kategorie": null,
+    "infrastruktur": "NULL",
+    "bemerkung": null
+   }
+  },
+  {
+   "type": "Feature",
+   "id": "poi_planschbecken_view.3",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     8.523723,
+     47.366729
+    ]
+   },
+   "properties": {
+    "name": "Planschbecken Sihlhölzli",
+    "namenzus": null,
+    "strasse": "8003 Zürich",
+    "hausnummer": null,
+    "plz": null,
+    "ort": null,
+    "www": "https://www.stadt-zuerich.ch/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/sommerbaeder/planschbecken.html",
+    "tel": null,
+    "poi_id": null,
+    "kategorie": null,
+    "infrastruktur": "NULL",
+    "bemerkung": null
+   }
+  },
+  {
+   "type": "Feature",
+   "id": "poi_planschbecken_view.4",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     8.541036,
+     47.415166
+    ]
+   },
+   "properties": {
+    "name": "Planschbecken Wahlenpark",
+    "namenzus": null,
+    "strasse": "8050 Zürich",
+    "hausnummer": null,
+    "plz": null,
+    "ort": null,
+    "www": "https://www.stadt-zuerich.ch/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/sommerbaeder/planschbecken.html",
+    "tel": null,
+    "poi_id": null,
+    "kategorie": null,
+    "infrastruktur": "NULL",
+    "bemerkung": null
+   }
+  },
+  {
+   "type": "Feature",
+   "id": "poi_planschbecken_view.5",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     8.554476,
+     47.365932
+    ]
+   },
+   "properties": {
+    "name": "Planschbecken Artergut",
+    "namenzus": null,
+    "strasse": "8032 Zürich",
+    "hausnummer": null,
+    "plz": null,
+    "ort": null,
+    "www": "https://www.stadt-zuerich.ch/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/sommerbaeder/planschbecken.html",
+    "tel": null,
+    "poi_id": null,
+    "kategorie": null,
+    "infrastruktur": "NULL",
+    "bemerkung": null
+   }
+  },
+  {
+   "type": "Feature",
+   "id": "poi_planschbecken_view.6",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     8.486068,
+     47.38083
+    ]
+   },
+   "properties": {
+    "name": "Planschbecken Bachwiesen",
+    "namenzus": null,
+    "strasse": "8047 Zürich",
+    "hausnummer": null,
+    "plz": null,
+    "ort": null,
+    "www": "https://www.stadt-zuerich.ch/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/sommerbaeder/planschbecken.html",
+    "tel": null,
+    "poi_id": null,
+    "kategorie": null,
+    "infrastruktur": "NULL",
+    "bemerkung": null
+   }
+  },
+  {
+   "type": "Feature",
+   "id": "poi_planschbecken_view.7",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     8.523426,
+     47.378147
+    ]
+   },
+   "properties": {
+    "name": "Planschbecken Bäckeranlage",
+    "namenzus": null,
+    "strasse": "8004 Zürich",
+    "hausnummer": null,
+    "plz": null,
+    "ort": null,
+    "www": "https://www.stadt-zuerich.ch/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/sommerbaeder/planschbecken.html",
+    "tel": null,
+    "poi_id": null,
+    "kategorie": null,
+    "infrastruktur": "NULL",
+    "bemerkung": null
+   }
+  },
+  {
+   "type": "Feature",
+   "id": "poi_planschbecken_view.8",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     8.514024,
+     47.378828
+    ]
+   },
+   "properties": {
+    "name": "Planschbecken Bullingerhof",
+    "namenzus": null,
+    "strasse": "8004 Zürich",
+    "hausnummer": null,
+    "plz": null,
+    "ort": null,
+    "www": "https://www.stadt-zuerich.ch/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/sommerbaeder/planschbecken.html",
+    "tel": null,
+    "poi_id": null,
+    "kategorie": null,
+    "infrastruktur": "NULL",
+    "bemerkung": null
+   }
+  },
+  {
+   "type": "Feature",
+   "id": "poi_planschbecken_view.9",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     8.512256,
+     47.376542
+    ]
+   },
+   "properties": {
+    "name": "Planschbecken Fritschiwiese",
+    "namenzus": null,
+    "strasse": "8003 Zürich",
+    "hausnummer": null,
+    "plz": null,
+    "ort": null,
+    "www": "https://www.stadt-zuerich.ch/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/sommerbaeder/planschbecken.html",
+    "tel": null,
+    "poi_id": null,
+    "kategorie": null,
+    "infrastruktur": "NULL",
+    "bemerkung": null
+   }
+  },
+  {
+   "type": "Feature",
+   "id": "poi_planschbecken_view.10",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     8.522791,
+     47.385979
+    ]
+   },
+   "properties": {
+    "name": "Planschbecken Josefswiese",
+    "namenzus": null,
+    "strasse": "8005 Zürich",
+    "hausnummer": null,
+    "plz": null,
+    "ort": null,
+    "www": "https://www.stadt-zuerich.ch/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/sommerbaeder/planschbecken.html",
+    "tel": null,
+    "poi_id": null,
+    "kategorie": null,
+    "infrastruktur": "NULL",
+    "bemerkung": null
+   }
+  },
+  {
+   "type": "Feature",
+   "id": "poi_planschbecken_view.11",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     8.541704,
+     47.405823
+    ]
+   },
+   "properties": {
+    "name": "Planschbecken Föhrenwald",
+    "namenzus": null,
+    "strasse": "8044 Zürich",
+    "hausnummer": null,
+    "plz": null,
+    "ort": null,
+    "www": "https://www.stadt-zuerich.ch/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/sommerbaeder/planschbecken.html",
+    "tel": null,
+    "poi_id": null,
+    "kategorie": null,
+    "infrastruktur": "NULL",
+    "bemerkung": null
+   }
+  },
+  {
+   "type": "Feature",
+   "id": "poi_planschbecken_view.12",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     8.505481,
+     47.360252
+    ]
+   },
+   "properties": {
+    "name": "Planschbecken Am Uetliberg",
+    "namenzus": null,
+    "strasse": "8055 Zürich",
+    "hausnummer": null,
+    "plz": null,
+    "ort": null,
+    "www": "https://www.stadt-zuerich.ch/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/sommerbaeder/planschbecken.html",
+    "tel": null,
+    "poi_id": null,
+    "kategorie": null,
+    "infrastruktur": "NULL",
+    "bemerkung": null
+   }
+  },
+  {
+   "type": "Feature",
+   "id": "poi_planschbecken_view.13",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     8.521488,
+     47.410547
+    ]
+   },
+   "properties": {
+    "name": "Planschbecken Althoos",
+    "namenzus": null,
+    "strasse": "8046 Zürich",
+    "hausnummer": null,
+    "plz": null,
+    "ort": null,
+    "www": "https://www.stadt-zuerich.ch/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/sommerbaeder/planschbecken.html",
+    "tel": null,
+    "poi_id": null,
+    "kategorie": null,
+    "infrastruktur": "NULL",
+    "bemerkung": null
+   }
+  }
+ ]
+}

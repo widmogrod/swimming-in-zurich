@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-07-19T00:11:28.832582+02:00",
+  "generated_at": "2026-08-01T14:13:11.989459+02:00",
   "count": 57,
   "entries": [
     {
@@ -32,7 +32,7 @@
       "lat": 47.401322,
       "lon": 8.501733,
       "url": "https://www.stadt-zuerich.ch/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/hallenbaeder/blaesi.html",
-      "description": "NULL",
+      "description": null,
       "phone": "+41 44 413 55 80"
     },
     {
@@ -43,7 +43,7 @@
       "lat": 47.326473,
       "lon": 8.513445,
       "url": "https://www.stadt-zuerich.ch/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/hallenbaeder/leimbach.html",
-      "description": "NULL",
+      "description": null,
       "phone": "+41 44 413 55 50"
     },
     {
@@ -54,7 +54,7 @@
       "lat": 47.410437,
       "lon": 8.556733,
       "url": "https://www.stadt-zuerich.ch/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/hallenbaeder/oerlikon.html",
-      "description": "NULL",
+      "description": null,
       "phone": "+41 44 413 55 00"
     },
     {
@@ -76,7 +76,7 @@
       "lat": 47.399543,
       "lon": 8.518032,
       "url": "https://www.stadt-zuerich.ch/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/hallenbaeder/kaeferberg.html",
-      "description": "NULL",
+      "description": null,
       "phone": "+41 44 413 55 90"
     },
     {
@@ -86,8 +86,8 @@
       "address": "Edelweissstrasse 5, 8048 Zürich",
       "lat": 47.38025,
       "lon": 8.501339,
-      "url": "https://www.sportamt.ch/freibad-letzigraben",
-      "description": "NULL",
+      "url": "http://www.sportamt.ch/freibad-letzigraben",
+      "description": null,
       "phone": "+41 44 413 57 00"
     },
     {
@@ -97,8 +97,8 @@
       "address": "8102 Oberengstringen",
       "lat": 47.409527,
       "lon": 8.473779,
-      "url": "https://www.sportamt.ch/freibad-zwischen-hoelzern",
-      "description": "NULL",
+      "url": "http://www.sportamt.ch/freibad-zwischen-den-hoelzern",
+      "description": null,
       "phone": "+41 44 413 57 70"
     },
     {
@@ -108,8 +108,8 @@
       "address": "Luegislandstrasse 160, 8051 Zürich",
       "lat": 47.408675,
       "lon": 8.571325,
-      "url": "https://www.sportamt.ch/freibad-auhof",
-      "description": "NULL",
+      "url": "http://www.sportamt.ch/freibad-auhof",
+      "description": null,
       "phone": "+41 44 413 57 40"
     },
     {
@@ -119,8 +119,8 @@
       "address": "Ringstrasse 79, 8057 Zürich",
       "lat": 47.405524,
       "lon": 8.539021,
-      "url": "https://www.sportamt.ch/freibad-allenmoos",
-      "description": "NULL",
+      "url": "http://www.sportamt.ch/freibad-allenmoos",
+      "description": null,
       "phone": "+41 44 413 57 30"
     },
     {
@@ -141,8 +141,8 @@
       "address": "8055 Zürich",
       "lat": 47.36711,
       "lon": 8.505062,
-      "url": "https://www.sportamt.ch/freibad-heuried",
-      "description": "NULL",
+      "url": "http://www.sportamt.ch/freibad-heuried",
+      "description": null,
       "phone": "+41 44 413 95 30"
     },
     {
@@ -152,8 +152,8 @@
       "address": "Glatttalstrasse 43, 8052 Zürich",
       "lat": 47.423588,
       "lon": 8.548248,
-      "url": "https://www.sportamt.ch/freibad-seebach",
-      "description": "NULL",
+      "url": "http://www.sportamt.ch/freibad-seebach",
+      "description": null,
       "phone": "+41 44 413 57 50"
     },
     {
@@ -163,8 +163,8 @@
       "address": "Wasserwerkstrasse 131, 8037 Zürich",
       "lat": 47.389312,
       "lon": 8.529852,
-      "url": "https://www.sportamt.ch/flussbad-unterer-letten",
-      "description": "NULL",
+      "url": "http://www.sportamt.ch/flussbad-unterer-letten",
+      "description": null,
       "phone": "+41 44 413 58 90"
     },
     {
@@ -174,8 +174,8 @@
       "address": "Werdinsel 2, 8049 Zürich",
       "lat": 47.399169,
       "lon": 8.489277,
-      "url": "https://www.sportamt.ch/flussbad-au-hoengg",
-      "description": "NULL",
+      "url": "http://www.sportamt.ch/flussbad-au-hoengg",
+      "description": null,
       "phone": "+41 44 413 58 60"
     },
     {
@@ -185,8 +185,8 @@
       "address": "Wasserwerkstrasse 131, 8037 Zürich",
       "lat": 47.389312,
       "lon": 8.529852,
-      "url": "https://www.sportamt.ch/flussbad-unterer-letten",
-      "description": "NULL",
+      "url": "http://www.sportamt.ch/flussbad-unterer-letten",
+      "description": null,
       "phone": "+41 44 413 58 90"
     },
     {
@@ -196,8 +196,8 @@
       "address": "8001 Zürich",
       "lat": 47.371269,
       "lon": 8.532594,
-      "url": "https://www.sportamt.ch/maennerbad",
-      "description": "NULL",
+      "url": "http://www.sportamt.ch/maennerbad",
+      "description": null,
       "phone": "+41 44 211 95 94"
     },
     {
@@ -207,8 +207,8 @@
       "address": "Lettensteg 10, 8037 Zürich",
       "lat": 47.38569,
       "lon": 8.534268,
-      "url": "https://www.sportamt.ch/flussbad-oberer-letten",
-      "description": "NULL",
+      "url": "http://www.sportamt.ch/flussbad-oberer-letten",
+      "description": null,
       "phone": "+41 44 413 58 80"
     },
     {
@@ -218,8 +218,8 @@
       "address": "Stadthausquai 12, 8001 Zürich",
       "lat": 47.368463,
       "lon": 8.54199,
-      "url": "https://www.sportamt.ch/frauenbad",
-      "description": "NULL",
+      "url": "http://www.sportamt.ch/frauenbad",
+      "description": null,
       "phone": "+41 44 413 58 70"
     },
     {
@@ -229,7 +229,7 @@
       "address": "Bellerivestrasse 200, 8008 Zürich",
       "lat": 47.352401,
       "lon": 8.557555,
-      "url": "https://www.sportamt.ch/strandbad-tiefenbrunnen",
+      "url": "http://www.sportamt.ch/strandbad-tiefenbrunnen",
       "description": "Nichtschwimmerbereich im See, Kinderplanschbecken, Sprungplattform 1/3/5 m, 3 Flosse, Super-See-Rutschbahn 62m, Volleyballnetz",
       "phone": "+41 44 413 58 00"
     },
@@ -241,7 +241,7 @@
       "lat": 47.430848,
       "lon": 8.493309,
       "url": "http://www.sportamt.ch/seebad-katzensee",
-      "description": "NULL",
+      "description": null,
       "phone": "+41 44 371 08 90"
     },
     {
@@ -252,7 +252,7 @@
       "lat": 47.361669,
       "lon": 8.53662,
       "url": "http://www.tonttu.ch/",
-      "description": "NULL",
+      "description": null,
       "phone": "+41 44 201 38 89"
     },
     {
@@ -262,7 +262,7 @@
       "address": "Seestrasse 451, 8038 Zürich",
       "lat": 47.340955,
       "lon": 8.537319,
-      "url": "https://www.sportamt.ch/strandbad-wollishofen",
+      "url": "http://www.sportamt.ch/strandbad-wollishofen",
       "description": "Nichtschwimmerbereich im See mit Blasio Spielgeräten, Sprungplattform 1/3m, 2 Flosse",
       "phone": "+41 44 413 58 10"
     },
@@ -273,8 +273,8 @@
       "address": "Utoquai 50, 8008 Zürich",
       "lat": 47.361784,
       "lon": 8.5472,
-      "url": "https://www.sportamt.ch/seebad-utoquai",
-      "description": "NULL",
+      "url": "http://www.sportamt.ch/seebad-utoquai",
+      "description": null,
       "phone": "+41 44 413 58 20"
     },
     {
@@ -284,7 +284,7 @@
       "address": "Mythenquai 95, 8002 Zürich",
       "lat": 47.354951,
       "lon": 8.534629,
-      "url": "https://www.sportamt.ch/strandbad-mythenquai",
+      "url": "http://www.sportamt.ch/strandbad-mythenquai",
       "description": "Sandstrand, grosszügiger und moderner Kinderbereich mit Wasserspielen",
       "phone": "+41 44 413 58 30"
     },
@@ -296,7 +296,7 @@
       "lat": 47.382302,
       "lon": 8.509988,
       "url": "https://www.stadt-zuerich.ch/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/hallenbaeder.html",
-      "description": "NULL",
+      "description": null,
       "phone": "+41 44 413 59 76"
     },
     {
@@ -307,7 +307,7 @@
       "lat": 47.401711,
       "lon": 8.580703,
       "url": "https://www.stadt-zuerich.ch/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/hallenbaeder.html",
-      "description": "NULL",
+      "description": null,
       "phone": "+41 44 413 59 84"
     },
     {
@@ -318,7 +318,7 @@
       "lat": 47.423271,
       "lon": 8.514245,
       "url": "https://www.stadt-zuerich.ch/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/hallenbaeder.html",
-      "description": "NULL",
+      "description": null,
       "phone": "+41 44 413 59 77"
     },
     {
@@ -329,7 +329,7 @@
       "lat": 47.40945,
       "lon": 8.571182,
       "url": "https://www.stadt-zuerich.ch/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/hallenbaeder.html",
-      "description": "NULL",
+      "description": null,
       "phone": "+41 44 413 59 72"
     },
     {
@@ -340,7 +340,7 @@
       "lat": 47.389084,
       "lon": 8.533092,
       "url": "https://www.stadt-zuerich.ch/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/hallenbaeder.html",
-      "description": "NULL",
+      "description": null,
       "phone": "+41 44 413 59 79"
     },
     {
@@ -351,7 +351,7 @@
       "lat": 47.374173,
       "lon": 8.512659,
       "url": "https://www.stadt-zuerich.ch/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/hallenbaeder/aemtler.html",
-      "description": "NULL",
+      "description": null,
       "phone": "+41 44 413 59 70"
     },
     {
@@ -362,7 +362,7 @@
       "lat": 47.420507,
       "lon": 8.54499,
       "url": "https://www.stadt-zuerich.ch/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/hallenbaeder.html",
-      "description": "NULL",
+      "description": null,
       "phone": "+41 44 413 59 74"
     },
     {
@@ -373,7 +373,7 @@
       "lat": 47.396405,
       "lon": 8.48958,
       "url": "https://www.stadt-zuerich.ch/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/hallenbaeder.html",
-      "description": "NULL",
+      "description": null,
       "phone": "+41 44 413 59 75"
     },
     {
@@ -384,7 +384,7 @@
       "lat": 47.40412,
       "lon": 8.499656,
       "url": "https://www.stadt-zuerich.ch/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/hallenbaeder.html",
-      "description": "NULL",
+      "description": null,
       "phone": "+41 44 413 59 86"
     },
     {
@@ -395,7 +395,7 @@
       "lat": 47.372373,
       "lon": 8.492244,
       "url": "https://www.stadt-zuerich.ch/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/hallenbaeder/altweg.html",
-      "description": "NULL",
+      "description": null,
       "phone": "+41 44 413 59 71"
     },
     {
@@ -406,7 +406,7 @@
       "lat": 47.360214,
       "lon": 8.504726,
       "url": "https://www.stadt-zuerich.ch/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/hallenbaeder.html",
-      "description": "NULL",
+      "description": null,
       "phone": "+41 44 413 59 73"
     },
     {
@@ -417,7 +417,7 @@
       "lat": 47.378991,
       "lon": 8.487568,
       "url": "https://www.stadt-zuerich.ch/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/hallenbaeder.html",
-      "description": "NULL",
+      "description": null,
       "phone": "+41 44 413 59 68"
     },
     {
@@ -428,7 +428,7 @@
       "lat": 47.359192,
       "lon": 8.553911,
       "url": "https://www.stadt-zuerich.ch/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/hallenbaeder.html",
-      "description": "NULL",
+      "description": null,
       "phone": "+41 44 413 59 82"
     },
     {
@@ -439,7 +439,7 @@
       "lat": 47.411014,
       "lon": 8.528322,
       "url": "https://www.stadt-zuerich.ch/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/hallenbaeder.html",
-      "description": "NULL",
+      "description": null,
       "phone": "+41 44 413 59 78"
     },
     {
@@ -450,7 +450,7 @@
       "lat": 47.419186,
       "lon": 8.535407,
       "url": "https://www.stadt-zuerich.ch/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/hallenbaeder.html",
-      "description": "NULL",
+      "description": null,
       "phone": "+41 44 413 59 83"
     },
     {
@@ -461,7 +461,7 @@
       "lat": 47.388685,
       "lon": 8.542899,
       "url": "https://www.stadt-zuerich.ch/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/hallenbaeder/riedtli.html",
-      "description": "NULL",
+      "description": null,
       "phone": "+41 44 413 59 81"
     },
     {
@@ -472,7 +472,7 @@
       "lat": 47.360726,
       "lon": 8.596346,
       "url": "https://www.stadt-zuerich.ch/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/hallenbaeder.html",
-      "description": "NULL",
+      "description": null,
       "phone": "+41 44 413 59 80"
     },
     {
@@ -483,7 +483,7 @@
       "lat": 47.345945,
       "lon": 8.528065,
       "url": "https://www.stadt-zuerich.ch/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/hallenbaeder/tannenrauch.html",
-      "description": "NULL",
+      "description": null,
       "phone": "+41 44 413 59 85"
     },
     {
@@ -494,7 +494,7 @@
       "lat": 47.388168,
       "lon": 8.512742,
       "url": "https://www.stadt-zuerich.ch/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/sommerbaeder/planschbecken.html",
-      "description": "NULL",
+      "description": null,
       "phone": null
     },
     {
@@ -505,7 +505,7 @@
       "lat": 47.381961,
       "lon": 8.558334,
       "url": "https://www.stadt-zuerich.ch/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/sommerbaeder/planschbecken.html",
-      "description": "NULL",
+      "description": null,
       "phone": null
     },
     {
@@ -516,7 +516,7 @@
       "lat": 47.366729,
       "lon": 8.523723,
       "url": "https://www.stadt-zuerich.ch/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/sommerbaeder/planschbecken.html",
-      "description": "NULL",
+      "description": null,
       "phone": null
     },
     {
@@ -527,7 +527,7 @@
       "lat": 47.415166,
       "lon": 8.541036,
       "url": "https://www.stadt-zuerich.ch/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/sommerbaeder/planschbecken.html",
-      "description": "NULL",
+      "description": null,
       "phone": null
     },
     {
@@ -538,7 +538,7 @@
       "lat": 47.365932,
       "lon": 8.554476,
       "url": "https://www.stadt-zuerich.ch/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/sommerbaeder/planschbecken.html",
-      "description": "NULL",
+      "description": null,
       "phone": null
     },
     {
@@ -549,7 +549,7 @@
       "lat": 47.38083,
       "lon": 8.486068,
       "url": "https://www.stadt-zuerich.ch/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/sommerbaeder/planschbecken.html",
-      "description": "NULL",
+      "description": null,
       "phone": null
     },
     {
@@ -560,7 +560,7 @@
       "lat": 47.378147,
       "lon": 8.523426,
       "url": "https://www.stadt-zuerich.ch/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/sommerbaeder/planschbecken.html",
-      "description": "NULL",
+      "description": null,
       "phone": null
     },
     {
@@ -571,7 +571,7 @@
       "lat": 47.378828,
       "lon": 8.514024,
       "url": "https://www.stadt-zuerich.ch/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/sommerbaeder/planschbecken.html",
-      "description": "NULL",
+      "description": null,
       "phone": null
     },
     {
@@ -582,7 +582,7 @@
       "lat": 47.376542,
       "lon": 8.512256,
       "url": "https://www.stadt-zuerich.ch/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/sommerbaeder/planschbecken.html",
-      "description": "NULL",
+      "description": null,
       "phone": null
     },
     {
@@ -593,7 +593,7 @@
       "lat": 47.385979,
       "lon": 8.522791,
       "url": "https://www.stadt-zuerich.ch/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/sommerbaeder/planschbecken.html",
-      "description": "NULL",
+      "description": null,
       "phone": null
     },
     {
@@ -604,7 +604,7 @@
       "lat": 47.405823,
       "lon": 8.541704,
       "url": "https://www.stadt-zuerich.ch/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/sommerbaeder/planschbecken.html",
-      "description": "NULL",
+      "description": null,
       "phone": null
     },
     {
@@ -615,7 +615,7 @@
       "lat": 47.360252,
       "lon": 8.505481,
       "url": "https://www.stadt-zuerich.ch/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/sommerbaeder/planschbecken.html",
-      "description": "NULL",
+      "description": null,
       "phone": null
     },
     {
@@ -626,7 +626,7 @@
       "lat": 47.410547,
       "lon": 8.521488,
       "url": "https://www.stadt-zuerich.ch/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/sommerbaeder/planschbecken.html",
-      "description": "NULL",
+      "description": null,
       "phone": null
     }
   ]

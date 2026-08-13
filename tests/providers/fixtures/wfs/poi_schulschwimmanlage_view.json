@@ -1,0 +1,455 @@
+{
+ "type": "FeatureCollection",
+ "features": [
+  {
+   "type": "Feature",
+   "id": "poi_schulschwimmanlage_view.1",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     8.509988,
+     47.382302
+    ]
+   },
+   "properties": {
+    "name": "Schulschwimmanlage Hardau",
+    "namenzus": null,
+    "strasse": "8004 Zürich",
+    "hausnummer": null,
+    "plz": null,
+    "ort": null,
+    "www": "https://www.stadt-zuerich.ch/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/hallenbaeder.html",
+    "tel": "+41 44 413 59 76",
+    "poi_id": null,
+    "kategorie": null,
+    "infrastruktur": "NULL",
+    "bemerkung": null
+   }
+  },
+  {
+   "type": "Feature",
+   "id": "poi_schulschwimmanlage_view.2",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     8.580703,
+     47.401711
+    ]
+   },
+   "properties": {
+    "name": "Schulschwimmanlage Stettbach",
+    "namenzus": null,
+    "strasse": "8051 Zürich",
+    "hausnummer": null,
+    "plz": null,
+    "ort": null,
+    "www": "https://www.stadt-zuerich.ch/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/hallenbaeder.html",
+    "tel": "+41 44 413 59 84",
+    "poi_id": null,
+    "kategorie": null,
+    "infrastruktur": "NULL",
+    "bemerkung": null
+   }
+  },
+  {
+   "type": "Feature",
+   "id": "poi_schulschwimmanlage_view.3",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     8.514245,
+     47.423271
+    ]
+   },
+   "properties": {
+    "name": "Schulschwimmanlage Isengrind",
+    "namenzus": null,
+    "strasse": "8046 Zürich",
+    "hausnummer": null,
+    "plz": null,
+    "ort": null,
+    "www": "https://www.stadt-zuerich.ch/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/hallenbaeder.html",
+    "tel": "+41 44 413 59 77",
+    "poi_id": null,
+    "kategorie": null,
+    "infrastruktur": "NULL",
+    "bemerkung": null
+   }
+  },
+  {
+   "type": "Feature",
+   "id": "poi_schulschwimmanlage_view.4",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     8.571182,
+     47.40945
+    ]
+   },
+   "properties": {
+    "name": "Schulschwimmanlage Aubrücke",
+    "namenzus": null,
+    "strasse": "8051 Zürich",
+    "hausnummer": null,
+    "plz": null,
+    "ort": null,
+    "www": "https://www.stadt-zuerich.ch/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/hallenbaeder.html",
+    "tel": "+41 44 413 59 72",
+    "poi_id": null,
+    "kategorie": null,
+    "infrastruktur": "NULL",
+    "bemerkung": null
+   }
+  },
+  {
+   "type": "Feature",
+   "id": "poi_schulschwimmanlage_view.5",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     8.533092,
+     47.389084
+    ]
+   },
+   "properties": {
+    "name": "Schulschwimmanlage Letten",
+    "namenzus": null,
+    "strasse": "8037 Zürich",
+    "hausnummer": null,
+    "plz": null,
+    "ort": null,
+    "www": "https://www.stadt-zuerich.ch/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/hallenbaeder.html",
+    "tel": "+41 44 413 59 79",
+    "poi_id": null,
+    "kategorie": null,
+    "infrastruktur": "NULL",
+    "bemerkung": null
+   }
+  },
+  {
+   "type": "Feature",
+   "id": "poi_schulschwimmanlage_view.6",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     8.512659,
+     47.374173
+    ]
+   },
+   "properties": {
+    "name": "Schulschwimmanlage Aemtler",
+    "namenzus": null,
+    "strasse": "8003 Zürich",
+    "hausnummer": null,
+    "plz": null,
+    "ort": null,
+    "www": "https://www.stadt-zuerich.ch/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/hallenbaeder/aemtler.html",
+    "tel": "+41 44 413 59 70",
+    "poi_id": null,
+    "kategorie": null,
+    "infrastruktur": "NULL",
+    "bemerkung": null
+   }
+  },
+  {
+   "type": "Feature",
+   "id": "poi_schulschwimmanlage_view.7",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     8.54499,
+     47.420507
+    ]
+   },
+   "properties": {
+    "name": "Schulschwimmanlage Buhn",
+    "namenzus": null,
+    "strasse": "Höhenring 38, 8052 Zürich",
+    "hausnummer": null,
+    "plz": null,
+    "ort": null,
+    "www": "https://www.stadt-zuerich.ch/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/hallenbaeder.html",
+    "tel": "+41 44 413 59 74",
+    "poi_id": null,
+    "kategorie": null,
+    "infrastruktur": "NULL",
+    "bemerkung": null
+   }
+  },
+  {
+   "type": "Feature",
+   "id": "poi_schulschwimmanlage_view.8",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     8.48958,
+     47.396405
+    ]
+   },
+   "properties": {
+    "name": "Schulschwimmanlage Grünau",
+    "namenzus": null,
+    "strasse": "Grünauring 28, 8064 Zürich",
+    "hausnummer": null,
+    "plz": null,
+    "ort": null,
+    "www": "https://www.stadt-zuerich.ch/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/hallenbaeder.html",
+    "tel": "+41 44 413 59 75",
+    "poi_id": null,
+    "kategorie": null,
+    "infrastruktur": "NULL",
+    "bemerkung": null
+   }
+  },
+  {
+   "type": "Feature",
+   "id": "poi_schulschwimmanlage_view.9",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     8.499656,
+     47.40412
+    ]
+   },
+   "properties": {
+    "name": "Schulschwimmanlage Vogtsrain",
+    "namenzus": null,
+    "strasse": "Ferdinand-Hodler-Strasse 23, 8049 Zürich",
+    "hausnummer": null,
+    "plz": null,
+    "ort": null,
+    "www": "https://www.stadt-zuerich.ch/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/hallenbaeder.html",
+    "tel": "+41 44 413 59 86",
+    "poi_id": null,
+    "kategorie": null,
+    "infrastruktur": "NULL",
+    "bemerkung": null
+   }
+  },
+  {
+   "type": "Feature",
+   "id": "poi_schulschwimmanlage_view.10",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     8.492244,
+     47.372373
+    ]
+   },
+   "properties": {
+    "name": "Schulschwimmanlage Altweg",
+    "namenzus": null,
+    "strasse": "8047 Zürich",
+    "hausnummer": null,
+    "plz": null,
+    "ort": null,
+    "www": "https://www.stadt-zuerich.ch/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/hallenbaeder/altweg.html",
+    "tel": "+41 44 413 59 71",
+    "poi_id": null,
+    "kategorie": null,
+    "infrastruktur": "NULL",
+    "bemerkung": null
+   }
+  },
+  {
+   "type": "Feature",
+   "id": "poi_schulschwimmanlage_view.11",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     8.504726,
+     47.360214
+    ]
+   },
+   "properties": {
+    "name": "Schulschwimmanlage Borrweg",
+    "namenzus": null,
+    "strasse": "8055 Zürich",
+    "hausnummer": null,
+    "plz": null,
+    "ort": null,
+    "www": "https://www.stadt-zuerich.ch/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/hallenbaeder.html",
+    "tel": "+41 44 413 59 73",
+    "poi_id": null,
+    "kategorie": null,
+    "infrastruktur": "NULL",
+    "bemerkung": null
+   }
+  },
+  {
+   "type": "Feature",
+   "id": "poi_schulschwimmanlage_view.12",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     8.487568,
+     47.378991
+    ]
+   },
+   "properties": {
+    "name": "Schulschwimmanlage Freilager",
+    "namenzus": null,
+    "strasse": "Flurstrasse 120, 8047 Zürich",
+    "hausnummer": null,
+    "plz": null,
+    "ort": null,
+    "www": "https://www.stadt-zuerich.ch/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/hallenbaeder.html",
+    "tel": "+41 44 413 59 68",
+    "poi_id": null,
+    "kategorie": null,
+    "infrastruktur": "NULL",
+    "bemerkung": null
+   }
+  },
+  {
+   "type": "Feature",
+   "id": "poi_schulschwimmanlage_view.13",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     8.553911,
+     47.359192
+    ]
+   },
+   "properties": {
+    "name": "Schulschwimmanlage Riesbach",
+    "namenzus": null,
+    "strasse": "Seefeldstrasse 93, 8008 Zürich",
+    "hausnummer": null,
+    "plz": null,
+    "ort": null,
+    "www": "https://www.stadt-zuerich.ch/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/hallenbaeder.html",
+    "tel": "+41 44 413 59 82",
+    "poi_id": null,
+    "kategorie": null,
+    "infrastruktur": "NULL",
+    "bemerkung": null
+   }
+  },
+  {
+   "type": "Feature",
+   "id": "poi_schulschwimmanlage_view.14",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     8.528322,
+     47.411014
+    ]
+   },
+   "properties": {
+    "name": "Schulschwimmanlage Kügeliloo",
+    "namenzus": null,
+    "strasse": "8050 Zürich",
+    "hausnummer": null,
+    "plz": null,
+    "ort": null,
+    "www": "https://www.stadt-zuerich.ch/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/hallenbaeder.html",
+    "tel": "+41 44 413 59 78",
+    "poi_id": null,
+    "kategorie": null,
+    "infrastruktur": "NULL",
+    "bemerkung": null
+   }
+  },
+  {
+   "type": "Feature",
+   "id": "poi_schulschwimmanlage_view.15",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     8.535407,
+     47.419186
+    ]
+   },
+   "properties": {
+    "name": "Schulschwimmanlage Staudenbühl",
+    "namenzus": null,
+    "strasse": "8052 Zürich",
+    "hausnummer": null,
+    "plz": null,
+    "ort": null,
+    "www": "https://www.stadt-zuerich.ch/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/hallenbaeder.html",
+    "tel": "+41 44 413 59 83",
+    "poi_id": null,
+    "kategorie": null,
+    "infrastruktur": "NULL",
+    "bemerkung": null
+   }
+  },
+  {
+   "type": "Feature",
+   "id": "poi_schulschwimmanlage_view.16",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     8.542899,
+     47.388685
+    ]
+   },
+   "properties": {
+    "name": "Schulschwimmanlage Riedtli",
+    "namenzus": null,
+    "strasse": "8006 Zürich",
+    "hausnummer": null,
+    "plz": null,
+    "ort": null,
+    "www": "https://www.stadt-zuerich.ch/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/hallenbaeder/riedtli.html",
+    "tel": "+41 44 413 59 81",
+    "poi_id": null,
+    "kategorie": null,
+    "infrastruktur": "NULL",
+    "bemerkung": null
+   }
+  },
+  {
+   "type": "Feature",
+   "id": "poi_schulschwimmanlage_view.17",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     8.596346,
+     47.360726
+    ]
+   },
+   "properties": {
+    "name": "Schulschwimmanlage Looren",
+    "namenzus": null,
+    "strasse": "8053 Zürich",
+    "hausnummer": null,
+    "plz": null,
+    "ort": null,
+    "www": "https://www.stadt-zuerich.ch/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/hallenbaeder.html",
+    "tel": "+41 44 413 59 80",
+    "poi_id": null,
+    "kategorie": null,
+    "infrastruktur": "NULL",
+    "bemerkung": null
+   }
+  },
+  {
+   "type": "Feature",
+   "id": "poi_schulschwimmanlage_view.18",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     8.528065,
+     47.345945
+    ]
+   },
+   "properties": {
+    "name": "Schulschwimmanlage Tannenrauch",
+    "namenzus": null,
+    "strasse": "8038 Zürich",
+    "hausnummer": null,
+    "plz": null,
+    "ort": null,
+    "www": "https://www.stadt-zuerich.ch/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/hallenbaeder/tannenrauch.html",
+    "tel": "+41 44 413 59 85",
+    "poi_id": null,
+    "kategorie": null,
+    "infrastruktur": "NULL",
+    "bemerkung": null
+   }
+  }
+ ]
+}

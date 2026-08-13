@@ -1,0 +1,115 @@
+{
+  "_note": "SYNTHETIC deterministic fixture (hand-authored, NOT captured). Its sole job is to exercise every ribbonmodel colour-family branch and every eligibility branch that the real captured day/week fixtures do not naturally contain (WomenOnly / SeniorsOnly / AdultsOnly / SchoolReserved / ClubReserved / GirlsOnly / GenderDiverse / AccompaniedChildren). Shapes match apps/web/api/swim/model.py.",
+  "options": [
+    {
+      "facility": "Synth Pool", "facility_id": "synth", "kind": "indoor", "basin": "Main",
+      "length_m": 25.0, "lanes": 8, "start": "08:00", "end": "10:00",
+      "access": "PublicSwim", "eligible": true, "reason": "open to all",
+      "price": null, "distance_km": null, "open_now": true, "valid_as_of": null,
+      "source": "synthetic", "curated": true,
+      "lane_availability": null,
+      "lane_timeline": { "segments": [
+        { "start": "08:00", "end": "09:00", "lane_count": 8, "public_lanes": 8, "reserved_lanes": 0, "partial": false },
+        { "start": "09:00", "end": "10:00", "lane_count": 8, "public_lanes": 4, "reserved_lanes": 4, "partial": false }
+      ] }
+    },
+    {
+      "facility": "Synth Pool", "facility_id": "synth", "kind": "indoor", "basin": "Main",
+      "length_m": 25.0, "lanes": 8, "start": "10:00", "end": "11:00",
+      "access": "LaneSwim", "eligible": true, "reason": "lane swimming — open to all",
+      "price": null, "distance_km": null, "open_now": true, "valid_as_of": null,
+      "source": "synthetic", "curated": true,
+      "lane_availability": null,
+      "lane_timeline": { "segments": [
+        { "start": "10:00", "end": "11:00", "lane_count": 8, "public_lanes": 6, "reserved_lanes": 2, "partial": false }
+      ] }
+    },
+    {
+      "facility": "Synth Pool", "facility_id": "synth", "kind": "indoor", "basin": "Main",
+      "length_m": 25.0, "lanes": 8, "start": "11:00", "end": "12:00",
+      "access": "FamilyTime", "eligible": true, "reason": "family session — open to all",
+      "price": null, "distance_km": null, "open_now": true, "valid_as_of": null,
+      "source": "synthetic", "curated": true,
+      "lane_availability": null,
+      "lane_timeline": null
+    },
+    {
+      "facility": "Synth Pool", "facility_id": "synth", "kind": "indoor", "basin": "Main",
+      "length_m": 25.0, "lanes": 8, "start": "12:00", "end": "13:00",
+      "access": "WomenOnly", "eligible": false, "reason": "women-only session",
+      "price": null, "distance_km": null, "open_now": true, "valid_as_of": null,
+      "source": "synthetic", "curated": true,
+      "lane_availability": null,
+      "lane_timeline": null
+    },
+    {
+      "facility": "Synth Pool", "facility_id": "synth", "kind": "indoor", "basin": "Main",
+      "length_m": 25.0, "lanes": 8, "start": "13:00", "end": "14:00",
+      "access": "SeniorsOnly", "eligible": false, "reason": "seniors-only session (age 60+)",
+      "price": null, "distance_km": null, "open_now": true, "valid_as_of": null,
+      "source": "synthetic", "curated": true,
+      "lane_availability": null,
+      "lane_timeline": null
+    },
+    {
+      "facility": "Synth Pool", "facility_id": "synth", "kind": "indoor", "basin": "Main",
+      "length_m": 25.0, "lanes": 8, "start": "14:00", "end": "15:00",
+      "access": "AdultsOnly", "eligible": false, "reason": "adults-only session (age 18+)",
+      "price": null, "distance_km": null, "open_now": true, "valid_as_of": null,
+      "source": "synthetic", "curated": true,
+      "lane_availability": null,
+      "lane_timeline": null
+    },
+    {
+      "facility": "Synth Pool", "facility_id": "synth", "kind": "indoor", "basin": "Main",
+      "length_m": 25.0, "lanes": 8, "start": "15:00", "end": "16:00",
+      "access": "SchoolReserved", "eligible": false, "reason": "reserved for schools — not public",
+      "price": null, "distance_km": null, "open_now": true, "valid_as_of": null,
+      "source": "synthetic", "curated": true,
+      "lane_availability": null,
+      "lane_timeline": null
+    },
+    {
+      "facility": "Synth Pool", "facility_id": "synth", "kind": "indoor", "basin": "Main",
+      "length_m": 25.0, "lanes": 8, "start": "16:00", "end": "17:00",
+      "access": "ClubReserved", "eligible": false, "reason": "reserved for a club — not public",
+      "price": null, "distance_km": null, "open_now": true, "valid_as_of": null,
+      "source": "synthetic", "curated": true,
+      "lane_availability": null,
+      "lane_timeline": null
+    },
+    {
+      "facility": "Synth Pool", "facility_id": "synth", "kind": "school", "basin": "Main",
+      "length_m": 25.0, "lanes": 8, "start": "17:00", "end": "18:00",
+      "access": "GirlsOnly", "eligible": false, "reason": "girls-only session (für Mädchen)",
+      "price": null, "distance_km": null, "open_now": true, "valid_as_of": null,
+      "source": "synthetic", "curated": true,
+      "lane_availability": null,
+      "lane_timeline": null
+    },
+    {
+      "facility": "Synth Pool", "facility_id": "synth", "kind": "school", "basin": "Main",
+      "length_m": 25.0, "lanes": 8, "start": "18:00", "end": "19:00",
+      "access": "GenderDiverse", "eligible": false, "reason": "trans and non-binary, 16+",
+      "price": null, "distance_km": null, "open_now": true, "valid_as_of": null,
+      "source": "synthetic", "curated": true,
+      "lane_availability": null,
+      "lane_timeline": null
+    },
+    {
+      "facility": "Synth Pool", "facility_id": "synth", "kind": "school", "basin": "Main",
+      "length_m": 25.0, "lanes": 8, "start": "19:00", "end": "20:00",
+      "access": "AccompaniedChildren", "eligible": false, "reason": "children only with an adult",
+      "price": null, "distance_km": null, "open_now": true, "valid_as_of": null,
+      "source": "synthetic", "curated": true,
+      "lane_availability": null,
+      "lane_timeline": null
+    }
+  ],
+  "statuses": [
+    { "facility": "Synth Closed", "status": "closed", "detail": "Sommerpause / Revision" },
+    { "facility": "Synth Uncurated", "status": "uncurated", "detail": "schedule not yet curated" }
+  ],
+  "warnings": [],
+  "notices": []
+}

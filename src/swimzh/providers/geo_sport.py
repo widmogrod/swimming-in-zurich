@@ -15,7 +15,9 @@ Error mapping specific to this provider:
 from __future__ import annotations
 
 import json
+from collections.abc import Mapping
 from dataclasses import dataclass
+from urllib.parse import urlsplit, urlunsplit
 
 from pydantic import ValidationError
 
@@ -70,10 +72,25 @@ class GeoPool:
     phone: str | None
 
 
+# The WFS uses the literal token "NULL" (case-sensitive) as its null sentinel: an absent
+# `infrastruktur` (and potentially any other text property) arrives as the STRING "NULL",
+# not JSON null. ONE rule at this boundary turns exactly that token into absence — for the
+# description, the address parts, and every other cleaned field alike. Only the whole-value
+# token matches: a value merely CONTAINING "NULL" (or a differently-cased "null") is real
+# data and passes untouched.
+_NULL_SENTINEL = "NULL"
+
+
+def _absent_if_null(value: str | None) -> str | None:
+    return None if value == _NULL_SENTINEL else value
+
+
 def _address(feature: FeatureDTO) -> str:
     p = feature.properties
-    street = " ".join(part for part in (p.strasse, p.hausnummer) if part)
-    town = " ".join(part for part in (p.plz, p.ort) if part)
+    parts = (_absent_if_null(part) for part in (p.strasse, p.hausnummer, p.plz, p.ort))
+    strasse, hausnummer, plz, ort = parts
+    street = " ".join(part for part in (strasse, hausnummer) if part)
+    town = " ".join(part for part in (plz, ort) if part)
     return ", ".join(part for part in (street, town) if part)
 
 
@@ -81,25 +98,76 @@ def _clean(text: str | None) -> str | None:
     if text is None:
         return None
     cleaned = " ".join(text.replace(";", " ").split()).strip()
-    return cleaned or None
+    return _absent_if_null(cleaned or None)
+
+
+# The WFS publishes `https://www.sportamt.ch/<slug>` for 17 of the 19 outdoor/river/lake pools,
+# but that host has NO TLS listener: it accepts TCP on 443 and then sends nothing (clean EOF at
+# ~5.1s — verified 2026-08-01 across TLS 1.0-1.3, ±SNI, ±ALPN, by-IP, and independently by SSL
+# Labs). Port 80 is healthy and 302s to the real `www.stadt-zuerich.ch/<slug>` page, so we repair
+# the SCHEME on the way in and let `follow_redirects` traverse the city's own live slug mapping.
+# Rewriting the HOST instead would hardcode a copy of that mapping behind a user-visible
+# "Official" link. Targeted repair of one known-broken host — NOT a general scheme policy.
+_BROKEN_TLS_HOSTS = frozenset({"sportamt.ch", "www.sportamt.ch"})
+
+# ONE sportamt slug is also dead, and the scheme repair alone cannot reach it: `/freibad-
+# zwischen-hoelzern` 302s to `www.stadt-zuerich.ch/freibad-zwischen-hoelzern`, which **404s** —
+# the city's live slug carries `-den-` (verified 2026-08-06: the `-den-` form answers 200, and so
+# does the pool's own id, `freibad-zwischen-den-hoelzern`). Harmless while the pool was never
+# fetched; once `OUTDOOR` entered `etl.scrape._SCRAPEABLE_KINDS` (seasonal-hours S3) the entry
+# became a declared source, and a declared source that 404s aborts the whole build.
+#
+# Keyed by the sportamt PATH and applied only on that host, so this stays one row of data rather
+# than a copy of the city's slug map: the 302 still does the host mapping, we only hand it a slug
+# that resolves. A general redirect-follower cannot fix it — the 404 IS the redirect target.
+_SPORTAMT_SLUG_REPAIRS: Mapping[str, str] = {
+    "/freibad-zwischen-hoelzern": "/freibad-zwischen-den-hoelzern",
+}
+
+
+def _normalize_roster_url(raw: str | None) -> str | None:
+    """Repair a roster URL on the known-broken `sportamt.ch` host — its unusable `https` SCHEME
+    and, for one entry, its dead PATH. Every other URL is returned byte-identical (an unparseable
+    value included), as is a sportamt URL that needs neither repair."""
+    if raw is None:
+        return None
+    try:
+        parts = urlsplit(raw)
+        host = parts.hostname
+    except ValueError:
+        return raw
+    if host is None or host.lower() not in _BROKEN_TLS_HOSTS:
+        return raw
+    scheme = "http" if parts.scheme == "https" else parts.scheme
+    path = _SPORTAMT_SLUG_REPAIRS.get(parts.path, parts.path)
+    if (scheme, path) == (parts.scheme, parts.path):
+        return raw
+    return urlunsplit((scheme, parts.netloc, path, parts.query, parts.fragment))
 
 
 def _to_geo_pool(feature: FeatureDTO, kind: PoolKind) -> GeoPool:
     lon, lat = feature.geometry.coordinates[0], feature.geometry.coordinates[1]
-    name = feature.properties.name
-    if feature.properties.namenzus:
-        name = f"{name} {feature.properties.namenzus}"
+    p = feature.properties
+    # `name` is deliberately EXEMPT from `_absent_if_null`: it is a required str and
+    # identity-bearing — a null name is not a representable pool, so its absence is not
+    # absorbable the way an absent description is. The corpus pin (`pool.name != "NULL"` in
+    # test_committed_wfs_fixtures_keep_raw_sentinels_and_parse_to_absence) guards the
+    # hypothetical.
+    name = p.name
+    namenzus = _absent_if_null(p.namenzus)
+    if namenzus:
+        name = f"{name} {namenzus}"
     return GeoPool(
         source_id=feature.id,
-        poi_id=feature.properties.poi_id,
+        poi_id=_absent_if_null(p.poi_id),
         name=name,
         kind=kind,
         address=_address(feature),
         geo=GeoPoint(lat=lat, lon=lon),
-        url=feature.properties.www,
-        category=feature.properties.kategorie,
-        description=_clean(feature.properties.infrastruktur),
-        phone=feature.properties.tel,
+        url=_normalize_roster_url(_absent_if_null(p.www)),
+        category=_absent_if_null(p.kategorie),
+        description=_clean(p.infrastruktur),
+        phone=_absent_if_null(p.tel),
     )
 
 

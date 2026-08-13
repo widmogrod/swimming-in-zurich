@@ -1,0 +1,155 @@
+{
+ "type": "FeatureCollection",
+ "features": [
+  {
+   "type": "Feature",
+   "id": "poi_flussbad_view.1",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     8.529852,
+     47.389312
+    ]
+   },
+   "properties": {
+    "name": "Flussbad Unterer Letten (Flussteil)",
+    "namenzus": null,
+    "strasse": "Wasserwerkstrasse 131, 8037 Zürich",
+    "hausnummer": null,
+    "plz": null,
+    "ort": null,
+    "www": "https://www.sportamt.ch/flussbad-unterer-letten",
+    "tel": "+41 44 413 58 90",
+    "poi_id": null,
+    "kategorie": null,
+    "infrastruktur": "NULL",
+    "bemerkung": null
+   }
+  },
+  {
+   "type": "Feature",
+   "id": "poi_flussbad_view.2",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     8.489277,
+     47.399169
+    ]
+   },
+   "properties": {
+    "name": "Flussbad Au-Höngg",
+    "namenzus": null,
+    "strasse": "Werdinsel 2, 8049 Zürich",
+    "hausnummer": null,
+    "plz": null,
+    "ort": null,
+    "www": "https://www.sportamt.ch/flussbad-au-hoengg",
+    "tel": "+41 44 413 58 60",
+    "poi_id": null,
+    "kategorie": null,
+    "infrastruktur": "NULL",
+    "bemerkung": null
+   }
+  },
+  {
+   "type": "Feature",
+   "id": "poi_flussbad_view.3",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     8.529852,
+     47.389312
+    ]
+   },
+   "properties": {
+    "name": "Flussbad Unterer Letten",
+    "namenzus": null,
+    "strasse": "Wasserwerkstrasse 131, 8037 Zürich",
+    "hausnummer": null,
+    "plz": null,
+    "ort": null,
+    "www": "https://www.sportamt.ch/flussbad-unterer-letten",
+    "tel": "+41 44 413 58 90",
+    "poi_id": null,
+    "kategorie": null,
+    "infrastruktur": "NULL",
+    "bemerkung": null
+   }
+  },
+  {
+   "type": "Feature",
+   "id": "poi_flussbad_view.4",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     8.532594,
+     47.371269
+    ]
+   },
+   "properties": {
+    "name": "Männerbad Schanzengraben",
+    "namenzus": null,
+    "strasse": "8001 Zürich",
+    "hausnummer": null,
+    "plz": null,
+    "ort": null,
+    "www": "https://www.sportamt.ch/maennerbad",
+    "tel": "+41 44 211 95 94",
+    "poi_id": null,
+    "kategorie": null,
+    "infrastruktur": "NULL",
+    "bemerkung": null
+   }
+  },
+  {
+   "type": "Feature",
+   "id": "poi_flussbad_view.5",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     8.534268,
+     47.38569
+    ]
+   },
+   "properties": {
+    "name": "Flussbad Oberer Letten",
+    "namenzus": null,
+    "strasse": "Lettensteg 10, 8037 Zürich",
+    "hausnummer": null,
+    "plz": null,
+    "ort": null,
+    "www": "https://www.sportamt.ch/flussbad-oberer-letten",
+    "tel": "+41 44 413 58 80",
+    "poi_id": null,
+    "kategorie": null,
+    "infrastruktur": "NULL",
+    "bemerkung": null
+   }
+  },
+  {
+   "type": "Feature",
+   "id": "poi_flussbad_view.6",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     8.54199,
+     47.368463
+    ]
+   },
+   "properties": {
+    "name": "Frauenbad Stadthausquai",
+    "namenzus": null,
+    "strasse": "Stadthausquai 12, 8001 Zürich",
+    "hausnummer": null,
+    "plz": null,
+    "ort": null,
+    "www": "https://www.sportamt.ch/frauenbad",
+    "tel": "+41 44 413 58 70",
+    "poi_id": null,
+    "kategorie": null,
+    "infrastruktur": "NULL",
+    "bemerkung": null
+   }
+  }
+ ]
+}

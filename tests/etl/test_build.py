@@ -1,121 +1,101 @@
-"""B1/B2 parity: the read path (``pool.facility_doc``) serves the curated schedules with the
-authoritative committed-catalog geo stamped onto them, for an offline build.
+"""The offline `build_store` read path (``pool.facility_doc``) serves the thin crosswalk — lane
+bindings + WFS-prose physicals — with the authoritative committed-catalog geo stamped on, and is
+uniformly SCHEDULE-LESS (delete-curated-schedule-tier S3: curated YAML carries no schedule; the
+real timetable is composed in by the scrape phase, proven end-to-end in tests/test_cli.py).
 
-The now-deleted ``facility`` table (Plan C) used to carry the raw curated YAML coords; the
-equivalent source is the curated dataset (``load_dataset``) it was built from. So the parity
-assertion normalizes geo out and compares everything else (identity, basins/schedule, prices,
-closures, amenities, …) against the raw curated facilities; a companion assertion pins the
-by-design geo *shift* — ``pool.facility_doc`` carries the committed ``catalog.json`` geo (B1),
-which for the shifted pools genuinely differs from the curated YAML — so it can never regress
-into a silent full-equality expectation.
+Geo is now unambiguously catalog-sourced: curated YAML no longer authors any geo, so there is
+nothing left to diverge — every served coordinate is the committed ``catalog.json`` (= WFS) one.
 """
 
 from __future__ import annotations
 
-from dataclasses import replace
 from pathlib import Path
 
 from swimzh.core.result import Ok
-from swimzh.domain.models import BasinSource, Facility, PoolId
+from swimzh.domain.models import BasinId, BasinSource, PoolId
 from swimzh.etl.build import build_store
 from swimzh.providers.curated import load_dataset
 from swimzh.storage import catalog_json
 from swimzh.storage.sqlite_repo import GoldRepository, open_db
 
 DATA_DIR = Path(__file__).resolve().parents[2] / "data"
+# Since S3 the roster is a `build_store` argument sourced from the WFS. The committed
+# catalog.json IS that WFS snapshot, so it is the recorded roster double for these build tests.
+_ROSTER = catalog_json.loads((DATA_DIR / "catalog.json").read_text(encoding="utf-8"))
 
-# The curated pools whose YAML coords differ from the committed catalog (per B1's ledger:
-# bungertwies, oerlikon, city shift; aemtler is identical).
-_GEO_SHIFTED = {"hallenbad-bungertwies", "hallenbad-oerlikon", "hallenbad-city"}
-
-
-def _curated_yaml_facilities() -> dict[str, Facility]:
-    """The raw curated facilities (YAML geo) — the content the retired ``facility`` table held."""
-    result = load_dataset(DATA_DIR)
-    assert isinstance(result, Ok), result
-    return {str(f.identity.facility_id): f for f in result.value.facilities}
-
-
-def _without_geo(f: Facility) -> Facility:
-    return replace(f, geo=None)
+# The pools whose stripped YAML carries a `lane_plan_source` binding on ≥1 basin.
+_LANE_BINDING_POOLS = {
+    "hallenbad-city",
+    "hallenbad-oerlikon",
+    "hallenbad-bungertwies",
+    "hallenbad-blaesi",
+    "hallenbad-leimbach",
+    "waermebad-kaeferberg",
+}
 
 
-def test_pool_facility_doc_read_matches_curated_dataset_modulo_geo(tmp_path: Path) -> None:
+def test_build_store_is_schedule_less_and_serves_crosswalk_bindings(tmp_path: Path) -> None:
     db = tmp_path / "gold.sqlite"
-    assert isinstance(build_store(DATA_DIR, db), Ok)
+    assert isinstance(build_store(DATA_DIR, db, _ROSTER), Ok)
     conn = open_db(db)
-
     new_read = {str(f.identity.facility_id): f for f in GoldRepository(conn).load_all()}
-    curated = _curated_yaml_facilities()
 
-    # The curated (scheduled) pools land on the read path — nothing dropped or invented by the
-    # flip. Both Slice-F prose pools AND the reconciliation slice's lane-plan-only pools are
-    # SCHEDULE-LESS; isolate the scheduled ones (those with a schedule rule) for the parity check.
-    scheduled_curated = {pid: f for pid, f in curated.items() if any(b.rules for b in f.basins)}
-    scheduled = {pid: f for pid, f in new_read.items() if any(b.rules for b in f.basins)}
-    assert set(scheduled) == set(scheduled_curated)
-    assert set(scheduled) == {
-        "hallenbad-city",
-        "hallenbad-oerlikon",
-        "hallenbad-bungertwies",
-        "schulschwimmanlage-aemtler",
-    }
+    # Offline build carries NO schedule — every roster pool is schedule-less until the scrape folds
+    # the real timetable in. Nothing derives a `/swim` option from `build_store` alone.
+    assert all(not any(b.rules for b in f.basins) for f in new_read.values())
 
-    # Everything but geo is identical: the schedule/identity/basins/prices the read path serves
-    # is unchanged by the flip.
-    for pool_id in scheduled:
-        assert _without_geo(scheduled[pool_id]) == _without_geo(scheduled_curated[pool_id]), pool_id
-
-    # Schedule-less read-path pools are of two kinds. Pin BOTH exactly so a catalog/curation change
-    # surfaces here, not silently: the Slice-F prose pools (all PARSED_PROSE basins) and the
-    # lane-plan-only curated pools (CURATED basins carrying only a `lane_plan_source`).
-    schedule_less = {pid for pid, f in new_read.items() if not any(b.rules for b in f.basins)}
-    prose = {
-        pid
-        for pid in schedule_less
-        if all(b.physical_source is BasinSource.PARSED_PROSE for b in new_read[pid].basins)
-    }
-    assert prose == {"hallenbad-altstetten", "strandbad-tiefenbrunnen"}
-    for pid in prose:
-        assert new_read[pid].basins
-    lane_only = schedule_less - prose
-    assert lane_only == {"hallenbad-leimbach", "hallenbad-blaesi", "waermebad-kaeferberg"}
-    for pid in lane_only:
+    # Every pool whose stripped YAML authors a lane binding surfaces it on ≥1 basin, so the lane
+    # phase can attach — the thin-crosswalk binding survives the seed.
+    for pid in _LANE_BINDING_POOLS:
         basins = new_read[pid].basins
-        assert basins and all(b.lane_plan_source is not None for b in basins)
+        assert basins and any(b.lane_plan_source is not None for b in basins), pid
+
+    # WFS `infrastruktur` prose physicals are applied to a curated facility's named basins (S1):
+    # City's `Schwimmerbecken` gains 50 x 15 m, Bungertwies its 25 m — sourced, not authored.
+    city_lap = next(
+        b for b in new_read["hallenbad-city"].basins if b.basin_id == BasinId("city-50m")
+    )
+    assert city_lap.dimensions is not None and city_lap.physical_source is BasinSource.PARSED_PROSE
+    bungertwies = new_read["hallenbad-bungertwies"].basins[0]
+    assert bungertwies.dimensions is not None
+    # Oerlikon's WFS `infrastruktur` is empty ("NULL") — a recorded physicals drop; basins bare.
+    assert all(b.dimensions is None for b in new_read["hallenbad-oerlikon"].basins)
+
+    # Location-only pools (no basin at all): the school pool and outdoor pins.
+    assert new_read["schulschwimmanlage-aemtler"].basins == ()
+    assert new_read["freibad-heuried"].basins == ()
+
+    # Prose-only pools (PARSED_PROSE basins, no authored lane binding) still mint from prose.
+    for pid in ("hallenbad-altstetten", "strandbad-tiefenbrunnen"):
+        basins = new_read[pid].basins
+        assert basins and all(b.physical_source is BasinSource.PARSED_PROSE for b in basins)
+        assert all(b.lane_plan_source is None for b in basins)
 
 
-def test_geo_divergence_is_by_design_catalog_over_yaml(tmp_path: Path) -> None:
+def test_geo_is_catalog_sourced_with_no_curated_yaml_divergence(tmp_path: Path) -> None:
     db = tmp_path / "gold.sqlite"
-    assert isinstance(build_store(DATA_DIR, db), Ok)
+    assert isinstance(build_store(DATA_DIR, db, _ROSTER), Ok)
     conn = open_db(db)
-
     new_read = {str(f.identity.facility_id): f for f in GoldRepository(conn).load_all()}
-    curated = _curated_yaml_facilities()
     catalog = {
         e.pool_id: e.geo
         for e in catalog_json.loads((DATA_DIR / "catalog.json").read_text(encoding="utf-8"))
     }
 
-    # The read path (pool.facility_doc) serves the authoritative committed-catalog geo — for the
-    # curated pools AND the Slice-F prose pools (both stamp `entry.geo`).
+    # The read path serves the authoritative committed-catalog geo for every pool.
     for pool_id, facility in new_read.items():
         assert facility.geo == catalog[pool_id]
 
-    # …and for the 3 shifted pools that is genuinely different from the curated YAML geo. Only a
-    # curated pool that actually authored a YAML geo can diverge; the lane-plan-only pools declare
-    # no geo (None), so they are excluded rather than counted as a trivial divergence.
-    diverged = {
-        pid
-        for pid in curated
-        if curated[pid].geo is not None and new_read[pid].geo != curated[pid].geo
-    }
-    assert diverged == _GEO_SHIFTED
+    # Curated YAML no longer authors any geo (delete-curated-schedule-tier S3), so geo is now
+    # unambiguously catalog-sourced — nothing can diverge.
+    curated = load_dataset(DATA_DIR)
+    assert isinstance(curated, Ok)
+    assert all(f.geo is None for f in curated.value.facilities)
 
 
 def test_get_by_id_reads_pool_facility_doc(tmp_path: Path) -> None:
     db = tmp_path / "gold.sqlite"
-    assert isinstance(build_store(DATA_DIR, db), Ok)
+    assert isinstance(build_store(DATA_DIR, db, _ROSTER), Ok)
     repo = GoldRepository(open_db(db))
 
     city = repo.get(PoolId("hallenbad-city"))

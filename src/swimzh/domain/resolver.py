@@ -5,8 +5,10 @@ basin's sessions?* It composes, in priority order:
 
   1. facility closures (maintenance "Revision" / seasonal)  -> ClosedDay
   2. a one-off ScheduleException for the date                -> its override (closed or sessions)
-  3. public-holiday policy (closed / Sunday schedule / normal)
-  4. recurring rules filtered by weekday and school-calendar scope
+  3. the facility-level SEASON GATE (`operating_season`)     -> ClosedDay(OUT_OF_SEASON) outside
+     the window; OpenUnscheduledDay(weather) inside it when NO rules exist
+  4. public-holiday policy (closed / Sunday schedule / normal)
+  5. recurring rules filtered by weekday, school-calendar scope and SEASON
 
 This is what makes future-date answers correct: the same weekday yields different sessions
 in term vs holiday, and holidays alter or close the day.
@@ -17,6 +19,8 @@ from __future__ import annotations
 from datetime import date
 
 from swimzh.domain.calendar import DayContext, ZurichCalendar
+from swimzh.domain.closure import ClosureCode
+from swimzh.domain.holiday import classify_holiday
 from swimzh.domain.models import Basin, Facility
 from swimzh.domain.schedule import (
     ClosedDay,
@@ -24,6 +28,7 @@ from swimzh.domain.schedule import (
     DayScope,
     HolidayPolicy,
     OpenDay,
+    OpenUnscheduledDay,
     ResolvedSession,
     ScheduleException,
     ScheduleRule,
@@ -45,16 +50,42 @@ def _scope_applies(scope: DayScope, ctx: DayContext) -> bool:
             return ctx.is_school_holiday
 
 
+def _in_season(rule: ScheduleRule, d: date) -> bool:
+    """A rule with no season runs all year; a seasoned one only inside its window."""
+    return rule.season is None or rule.season.contains(d)
+
+
 def _sessions_for_weekday(
-    rules: tuple[ScheduleRule, ...], weekday: Weekday, ctx: DayContext
+    rules: tuple[ScheduleRule, ...], weekday: Weekday, ctx: DayContext, d: date
 ) -> tuple[ResolvedSession, ...]:
     matched = [
-        ResolvedSession(time=rule.time, access=rule.access)
+        ResolvedSession(time=rule.time, access=rule.access, weather=rule.weather)
         for rule in rules
-        if weekday in rule.weekdays and _scope_applies(rule.scope, ctx)
+        if weekday in rule.weekdays and _scope_applies(rule.scope, ctx) and _in_season(rule, d)
     ]
     matched.sort(key=lambda s: s.time.start)
     return tuple(matched)
+
+
+def _empty_day(rules: tuple[ScheduleRule, ...], d: date) -> ClosedDay:
+    """Why a day resolved to no sessions.
+
+    `OUT_OF_SEASON` only when the facility's whole timetable is seasonal AND no part of it is
+    running today — a lido in October. Anything else stays `NO_SESSIONS`: a pool that is open
+    this season but shut on Mondays is not out of season.
+
+    NOT `SEASONAL_BREAK`, which is the curated "Sommerpause" — a *summer* shutdown — and is
+    translated as such in all five locales. The code here is derived from the pool's own
+    annual window and has no idea which season it is outside; for an outdoor pool it fires in
+    January, and "Summer break" would be exactly the lie this whole filter exists to remove.
+    """
+    if (
+        rules
+        and all(rule.season is not None for rule in rules)
+        and not any(_in_season(rule, d) for rule in rules)
+    ):
+        return ClosedDay(code=ClosureCode.OUT_OF_SEASON)
+    return ClosedDay(code=ClosureCode.NO_SESSIONS)
 
 
 def resolve_hours(
@@ -70,35 +101,63 @@ def resolve_hours(
     # 1. Facility-wide closures win over everything.
     for closure in facility.closures:
         if closure.contains(d):
-            reason = closure.reason or "closed (maintenance)"
-            return ClosedDay(reason=reason)
+            return ClosedDay(code=closure.code, params=dict(closure.params))
 
     # 2. A one-off exception for this exact date overrides the recurring pattern.
     exception = _find_exception(exceptions, d)
     if exception is not None:
         if exception.closed:
-            return ClosedDay(reason=exception.reason or "closed (special)")
+            # The code was settled at build time (boundary/mapping); carry it through.
+            return ClosedDay(code=exception.code, params=dict(exception.params))
         return OpenDay(sessions=exception.sessions)
+
+    # 3. The facility-level SEASON GATE (sharedsource-fanout): a page-stated operating
+    # season with no timetable. Outside the window the pool is knowably shut — its own
+    # page says so. Inside it, a rule-less schedule is *open, hours unpublished* — the
+    # honest third state, carrying the season's weather condition. A facility WITHOUT an
+    # `operating_season` never reaches either branch, and a rule-carrying schedule inside
+    # its window falls through to the unchanged path below.
+    season = facility.operating_season
+    if season is not None:
+        if not season.window.contains(d):
+            return ClosedDay(code=ClosureCode.OUT_OF_SEASON)
+        if not rules:
+            return OpenUnscheduledDay(weather=season.weather)
 
     ctx = calendar.context(d)
 
-    # 3. Public-holiday policy.
+    # 4. Public-holiday policy.
     effective_weekday = Weekday(d.weekday())
+    # A holiday we cannot vouch for: the pool states no policy, so we fall through to its
+    # ordinary weekday rules AND say so, rather than silently presenting them as confirmed.
+    unverified_holiday = ctx.is_public_holiday and facility.public_holiday_policy is None
     if ctx.is_public_holiday:
         match facility.public_holiday_policy:
             case HolidayPolicy.CLOSED:
-                name = ctx.holiday_name or "public holiday"
-                return ClosedDay(reason=f"closed ({name})")
+                # The holiday NAME is data, not copy: it travels as a param so a
+                # translated sentence can place it (and an untranslatable one — see
+                # Berchtoldstag — can be shown verbatim without breaking the sentence).
+                name = ctx.holiday_name or ""
+                # Both travel: the CODE so a known holiday can be translated, and the
+                # NAME so an unrecognised (or untranslatable, e.g. Berchtoldstag) one is
+                # still shown truthfully rather than as a blank.
+                params = (
+                    {"holiday": name, "holiday_code": classify_holiday(name).value} if name else {}
+                )
+                return ClosedDay(code=ClosureCode.PUBLIC_HOLIDAY, params=params)
             case HolidayPolicy.SUNDAY_SCHEDULE:
                 effective_weekday = Weekday.SUNDAY
             case HolidayPolicy.NORMAL:
                 pass
+            case None:
+                # Unknown policy: use the weekday rules, flagged (see `unverified_holiday`).
+                pass
 
-    # 4. Recurring rules for the effective weekday and calendar scope.
-    sessions = _sessions_for_weekday(rules, effective_weekday, ctx)
+    # 5. Recurring rules for the effective weekday, calendar scope and season.
+    sessions = _sessions_for_weekday(rules, effective_weekday, ctx, d)
     if not sessions:
-        return ClosedDay(reason="no sessions scheduled")
-    return OpenDay(sessions=sessions)
+        return _empty_day(rules, d)
+    return OpenDay(sessions=sessions, holiday_policy_unverified=unverified_holiday)
 
 
 def resolve_basin(

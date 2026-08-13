@@ -14,7 +14,7 @@ import pytest
 from swimzh.build.reconcile import Name, Xref
 from swimzh.build.seed import build_crosswalk, build_spine
 from swimzh.core.result import Ok
-from swimzh.domain.catalog import PoolCatalogEntry
+from swimzh.domain.catalog import PoolCatalogEntry, ScheduleFreshness
 from swimzh.domain.models import BasinSource, PoolId, PoolKind
 from swimzh.providers.curated import Dataset, load_dataset
 from swimzh.storage import catalog_json, codec
@@ -47,36 +47,52 @@ def test_spine_has_one_row_per_catalog_pool(
     assert {p.id for p in spine.pools} == {PoolId(e.pool_id) for e in catalog}
 
 
-def test_curation_status_is_derived(spine: PoolSpine, dataset: Dataset) -> None:
-    # Curation is not stored on the spine; it is derived from `facility_doc` by the single
-    # shared rule (`codec.is_curated`) — the same predicate for every consumer.
-    curated = {p.id for p in spine.pools if codec.is_curated(p.facility_doc)}
-    # Exactly the curated facilities that carry at least one basin with a rule.
+def test_schedule_freshness_is_derived(spine: PoolSpine, dataset: Dataset) -> None:
+    # Freshness is not stored on the spine; it is derived from `facility_doc` by the single
+    # shared rule (`codec.schedule_freshness`) — the same predicate for every consumer.
+    scraped = {
+        p.id
+        for p in spine.pools
+        if codec.schedule_freshness(p.facility_doc) is ScheduleFreshness.SCRAPED
+    }
+    # Exactly the facilities that carry at least one basin with a rule are `scraped`.
     expected = {
         PoolId(str(f.identity.facility_id))
         for f in dataset.facilities
         if any(b.rules for b in f.basins)
     }
-    assert curated == expected
-    assert len(curated) == 4
-    # The remaining 53 roster pools derive uncurated.
-    assert sum(1 for p in spine.pools if not codec.is_curated(p.facility_doc)) == 53
+    assert scraped == expected
+    # Since delete-curated-schedule-tier S3, curated YAML carries NO schedule — the pre-scrape
+    # spine is schedule-less, so NO pool derives `SCRAPED` here. `SCRAPED` appears only once
+    # the atomic build's scrape phase composes the real timetable in (proven end-to-end in
+    # tests/test_cli.py); all 57 roster pools are awaiting_scrape / no_source at seed time.
+    assert scraped == set()
+    assert (
+        sum(
+            1
+            for p in spine.pools
+            if codec.schedule_freshness(p.facility_doc) is not ScheduleFreshness.SCRAPED
+        )
+        == 57
+    )
 
 
 def test_curated_pools_carry_a_facility_blob_uncurated_carry_at_most_prose(
     spine: PoolSpine,
 ) -> None:
     for p in spine.pools:
-        if codec.is_curated(p.facility_doc):
+        if codec.schedule_freshness(p.facility_doc) is ScheduleFreshness.SCRAPED:
             assert p.facility_doc is not None
-        elif p.facility_doc is not None:
-            # A present-but-uncurated blob is SCHEDULE-LESS (no rule → no `/swim` option) and is
-            # one of two kinds: a Slice-F prose pool (auto-extracted PARSED_PROSE basins), or a
-            # lane-plan-only pool (hand-authored CURATED basin carrying only a `lane_plan_source`
-            # — leimbach/blaesi/käferberg). Both are legitimately uncurated.
+        else:
+            # S1: every catalog pool now carries a non-NULL blob, but an uncurated one is always
+            # SCHEDULE-LESS (no rule → no `/swim` option). It is one of three kinds: a location-only
+            # pool (ZERO basins — an outdoor pin like Freibad Heuried whose prose names no basin), a
+            # Slice-F prose pool (auto-extracted PARSED_PROSE basins), or a lane-plan-only pool (a
+            # hand-authored CURATED basin carrying only a `lane_plan_source` — leimbach/blaesi/
+            # käferberg). All three are legitimately uncurated.
+            assert p.facility_doc is not None  # S1: no roster pool has a NULL blob any more
             facility = codec.loads(p.facility_doc)
             assert not any(b.rules for b in facility.basins)
-            assert facility.basins  # a blob is only minted when it carries at least one basin
             for basin in facility.basins:
                 if basin.physical_source is BasinSource.PARSED_PROSE:
                     continue  # prose pool
@@ -116,6 +132,60 @@ def test_build_extracts_parsed_prose_basins_for_a_location_only_pool(spine: Pool
     diving = next(b for b in facility.basins if b.diving_platforms_m)
     assert diving.diving_platforms_m  # e.g. (1, 3, 5) from "Sprungbecken 1/3/5m"
     assert facility.features  # sauna/steam/slide/… from the non-Becken segments
+
+
+def test_every_catalog_pool_has_a_non_null_facility_doc(
+    spine: PoolSpine, catalog: tuple[PoolCatalogEntry, ...]
+) -> None:
+    # S1: universal detail. Every one of the ~57 catalog pools now carries a non-NULL
+    # `facility_doc`, so `/pools/{id}` never 404s for a real catalog pin (Heuried included).
+    assert len(spine.pools) == len(catalog) == 57
+    assert all(p.facility_doc is not None for p in spine.pools)
+
+
+def test_location_only_pool_is_zero_basin_and_uncurated(spine: PoolSpine) -> None:
+    # S1: Freibad Heuried is an outdoor pin with no prose at all — the WFS publishes its "NULL"
+    # sentinel there, parsed to an absent description since claim-audit S4 — so no prose basins.
+    # It gets a location-only facility with ZERO basins that stays uncurated — so it is
+    # viewable in detail but never a `/swim` option.
+    row = next(p for p in spine.pools if p.id == PoolId("freibad-heuried"))
+    assert row.facility_doc is not None
+    facility = codec.loads(row.facility_doc)
+    assert facility.basins == ()  # location-only: no basin at all
+    assert facility.provenance.curated is False
+    assert codec.schedule_freshness(row.facility_doc) is not ScheduleFreshness.SCRAPED
+
+
+def test_uncurated_pool_with_registry_entry_keeps_its_identity(spine: PoolSpine) -> None:
+    # S1 (round-2 fix): the location-only mint builds its `PoolIdentity` from `registry.get(id)`
+    # when a registry entry exists — so an *uncurated* pool's external identity fields survive the
+    # mint AND the gold round-trip (dumps in `build_spine` → `codec.loads` here). This is the exact
+    # seam S2's `baditicker_poiid` rides on; here the authored `aliases` prove a REGISTRY identity
+    # (not a bare `PoolIdentity(id, name, kind)`, whose aliases/keys would be empty) reached it.
+    row = next(p for p in spine.pools if p.id == PoolId("freibad-heuried"))
+    assert row.facility_doc is not None
+    identity = codec.loads(row.facility_doc).identity
+    assert identity.aliases == ("heuried", "Freibad Heuried")  # authored registry aliases survive
+    assert identity.crowdmonitor_keys == ()  # empty as authored (round-trips faithfully)
+
+
+def test_baditicker_poiid_survives_gold_round_trip(spine: PoolSpine) -> None:
+    # S2: the Baditicker `poiid` authored in `registry.yaml` rides the identity through the spine
+    # build (`codec.dumps`) and back (`codec.loads`) for BOTH a curated pool (hallenbad-city, whose
+    # identity comes via the curated facility) and the UNCURATED freibad-heuried (whose identity
+    # comes via the S1 location-only mint reusing `registry.get(id)`). If either seam dropped the
+    # key, `read_temperature` would return "no baditicker key" and no live temp would attach.
+    docs = {str(p.id): p.facility_doc for p in spine.pools}
+
+    heuried_doc = docs["freibad-heuried"]
+    assert heuried_doc is not None
+    heuried = codec.loads(heuried_doc).identity
+    assert heuried.baditicker_poiid == "fb012"  # uncurated pin: real feed poiid survives the mint
+
+    city_doc = docs["hallenbad-city"]
+    assert city_doc is not None
+    city = codec.loads(city_doc).identity
+    assert city.baditicker_poiid == "hb001"  # curated pool: real feed poiid round-trips
 
 
 def test_kaeferberg_kind_is_curated_wins_thermal(spine: PoolSpine) -> None:

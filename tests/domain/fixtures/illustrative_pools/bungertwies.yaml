@@ -1,0 +1,38 @@
+# Hallenbad Bungertwies — CURATED, ILLUSTRATIVE DATA (not verified). See city.yaml header.
+# Demonstrates a Wednesday family afternoon (Kinderspielnachmittag) partitioned cleanly
+# out of the public block, and a mid-July closure.
+
+facility_id: "hallenbad-bungertwies"
+address: "Bungertwies 2, 8008 Zürich"
+source: "stadt-zuerich.ch/hallenbaeder/bungertwies (curated, illustrative)"
+valid_as_of: "2026-07-18"
+geo: { lat: 47.3670, lon: 8.5610 }
+public_holiday_policy: "normal"
+
+prices:
+  valid_as_of: "2026-07-18"
+  source_url: "https://www.stadt-zuerich.ch/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/hallenbaeder/bungertwies.html"
+  entries:
+    - { category: "adult", amount_chf: "8.00", display: "Erwachsene (ab 20 J.) CHF 8.00", min_age: 20 }
+    - { category: "youth", amount_chf: "6.00", display: "Jugendliche (ab 16 J.) CHF 6.00", min_age: 16 }
+    - { category: "child", amount_chf: "4.00", display: "Kinder (ab 6 J.) CHF 4.00", min_age: 6 }
+
+closures:
+  - { start: "2026-07-11", end: "2026-07-31", reason: "Sommerpause" }
+
+basins:
+  - basin_id: "bungertwies-25m"
+    name: "25m-Becken"
+    kind: "lap"
+    dimensions: { length_m: "25" }
+    # First-class lane document: the single-basin Bungertwies sheet. Its PDF header reads
+    # "Hallenbad Bungertwies" (no basin word), so URL-origin — not the title — binds it.
+    lane_plan_source:
+      url: "https://www.stadt-zuerich.ch/content/dam/web/de/stadtleben/sport-und-erholung/dokumente/badeanlagen/belegungsplaene/bungertwies.pdf"
+    rules:
+      - { weekdays: ["mon", "tue", "thu", "fri"], start: "07:00", end: "21:00", access: { type: "public" } }
+      # Wednesday partitioned around the family afternoon:
+      - { weekdays: ["wed"], start: "07:00", end: "13:30", access: { type: "public" } }
+      - { weekdays: ["wed"], start: "13:30", end: "16:30", access: { type: "family", note: "Kinderspielnachmittag" } }
+      - { weekdays: ["wed"], start: "16:30", end: "21:00", access: { type: "public" } }
+      - { weekdays: ["sat", "sun"], start: "08:00", end: "18:00", access: { type: "public" } }

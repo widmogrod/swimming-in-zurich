@@ -2,14 +2,23 @@
 
 from __future__ import annotations
 
-from datetime import date, time
+import json
+import sqlite3
+from datetime import date, datetime, time, timedelta
 from decimal import Decimal
+from pathlib import Path
+from zoneinfo import ZoneInfo
 
+import pytest
 from fastapi.testclient import TestClient
 
 from apps.web.api.pools.service import facility_detail_out
 from apps.web.main import app
+from swimzh.core.errors import ProviderError
+from swimzh.core.result import Ok, Result
 from swimzh.domain.access import PublicSwim
+from swimzh.domain.admission import Tariff
+from swimzh.domain.catalog import ScheduleFreshness
 from swimzh.domain.lockers import LockerCategory, LockerOption
 from swimzh.domain.models import (
     Basin,
@@ -23,8 +32,22 @@ from swimzh.domain.models import (
     Provenance,
 )
 from swimzh.domain.pricing import PriceCategory, PriceEntry, PriceTable
-from swimzh.domain.query import FacilityDetail, FeatureStatus
+from swimzh.domain.query import FacilityDetail, FeatureStatus, TempReading, TempUnavailable
+from swimzh.domain.rentals import Gratis, RentalItem, RentalKind, Unstated
 from swimzh.domain.schedule import OpenDay, ResolvedSession, TimeRange
+
+_ZURICH = ZoneInfo("Europe/Zurich")
+
+
+class _FakeTemperatureProvider:
+    """In-memory `TemperatureProvider` for the app tests — returns a canned reading for any
+    poiid (S2 proves the wiring end-to-end; the real Baditicker adapter lands later)."""
+
+    def __init__(self, result: Result[TempReading, ProviderError]) -> None:
+        self._result = result
+
+    def read(self, poiid: str) -> Result[TempReading, ProviderError]:
+        return self._result
 
 
 def test_pools_lists_all_categories() -> None:
@@ -58,9 +81,66 @@ def test_pool_detail_unknown_facility_is_404() -> None:
     assert response.status_code == 404
 
 
-def test_pool_detail_has_no_lane_panels_without_a_plan() -> None:
-    # The curated app carries no lane plans yet: the detail resolves (200) but its lane-panel
-    # list is empty — never an invented panel.
+def test_pool_detail_location_only_pool_is_viewable() -> None:
+    """S1 acceptance: an outdoor pin with no facility of its own still returns a location-only
+    detail (200) rather than a 404. Name + location come back on the detail; its `kind` +
+    coordinates are served by the `/pools` listing (`PoolOut`), and its `basins` list is empty.
+
+    The subject is `seebad-enge`, not Heuried: seasonal-hours S3 admitted the outdoor/lake/river
+    pools that publish a seasonal table, and Heuried is scraped now. Enge's page is a private
+    operator's that no parser here understands (`etl.scrape._UNPARSEABLE_OPERATOR_PAGES`), so it
+    stays the honest location-only case — an open-air pin, schedule-less, zero basins."""
+    with TestClient(app) as client:
+        detail = client.get("/pools/seebad-enge")
+        listing = client.get("/pools").json()
+    assert detail.status_code == 200  # was 404 before S1
+    body = detail.json()
+    assert body["facility_id"] == "seebad-enge"
+    assert body["facility_name"] == "Seebad Enge"  # name
+    assert body["address"]  # location (the catalog address is present)
+    assert body["basins"] == []  # location-only: zero basins, rendered without error
+    assert body["lane_panels"] == [] and body["features"] == []
+    assert body["provenance"]["curated"] is False  # never flipped to curated
+    # kind + geo (location) are on the listing entry for the same pool.
+    enge = next(p for p in listing["pools"] if p["pool_id"] == "seebad-enge")
+    assert enge["kind"] == "lake"
+    assert enge["lat"] is not None and enge["lon"] is not None
+    # Excluded from the scrape → `no_source`, never `scraped` and never `awaiting_scrape`.
+    assert enge["freshness"] == "no_source"
+    # …and a lake/outdoor pool that IS scraped reads differently, so this is not just "not indoor".
+    heuried = next(p for p in listing["pools"] if p["pool_id"] == "freibad-heuried")
+    assert heuried["freshness"] == "scraped"
+
+
+def test_location_only_pool_is_never_a_swim_option_nor_closed() -> None:
+    """S1 schedule-less invariant: a location-only pool (Enge, see above for why not Heuried)
+    produces NO `/swim` option and no spurious `closed` status — it is reported with its freshness
+    status (`no_source`, identity known, schedule not), never conflated with a real session or a
+    stated closure."""
+    swim_params = {
+        "at": "2026-09-15T09:00",
+        "gender": "female",
+        "age": 34,
+        "eligible_only": "false",
+    }
+    with TestClient(app) as client:
+        swim = client.get("/swim", params=swim_params).json()
+    assert "Seebad Enge" not in {o["facility"] for o in swim["options"]}
+    closed = {s["facility"] for s in swim["statuses"] if s["status"] == "closed"}
+    assert "Seebad Enge" not in closed  # no spurious "closed" for a rule-less facility
+    schedule_less = {
+        s["facility"] for s in swim["statuses"] if s["status"] in {"awaiting_scrape", "no_source"}
+    }
+    assert "Seebad Enge" in schedule_less
+
+
+def test_pool_detail_has_no_lane_panels_without_a_plan(
+    offline_gold_db: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Without a scraped lane plan the detail resolves (200) but its lane-panel list is empty —
+    # never an invented panel. Read against the PRE-SCRAPE store: the atomic `build` attaches
+    # City's lane plan, so "no plan" is the pre-scrape (`build_store`) state.
+    monkeypatch.setenv("SWIMZH_GOLD_DB", str(offline_gold_db))
     with TestClient(app) as client:
         response = client.get("/pools/hallenbad-city", params={"at": "2026-09-15T07:00"})
     assert response.status_code == 200
@@ -70,52 +150,194 @@ def test_pool_detail_has_no_lane_panels_without_a_plan() -> None:
     assert body["lane_panels"] == []
 
 
-def test_pool_detail_surfaces_basins_features_lockers_prices() -> None:
-    """Slice C acceptance: `/pools/{city}` JSON now carries the physical statics the domain
-    already computes — basins (nominal_temp_c, lanes, dimensions, physical_source caveat),
-    features resolved for the queried moment, lockers, the price table, and provenance —
-    not just id/name/address/website/lane_panels."""
+def test_pool_detail_surfaces_basins_physicals_and_prices() -> None:
+    """Slice C acceptance (post delete-curated-schedule-tier S3): `/pools/{city}` JSON carries the
+    physical statics the domain computes — per-basin dimensions/lanes/temperature key and the
+    physical_source caveat, the scraped price table, and provenance. City's `Schwimmerbecken` basin
+    gains its 50 m / 6-lane physicals from the WFS `infrastruktur` prose (`apply_physicals`), tagged
+    `parsed_prose`. Features are not produced by the sourced pipeline (their projection is
+    pinned by the mapping unit test `test_facility_detail_out_...`), so they are empty here;
+    lockers ARE since mietobjekt-extraction S1 — City's four page rows reach the wire."""
     with TestClient(app) as client:
-        # A Tuesday at 09:00 — the sauna (08:00–22:00, all days) is open at the queried moment.
         response = client.get("/pools/hallenbad-city", params={"at": "2026-09-15T09:00"})
     assert response.status_code == 200
     body = response.json()
 
-    # Basins: the 50m lap basin surfaces its size, lane count, temperature key, and its
-    # curated-vs-parsed_prose caveat.
+    # Basins: the scraped schedule basin + the physical `Schwimmerbecken` (its 50 m / 6-lane
+    # physicals sourced from the WFS prose, tagged parsed_prose).
     basins = {b["basin_id"]: b for b in body["basins"]}
-    assert set(basins) == {"city-50m", "city-lehrbecken"}
+    assert "city-50m" in basins
     lap = basins["city-50m"]
     assert lap["kind"] == "lap"
     assert lap["length_m"] == 50.0
     assert lap["lanes"] == 6
-    assert "nominal_temp_c" in lap and lap["nominal_temp_c"] is None  # no temp curated yet
-    assert lap["physical_source"] == "curated"  # the honesty caveat is present
+    assert lap["nominal_temp_c"] == 28.0  # "28°C" sourced from the WFS infrastruktur prose
+    assert lap["physical_source"] == "parsed_prose"  # sourced from infrastruktur, honesty caveat
 
-    # Features: the sauna, resolved open at 09:00, with its stated hours and surcharge.
-    features = {f["kind"]: f for f in body["features"]}
-    assert "sauna" in features
-    sauna = features["sauna"]
-    assert sauna["open_now"] is True  # open-at-query-time, resolved for the queried moment
-    assert sauna["hours"] == [{"start": "08:00", "end": "22:00"}]
-    assert sauna["surcharge_chf"] == 10.0
+    # Features: not produced by the sourced pipeline (curated statics were deleted in S3).
+    assert body["features"] == []
+    # Lockers: produced since mietobjekt-extraction S1 — City's four `Mietobjekt|Preis` rows,
+    # scrape → compose → codec → projection end to end. Fee/deposit are the page's ORTHOGONAL
+    # axes ("gratis, plus Depot Fr. 5.–" = free usage + refundable deposit); the Wäschefach
+    # term suffix rides `period` verbatim.
+    assert body["lockers"] == [
+        {
+            "category": "wardrobe",
+            "fee_chf": None,
+            "deposit_chf": 5.0,
+            "period": None,
+            "mechanism": None,
+            "raw": "Garderobenkasten | gratis, plus Depot Fr. 5.–",
+        },
+        {
+            "category": "valuables",
+            "fee_chf": None,
+            "deposit_chf": 5.0,
+            "period": None,
+            "mechanism": None,
+            "raw": "Wertsachenfach | gratis, plus Depot Fr. 5.–",
+        },
+        {
+            "category": "laundry",
+            "fee_chf": 240.0,
+            "deposit_chf": None,
+            "period": "1/2 Jahr",
+            "mechanism": None,
+            "raw": "Wäschefach (1/2 Jahr) | Fr. 240.–",
+        },
+        {
+            "category": "laundry",
+            "fee_chf": 400.0,
+            "deposit_chf": None,
+            "period": "1 Jahr",
+            "mechanism": None,
+            "raw": "Wäschefach (1 Jahr) | Fr. 400.–",
+        },
+    ]
+    # Rentals (mietobjekt-extraction S2): the non-locker half of the same table. The fee is
+    # the projected closed union — "priced" with the amount here; a stated-gratis row would
+    # be ("gratis", None), never conflated with an unstated ("unstated", None).
+    assert body["rentals"] == [
+        {
+            "kind": "towel",
+            "fee": "priced",
+            "fee_chf": 3.0,
+            "deposit_chf": 20.0,
+            "period": None,
+            "raw": "Badetuch | Fr. 3.–, plus Depot Fr. 20.–",
+        },
+        {
+            "kind": "swimwear",
+            "fee": "priced",
+            "fee_chf": 3.0,
+            "deposit_chf": 20.0,
+            "period": None,
+            "raw": "Badebekleidung | Fr. 3.–, plus Depot Fr. 20.–",
+        },
+        {
+            "kind": "goggles",
+            "fee": "priced",
+            "fee_chf": 3.0,
+            "deposit_chf": 20.0,
+            "period": None,
+            "raw": "Schwimmbrille | Fr. 3.–, plus Depot Fr. 20.–",
+        },
+    ]
+    # The S2 acceptance stated as the page states it: all 7 Mietobjekt rows of City's table
+    # reach the wire across the two typed fields — 4 lockers + 3 rentals, nothing dropped.
+    assert len(body["lockers"]) + len(body["rentals"]) == 7
 
-    # Lockers: all three rows, with the orthogonal fee/deposit/period axes intact.
-    lockers = {locker["category"]: locker for locker in body["lockers"]}
-    assert set(lockers) == {"wardrobe", "valuables", "laundry"}
-    assert lockers["wardrobe"]["fee_chf"] is None and lockers["wardrobe"]["deposit_chf"] == 5.0
-    assert lockers["laundry"]["fee_chf"] == 400.0 and lockers["laundry"]["period"] == "1 Jahr"
-
-    # Prices: the whole facility price table (not the per-person pick), with its freshness date.
+    # Prices: the whole scraped facility price table, with its freshness date present — and the
+    # admission kind naming it a stated tariff (non-null `prices` exactly when "tariff").
+    assert body["admission"] == "tariff"
     prices = body["prices"]
     assert prices is not None
     entries = {e["category"]: e for e in prices["entries"]}
-    assert entries["adult"]["display"] == "Erwachsene CHF 8.00"
     assert entries["adult"]["amount_chf"] == 8.0
-    assert prices["valid_as_of"] == "2026-07-18"
+    assert entries["adult"]["display"]
+    assert prices["valid_as_of"]  # a scrape freshness date is stamped
 
     # Provenance: the curated flag reaches the detail view.
-    assert body["provenance"]["curated"] is True
+    assert "curated" in body["provenance"]
+
+
+def test_pool_detail_projects_all_three_admission_kinds() -> None:
+    """Admission-union S1 acceptance on the wire: `seebad-katzensee` states its own gratis
+    sentence → "free"; `hallenbad-city` links the city tariff → "tariff" (with the table);
+    `hallenbad-altstetten` states neither → "unknown". Free and unknown both carry
+    `prices: null` — the KIND is what stops them reading as the same fact."""
+    with TestClient(app) as client:
+        katzensee = client.get("/pools/seebad-katzensee").json()
+        city = client.get("/pools/hallenbad-city").json()
+        altstetten = client.get("/pools/hallenbad-altstetten").json()
+
+    assert katzensee["admission"] == "free"
+    assert katzensee["prices"] is None  # free is a fact, not a zero-franc table
+    assert city["admission"] == "tariff"
+    assert city["prices"] is not None
+    assert altstetten["admission"] == "unknown"
+    assert altstetten["prices"] is None
+
+
+def test_pool_detail_shows_a_planschbecken_free_with_its_season() -> None:
+    """sharedsource-fanout S3 acceptance: `/pools/{id}` for a Planschbecken shows
+    `admission: "free"` AND the page-stated season — the Mai–September window at MONTH
+    precision (day fields null: rendering a month range day-precise would overstate what the
+    page published) with its fair-weather condition. A pool whose page states no season
+    carries `operating_season: null`."""
+    with TestClient(app) as client:
+        althoos = client.get("/pools/planschbecken-althoos").json()
+        city = client.get("/pools/hallenbad-city").json()
+
+    assert althoos["admission"] == "free"
+    assert althoos["prices"] is None  # free is a fact, not a zero-franc table
+    assert althoos["operating_season"] == {
+        "start_month": 5,
+        "end_month": 9,
+        "precision": "month",
+        "weather": "fair_only",
+        "start_day": None,
+        "end_day": None,
+    }
+    # The schedule signal is untouched: the page publishes no timetable, so freshness stays
+    # the honest `no_source` while the season rides as a separate fact.
+    assert althoos["freshness"] == "no_source"
+    assert city["operating_season"] is None
+
+
+def test_pool_detail_surfaces_lane_plan_source_url() -> None:
+    """S1 acceptance: `/pools/{id}` projects each basin's declared Belegungsplan PDF URL
+    (`Basin.lane_plan_source.url`) as `lane_plan_url`. Oerlikon's two crosswalk basins declare
+    DISTINCT PDFs (both survive the S3 strip + the scrape's binding-carry compose); the scraped
+    schedule basin declares none (`null`). The price source_url still reaches the boundary."""
+    _plan = "https://www.stadt-zuerich.ch/content/dam/web/de/stadtleben/sport-und-erholung/dokumente/badeanlagen/belegungsplaene"
+    with TestClient(app) as client:
+        oerlikon = client.get("/pools/hallenbad-oerlikon").json()
+        city = client.get("/pools/hallenbad-city").json()
+
+    # Oerlikon: its two crosswalk basins each carry the EXACT distinct PDF authored in the YAML.
+    oerlikon_basins = {b["basin_id"]: b for b in oerlikon["basins"]}
+    assert (
+        oerlikon_basins["oerlikon-50m"]["lane_plan_url"] == f"{_plan}/oerlikon-schwimmerbecken.pdf"
+    )
+    assert (
+        oerlikon_basins["oerlikon-sprungbecken"]["lane_plan_url"]
+        == f"{_plan}/oerlikon-nichtschwimmer-sprungbecken.pdf"
+    )
+    # The two basins' URLs are genuinely distinct (not one repeated).
+    assert (
+        oerlikon_basins["oerlikon-50m"]["lane_plan_url"]
+        != oerlikon_basins["oerlikon-sprungbecken"]["lane_plan_url"]
+    )
+    # The scraped schedule basin declares no `lane_plan_source` → projects `null`.
+    assert oerlikon_basins["hallenbad-oerlikon-main"]["lane_plan_url"] is None
+    # Regression guard: the price source URL still reaches the boundary.
+    assert oerlikon["prices"]["source_url"] is not None
+
+    # City: its `Schwimmerbecken` crosswalk basin carries the URL; the scraped basin projects null.
+    city_basins = {b["basin_id"]: b for b in city["basins"]}
+    assert city_basins["city-50m"]["lane_plan_url"] == f"{_plan}/city-schwimmerbecken.pdf"
+    assert city_basins["hallenbad-city-main"]["lane_plan_url"] is None
 
 
 def test_facility_detail_out_surfaces_temp_and_parsed_prose_caveat() -> None:
@@ -143,32 +365,78 @@ def test_facility_detail_out_surfaces_temp_and_parsed_prose_caveat() -> None:
         facility_id=PoolId("prose-pool"),
         facility_name="Prose Pool",
         address="Somewhere 1",
-        website=None,
         basins=(basin,),
         features=(sauna,),
         lockers=(LockerOption(category=LockerCategory.WARDROBE, deposit_chf=Decimal("2")),),
+        rentals=(
+            # The gratis/unstated PAIR at the projection seam — the two arms the store-backed
+            # City test cannot reach (its rows are all priced). Both project fee_chf None, so
+            # the fee STRING is the only carrier of the stated-vs-absent distinction on the
+            # wire: pinning both strings side by side is what makes a `_rental_out` arm that
+            # collapses them fail here.
+            RentalItem(
+                kind=RentalKind.SUNLOUNGER,
+                fee=Gratis(),
+                deposit_chf=Decimal("2"),
+                raw="Liegestuhl | gratis, plus Depot Fr. 2.–",
+            ),
+            RentalItem(
+                kind=RentalKind.OTHER,
+                fee=Unstated(),
+                raw="Mehrzweckraum | auf Anfrage",
+            ),
+        ),
         provenance=Provenance(source="pool-page", curated=False, valid_as_of=date(2026, 7, 1)),
     )
     out = facility_detail_out(
         detail,
-        PriceTable(
-            entries=(PriceEntry(PriceCategory.ADULT, Decimal("8"), "Adult CHF 8"),),
-            valid_as_of=date(2026, 7, 1),
+        Tariff(
+            PriceTable(
+                entries=(PriceEntry(PriceCategory.ADULT, Decimal("8"), "Adult CHF 8"),),
+                valid_as_of=date(2026, 7, 1),
+            )
         ),
+        TempUnavailable(reason="no baditicker key"),
+        ScheduleFreshness.AWAITING_SCRAPE,
+        # REQUIRED like its peer `admission`: a forgotten pass-through is a TypeError at the
+        # call site, never a silently-null season on the wire.
+        operating_season=None,
     )
+    # The live facility temp is additive and labelled — it never overwrites a basin's temp.
+    assert out.live_water_temp.available is False
+    assert out.live_water_temp.reason == "no baditicker key"
     assert out.basins[0].nominal_temp_c == 32.0
     assert out.basins[0].physical_source == "parsed_prose"  # drives the UI caveat
     assert out.basins[0].width_m == 8.0
     assert out.features[0].open_now is False
     assert [(h.start, h.end) for h in out.features[0].hours] == [("09:00", "21:00")]
+    assert out.admission == "tariff"  # the `Tariff` arm projects its kind alongside the table
     assert out.prices is not None and out.prices.entries[0].display == "Adult CHF 8"
+    # The stated-gratis rental projects as ("gratis", fee_chf None) and the unstated one as
+    # ("unstated", fee_chf None): same null amount, DIFFERENT fee strings — a page-stated
+    # fact is never rendered the same as an absent one (the fee-union directive at the wire).
+    assert [(r.fee, r.fee_chf) for r in out.rentals] == [("gratis", None), ("unstated", None)]
+    assert out.rentals[0].kind == "sunlounger"
+    assert out.rentals[0].deposit_chf == 2.0
+    assert out.rentals[1].kind == "other" and out.rentals[1].raw == "Mehrzweckraum | auf Anfrage"
     assert out.provenance.curated is False and out.provenance.valid_as_of == "2026-07-01"
+    # The detail carries the SAME three-state freshness as the `/pools` row, so the panel's
+    # trust line no longer has to read the (now always-False) `curated` flag.
+    assert out.freshness == "awaiting_scrape"
 
 
-def test_parsed_prose_pool_shows_in_detail_but_never_a_swim_option() -> None:
+def test_parsed_prose_pool_shows_in_detail_but_never_a_swim_option(
+    offline_gold_db: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """Slice F / Decision #5 acceptance: a location-only pool whose WFS prose names basins gains
     auto-extracted PARSED_PROSE basins visible in `/pools/{id}` detail (with caveat), yet produces
-    NO `/swim` option — it stays reported `uncurated`, never conflated with a real session."""
+    NO `/swim` option — it stays reported with its freshness status, never conflated with a
+    real session (Altstetten is indoor + schedule-less → `awaiting_scrape`).
+
+    Read against the PRE-SCRAPE store: the atomic `build` would scrape Altstetten into a real
+    schedule, so the schedule-less/prose-only state this pins is only observable before the fold.
+    """
+    monkeypatch.setenv("SWIMZH_GOLD_DB", str(offline_gold_db))
     swim_params = {
         "at": "2026-09-15T09:00",
         "gender": "female",
@@ -186,18 +454,139 @@ def test_parsed_prose_pool_shows_in_detail_but_never_a_swim_option() -> None:
     diving = [b for b in detail["basins"] if b["kind"] == "diving"]
     assert diving and diving[0]["diving_platforms_m"] == [1.0, 3.0, 5.0]
 
-    # /swim: the gate. Never an option; reported `uncurated` instead — the test fails the moment a
-    # PARSED_PROSE basin leaks into an option.
+    # /swim: the gate. Never an option; reported `awaiting_scrape` instead — the test fails the
+    # moment a PARSED_PROSE basin leaks into an option.
     assert "Hallenbad Altstetten" not in {o["facility"] for o in swim["options"]}
-    uncurated = {s["facility"] for s in swim["statuses"] if s["status"] == "uncurated"}
-    assert "Hallenbad Altstetten" in uncurated
+    awaiting = {s["facility"] for s in swim["statuses"] if s["status"] == "awaiting_scrape"}
+    assert "Hallenbad Altstetten" in awaiting
 
 
-def test_access_types_explained() -> None:
+def test_pool_detail_surfaces_live_water_temp_from_a_wired_provider() -> None:
+    """S2 acceptance: with a fake provider @ 23 °C wired into `app.state`, `/pools/freibad-heuried`
+    (the UNCURATED pin whose `fb012` key rides the S1 location-only mint into gold) surfaces a
+    facility-level `live_water_temp` with a numeric age — the whole live-attach path end-to-end."""
+    measured_at = datetime.now(_ZURICH) - timedelta(minutes=15)
+    reading = TempReading(
+        measured_at=measured_at, celsius=Decimal("23.0"), is_open=True, source="baditicker"
+    )
+    with TestClient(app) as client:
+        app.state.temperature = _FakeTemperatureProvider(Ok(reading))
+        try:
+            body = client.get("/pools/freibad-heuried").json()
+        finally:
+            app.state.temperature = None
+    temp = body["live_water_temp"]
+    assert temp["available"] is True
+    assert temp["celsius"] == 23.0
+    assert isinstance(temp["age_min"], int) and temp["age_min"] >= 0  # derived freshness
+    assert temp["is_open"] is True
+    assert temp["source"] == "baditicker"
+    assert temp["reason"] is None
+    assert temp["measured_at"] is not None
+
+
+def test_pool_detail_live_water_temp_unavailable_without_a_key() -> None:
+    """A pool with no `baditicker_poiid` (Hallenbad Altstetten — genuinely absent from the
+    Baditicker feed) never asks the provider: the facility-level temp reports the unavailable
+    reason, not a stale number."""
+    reading = TempReading(
+        measured_at=datetime.now(_ZURICH),
+        celsius=Decimal("23.0"),
+        is_open=True,
+        source="baditicker",
+    )
+    with TestClient(app) as client:
+        app.state.temperature = _FakeTemperatureProvider(Ok(reading))
+        try:
+            body = client.get("/pools/hallenbad-altstetten").json()
+        finally:
+            app.state.temperature = None
+    temp = body["live_water_temp"]
+    assert temp["available"] is False
+    assert temp["celsius"] is None
+    assert temp["reason"] == "no baditicker key"
+
+
+def test_pool_detail_live_water_temp_fail_open_when_unconfigured() -> None:
+    """Fail-open: the default app wires NO temperature provider, so the detail reports an
+    explainable unavailable reason (never an exception, never a fabricated reading)."""
+    with TestClient(app) as client:
+        body = client.get("/pools/freibad-heuried").json()
+    temp = body["live_water_temp"]
+    assert temp["available"] is False
+    assert temp["reason"] == "live temperature not configured"
+
+
+def test_absent_address_renders_absent_not_empty_string() -> None:
+    """claim-audit S4 wire pin: `planschbecken-pfingstweid` has NO published address — every WFS
+    address part is a real JSON null (not the "NULL" sentinel), so its catalog address is the
+    empty-string sentinel. The API renders that absence as `null` on both surfaces, never `""`;
+    a pool WITH a published address still serves it verbatim."""
+    with TestClient(app) as client:
+        detail = client.get("/pools/planschbecken-pfingstweid")
+        listing = client.get("/pools").json()
+    assert detail.status_code == 200
+    assert detail.json()["address"] is None  # absent, not ""
+    rows = {p["pool_id"]: p for p in listing["pools"]}
+    assert rows["planschbecken-pfingstweid"]["address"] is None
+    assert rows["hallenbad-city"]["address"] == "Sihlstrasse 71, 8001 Zürich"
+
+
+def _assert_no_null_sentinel(node: object, where: str) -> None:
+    """Recursively assert no JSON string VALUE is the literal "NULL" (the WFS null sentinel —
+    a value merely containing it as a substring would be real data, hence equality, not `in`)."""
+    if isinstance(node, str):
+        assert node != "NULL", where
+    elif isinstance(node, dict):
+        for key, value in node.items():
+            _assert_no_null_sentinel(value, f"{where}.{key}")
+    elif isinstance(node, list):
+        for index, value in enumerate(node):
+            _assert_no_null_sentinel(value, f"{where}[{index}]")
+
+
+def test_no_store_or_wire_value_is_the_null_sentinel(gold_db: Path) -> None:
+    """claim-audit S4 literal scan after a full rebuild (the session `gold_db` IS an atomic
+    `build` over the raw WFS fixtures, whose 50 literal "NULL" values are kept on purpose): no
+    pool row, no `facility_doc`, and no `/pools` / `/pools/{id}` response carries the string
+    "NULL" as a value anywhere."""
+    conn = sqlite3.connect(gold_db)
+    try:
+        pool_rows = conn.execute(
+            "SELECT id, name, kind, address, url, description, phone, facility_doc FROM pool"
+        ).fetchall()
+    finally:
+        conn.close()
+    assert len(pool_rows) == 57
+    for row in pool_rows:
+        pool_id, doc = row[0], row[-1]
+        for value in row[:-1]:
+            assert value != "NULL", pool_id
+        assert doc is not None, pool_id
+        _assert_no_null_sentinel(json.loads(doc), f"facility_doc[{pool_id}]")
+
+    with TestClient(app) as client:
+        listing = client.get("/pools").json()
+        _assert_no_null_sentinel(listing, "/pools")
+        for row_out in listing["pools"]:
+            pool_id = row_out["pool_id"]
+            response = client.get(f"/pools/{pool_id}")
+            assert response.status_code == 200, pool_id
+            _assert_no_null_sentinel(response.json(), f"/pools/{pool_id}")
+
+
+def test_access_types_are_keys_the_client_translates() -> None:
+    """S5: the endpoint serves KEYS, not English prose.
+
+    It used to ship `label`/`description`, which made the server decide the explanation's
+    language. The client now renders both from its own catalogue, so one response serves
+    every locale — and the endpoint's contract is the key set.
+    """
     with TestClient(app) as client:
         response = client.get("/access-types")
     assert response.status_code == 200
-    types = {t["key"]: t for t in response.json()["types"]}
-    assert "women-only" in types
-    assert types["women-only"]["description"]
-    assert "school-reserved" in types
+    types = response.json()["types"]
+    keys = {t["key"] for t in types}
+    assert "women-only" in keys
+    assert "school-reserved" in keys
+    assert all(set(t) == {"key"} for t in types), "no prose should remain on the wire"

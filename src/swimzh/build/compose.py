@@ -16,23 +16,26 @@ from __future__ import annotations
 
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field, replace
-from datetime import datetime
+from datetime import datetime, timedelta
 from enum import Enum
 from typing import Any
 
+from swimzh.domain.admission import Admission, Unknown
 from swimzh.domain.geo import GeoPoint
 from swimzh.domain.lockers import LockerOption
 from swimzh.domain.models import (
     Basin,
     Facility,
     Feature,
+    LanePlanSource,
     Notice,
+    OperatingSeason,
     PoolId,
     PoolIdentity,
     PoolKind,
     Provenance,
 )
-from swimzh.domain.pricing import PriceTable
+from swimzh.domain.rentals import RentalItem
 from swimzh.domain.schedule import ClosureRange, HolidayPolicy
 
 _SCRAPE_SOURCE = "schedule_scraper"
@@ -43,9 +46,9 @@ class ScrapedAspects:
     """The identity-free payload a schedule scrape emits, paired with a ``SourceRef``.
 
     Carries only *aspects* (never a canonical id): the basins/rules parsed from a pool's
-    timetable, plus notices, closures, and the shared admission price for city-run pools.
-    ``compose`` turns it into a scraped ``Facility`` once ``reconcile`` has produced the
-    ``PoolId`` — the id is never minted here.
+    timetable, plus notices, closures, and the page-stated ``Admission`` (the shared city
+    tariff, free, or unknown). ``compose`` turns it into a scraped ``Facility`` once
+    ``reconcile`` has produced the ``PoolId`` — the id is never minted here.
     """
 
     name: str
@@ -55,15 +58,25 @@ class ScrapedAspects:
     basins: tuple[Basin, ...]
     closures: tuple[ClosureRange, ...]
     notices: tuple[Notice, ...]
-    prices: PriceTable | None
+    admission: Admission
     fetched_at: datetime
     # Slice F: richer scraped statics, folded per-aspect like the rest (defaulting empty/None so
     # existing scrape call-sites are unchanged and a curated pool keeps its curated values).
     features: tuple[Feature, ...] = ()
     lockers: tuple[LockerOption, ...] = ()
-    website: str | None = None
-    amenities: frozenset[str] = frozenset()
-    accessibility: str | None = None
+    #: The non-locker half of the same `Mietobjekt | Preis` table the lockers come from
+    #: (mietobjekt-extraction S2). Empty == the page states none; defaulted like its peers.
+    rentals: tuple[RentalItem, ...] = ()
+    #: Sourced from the timetable's "(und Feiertage)" Sunday row; `None` when the page is
+    #: silent. Never defaulted to `NORMAL` — that fabricated a fact on all 57 pools.
+    public_holiday_policy: HolidayPolicy | None = None
+    #: Sourced from the page's last-admission sentence ("Der letzte Einlass erfolgt bis 30
+    #: Minuten vor Badschluss"); `None` when the page is silent, never an assumed zero.
+    last_admission_before: timedelta | None = None
+    #: The facility-level, timetable-free season a SHARED page states once for every member
+    #: (sharedsource-fanout S3: the Planschbecken overview). `None` for every per-pool scrape —
+    #: a scraped pool's seasonal rules carry `ScheduleRule.season` instead, never both.
+    operating_season: OperatingSeason | None = None
 
 
 class Source(Enum):
@@ -100,19 +113,27 @@ def _is_nonempty(value: tuple[Any, ...]) -> bool:
     return bool(value)
 
 
+def _is_known_admission(value: Any) -> bool:
+    """`Unknown` is the admission zero object — only `Free`/`Tariff` count as a supplied fact."""
+    return not isinstance(value, Unknown)
+
+
 # The declarative precedence map — the single place aspect merge policy is stated. No aspect is
-# merged by a hand-written provider ``if``; adding one means one row here.
+# merged by a hand-written provider ``if``; adding one means one row here. ``basins`` is NOT here:
+# it is not a plain replace-the-winner field but a binding-preserving merge (``_merge_basins``),
+# because a stripped pool's ``lane_plan_source`` crosswalk must survive when the scraped schedule
+# wins the timetable — see below.
 _ASPECTS: tuple[_Aspect, ...] = (
-    _Aspect("basins", _has_schedule, CURATED_WINS),
-    _Aspect("prices", _is_not_none, CURATED_WINS),
+    _Aspect("admission", _is_known_admission, CURATED_WINS),
     _Aspect("closures", _is_nonempty, CURATED_WINS),
     _Aspect("notices", _is_nonempty, CURATED_WINS),
     _Aspect("geo", _is_not_none, CURATED_WINS),
     _Aspect("features", _is_nonempty, CURATED_WINS),
     _Aspect("lockers", _is_nonempty, CURATED_WINS),
-    _Aspect("website", _is_not_none, CURATED_WINS),
-    _Aspect("amenities", _is_nonempty, CURATED_WINS),
-    _Aspect("accessibility", _is_not_none, CURATED_WINS),
+    _Aspect("rentals", _is_nonempty, CURATED_WINS),
+    _Aspect("public_holiday_policy", _is_not_none, CURATED_WINS),
+    _Aspect("last_admission_before", _is_not_none, CURATED_WINS),
+    _Aspect("operating_season", _is_not_none, CURATED_WINS),
 )
 
 
@@ -138,15 +159,155 @@ def _scraped_facility(pool_id: PoolId, aspects: ScrapedAspects) -> Facility:
         basins=aspects.basins,
         geo=aspects.geo,
         closures=aspects.closures,
-        public_holiday_policy=HolidayPolicy.NORMAL,
-        prices=aspects.prices,
+        public_holiday_policy=aspects.public_holiday_policy,
+        last_admission_before=aspects.last_admission_before,
+        admission=aspects.admission,
         notices=aspects.notices,
-        website=aspects.website,
         features=aspects.features,
         lockers=aspects.lockers,
-        amenities=aspects.amenities,
-        accessibility=aspects.accessibility,
+        rentals=aspects.rentals,
+        operating_season=aspects.operating_season,
     )
+
+
+def _carry_bindings(
+    scraped_basins: tuple[Basin, ...], curated_basins: tuple[Basin, ...]
+) -> tuple[Basin, ...]:
+    """Scraped basins carry the real schedule; every curated basin that carries a
+    ``lane_plan_source`` (the thin-crosswalk URL→basin binding, plus its WFS-sourced physicals) is
+    preserved ALONGSIDE them, so a stripped pool's lane binding survives the schedule scrape instead
+    of being replaced away. A curated binding whose URL a scraped basin already declares is dropped
+    (the scraped basin wins the schedule); today the scrape emits a single synthetic ``Hauptbecken``
+    with no ``lane_plan_source``, so every authored lane basin is appended untouched.
+
+    Each carried basin is additionally STAMPED WITH THE SCRAPED TIMETABLE (lane-stack-board S1), so
+    it passes ``query.py``'s Decision-#5 gate (``if not basin.rules: continue``) on its own merits
+    rather than being skipped as schedule-less — which is what kept a lane basin from ever producing
+    a ``/swim`` option, and so kept its Belegungsplan off the wire. The rules are not invented: the
+    scrape publishes FACILITY-level opening hours, and a lane basin is open exactly when its
+    facility is.
+
+    Two invariants hold the stamp honest:
+
+    * **I1** — the rules come from **the single scraped basin bearing rules**. ``etl/scrape`` emits
+      exactly one synthetic ``Hauptbecken`` per facility, so this asserts that shape instead of
+      inventing a winner rule for a case that does not exist: more than one rules-bearing scraped
+      basin raises, failing the build loudly rather than picking. A facility with **no** scraped
+      timetable carries its lane basins forward exactly as before (no rules ⇒ no session, no
+      option).
+    * **I2** — a carried basin keeps its own ``basin_id``, ``name``, ``lanes``, ``dimensions``,
+      ``lane_plan_source`` and ``lane_plan``. Only ``rules`` is added; basin identity is never
+      merged, folded or overwritten (the mis-attach ``lane-plan-reconciliation`` exists to prevent).
+    """
+    scraped_urls = {
+        b.lane_plan_source.url for b in scraped_basins if b.lane_plan_source is not None
+    }
+    rules_bearing = tuple(basin for basin in scraped_basins if basin.rules)
+    if len(rules_bearing) > 1:
+        ids = ", ".join(str(basin.basin_id) for basin in rules_bearing)
+        raise ValueError(
+            f"cannot carry a lane binding: {len(rules_bearing)} scraped basins bear rules ({ids}); "
+            "the timetable a lane basin should inherit is ambiguous (I1)"
+        )
+    bound = tuple(
+        basin
+        for basin in curated_basins
+        if basin.lane_plan_source is not None and basin.lane_plan_source.url not in scraped_urls
+    )
+    if not rules_bearing:
+        return scraped_basins + bound
+    timetable = rules_bearing[0].rules
+    return scraped_basins + tuple(replace(basin, rules=timetable) for basin in bound)
+
+
+def carry_lane_plans(
+    curated: Iterable[Facility], stored: Iterable[Facility]
+) -> tuple[Facility, ...]:
+    """Carry the lane plans a previous ``_attach_lanes`` wrote onto a FRESHLY ASSEMBLED curated
+    tier, keyed by ``(facility_id, basin_id, lane_plan_source)``.
+
+    A gold blob is three tiers folded flat: curated (``data/`` + the roster), scraped, and the lane
+    plans attached *after* ``compose``. A ``scrape-gold`` re-layer rebuilds the curated tier from
+    ``data/`` so the fresh scrape is not discarded — but that rebuilt tier carries each basin's
+    ``lane_plan_source`` **binding** with no fetched ``lane_plan``, because the lane phase is a
+    different command on a different cadence. Without this carry a *successful* re-layer would
+    silently DELETE every attached lane plan — the same class of bug as the staleness it replaces
+    (invariant S-2: a re-layer must not delete what a previous run wrote).
+
+    **The binding is part of the key, not just the identity.** ``LanePlanSource`` IS the join key a
+    plan was bound on (``url`` + the ``section`` token routing one sub-grid of a stacked sheet), and
+    both sides have it in hand. Keying on ``(facility_id, basin_id)`` alone would carry the plan
+    parsed from the OLD sheet onto a basin whose ``data/`` binding has since been re-pointed — a
+    stale plan wearing a fresh binding, which is exactly the mis-attach
+    ``docs/concepts/lane-plan-url-binding.md`` exists to prevent. A re-pointed basin carries nothing
+    and waits for the next ``scrape-lanes``, which is the honest state.
+
+    Only ``lane_plan`` crosses, and only onto a basin that has none — basin identity, physicals and
+    the binding itself are never merged (the rule ``_carry_bindings`` states as I2). A basin the
+    previous store no longer holds, or that ``data/`` no longer declares, simply has no plan: the
+    lane tier follows the curated crosswalk, it never resurrects a basin.
+    """
+    plans = {
+        (str(facility.identity.facility_id), str(basin.basin_id), basin.lane_plan_source): (
+            basin.lane_plan
+        )
+        for facility in stored
+        for basin in facility.basins
+        if basin.lane_plan is not None
+    }
+    carried: list[Facility] = []
+    for facility in curated:
+        pool_key = str(facility.identity.facility_id)
+        basins = tuple(
+            replace(basin, lane_plan=plans[_lane_key(pool_key, basin)])
+            if basin.lane_plan is None and _lane_key(pool_key, basin) in plans
+            else basin
+            for basin in facility.basins
+        )
+        carried.append(facility if basins == facility.basins else replace(facility, basins=basins))
+    return tuple(carried)
+
+
+def _lane_key(pool_key: str, basin: Basin) -> tuple[str, str, LanePlanSource | None]:
+    """The join key a carried lane plan must match on: the basin AND the binding it was parsed
+    from. A re-pointed ``lane_plan_source`` is a different key, so no stale plan crosses."""
+    return (pool_key, str(basin.basin_id), basin.lane_plan_source)
+
+
+def _merge_basins(
+    by_source: dict[Source, Facility],
+) -> tuple[tuple[Basin, ...], str | None, bool]:
+    """Fold the two sources' basins, preserving the thin-crosswalk lane binding.
+
+    Unlike a plain aspect (replace with the winner), basins need a merge so the ``lane_plan_source``
+    binding is not discarded when the scraped timetable wins:
+
+    * curated has a schedule (≥1 rule) → **curated-wins wholesale** (scraped basins discarded), as
+      the original per-aspect precedence did — a fully-curated pool is unchanged;
+    * scraped has the schedule (curated has none — the post-strip world) → the scraped basins carry
+      the timetable and every curated basin bearing a ``lane_plan_source`` is CARRIED alongside them
+      **and stamped with that same scraped timetable** (``_carry_bindings``), so the crosswalk
+      binding + physicals survive, ``_attach_lanes`` finds an owner (no ``attached == 0`` abort),
+      and the lane basin goes on to produce its own ``/swim`` session instead of being skipped as
+      schedule-less;
+    * neither has a schedule → keep whichever source has basins (curated first).
+
+    The third return value is ``True`` iff the **scraped** timetable won — the caller uses it to
+    make ``provenance`` honest (a scraped schedule ⇒ ``curated=False``, `_fold`).
+    """
+    curated = by_source.get(Source.CURATED)
+    scraped = by_source.get(Source.SCRAPED)
+    curated_basins = curated.basins if curated is not None else ()
+    scraped_basins = scraped.basins if scraped is not None else ()
+
+    if _has_schedule(curated_basins):
+        return curated_basins, None, False
+    if _has_schedule(scraped_basins):
+        merged = _carry_bindings(scraped_basins, curated_basins)
+        carried = len(merged) - len(scraped_basins)
+        note = f"basins: scraped schedule + {carried} curated lane binding(s)" if carried else None
+        return merged, note, True
+    return (curated_basins or scraped_basins), None, False
 
 
 def _fold(by_source: dict[Source, Facility]) -> tuple[Facility, tuple[str, ...]]:
@@ -172,6 +333,17 @@ def _fold(by_source: dict[Source, Facility]) -> tuple[Facility, tuple[str, ...]]
                 f"{base.identity.name}: {aspect.field} kept from {winner.value} "
                 f"(also supplied by {also})"
             )
+    basins, basin_note, scraped_schedule = _merge_basins(by_source)
+    changes["basins"] = basins
+    if basin_note is not None:
+        notes.append(f"{base.identity.name}: {basin_note}")
+    # Honest provenance: when the SCRAPED timetable won (the post-strip world — the base is the
+    # thin-crosswalk curated blob but the schedule came from the page scraper), adopt the scraped
+    # facility's provenance so ``curated`` reads False and ``source``/``valid_as_of`` name the
+    # scrape. A genuinely curated schedule (illustrative fixtures) keeps ``curated=True``. Freshness
+    # remains the primary signal; this stops the boolean from silently lying.
+    if scraped_schedule and Source.SCRAPED in by_source:
+        changes["provenance"] = by_source[Source.SCRAPED].provenance
     return replace(base, **changes), tuple(notes)
 
 

@@ -11,10 +11,12 @@ turn failures into `Result` values catch it at their boundary.
 from __future__ import annotations
 
 from datetime import time
+from decimal import Decimal
 from typing import assert_never
 
 from swimzh.boundary.curated_dto import (
     AccessDTO,
+    AccompaniedChildrenDTO,
     AdultsOnlyDTO,
     BasinDTO,
     ClosureDTO,
@@ -25,7 +27,9 @@ from swimzh.boundary.curated_dto import (
     ExceptionDTO,
     FamilyDTO,
     FeatureDTO,
+    GenderDiverseDTO,
     GeoDTO,
+    GirlsOnlyDTO,
     HttpStatusDTO,
     LanePlanDTO,
     LanePlanSourceDTO,
@@ -33,6 +37,7 @@ from swimzh.boundary.curated_dto import (
     LaneReservationDTO,
     LaneSwimDTO,
     LockerOptionDTO,
+    OperatingSeasonDTO,
     ParseErrorDTO,
     PlanCoverageDTO,
     PriceEntryDTO,
@@ -42,22 +47,28 @@ from swimzh.boundary.curated_dto import (
     PublicDTO,
     RateLimitedDTO,
     RedirectDTO,
+    RentalItemDTO,
     ResolvedSessionDTO,
     RuleDTO,
     SchemaMismatchDTO,
     SchoolReservedDTO,
+    SeasonDTO,
     SeniorsOnlyDTO,
     TimeoutDTO,
     TooLargeDTO,
     WomenOnlyDTO,
     _BasinKind,
     _BasinSource,
+    _DatePrecision,
     _FeatureKind,
     _LockerCategory,
     _LockerMechanism,
     _PlanConfidence,
     _PriceCategory,
+    _RentalFeeState,
+    _RentalKind,
     _Scope,
+    _Weather,
     _Weekday,
 )
 from swimzh.core.errors import (
@@ -74,9 +85,12 @@ from swimzh.core.errors import (
     TooLarge,
 )
 from swimzh.domain.access import (
+    AccompaniedChildren,
     AdultsOnly,
     ClubReserved,
     FamilyTime,
+    GenderDiverse,
+    GirlsOnly,
     LaneSwim,
     PublicSwim,
     SchoolReserved,
@@ -102,15 +116,21 @@ from swimzh.domain.models import (
     FeatureKind,
     LanePlanSource,
     LanePlanUnavailable,
+    OperatingSeason,
 )
 from swimzh.domain.pricing import PriceCategory, PriceEntry, PriceTable
+from swimzh.domain.rentals import Gratis, Priced, RentalFee, RentalItem, RentalKind, Unstated
 from swimzh.domain.schedule import (
+    AnnualWindow,
     ClosureRange,
+    DatePrecision,
     DayScope,
+    MonthDay,
     ResolvedSession,
     ScheduleException,
     ScheduleRule,
     TimeRange,
+    Weather,
     Weekday,
 )
 
@@ -133,12 +153,18 @@ _SCOPE_TO: dict[DayScope, _Scope] = {
     DayScope.SCHOOL_TERM: "school_term",
     DayScope.SCHOOL_HOLIDAY: "school_holiday",
 }
+_PRECISION_FROM: dict[str, DatePrecision] = {p.value: p for p in DatePrecision}
+_PRECISION_TO: dict[DatePrecision, _DatePrecision] = {
+    DatePrecision.DAY: "day",
+    DatePrecision.MONTH: "month",
+}
+_WEATHER_FROM: dict[str, Weather] = {w.value: w for w in Weather}
+_WEATHER_TO: dict[Weather, _Weather] = {Weather.ANY: "any", Weather.FAIR_ONLY: "fair_only"}
 _CATEGORY_FROM: dict[str, PriceCategory] = {c.value: c for c in PriceCategory}
 _CATEGORY_TO: dict[PriceCategory, _PriceCategory] = {
     PriceCategory.CHILD: "child",
     PriceCategory.YOUTH: "youth",
     PriceCategory.ADULT: "adult",
-    PriceCategory.SENIOR: "senior",
 }
 _BASIN_KIND_FROM: dict[str, BasinKind] = {k.value: k for k in BasinKind}
 _BASIN_KIND_TO: dict[BasinKind, _BasinKind] = {
@@ -209,6 +235,12 @@ def access_from_dto(dto: AccessDTO) -> SessionAccess:
             return ClubReserved(club=club)
         case AdultsOnlyDTO(min_age=min_age, note=note):
             return AdultsOnly(min_age=min_age, note=note)
+        case GirlsOnlyDTO():
+            return GirlsOnly()
+        case GenderDiverseDTO(min_age=min_age):
+            return GenderDiverse(min_age=min_age)
+        case AccompaniedChildrenDTO():
+            return AccompaniedChildren()
         case _ as unreachable:
             assert_never(unreachable)
 
@@ -231,6 +263,12 @@ def access_to_dto(access: SessionAccess) -> AccessDTO:
             return ClubReservedDTO(type="club_reserved", club=club)
         case AdultsOnly(min_age, note):
             return AdultsOnlyDTO(type="adults_only", min_age=min_age, note=note)
+        case GirlsOnly():
+            return GirlsOnlyDTO(type="girls_only")
+        case GenderDiverse(min_age):
+            return GenderDiverseDTO(type="gender_diverse", min_age=min_age)
+        case AccompaniedChildren():
+            return AccompaniedChildrenDTO(type="accompanied_children")
         case _ as unreachable:
             assert_never(unreachable)
 
@@ -242,12 +280,47 @@ def time_range(start: time, end: time) -> TimeRange:
     return TimeRange(start=start, end=end)
 
 
+def season_from_dto(dto: SeasonDTO) -> AnnualWindow:
+    return AnnualWindow(
+        start=MonthDay(month=dto.start_month, day=dto.start_day),
+        end=MonthDay(month=dto.end_month, day=dto.end_day),
+        precision=_PRECISION_FROM[dto.precision],
+    )
+
+
+def season_to_dto(window: AnnualWindow) -> SeasonDTO:
+    return SeasonDTO(
+        start_month=window.start.month,
+        start_day=window.start.day,
+        end_month=window.end.month,
+        end_day=window.end.day,
+        precision=_PRECISION_TO[window.precision],
+    )
+
+
+def operating_season_from_dto(dto: OperatingSeasonDTO) -> OperatingSeason:
+    return OperatingSeason(
+        window=season_from_dto(dto.window),
+        weather=_WEATHER_FROM[dto.weather],
+    )
+
+
+def operating_season_to_dto(season: OperatingSeason) -> OperatingSeasonDTO:
+    return OperatingSeasonDTO(
+        window=season_to_dto(season.window),
+        weather=_WEATHER_TO[season.weather],
+    )
+
+
 def rule_from_dto(dto: RuleDTO) -> ScheduleRule:
     return ScheduleRule(
         weekdays=frozenset(_WEEKDAY_FROM[w] for w in dto.weekdays),
         time=time_range(dto.start, dto.end),
         access=access_from_dto(dto.access),
         scope=_SCOPE_FROM[dto.scope],
+        source_text=dto.source_text,
+        season=season_from_dto(dto.season) if dto.season is not None else None,
+        weather=_WEATHER_FROM[dto.weather],
     )
 
 
@@ -258,20 +331,32 @@ def rule_to_dto(rule: ScheduleRule) -> RuleDTO:
         end=rule.time.end,
         access=access_to_dto(rule.access),
         scope=_SCOPE_TO[rule.scope],
+        source_text=rule.source_text,
+        season=season_to_dto(rule.season) if rule.season is not None else None,
+        weather=_WEATHER_TO[rule.weather],
     )
 
 
 def resolved_from_dto(dto: ResolvedSessionDTO) -> ResolvedSession:
-    return ResolvedSession(time=time_range(dto.start, dto.end), access=access_from_dto(dto.access))
+    return ResolvedSession(
+        time=time_range(dto.start, dto.end),
+        access=access_from_dto(dto.access),
+        weather=_WEATHER_FROM[dto.weather],
+    )
 
 
 def resolved_to_dto(session: ResolvedSession) -> ResolvedSessionDTO:
     return ResolvedSessionDTO(
-        start=session.time.start, end=session.time.end, access=access_to_dto(session.access)
+        start=session.time.start,
+        end=session.time.end,
+        access=access_to_dto(session.access),
+        weather=_WEATHER_TO[session.weather],
     )
 
 
 def exception_from_dto(dto: ExceptionDTO) -> ScheduleException:
+    # `reason` is classified into a code by ScheduleException.__post_init__, so every
+    # construction path gets it — not just this one.
     return ScheduleException(
         date=dto.date,
         closed=dto.closed,
@@ -578,6 +663,77 @@ def locker_to_dto(locker: LockerOption) -> LockerOptionDTO:
     )
 
 
+_RENTAL_KIND_FROM: dict[str, RentalKind] = {k.value: k for k in RentalKind}
+
+
+def _rental_kind_to_dto(kind: RentalKind) -> _RentalKind:
+    """Exhaustive by construction (the fee-union style): a future `RentalKind` member is a
+    TYPE error here until it gets a wire value — never a runtime `KeyError` from a dict a
+    later edit forgot."""
+    match kind:
+        case RentalKind.TOWEL:
+            return "towel"
+        case RentalKind.SWIMWEAR:
+            return "swimwear"
+        case RentalKind.GOGGLES:
+            return "goggles"
+        case RentalKind.CABIN:
+            return "cabin"
+        case RentalKind.SUNLOUNGER:
+            return "sunlounger"
+        case RentalKind.PARASOL:
+            return "parasol"
+        case RentalKind.OTHER:
+            return "other"
+        case _ as unreachable:
+            assert_never(unreachable)
+
+
+def _rental_fee_from_dto(dto: RentalItemDTO) -> RentalFee:
+    """A non-null `fee_chf` means `Priced`; the discriminant means `Gratis`; anything else is
+    the honest `Unstated` — mirroring `_admission_from_stored`'s prices-first reading."""
+    if dto.fee_chf is not None:
+        return Priced(dto.fee_chf)
+    if dto.fee_state == "gratis":
+        return Gratis()
+    return Unstated()
+
+
+def _rental_fee_to_dto(fee: RentalFee) -> tuple[Decimal | None, _RentalFeeState | None]:
+    """Project the fee union onto the two stored keys (`fee_chf`, `fee_state`)."""
+    match fee:
+        case Priced(amount_chf):
+            return amount_chf, None
+        case Gratis():
+            return None, "gratis"
+        case Unstated():
+            return None, None
+        case _ as unreachable:
+            assert_never(unreachable)
+
+
+def rental_from_dto(dto: RentalItemDTO) -> RentalItem:
+    return RentalItem(
+        kind=_RENTAL_KIND_FROM[dto.kind],
+        fee=_rental_fee_from_dto(dto),
+        deposit_chf=dto.deposit_chf,
+        period=dto.period,
+        raw=dto.raw,
+    )
+
+
+def rental_to_dto(rental: RentalItem) -> RentalItemDTO:
+    fee_chf, fee_state = _rental_fee_to_dto(rental.fee)
+    return RentalItemDTO(
+        kind=_rental_kind_to_dto(rental.kind),
+        fee_chf=fee_chf,
+        fee_state=fee_state,
+        deposit_chf=rental.deposit_chf,
+        period=rental.period,
+        raw=rental.raw,
+    )
+
+
 # --- pricing & geo ------------------------------------------------------------------
 
 
@@ -585,7 +741,10 @@ def price_table_from_dto(dto: PriceTableDTO) -> PriceTable:
     return PriceTable(
         entries=tuple(
             PriceEntry(
-                category=_CATEGORY_FROM[e.category], amount_chf=e.amount_chf, display=e.display
+                category=_CATEGORY_FROM[e.category],
+                amount_chf=e.amount_chf,
+                display=e.display,
+                min_age=e.min_age,
             )
             for e in dto.entries
         ),
@@ -598,7 +757,10 @@ def price_table_to_dto(table: PriceTable) -> PriceTableDTO:
     return PriceTableDTO(
         entries=[
             PriceEntryDTO(
-                category=_CATEGORY_TO[e.category], amount_chf=e.amount_chf, display=e.display
+                category=_CATEGORY_TO[e.category],
+                amount_chf=e.amount_chf,
+                display=e.display,
+                min_age=e.min_age,
             )
             for e in table.entries
         ],

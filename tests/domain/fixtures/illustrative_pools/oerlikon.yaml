@@ -1,0 +1,48 @@
+# Hallenbad Oerlikon — CURATED, ILLUSTRATIVE DATA (not verified). See city.yaml header.
+# Demonstrates a facility that CLOSES on public holidays and a late-summer closure.
+
+facility_id: "hallenbad-oerlikon"
+address: "Wallisellenstrasse 100, 8050 Zürich"
+source: "stadt-zuerich.ch/hallenbaeder/oerlikon (curated, illustrative)"
+valid_as_of: "2026-07-18"
+geo: { lat: 47.4106, lon: 8.5528 }
+public_holiday_policy: "closed"
+
+prices:
+  valid_as_of: "2026-07-18"
+  source_url: "https://www.stadt-zuerich.ch/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/hallenbaeder/oerlikon.html"
+  entries:
+    - { category: "adult", amount_chf: "8.00", display: "Erwachsene (ab 20 J.) CHF 8.00", min_age: 20 }
+    - { category: "youth", amount_chf: "6.00", display: "Jugendliche (ab 16 J.) CHF 6.00", min_age: 16 }
+    - { category: "child", amount_chf: "4.00", display: "Kinder (ab 6 J.) CHF 4.00", min_age: 6 }
+
+closures:
+  - { start: "2026-08-02", end: "2026-08-23", reason: "Betriebsferien" }
+
+basins:
+  - basin_id: "oerlikon-50m"
+    name: "50m-Becken"
+    kind: "lap"
+    dimensions: { length_m: "50" }
+    # First-class lane document: this basin's Belegungsplan (single-basin sheet). The Oerlikon
+    # Nichtschwimmer-/Sprungbecken combined sheet is a STACKED sheet (S2), not authored here.
+    lane_plan_source:
+      url: "https://www.stadt-zuerich.ch/content/dam/web/de/stadtleben/sport-und-erholung/dokumente/badeanlagen/belegungsplaene/oerlikon-schwimmerbecken.pdf"
+    rules:
+      - { weekdays: ["mon", "tue", "wed", "thu", "fri"], start: "06:00", end: "08:00", access: { type: "lane_swim" } }
+      - { weekdays: ["mon", "tue", "wed", "thu", "fri"], start: "08:00", end: "21:30", access: { type: "public" } }
+      - { weekdays: ["sat", "sun"], start: "08:00", end: "18:00", access: { type: "public" } }
+
+  - basin_id: "oerlikon-sprungbecken"
+    name: "Sprungbecken"
+    kind: "diving"
+    # First-class lane document on a STACKED sheet: the combined Nichtschwimmer-/Sprungbecken
+    # Belegungsplan carries two basins side by side under one URL. `section` routes this basin's
+    # parsed sub-grid by matching the token against the parsed header. The sibling Nichtschwimmer
+    # section is not curated here, so it stays an honest UnboundPlan (audited, not attached).
+    lane_plan_source:
+      url: "https://www.stadt-zuerich.ch/content/dam/web/de/stadtleben/sport-und-erholung/dokumente/badeanlagen/belegungsplaene/oerlikon-nichtschwimmer-sprungbecken.pdf"
+      section: "sprungbecken"
+    rules:
+      - { weekdays: ["wed"], start: "17:00", end: "19:00", access: { type: "family", note: "Kinder-Springen" } }
+      - { weekdays: ["sat"], start: "10:00", end: "16:00", access: { type: "family" } }

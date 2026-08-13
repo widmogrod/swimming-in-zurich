@@ -325,23 +325,49 @@ def club_roster(plan: LanePlan) -> tuple[ClubSlot, ...]:
     return tuple(slots)
 
 
-def best_public_time(plan: LanePlan, weekday: Weekday) -> PublicWindow | None:
+def _clipped_to(span: TimeRange, within: TimeRange | None) -> TimeRange | None:
+    """`span` intersected with `within` (the whole of `span` when `within` is None), or None
+    when the two do not overlap. Both ends are half-open, so a touching pair yields None."""
+    if within is None:
+        return span
+    lo = max(span.start, within.start)
+    hi = min(span.end, within.end)
+    return TimeRange(lo, hi) if lo < hi else None
+
+
+def best_public_time(
+    plan: LanePlan, weekday: Weekday, within: TimeRange | None = None
+) -> PublicWindow | None:
     """The "best time to come": the window with the MOST public lanes free (while ≥1 is
     public) on `weekday`, or `None` if no lane is ever public that day. Ties go to the
     earliest window. Public-lane count only changes at a public reservation's boundary, so
-    the day is cut at those boundaries and adjacent equal-count cuts are merged."""
-    publics = [
-        r for r in plan.reservations if weekday in r.weekdays and isinstance(r.access, PublicSwim)
-    ]
+    the day is cut at those boundaries and adjacent equal-count cuts are merged.
+
+    `within` BOUNDS the search to one time range — the mirror of `lane_availability_timeline`'s
+    own `within`, and for the same reason: a window is only a fact about the thing it is
+    attached to. `find_swim_options` passes the SESSION, because a `SwimOption` *is* one
+    session and "come at 09:00" is not an answer for a row whose hours end at 08:00; bounding
+    it also makes the count agree with that session's `lane_availability_timeline` peak by
+    construction rather than by coincidence of hours. `lane_panel` deliberately passes NOTHING:
+    a `LanePanel` is a per-DAY object, so the whole weekday is its correct scope. Keep the two
+    callers distinct — collapsing them would make one of the two lie.
+    """
+    publics: list[tuple[TimeRange, frozenset[int]]] = []
+    for reservation in plan.reservations:
+        if weekday not in reservation.weekdays or not isinstance(reservation.access, PublicSwim):
+            continue
+        clipped = _clipped_to(reservation.time, within)
+        if clipped is not None:
+            publics.append((clipped, reservation.lanes))
     if not publics:
         return None
-    bounds = sorted({r.time.start for r in publics} | {r.time.end for r in publics})
+    bounds = sorted({t.start for t, _ in publics} | {t.end for t, _ in publics})
     windows: list[PublicWindow] = []
     for lo, hi in pairwise(bounds):
         lanes: set[int] = set()
-        for r in publics:
-            if r.time.start <= lo and hi <= r.time.end:
-                lanes |= r.lanes
+        for span, reserved in publics:
+            if span.start <= lo and hi <= span.end:
+                lanes |= reserved
         count = len(lanes)
         if count == 0:  # a gap with no public lanes — never a "best time"
             continue

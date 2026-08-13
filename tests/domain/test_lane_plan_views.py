@@ -203,6 +203,46 @@ def test_best_public_counts_overlapping_public_reservations_as_a_union() -> None
     assert best == PublicWindow(time=TimeRange(time(7, 0), time(8, 0)), public_lanes=3)
 
 
+# --- best_public_time, bounded by `within` (lane-stack-board S2) -------------------------
+#
+# `/swim` attaches this window to a `SwimOption`, which IS one session, so it passes the
+# session as `within`. `/pools`' `lane_panel` passes nothing, because a `LanePanel` is a
+# per-day object. The default must therefore stay whole-day, and the bound must actually bind.
+
+
+def test_best_public_within_a_session_ignores_windows_outside_it() -> None:
+    # The day's best window is 08:00–10:00 (6 lanes), but a 06:00–08:00 session cannot tell
+    # anyone to "come at 08:00" — inside it only the 4-lane morning window exists.
+    best = best_public_time(CITY, Weekday.TUESDAY, TimeRange(time(6, 0), time(8, 0)))
+    assert best == PublicWindow(time=TimeRange(time(6, 0), time(8, 0)), public_lanes=4)
+
+
+def test_best_public_within_clips_a_window_starting_before_the_bound() -> None:
+    # The 08:00–10:00 all-public block starts before a session opening at 09:00, so the window
+    # is reported FROM the bound: a band drawn from 08:00 behind a row that opens at 09:00
+    # would overhang the row.
+    best = best_public_time(CITY, Weekday.TUESDAY, TimeRange(time(9, 0), time(12, 0)))
+    assert best == PublicWindow(time=TimeRange(time(9, 0), time(10, 0)), public_lanes=6)
+
+
+def test_best_public_within_clips_a_window_running_past_the_bound() -> None:
+    # The mirror case, at the far end: the same 08:00–10:00 block runs past a session that ends
+    # at 09:00, so the window must be reported as 08:00–09:00. Note the bound also KEEPS the
+    # right window — the earlier 06:00–08:00 stretch is public too, but only 4 lanes.
+    best = best_public_time(CITY, Weekday.TUESDAY, TimeRange(time(6, 0), time(9, 0)))
+    assert best == PublicWindow(time=TimeRange(time(8, 0), time(9, 0)), public_lanes=6)
+
+
+def test_best_public_within_a_session_with_no_public_lane_is_none() -> None:
+    # A bound missing every public block yields None — never a zero-lane window.
+    assert best_public_time(CITY, Weekday.TUESDAY, TimeRange(time(20, 0), time(22, 0))) is None
+
+
+def test_best_public_without_a_bound_is_unchanged() -> None:
+    # The `/pools` path: omitting `within` behaves exactly as before the parameter existed.
+    assert best_public_time(CITY, Weekday.TUESDAY, None) == best_public_time(CITY, Weekday.TUESDAY)
+
+
 # --- lane_panel (the aggregate the facility-detail view consumes) ------------------------
 
 

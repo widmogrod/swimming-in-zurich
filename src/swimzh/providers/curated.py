@@ -1,9 +1,12 @@
-"""The curated-data provider: loads hand-authored YAML into the domain.
+"""The curated-data provider: loads the thin-crosswalk YAML into the domain.
 
 Curated YAML is a first-class provider — the same `Result[..., ProviderError]` contract as
-any network adapter. For v1 it is the *only* source of schedules/prices (we deliberately do
-not scrape), so it is where the product's accuracy lives. Every facility carries provenance
-(`valid_as_of`, `curated=True`) so downstream answers can be honest about freshness.
+any network adapter. Post-strip it is a **thin crosswalk** (`facility_id` + basins carrying only
+`lane_plan_source`), not a source of schedules/prices/physicals: those are all sourced (WFS
+roster + page/price/notice scrapers). A loaded facility carries `curated=True` provenance here,
+but `build/compose.py` overrides it to `curated=False` once the scraped timetable wins, so a
+scraped-schedule pool never reads as hand-verified. `ScheduleFreshness` is the primary freshness
+signal downstream.
 
 DTO↔domain mapping lives in `swimzh.boundary.mapping` (shared with the gold codec); this
 module handles YAML I/O, validation, and the facility-level assembly that needs the registry.
@@ -21,6 +24,7 @@ from swimzh.boundary import mapping
 from swimzh.boundary.curated_dto import CalendarDTO, FacilityDTO, RegistryDTO
 from swimzh.core.errors import ParseError, ProviderError, SchemaMismatch
 from swimzh.core.result import Err, Ok, Result
+from swimzh.domain.admission import Tariff, Unknown
 from swimzh.domain.calendar import HolidayRange, ZurichCalendar
 from swimzh.domain.models import (
     Facility,
@@ -80,20 +84,31 @@ def _validate[T](model: type[T], data: object, where: str) -> T:
 
 
 def _map_facility(dto: FacilityDTO, identity: PoolIdentity) -> Facility:
+    # `address`/`source` are optional since S1 (a stripped pool file omits them). This provider
+    # has NO roster, so it cannot source the address here — it leaves an empty sentinel that the
+    # build/seed path (`build_spine`) overwrites with the WFS roster's `entry.address` before the
+    # blob is serialized (never a served ""). `source` falls back to the build-assigned `_SOURCE`.
     return Facility(
         identity=identity,
-        address=dto.address,
-        provenance=Provenance(source=dto.source, curated=True, valid_as_of=dto.valid_as_of),
+        address=dto.address or "",
+        provenance=Provenance(
+            source=dto.source or _SOURCE, curated=True, valid_as_of=dto.valid_as_of
+        ),
         basins=tuple(mapping.basin_from_dto(b) for b in dto.basins),
         geo=mapping.geo_from_dto(dto.geo) if dto.geo is not None else None,
-        amenities=frozenset(dto.amenities),
         closures=tuple(mapping.closure_from_dto(c) for c in dto.closures),
-        public_holiday_policy=_POLICIES[dto.public_holiday_policy],
-        prices=mapping.price_table_from_dto(dto.prices) if dto.prices is not None else None,
-        website=dto.website,
+        public_holiday_policy=(
+            _POLICIES[dto.public_holiday_policy] if dto.public_holiday_policy is not None else None
+        ),
+        # A curated price table is a stated `Tariff`; an absent one is the honest `Unknown` —
+        # a thin-crosswalk file states nothing about admission, it never asserts free.
+        admission=(
+            Tariff(mapping.price_table_from_dto(dto.prices))
+            if dto.prices is not None
+            else Unknown()
+        ),
         features=tuple(mapping.feature_from_dto(f) for f in dto.features),
         lockers=tuple(mapping.locker_from_dto(lo) for lo in dto.lockers),
-        accessibility=dto.accessibility,
         last_admission_before=dto.last_admission_before,
     )
 
@@ -114,8 +129,10 @@ def _build_registry(dto: RegistryDTO) -> Registry:
             facility_id=reconstruct_pool_id(i.facility_id),
             name=i.name,
             kind=_KINDS[i.kind],
-            geo_sport_id=i.geo_sport_id,
+            # `geo_sport_id` is left at its domain default (`None`) here: it is no longer read from
+            # the registry crosswalk but SOURCED from the WFS `poi_id` in `build_spine` (S5b).
             crowdmonitor_keys=tuple(i.crowdmonitor_keys),
+            baditicker_poiid=i.baditicker_poiid,
             aliases=tuple(i.aliases),
         )
         for i in dto.facilities

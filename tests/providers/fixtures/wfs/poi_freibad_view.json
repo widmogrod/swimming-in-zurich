@@ -1,0 +1,180 @@
+{
+ "type": "FeatureCollection",
+ "features": [
+  {
+   "type": "Feature",
+   "id": "poi_freibad_view.1",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     8.501339,
+     47.38025
+    ]
+   },
+   "properties": {
+    "name": "Freibad Letzigraben",
+    "namenzus": null,
+    "strasse": "Edelweissstrasse 5, 8048 Zürich",
+    "hausnummer": null,
+    "plz": null,
+    "ort": null,
+    "www": "https://www.sportamt.ch/freibad-letzigraben",
+    "tel": "+41 44 413 57 00",
+    "poi_id": null,
+    "kategorie": null,
+    "infrastruktur": "NULL",
+    "bemerkung": null
+   }
+  },
+  {
+   "type": "Feature",
+   "id": "poi_freibad_view.2",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     8.473779,
+     47.409527
+    ]
+   },
+   "properties": {
+    "name": "Freibad Zwischen den Hölzern",
+    "namenzus": null,
+    "strasse": "8102 Oberengstringen",
+    "hausnummer": null,
+    "plz": null,
+    "ort": null,
+    "www": "https://www.sportamt.ch/freibad-zwischen-hoelzern",
+    "tel": "+41 44 413 57 70",
+    "poi_id": null,
+    "kategorie": null,
+    "infrastruktur": "NULL",
+    "bemerkung": null
+   }
+  },
+  {
+   "type": "Feature",
+   "id": "poi_freibad_view.3",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     8.571325,
+     47.408675
+    ]
+   },
+   "properties": {
+    "name": "Freibad Auhof",
+    "namenzus": null,
+    "strasse": "Luegislandstrasse 160, 8051 Zürich",
+    "hausnummer": null,
+    "plz": null,
+    "ort": null,
+    "www": "https://www.sportamt.ch/freibad-auhof",
+    "tel": "+41 44 413 57 40",
+    "poi_id": null,
+    "kategorie": null,
+    "infrastruktur": "NULL",
+    "bemerkung": null
+   }
+  },
+  {
+   "type": "Feature",
+   "id": "poi_freibad_view.4",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     8.539021,
+     47.405524
+    ]
+   },
+   "properties": {
+    "name": "Freibad Allenmoos",
+    "namenzus": null,
+    "strasse": "Ringstrasse 79, 8057 Zürich",
+    "hausnummer": null,
+    "plz": null,
+    "ort": null,
+    "www": "https://www.sportamt.ch/freibad-allenmoos",
+    "tel": "+41 44 413 57 30",
+    "poi_id": null,
+    "kategorie": null,
+    "infrastruktur": "NULL",
+    "bemerkung": null
+   }
+  },
+  {
+   "type": "Feature",
+   "id": "poi_freibad_view.5",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     8.576846,
+     47.375609
+    ]
+   },
+   "properties": {
+    "name": "Freibad Dolder",
+    "namenzus": null,
+    "strasse": "Adlisbergstrasse 36, 8044 Zürich",
+    "hausnummer": null,
+    "plz": null,
+    "ort": null,
+    "www": "https://www.doldersports.com/summer-front-page/",
+    "tel": "+41 44 267 70 80",
+    "poi_id": null,
+    "kategorie": null,
+    "infrastruktur": "Parkplatz_Restaurant täglich geöffnet_grösste offene Kunsteisfläche Europas",
+    "bemerkung": null
+   }
+  },
+  {
+   "type": "Feature",
+   "id": "poi_freibad_view.6",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     8.505062,
+     47.36711
+    ]
+   },
+   "properties": {
+    "name": "Freibad Heuried",
+    "namenzus": null,
+    "strasse": "8055 Zürich",
+    "hausnummer": null,
+    "plz": null,
+    "ort": null,
+    "www": "https://www.sportamt.ch/freibad-heuried",
+    "tel": "+41 44 413 95 30",
+    "poi_id": null,
+    "kategorie": null,
+    "infrastruktur": "NULL",
+    "bemerkung": null
+   }
+  },
+  {
+   "type": "Feature",
+   "id": "poi_freibad_view.7",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     8.548248,
+     47.423588
+    ]
+   },
+   "properties": {
+    "name": "Freibad Seebach",
+    "namenzus": null,
+    "strasse": "Glatttalstrasse 43, 8052 Zürich",
+    "hausnummer": null,
+    "plz": null,
+    "ort": null,
+    "www": "https://www.sportamt.ch/freibad-seebach",
+    "tel": "+41 44 413 57 50",
+    "poi_id": null,
+    "kategorie": null,
+    "infrastruktur": "NULL",
+    "bemerkung": null
+   }
+  }
+ ]
+}

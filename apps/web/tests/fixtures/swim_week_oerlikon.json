@@ -1,0 +1,1174 @@
+{
+  "facility": "Hallenbad Oerlikon",
+  "days": [
+    {
+      "label": "Mon 20 Jul",
+      "date": "2026-07-20",
+      "answer": {
+        "options": [
+          {
+            "facility": "Hallenbad Oerlikon",
+            "facility_id": "hallenbad-oerlikon",
+            "kind": "indoor",
+            "basin": "50m-Becken",
+            "length_m": 50.0,
+            "lanes": null,
+            "start": "06:00",
+            "end": "08:00",
+            "access": "LaneSwim",
+            "eligible": true,
+            "reason": "lane swimming \u2014 open to all",
+            "price": "Erwachsene CHF 8.00",
+            "distance_km": null,
+            "open_now": false,
+            "valid_as_of": "2026-07-18",
+            "source": "stadt-zuerich.ch/hallenbaeder/oerlikon (curated, illustrative)",
+            "curated": true,
+            "lane_availability": {
+              "lane_count": 8,
+              "public_lanes": 6,
+              "reserved_lanes": 2,
+              "public_until": "20:00",
+              "partial": false
+            },
+            "lane_timeline": {
+              "segments": [
+                {
+                  "start": "06:00",
+                  "end": "06:30",
+                  "lane_count": 8,
+                  "public_lanes": 6,
+                  "reserved_lanes": 2,
+                  "partial": false
+                },
+                {
+                  "start": "06:30",
+                  "end": "07:30",
+                  "lane_count": 8,
+                  "public_lanes": 5,
+                  "reserved_lanes": 3,
+                  "partial": false
+                },
+                {
+                  "start": "07:30",
+                  "end": "08:00",
+                  "lane_count": 8,
+                  "public_lanes": 5,
+                  "reserved_lanes": 3,
+                  "partial": false
+                }
+              ]
+            }
+          },
+          {
+            "facility": "Hallenbad Oerlikon",
+            "facility_id": "hallenbad-oerlikon",
+            "kind": "indoor",
+            "basin": "50m-Becken",
+            "length_m": 50.0,
+            "lanes": null,
+            "start": "08:00",
+            "end": "21:30",
+            "access": "PublicSwim",
+            "eligible": true,
+            "reason": "public swimming \u2014 open to all",
+            "price": "Erwachsene CHF 8.00",
+            "distance_km": null,
+            "open_now": true,
+            "valid_as_of": "2026-07-18",
+            "source": "stadt-zuerich.ch/hallenbaeder/oerlikon (curated, illustrative)",
+            "curated": true,
+            "lane_availability": {
+              "lane_count": 8,
+              "public_lanes": 5,
+              "reserved_lanes": 3,
+              "public_until": "20:00",
+              "partial": false
+            },
+            "lane_timeline": {
+              "segments": [
+                {
+                  "start": "08:00",
+                  "end": "09:00",
+                  "lane_count": 8,
+                  "public_lanes": 4,
+                  "reserved_lanes": 4,
+                  "partial": false
+                },
+                {
+                  "start": "09:00",
+                  "end": "09:30",
+                  "lane_count": 8,
+                  "public_lanes": 5,
+                  "reserved_lanes": 3,
+                  "partial": false
+                },
+                {
+                  "start": "09:30",
+                  "end": "10:00",
+                  "lane_count": 8,
+                  "public_lanes": 6,
+                  "reserved_lanes": 2,
+                  "partial": false
+                },
+                {
+                  "start": "10:00",
+                  "end": "11:00",
+                  "lane_count": 8,
+                  "public_lanes": 5,
+                  "reserved_lanes": 3,
+                  "partial": false
+                },
+                {
+                  "start": "11:00",
+                  "end": "11:30",
+                  "lane_count": 8,
+                  "public_lanes": 6,
+                  "reserved_lanes": 2,
+                  "partial": false
+                },
+                {
+                  "start": "11:30",
+                  "end": "12:00",
+                  "lane_count": 8,
+                  "public_lanes": 7,
+                  "reserved_lanes": 1,
+                  "partial": false
+                },
+                {
+                  "start": "12:00",
+                  "end": "13:00",
+                  "lane_count": 8,
+                  "public_lanes": 5,
+                  "reserved_lanes": 3,
+                  "partial": false
+                },
+                {
+                  "start": "13:00",
+                  "end": "14:00",
+                  "lane_count": 8,
+                  "public_lanes": 8,
+                  "reserved_lanes": 0,
+                  "partial": false
+                },
+                {
+                  "start": "14:00",
+                  "end": "15:00",
+                  "lane_count": 8,
+                  "public_lanes": 7,
+                  "reserved_lanes": 1,
+                  "partial": false
+                },
+                {
+                  "start": "15:00",
+                  "end": "16:00",
+                  "lane_count": 8,
+                  "public_lanes": 8,
+                  "reserved_lanes": 0,
+                  "partial": false
+                },
+                {
+                  "start": "16:00",
+                  "end": "18:30",
+                  "lane_count": 8,
+                  "public_lanes": 4,
+                  "reserved_lanes": 4,
+                  "partial": false
+                },
+                {
+                  "start": "18:30",
+                  "end": "20:00",
+                  "lane_count": 8,
+                  "public_lanes": 4,
+                  "reserved_lanes": 4,
+                  "partial": false
+                },
+                {
+                  "start": "20:00",
+                  "end": "21:00",
+                  "lane_count": 8,
+                  "public_lanes": 0,
+                  "reserved_lanes": 8,
+                  "partial": false
+                },
+                {
+                  "start": "21:00",
+                  "end": "21:30",
+                  "lane_count": 8,
+                  "public_lanes": 0,
+                  "reserved_lanes": 8,
+                  "partial": false
+                }
+              ]
+            }
+          }
+        ],
+        "statuses": [],
+        "warnings": [],
+        "notices": []
+      }
+    },
+    {
+      "label": "Tue 21 Jul",
+      "date": "2026-07-21",
+      "answer": {
+        "options": [
+          {
+            "facility": "Hallenbad Oerlikon",
+            "facility_id": "hallenbad-oerlikon",
+            "kind": "indoor",
+            "basin": "50m-Becken",
+            "length_m": 50.0,
+            "lanes": null,
+            "start": "06:00",
+            "end": "08:00",
+            "access": "LaneSwim",
+            "eligible": true,
+            "reason": "lane swimming \u2014 open to all",
+            "price": "Erwachsene CHF 8.00",
+            "distance_km": null,
+            "open_now": false,
+            "valid_as_of": "2026-07-18",
+            "source": "stadt-zuerich.ch/hallenbaeder/oerlikon (curated, illustrative)",
+            "curated": true,
+            "lane_availability": {
+              "lane_count": 8,
+              "public_lanes": 6,
+              "reserved_lanes": 2,
+              "public_until": "20:00",
+              "partial": false
+            },
+            "lane_timeline": {
+              "segments": [
+                {
+                  "start": "06:00",
+                  "end": "06:30",
+                  "lane_count": 8,
+                  "public_lanes": 6,
+                  "reserved_lanes": 2,
+                  "partial": false
+                },
+                {
+                  "start": "06:30",
+                  "end": "07:30",
+                  "lane_count": 8,
+                  "public_lanes": 5,
+                  "reserved_lanes": 3,
+                  "partial": false
+                },
+                {
+                  "start": "07:30",
+                  "end": "08:00",
+                  "lane_count": 8,
+                  "public_lanes": 4,
+                  "reserved_lanes": 4,
+                  "partial": false
+                }
+              ]
+            }
+          },
+          {
+            "facility": "Hallenbad Oerlikon",
+            "facility_id": "hallenbad-oerlikon",
+            "kind": "indoor",
+            "basin": "50m-Becken",
+            "length_m": 50.0,
+            "lanes": null,
+            "start": "08:00",
+            "end": "21:30",
+            "access": "PublicSwim",
+            "eligible": true,
+            "reason": "public swimming \u2014 open to all",
+            "price": "Erwachsene CHF 8.00",
+            "distance_km": null,
+            "open_now": true,
+            "valid_as_of": "2026-07-18",
+            "source": "stadt-zuerich.ch/hallenbaeder/oerlikon (curated, illustrative)",
+            "curated": true,
+            "lane_availability": {
+              "lane_count": 8,
+              "public_lanes": 4,
+              "reserved_lanes": 4,
+              "public_until": "20:00",
+              "partial": false
+            },
+            "lane_timeline": {
+              "segments": [
+                {
+                  "start": "08:00",
+                  "end": "09:30",
+                  "lane_count": 8,
+                  "public_lanes": 4,
+                  "reserved_lanes": 4,
+                  "partial": false
+                },
+                {
+                  "start": "09:30",
+                  "end": "12:00",
+                  "lane_count": 8,
+                  "public_lanes": 7,
+                  "reserved_lanes": 1,
+                  "partial": false
+                },
+                {
+                  "start": "12:00",
+                  "end": "14:00",
+                  "lane_count": 8,
+                  "public_lanes": 8,
+                  "reserved_lanes": 0,
+                  "partial": false
+                },
+                {
+                  "start": "14:00",
+                  "end": "14:30",
+                  "lane_count": 8,
+                  "public_lanes": 7,
+                  "reserved_lanes": 1,
+                  "partial": false
+                },
+                {
+                  "start": "14:30",
+                  "end": "15:30",
+                  "lane_count": 8,
+                  "public_lanes": 6,
+                  "reserved_lanes": 2,
+                  "partial": false
+                },
+                {
+                  "start": "15:30",
+                  "end": "16:00",
+                  "lane_count": 8,
+                  "public_lanes": 7,
+                  "reserved_lanes": 1,
+                  "partial": false
+                },
+                {
+                  "start": "16:00",
+                  "end": "16:30",
+                  "lane_count": 8,
+                  "public_lanes": 4,
+                  "reserved_lanes": 4,
+                  "partial": false
+                },
+                {
+                  "start": "16:30",
+                  "end": "18:30",
+                  "lane_count": 8,
+                  "public_lanes": 4,
+                  "reserved_lanes": 4,
+                  "partial": false
+                },
+                {
+                  "start": "18:30",
+                  "end": "20:00",
+                  "lane_count": 8,
+                  "public_lanes": 4,
+                  "reserved_lanes": 4,
+                  "partial": false
+                },
+                {
+                  "start": "20:00",
+                  "end": "21:00",
+                  "lane_count": 8,
+                  "public_lanes": 0,
+                  "reserved_lanes": 8,
+                  "partial": false
+                },
+                {
+                  "start": "21:00",
+                  "end": "21:30",
+                  "lane_count": 8,
+                  "public_lanes": 0,
+                  "reserved_lanes": 8,
+                  "partial": false
+                }
+              ]
+            }
+          }
+        ],
+        "statuses": [],
+        "warnings": [],
+        "notices": []
+      }
+    },
+    {
+      "label": "Wed 22 Jul",
+      "date": "2026-07-22",
+      "answer": {
+        "options": [
+          {
+            "facility": "Hallenbad Oerlikon",
+            "facility_id": "hallenbad-oerlikon",
+            "kind": "indoor",
+            "basin": "50m-Becken",
+            "length_m": 50.0,
+            "lanes": null,
+            "start": "06:00",
+            "end": "08:00",
+            "access": "LaneSwim",
+            "eligible": true,
+            "reason": "lane swimming \u2014 open to all",
+            "price": "Erwachsene CHF 8.00",
+            "distance_km": null,
+            "open_now": false,
+            "valid_as_of": "2026-07-18",
+            "source": "stadt-zuerich.ch/hallenbaeder/oerlikon (curated, illustrative)",
+            "curated": true,
+            "lane_availability": {
+              "lane_count": 8,
+              "public_lanes": 5,
+              "reserved_lanes": 3,
+              "public_until": "22:00",
+              "partial": false
+            },
+            "lane_timeline": {
+              "segments": [
+                {
+                  "start": "06:00",
+                  "end": "08:00",
+                  "lane_count": 8,
+                  "public_lanes": 5,
+                  "reserved_lanes": 3,
+                  "partial": false
+                }
+              ]
+            }
+          },
+          {
+            "facility": "Hallenbad Oerlikon",
+            "facility_id": "hallenbad-oerlikon",
+            "kind": "indoor",
+            "basin": "50m-Becken",
+            "length_m": 50.0,
+            "lanes": null,
+            "start": "08:00",
+            "end": "21:30",
+            "access": "PublicSwim",
+            "eligible": true,
+            "reason": "public swimming \u2014 open to all",
+            "price": "Erwachsene CHF 8.00",
+            "distance_km": null,
+            "open_now": true,
+            "valid_as_of": "2026-07-18",
+            "source": "stadt-zuerich.ch/hallenbaeder/oerlikon (curated, illustrative)",
+            "curated": true,
+            "lane_availability": {
+              "lane_count": 8,
+              "public_lanes": 5,
+              "reserved_lanes": 3,
+              "public_until": "22:00",
+              "partial": false
+            },
+            "lane_timeline": {
+              "segments": [
+                {
+                  "start": "08:00",
+                  "end": "09:00",
+                  "lane_count": 8,
+                  "public_lanes": 4,
+                  "reserved_lanes": 4,
+                  "partial": false
+                },
+                {
+                  "start": "09:00",
+                  "end": "09:30",
+                  "lane_count": 8,
+                  "public_lanes": 5,
+                  "reserved_lanes": 3,
+                  "partial": false
+                },
+                {
+                  "start": "09:30",
+                  "end": "10:00",
+                  "lane_count": 8,
+                  "public_lanes": 8,
+                  "reserved_lanes": 0,
+                  "partial": false
+                },
+                {
+                  "start": "10:00",
+                  "end": "11:00",
+                  "lane_count": 8,
+                  "public_lanes": 6,
+                  "reserved_lanes": 2,
+                  "partial": false
+                },
+                {
+                  "start": "11:00",
+                  "end": "12:00",
+                  "lane_count": 8,
+                  "public_lanes": 7,
+                  "reserved_lanes": 1,
+                  "partial": false
+                },
+                {
+                  "start": "12:00",
+                  "end": "12:30",
+                  "lane_count": 8,
+                  "public_lanes": 6,
+                  "reserved_lanes": 2,
+                  "partial": false
+                },
+                {
+                  "start": "12:30",
+                  "end": "13:00",
+                  "lane_count": 8,
+                  "public_lanes": 5,
+                  "reserved_lanes": 3,
+                  "partial": false
+                },
+                {
+                  "start": "13:00",
+                  "end": "14:00",
+                  "lane_count": 8,
+                  "public_lanes": 4,
+                  "reserved_lanes": 4,
+                  "partial": false
+                },
+                {
+                  "start": "14:00",
+                  "end": "20:00",
+                  "lane_count": 8,
+                  "public_lanes": 4,
+                  "reserved_lanes": 4,
+                  "partial": false
+                },
+                {
+                  "start": "20:00",
+                  "end": "21:00",
+                  "lane_count": 8,
+                  "public_lanes": 4,
+                  "reserved_lanes": 4,
+                  "partial": false
+                },
+                {
+                  "start": "21:00",
+                  "end": "21:30",
+                  "lane_count": 8,
+                  "public_lanes": 6,
+                  "reserved_lanes": 2,
+                  "partial": false
+                }
+              ]
+            }
+          },
+          {
+            "facility": "Hallenbad Oerlikon",
+            "facility_id": "hallenbad-oerlikon",
+            "kind": "indoor",
+            "basin": "Sprungbecken",
+            "length_m": null,
+            "lanes": null,
+            "start": "17:00",
+            "end": "19:00",
+            "access": "FamilyTime",
+            "eligible": true,
+            "reason": "family session \u2014 open to all",
+            "price": "Erwachsene CHF 8.00",
+            "distance_km": null,
+            "open_now": false,
+            "valid_as_of": "2026-07-18",
+            "source": "stadt-zuerich.ch/hallenbaeder/oerlikon (curated, illustrative)",
+            "curated": true,
+            "lane_availability": {
+              "lane_count": 2,
+              "public_lanes": 1,
+              "reserved_lanes": 1,
+              "public_until": "18:30",
+              "partial": false
+            },
+            "lane_timeline": {
+              "segments": [
+                {
+                  "start": "17:00",
+                  "end": "18:30",
+                  "lane_count": 2,
+                  "public_lanes": 1,
+                  "reserved_lanes": 1,
+                  "partial": false
+                },
+                {
+                  "start": "18:30",
+                  "end": "19:00",
+                  "lane_count": 2,
+                  "public_lanes": 0,
+                  "reserved_lanes": 2,
+                  "partial": false
+                }
+              ]
+            }
+          }
+        ],
+        "statuses": [],
+        "warnings": [],
+        "notices": []
+      }
+    },
+    {
+      "label": "Thu 23 Jul",
+      "date": "2026-07-23",
+      "answer": {
+        "options": [
+          {
+            "facility": "Hallenbad Oerlikon",
+            "facility_id": "hallenbad-oerlikon",
+            "kind": "indoor",
+            "basin": "50m-Becken",
+            "length_m": 50.0,
+            "lanes": null,
+            "start": "06:00",
+            "end": "08:00",
+            "access": "LaneSwim",
+            "eligible": true,
+            "reason": "lane swimming \u2014 open to all",
+            "price": "Erwachsene CHF 8.00",
+            "distance_km": null,
+            "open_now": false,
+            "valid_as_of": "2026-07-18",
+            "source": "stadt-zuerich.ch/hallenbaeder/oerlikon (curated, illustrative)",
+            "curated": true,
+            "lane_availability": {
+              "lane_count": 8,
+              "public_lanes": 5,
+              "reserved_lanes": 3,
+              "public_until": "20:00",
+              "partial": false
+            },
+            "lane_timeline": {
+              "segments": [
+                {
+                  "start": "06:00",
+                  "end": "07:30",
+                  "lane_count": 8,
+                  "public_lanes": 5,
+                  "reserved_lanes": 3,
+                  "partial": false
+                },
+                {
+                  "start": "07:30",
+                  "end": "08:00",
+                  "lane_count": 8,
+                  "public_lanes": 4,
+                  "reserved_lanes": 4,
+                  "partial": false
+                }
+              ]
+            }
+          },
+          {
+            "facility": "Hallenbad Oerlikon",
+            "facility_id": "hallenbad-oerlikon",
+            "kind": "indoor",
+            "basin": "50m-Becken",
+            "length_m": 50.0,
+            "lanes": null,
+            "start": "08:00",
+            "end": "21:30",
+            "access": "PublicSwim",
+            "eligible": true,
+            "reason": "public swimming \u2014 open to all",
+            "price": "Erwachsene CHF 8.00",
+            "distance_km": null,
+            "open_now": true,
+            "valid_as_of": "2026-07-18",
+            "source": "stadt-zuerich.ch/hallenbaeder/oerlikon (curated, illustrative)",
+            "curated": true,
+            "lane_availability": {
+              "lane_count": 8,
+              "public_lanes": 4,
+              "reserved_lanes": 4,
+              "public_until": "20:00",
+              "partial": false
+            },
+            "lane_timeline": {
+              "segments": [
+                {
+                  "start": "08:00",
+                  "end": "09:30",
+                  "lane_count": 8,
+                  "public_lanes": 4,
+                  "reserved_lanes": 4,
+                  "partial": false
+                },
+                {
+                  "start": "09:30",
+                  "end": "10:30",
+                  "lane_count": 8,
+                  "public_lanes": 7,
+                  "reserved_lanes": 1,
+                  "partial": false
+                },
+                {
+                  "start": "10:30",
+                  "end": "11:00",
+                  "lane_count": 8,
+                  "public_lanes": 5,
+                  "reserved_lanes": 3,
+                  "partial": false
+                },
+                {
+                  "start": "11:00",
+                  "end": "12:00",
+                  "lane_count": 8,
+                  "public_lanes": 6,
+                  "reserved_lanes": 2,
+                  "partial": false
+                },
+                {
+                  "start": "12:00",
+                  "end": "13:00",
+                  "lane_count": 8,
+                  "public_lanes": 7,
+                  "reserved_lanes": 1,
+                  "partial": false
+                },
+                {
+                  "start": "13:00",
+                  "end": "14:00",
+                  "lane_count": 8,
+                  "public_lanes": 8,
+                  "reserved_lanes": 0,
+                  "partial": false
+                },
+                {
+                  "start": "14:00",
+                  "end": "16:00",
+                  "lane_count": 8,
+                  "public_lanes": 7,
+                  "reserved_lanes": 1,
+                  "partial": false
+                },
+                {
+                  "start": "16:00",
+                  "end": "16:30",
+                  "lane_count": 8,
+                  "public_lanes": 4,
+                  "reserved_lanes": 4,
+                  "partial": false
+                },
+                {
+                  "start": "16:30",
+                  "end": "18:30",
+                  "lane_count": 8,
+                  "public_lanes": 4,
+                  "reserved_lanes": 4,
+                  "partial": false
+                },
+                {
+                  "start": "18:30",
+                  "end": "19:30",
+                  "lane_count": 8,
+                  "public_lanes": 4,
+                  "reserved_lanes": 4,
+                  "partial": false
+                },
+                {
+                  "start": "19:30",
+                  "end": "20:00",
+                  "lane_count": 8,
+                  "public_lanes": 4,
+                  "reserved_lanes": 4,
+                  "partial": false
+                },
+                {
+                  "start": "20:00",
+                  "end": "21:00",
+                  "lane_count": 8,
+                  "public_lanes": 0,
+                  "reserved_lanes": 8,
+                  "partial": false
+                },
+                {
+                  "start": "21:00",
+                  "end": "21:30",
+                  "lane_count": 8,
+                  "public_lanes": 0,
+                  "reserved_lanes": 8,
+                  "partial": false
+                }
+              ]
+            }
+          }
+        ],
+        "statuses": [],
+        "warnings": [],
+        "notices": []
+      }
+    },
+    {
+      "label": "Fri 24 Jul",
+      "date": "2026-07-24",
+      "answer": {
+        "options": [
+          {
+            "facility": "Hallenbad Oerlikon",
+            "facility_id": "hallenbad-oerlikon",
+            "kind": "indoor",
+            "basin": "50m-Becken",
+            "length_m": 50.0,
+            "lanes": null,
+            "start": "06:00",
+            "end": "08:00",
+            "access": "LaneSwim",
+            "eligible": true,
+            "reason": "lane swimming \u2014 open to all",
+            "price": "Erwachsene CHF 8.00",
+            "distance_km": null,
+            "open_now": false,
+            "valid_as_of": "2026-07-18",
+            "source": "stadt-zuerich.ch/hallenbaeder/oerlikon (curated, illustrative)",
+            "curated": true,
+            "lane_availability": {
+              "lane_count": 8,
+              "public_lanes": 5,
+              "reserved_lanes": 3,
+              "public_until": "22:00",
+              "partial": false
+            },
+            "lane_timeline": {
+              "segments": [
+                {
+                  "start": "06:00",
+                  "end": "08:00",
+                  "lane_count": 8,
+                  "public_lanes": 5,
+                  "reserved_lanes": 3,
+                  "partial": false
+                }
+              ]
+            }
+          },
+          {
+            "facility": "Hallenbad Oerlikon",
+            "facility_id": "hallenbad-oerlikon",
+            "kind": "indoor",
+            "basin": "50m-Becken",
+            "length_m": 50.0,
+            "lanes": null,
+            "start": "08:00",
+            "end": "21:30",
+            "access": "PublicSwim",
+            "eligible": true,
+            "reason": "public swimming \u2014 open to all",
+            "price": "Erwachsene CHF 8.00",
+            "distance_km": null,
+            "open_now": true,
+            "valid_as_of": "2026-07-18",
+            "source": "stadt-zuerich.ch/hallenbaeder/oerlikon (curated, illustrative)",
+            "curated": true,
+            "lane_availability": {
+              "lane_count": 8,
+              "public_lanes": 4,
+              "reserved_lanes": 4,
+              "public_until": "22:00",
+              "partial": false
+            },
+            "lane_timeline": {
+              "segments": [
+                {
+                  "start": "08:00",
+                  "end": "09:00",
+                  "lane_count": 8,
+                  "public_lanes": 4,
+                  "reserved_lanes": 4,
+                  "partial": false
+                },
+                {
+                  "start": "09:00",
+                  "end": "09:30",
+                  "lane_count": 8,
+                  "public_lanes": 4,
+                  "reserved_lanes": 4,
+                  "partial": false
+                },
+                {
+                  "start": "09:30",
+                  "end": "10:00",
+                  "lane_count": 8,
+                  "public_lanes": 8,
+                  "reserved_lanes": 0,
+                  "partial": false
+                },
+                {
+                  "start": "10:00",
+                  "end": "11:00",
+                  "lane_count": 8,
+                  "public_lanes": 7,
+                  "reserved_lanes": 1,
+                  "partial": false
+                },
+                {
+                  "start": "11:00",
+                  "end": "13:00",
+                  "lane_count": 8,
+                  "public_lanes": 8,
+                  "reserved_lanes": 0,
+                  "partial": false
+                },
+                {
+                  "start": "13:00",
+                  "end": "13:30",
+                  "lane_count": 8,
+                  "public_lanes": 7,
+                  "reserved_lanes": 1,
+                  "partial": false
+                },
+                {
+                  "start": "13:30",
+                  "end": "14:00",
+                  "lane_count": 8,
+                  "public_lanes": 6,
+                  "reserved_lanes": 2,
+                  "partial": false
+                },
+                {
+                  "start": "14:00",
+                  "end": "15:00",
+                  "lane_count": 8,
+                  "public_lanes": 4,
+                  "reserved_lanes": 4,
+                  "partial": false
+                },
+                {
+                  "start": "15:00",
+                  "end": "19:00",
+                  "lane_count": 8,
+                  "public_lanes": 4,
+                  "reserved_lanes": 4,
+                  "partial": false
+                },
+                {
+                  "start": "19:00",
+                  "end": "20:00",
+                  "lane_count": 8,
+                  "public_lanes": 4,
+                  "reserved_lanes": 4,
+                  "partial": false
+                },
+                {
+                  "start": "20:00",
+                  "end": "21:30",
+                  "lane_count": 8,
+                  "public_lanes": 4,
+                  "reserved_lanes": 4,
+                  "partial": false
+                }
+              ]
+            }
+          }
+        ],
+        "statuses": [],
+        "warnings": [],
+        "notices": []
+      }
+    },
+    {
+      "label": "Sat 25 Jul",
+      "date": "2026-07-25",
+      "answer": {
+        "options": [
+          {
+            "facility": "Hallenbad Oerlikon",
+            "facility_id": "hallenbad-oerlikon",
+            "kind": "indoor",
+            "basin": "50m-Becken",
+            "length_m": 50.0,
+            "lanes": null,
+            "start": "08:00",
+            "end": "18:00",
+            "access": "PublicSwim",
+            "eligible": true,
+            "reason": "public swimming \u2014 open to all",
+            "price": "Erwachsene CHF 8.00",
+            "distance_km": null,
+            "open_now": true,
+            "valid_as_of": "2026-07-18",
+            "source": "stadt-zuerich.ch/hallenbaeder/oerlikon (curated, illustrative)",
+            "curated": true,
+            "lane_availability": {
+              "lane_count": 8,
+              "public_lanes": 4,
+              "reserved_lanes": 4,
+              "public_until": "22:00",
+              "partial": false
+            },
+            "lane_timeline": {
+              "segments": [
+                {
+                  "start": "08:00",
+                  "end": "14:00",
+                  "lane_count": 8,
+                  "public_lanes": 4,
+                  "reserved_lanes": 4,
+                  "partial": false
+                },
+                {
+                  "start": "14:00",
+                  "end": "16:30",
+                  "lane_count": 8,
+                  "public_lanes": 5,
+                  "reserved_lanes": 3,
+                  "partial": false
+                },
+                {
+                  "start": "16:30",
+                  "end": "18:00",
+                  "lane_count": 8,
+                  "public_lanes": 4,
+                  "reserved_lanes": 4,
+                  "partial": false
+                }
+              ]
+            }
+          },
+          {
+            "facility": "Hallenbad Oerlikon",
+            "facility_id": "hallenbad-oerlikon",
+            "kind": "indoor",
+            "basin": "Sprungbecken",
+            "length_m": null,
+            "lanes": null,
+            "start": "10:00",
+            "end": "16:00",
+            "access": "FamilyTime",
+            "eligible": true,
+            "reason": "family session \u2014 open to all",
+            "price": "Erwachsene CHF 8.00",
+            "distance_km": null,
+            "open_now": false,
+            "valid_as_of": "2026-07-18",
+            "source": "stadt-zuerich.ch/hallenbaeder/oerlikon (curated, illustrative)",
+            "curated": true,
+            "lane_availability": {
+              "lane_count": 2,
+              "public_lanes": 0,
+              "reserved_lanes": 2,
+              "public_until": null,
+              "partial": false
+            },
+            "lane_timeline": {
+              "segments": [
+                {
+                  "start": "10:00",
+                  "end": "10:30",
+                  "lane_count": 2,
+                  "public_lanes": 0,
+                  "reserved_lanes": 2,
+                  "partial": false
+                },
+                {
+                  "start": "10:30",
+                  "end": "11:00",
+                  "lane_count": 2,
+                  "public_lanes": 1,
+                  "reserved_lanes": 1,
+                  "partial": false
+                },
+                {
+                  "start": "11:00",
+                  "end": "11:30",
+                  "lane_count": 2,
+                  "public_lanes": 0,
+                  "reserved_lanes": 2,
+                  "partial": false
+                },
+                {
+                  "start": "11:30",
+                  "end": "13:00",
+                  "lane_count": 2,
+                  "public_lanes": 1,
+                  "reserved_lanes": 1,
+                  "partial": false
+                },
+                {
+                  "start": "13:00",
+                  "end": "16:00",
+                  "lane_count": 2,
+                  "public_lanes": 2,
+                  "reserved_lanes": 0,
+                  "partial": false
+                }
+              ]
+            }
+          }
+        ],
+        "statuses": [],
+        "warnings": [],
+        "notices": []
+      }
+    },
+    {
+      "label": "Sun 26 Jul",
+      "date": "2026-07-26",
+      "answer": {
+        "options": [
+          {
+            "facility": "Hallenbad Oerlikon",
+            "facility_id": "hallenbad-oerlikon",
+            "kind": "indoor",
+            "basin": "50m-Becken",
+            "length_m": 50.0,
+            "lanes": null,
+            "start": "08:00",
+            "end": "18:00",
+            "access": "PublicSwim",
+            "eligible": true,
+            "reason": "public swimming \u2014 open to all",
+            "price": "Erwachsene CHF 8.00",
+            "distance_km": null,
+            "open_now": true,
+            "valid_as_of": "2026-07-18",
+            "source": "stadt-zuerich.ch/hallenbaeder/oerlikon (curated, illustrative)",
+            "curated": true,
+            "lane_availability": {
+              "lane_count": 8,
+              "public_lanes": 5,
+              "reserved_lanes": 3,
+              "public_until": "22:00",
+              "partial": false
+            },
+            "lane_timeline": {
+              "segments": [
+                {
+                  "start": "08:00",
+                  "end": "09:00",
+                  "lane_count": 8,
+                  "public_lanes": 6,
+                  "reserved_lanes": 2,
+                  "partial": false
+                },
+                {
+                  "start": "09:00",
+                  "end": "10:30",
+                  "lane_count": 8,
+                  "public_lanes": 5,
+                  "reserved_lanes": 3,
+                  "partial": false
+                },
+                {
+                  "start": "10:30",
+                  "end": "11:30",
+                  "lane_count": 8,
+                  "public_lanes": 5,
+                  "reserved_lanes": 3,
+                  "partial": false
+                },
+                {
+                  "start": "11:30",
+                  "end": "18:00",
+                  "lane_count": 8,
+                  "public_lanes": 6,
+                  "reserved_lanes": 2,
+                  "partial": false
+                }
+              ]
+            }
+          }
+        ],
+        "statuses": [],
+        "warnings": [],
+        "notices": []
+      }
+    }
+  ]
+}

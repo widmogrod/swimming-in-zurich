@@ -38,16 +38,28 @@ deferred debt — see `CLAUDE.md`.
 
 ## Run the app
 
-The app reads a **single source of truth**: one SQLite gold store. Build it once from the
-committed inputs (offline, no network), then run the web app against it.
+The app reads a **single source of truth**: one SQLite gold store. Build it once, then run the web
+app against it. `build` is a **single atomic pipeline** — WFS roster, curated assemble, schedule
+scrape, lane scrape, compose — inside one temp-DB + swap, so it needs the network and it already
+includes the scraping steps.
 
 ```sh
-# 1. Build a complete, self-contained gold DB from the committed data/ inputs (offline).
+# 1. Build a complete, self-contained gold DB. Atomic: a mid-chain failure aborts non-zero
+#    and leaves any prior DB content-unchanged.
 uv run python -m swimzh.cli build --db gold.sqlite
 
-# 2. (optional) enrich it with real scraped schedules (network):
-uv run python -m swimzh.cli scrape-gold  --db gold.sqlite   # real scraped schedules
+# 2. (optional) thin re-layer — re-run ONE phase against an already-built store, to refresh
+#    on its own cadence without a full rebuild:
+uv run python -m swimzh.cli scrape-gold  --db gold.sqlite   # schedules
 uv run python -m swimzh.cli scrape-lanes --db gold.sqlite   # per-basin lane plans
+#    scrape-gold composes the fresh scrape onto the curated tier REBUILT from `data/`
+#    (`--data`, default `data`), never onto the store's own previous output — so a re-layer
+#    really does refresh hours, prices, notices and closures. It writes only the pools it
+#    actually scraped, so nothing else in the store is touched. Lane plans a previous
+#    scrape-lanes attached are carried across that rebuild — UNLESS that basin's `data/`
+#    binding (`lane_plan_source`) was re-pointed at a different sheet, in which case the plan
+#    parsed from the OLD sheet is dropped rather than mis-attached, and the basin has no lane
+#    plan until the next scrape-lanes.
 
 # 3. Serve it (UI at /, API at /swim). A missing/empty DB fails fast with a one-line
 #    "build it first" message (no traceback); SWIMZH_RELOAD=0 disables auto-reload.

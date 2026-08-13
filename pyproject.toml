@@ -9,6 +9,7 @@ dependencies = [
     "tenacity>=9.0",
     "pydantic>=2.7",
     "pyyaml>=6.0",
+    "python-dotenv>=1.0",
 ]
 
 [project.optional-dependencies]
@@ -44,6 +45,10 @@ ignore = [
 "apps/web/api/ui/router.py" = ["E501"]
 # Vendored QA gate script legitimately shells out to `radon` by name.
 "scripts/**" = ["S603", "S607"]
+# The JS unit-test bridge legitimately shells out to the pinned `node` binary
+# (resolved via shutil.which, fixed args) to run `node --test`; S603's
+# untrusted-input heuristic is a false positive here, same as scripts/ above.
+"apps/web/tests/test_static_js.py" = ["S603"]
 
 # Canonical type checker for the QA chain is mypy strict (below). The pyright config is
 # kept because the codebase was authored against it and it also passes; both agree.
@@ -85,6 +90,15 @@ branch = true
 fail_under = 95
 
 [tool.crap]
+threshold = 30.0
+min-complexity = 5
+
+# TypeScript CRAP gate (scripts/crap_ts.mjs) — FORMULA parity with [tool.crap] above
+# (cc²·(1−cov)³ + cc; offender when cc > min-complexity AND crap > threshold). ESLint's
+# cyclomatic count differs algorithmically from radon's, so this is its own no-regression
+# ratchet; calibrated to current TS reality (max is urlstate.ts fromParams: cc 20 @ 100% cov
+# → CRAP 20), same 30/5 bar as the Python gate. Raise as coverage grows; never lower to pass.
+[tool.crap-ts]
 threshold = 30.0
 min-complexity = 5
 

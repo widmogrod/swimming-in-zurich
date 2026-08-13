@@ -1,78 +1,15 @@
-# Hallenbad City — CURATED, ILLUSTRATIVE DATA.
+# Hallenbad City — thin CROSSWALK only (delete-curated-schedule-tier S3).
 #
-# Schedules/prices below are plausible but NOT verified against the official timetable.
-# They demonstrate the model (term vs holiday scope, seniors/women/school access, a
-# Sunday-schedule public holiday, a summer closure). Verify against stadt-zuerich.ch and
-# update `valid_as_of` before relying on any answer.
+# No curated schedule/price/physical payload: the schedule is scraped, the basin physicals come
+# from the WFS `infrastruktur` prose (`apply_physicals`), and identity/address/geo from the WFS
+# roster. This file carries ONLY the URL→basin lane binding. The `50m-Becken` basin is named to
+# the WFS prose segment ("Schwimmerbecken") so `apply_physicals` matches it and populates its
+# 50 x 15 m / 6-lane physicals. The lane binding itself is URL-keyed, so the rename is safe.
 
 facility_id: "hallenbad-city"
-address: "Sihlstrasse 71, 8001 Zürich"
-source: "stadt-zuerich.ch/hallenbaeder/city (curated, illustrative)"
-valid_as_of: "2026-07-18"
-geo: { lat: 47.3739, lon: 8.5320 }
-amenities: ["50m", "sauna"]
-public_holiday_policy: "sunday_schedule"
-website: "https://www.stadt-zuerich.ch/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/hallenbaeder/city.html"
-
-# Non-swim amenities. The sauna hours/surcharge follow the WFS `infrastruktur` prose
-# ("gemischte Sauna 8-22 Uhr Eintritt Fr. 10.-"); hours reuse the schedule rules, so
-# "is the sauna open now?" resolves through the ordinary resolver (incl. closures).
-features:
-  - kind: "sauna"
-    name: "Gemischte Sauna"
-    surcharge_chf: "10.00"
-    hours:
-      - { weekdays: ["mon", "tue", "wed", "thu", "fri", "sat", "sun"], start: "08:00", end: "22:00", access: { type: "public" } }
-
-# Locker offerings (pool-page rows). Cost axes are orthogonal: a row can be free to
-# use yet require a refundable deposit, or carry a fee plus a rental period.
-lockers:
-  - { category: "wardrobe", deposit_chf: "5.00", raw: "Garderobenkasten gratis, plus Depot Fr. 5.–" }
-  - { category: "valuables", deposit_chf: "2.00", raw: "Wertsachenfach gratis, plus Depot Fr. 2.–" }
-  - { category: "laundry", fee_chf: "400.00", period: "1 Jahr", raw: "Wäschefach (1 Jahr) Fr. 400.–" }
-
-prices:
-  valid_as_of: "2026-07-18"
-  source_url: "https://www.stadt-zuerich.ch/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/hallenbaeder/city.html"
-  entries:
-    - { category: "adult", amount_chf: "8.00", display: "Erwachsene CHF 8.00" }
-    - { category: "youth", amount_chf: "6.00", display: "Jugendliche CHF 6.00" }
-    - { category: "child", amount_chf: "4.00", display: "Kinder CHF 4.00" }
-    - { category: "senior", amount_chf: "6.00", display: "Senioren CHF 6.00" }
-
-closures:
-  - { start: "2026-07-04", end: "2026-08-07", reason: "Sommerpause / Revision" }
 
 basins:
   - basin_id: "city-50m"
-    name: "50m-Becken"
-    kind: "lap"
-    dimensions: { length_m: "50" }
-    lanes: 6  # "50 x 15 m (6 Bahnen)" — from the official infrastructure prose
-    # First-class lane document: this basin's city Belegungsplan (single-basin sheet).
+    name: "Schwimmerbecken"
     lane_plan_source:
       url: "https://www.stadt-zuerich.ch/content/dam/web/de/stadtleben/sport-und-erholung/dokumente/badeanlagen/belegungsplaene/city-schwimmerbecken.pdf"
-    rules:
-      # Weekday partition (school term): lane -> seniors -> public
-      - { weekdays: ["mon", "tue", "wed", "thu", "fri"], start: "06:30", end: "09:00", access: { type: "lane_swim" } }
-      - { weekdays: ["mon", "tue", "wed", "thu", "fri"], start: "09:00", end: "11:00", access: { type: "seniors_only", min_age: 60 }, scope: "school_term" }
-      # During school holidays that 09:00–11:00 slot is open to the public instead:
-      - { weekdays: ["mon", "tue", "wed", "thu", "fri"], start: "09:00", end: "11:00", access: { type: "public" }, scope: "school_holiday" }
-      - { weekdays: ["mon", "tue", "wed", "thu", "fri"], start: "11:00", end: "22:00", access: { type: "public" } }
-      # Weekend (also used as the Sunday-schedule fallback on public holidays):
-      - { weekdays: ["sat", "sun"], start: "08:00", end: "20:00", access: { type: "public" } }
-    exceptions:
-      - { date: "2026-12-24", closed: true, reason: "Heiligabend" }
-
-  - basin_id: "city-lehrbecken"
-    name: "Lehrschwimmbecken"
-    kind: "teaching"
-    dimensions: { length_m: "20" }
-    rules:
-      # School term: reserved for schools during the day, public in the evening.
-      - { weekdays: ["mon", "tue", "wed", "thu", "fri"], start: "08:00", end: "16:00", access: { type: "school_reserved" }, scope: "school_term" }
-      # During school holidays the daytime block opens to the public:
-      - { weekdays: ["mon", "tue", "wed", "thu", "fri"], start: "08:00", end: "16:00", access: { type: "public" }, scope: "school_holiday" }
-      - { weekdays: ["mon", "tue", "wed", "thu", "fri"], start: "16:00", end: "20:00", access: { type: "public" } }
-      # Monday evening women-only session:
-      - { weekdays: ["mon"], start: "20:00", end: "22:00", access: { type: "women_only", note: "Frauenschwimmen" } }

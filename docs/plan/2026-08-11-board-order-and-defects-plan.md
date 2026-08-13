@@ -1,0 +1,566 @@
+---
+type: plan
+status: done             # owner approved 2026-08-11;
+branch: plan/board-order-and-defects
+worktree: .claude/worktrees/plan-board-order-and-defects
+base_branch: feat/new-ui draft -> approved -> in-progress -> done
+created: 2026-08-11
+feature: board-order-and-defects
+gates:
+  # TWO chains, both required. `make qa` CANNOT see the vitest .ts suites — the pytest bridge
+  # (apps/web/tests/test_static_js.py) pins discovery to `**/*.test.js` to exclude them, so
+  # `make qa` can go green with every TypeScript test failing.
+  qa: "make qa && (cd apps/web/static/js && npm run qa)"
+  review: adversarial
+  max_rounds: 2
+pause_after: [S1]        # S1 (scrape-gold) changes what a refresh writes for every pool; run riskiest first
+links: ["[[lane-stack-board]]", "[[board-row-identity]]", "[[2026-08-10-scrape-gold-recompose-defect]]", "[[data-sourcing-rule]]", "[[gold-store]]", "[[2026-07-19-ux-ascii-design]]"]
+---
+
+# Plan — stable board order, and the defects behind it
+
+## Intent (verbatim)
+
+The user's own words, unedited. No agent may paraphrase, summarize, or
+"clean up" this block. It is the anchor every later artifact is measured
+against.
+
+**2026-08-11**
+
+> when I switch dates order of swimming pools changes, this is non intuitive ; number of lanes ui is fine but you still shoudl address issues and defects
+
+## Context
+
+[[lane-stack-board]] shipped, and testing it surfaced a defect older than that plan: **a pool's
+position on the board is decided by whether it happens to be open that day, not by where it is.**
+Measured against `gold_db` with the place the UI actually sends (`PLACE_PRESETS[0]`, Zürich HB —
+`app.ts:78-82,121`, always emitted as `lat`/`lon` by `api.ts:105-107`): Wed 2026-08-12 → Thu
+2026-08-13, **34 of 57 facilities change position** (33 of 57 at row level); Schulschwimmanlage
+Tannenrauch moves **15 → 41** purely because it is open on one day and closed on the other.
+
+*(An earlier revision of this plan cited 37 of 58 and 21 → 39. Those reproduce only with **no**
+`lat`/`lon`, where every `distance_km` is null — a configuration no user is ever in, since the app
+seeds a place on load. Corrected here rather than silently: the defect is real either way, but a
+measurement taken in a state the product cannot reach is not evidence about the product.)*
+
+Cause, in two halves. `query.py:633` sorts **options** by `(distance_km, session start,
+facility_name)` — stable. **Statuses are never sorted and carry no distance at all**
+(`FacilityStatus` has no such field). `dayRows` then renders every option row first and every status
+row after. So a pool distance-ranked near the top on Wednesday lands in an unranked tail on Thursday,
+and everything downstream shifts.
+
+This was foreseen and abandoned once: [[2026-07-19-ux-ascii-design]]'s S3 ledger records *"closed /
+uncurated pools come from `statuses` which carry no distance, so they stay visible but can't be
+distance-ranked."* The field was missing, so the ranking was dropped.
+
+**Statuses come from two places, and only one of them is easy.** `_distance_km(query, facility)` is
+already computed at `query.py:550` in the facility loop that emits *closed* statuses — 20 of 38 on
+2026-08-12. The other 18 come from `_schedule_less_statuses(facilities, roster)` at `query.py:631`,
+**outside** that loop: it takes no `query` and builds each `FacilityStatus` from a `RosterEntry`, not
+a `Facility`. Fixing only the easy half would leave 18 of 38 closed rows with `distance_km: None`,
+sorted into O4's unranked tail — the very defect this plan exists to remove, half-fixed and
+invisible. `PoolCatalogEntry.geo` exists (`domain/catalog.py:35`) and all 57 roster entries carry
+it, so the fix is to thread the query into that helper too.
+
+The owner also asked for the remaining recorded defects in the same pass: the `scrape-gold`
+silent-staleness bug ([[2026-08-10-scrape-gold-recompose-defect]]), the owner-name gap left open by
+[[lane-stack-board]] S4, and two small items its ledger recorded.
+
+## Design (signature altitude)
+
+### Row order — a stable key, and one honest divider
+
+```python
+# domain/query.py
+@dataclass(frozen=True, slots=True)
+class FacilityStatus:
+    ...
+    distance_km: float | None = None      # NEW — same value the options carry
+
+statuses.sort(key=lambda s: (s.distance_km if s.distance_km is not None else inf, s.facility_name))
+```
+
+```ts
+// blocks/board.ts — dayRows keeps its two groups, both distance-ordered
+// NO new field: which group a row is in is exactly `row.options.length > 0` — `board.ts:196-207`
+// records that status facilities and option facilities are disjoint on shipped input. A stored
+// `openToday` could desync from the rows it describes; a helper cannot.
+export function isOpenToday(row: BoardRow): boolean
+```
+
+**Rule O1 — position is a property of geography, never of today's outcome.** Options keep their
+existing key `(distance_km, session.time.start, facility_name)` (`query.py:633`); statuses gain
+`(distance_km ?? inf, facility_name)`. Note the option key breaks ties on *session start*, so two
+basins of one pool order by earliest session — latent, not live (0 flips measured over 60 days), but
+it is the real key and this plan does not change it.
+
+**Rule O2 — the two groups stay, and the boundary is named.** Open rows first, then a labelled
+divider, then closed / schedule-less rows. A pool still moves between groups on the day it shuts —
+that is a real change in the world — but the move is now *explained by a visible boundary* instead of
+being a silent re-sort. This preserves "what can I use today" as the scannable top block, which
+interleaving would have cost.
+
+**Invariant (O3):** the divider is rendered only when both groups are non-empty. An empty group must
+never leave a dangling header — the same never-merged-states discipline the three terminal states
+already carry.
+
+**Invariant (O4):** a status with no geo keeps `distance_km: None` and sorts last within its group,
+by name. It is never given a fabricated distance — an unknown position is not zero.
+
+### `scrape-gold` — re-layer from sources, not from the store
+
+Today `scrape_gold` does `curated = GoldRepository(conn).load_all()` then `compose(curated, scraped)`
+and writes back, so on a re-layer the previously-composed blob **is** the curated side:
+`_has_schedule(curated_basins)` is true, `_merge_basins` takes curated-wins-wholesale, and the fresh
+scrape is discarded. All ten `_ASPECTS` are `CURATED_WINS`, so the same feedback silences prices,
+closures, notices, lockers, rentals and geo too. Exit code 0, no signal.
+
+Fix = option 2 from the defect report, the only listed option short of a full re-architecture that
+fixes **both** basins and aspects:
+
+```python
+def scrape_gold(*, db_path: Path, data_dir: Path, catalog_path: Path, ...) -> int:
+    """Re-layer: compose the freshly scraped aspects onto the CURATED TIER REBUILT FROM `data/`,
+    never onto the store's own previous output."""
+```
+
+**Invariant (S-1):** `compose` is never called with its own output as an input. The curated side
+comes from `data/`; the scraped side from this run. Re-running the phase twice with the same source
+data yields a byte-identical store.
+
+**Invariant (S-2):** an empty or failed scrape must not delete what a previous run wrote — the fix
+trades silent staleness for a *risk* of silent deletion, so that risk is pinned. **No new type is
+introduced:** `cli.py:320-331` already aborts fatal on a declared-source failure and on
+`not report.extracts`, and the phase runs inside `atomic_swap(db_path, seed_from=db_path)`
+(`cli.py:591`) which commits only on a non-fatal outcome (`cli.py:600-603`). The property already
+holds; S2 pins it as a regression rather than building a `Facts | NothingFound | Failed` sum type
+and threading it through `write_schedules` and both callers.
+
+### The owner name — height is the constraint, so height is the fix
+
+At `ROW_H = 46` a six-lane stack gives 5.13px bands and the label gate binds at `n <= 4`, so the
+owner never renders on City (6) or Oerlikon (8) — the arithmetic behind [[lane-stack-board]]'s known
+gap. The band must clear ~7px against an 8.5px font:
+
+```
+band = ROW_H * 0.8 / n - 1 >= 7   →   ROW_H >= 10 * n
+```
+
+```ts
+// blocks/board.ts
+export function rowHeight(row: BoardRow): number   // max(ROW_H, 10 * lane_count), ROW_H when no plan
+```
+
+Feasible because each row already builds **its own canvas** (`board.ts:621`) and its label cell sizes
+off the same constant (`board.ts:560`). Against the seven real lane plans, `max(46, 10n)` gives:
+
+| basin | lanes | height |
+|---|---|---|
+| Oerlikon 50m | 8 | **80** |
+| City Schwimmerbecken | 6 | **60** |
+| Bläsi 25m, Leimbach 25m | 5 | **50** |
+| Bungertwies, Käferberg | 4 | 46 (unchanged) |
+| Oerlikon Sprungbecken | 2 | 46 (unchanged) |
+
+So **4 of 7 rows grow**, three stay — and every row without a plan is untouched.
+
+**Invariant (H1):** the shared timescale is unchanged. Row *height* varies; the x-axis, the cursor
+overlay and the axis header must stay aligned to the pixel, because a Gantt/board desync is the
+single hardest correctness property this UI has (`gantt.ts` throws without an injected timescale).
+
+## Out of scope
+
+- **Interleaving closed pools with open ones.** Considered and rejected by the owner: it costs the
+  scannable "what's open" block. O2 is the chosen shape.
+- **A cursor-following readout on the board.** The alternative to H1 for the owner name; `board.ts`
+  carries no pointer handler today, so it is a new interaction surface and its own plan.
+- **Normalizing the gold store.** [[data-sourcing-rule]] settles this as amend-not-reverse; the
+  `scrape-gold` fix here is the write-door half, not the schema half.
+- **Pool-mode multi-basin rows**, and the phone-specific lane treatment (research variant D).
+- Re-opening `lane_best_public`'s session bound, or the `lanes` ribbon variant.
+
+## Slices
+
+### S1 — a re-layer actually refreshes
+
+- **Goal**: `scrape-gold` composes onto the curated tier rebuilt from `data/`, so re-running it
+  changes what changed and nothing else.
+- **Touches**: `src/swimzh/cli.py` (`scrape_gold` gains `data_dir`; the arg parser), the curated
+  assemble path it reuses from `build`, `src/swimzh/build/compose.py` (only if `_merge_basins`'
+  branch comment needs correcting), `tests/test_cli.py`.
+- **Acceptance**:
+  1. **The defect's own reproduction, inverted.** With a mutated page fixture (`6–22 Uhr` →
+     `7–21 Uhr`), a `scrape-gold` re-layer against an already-built store changes the stored rules.
+     Today it does not — this test must fail before the fix.
+  2. **A non-basin aspect too** — a mutated tariff changes the stored price. The defect report's
+     option 4 warns that a basins-only guard passes while prices stay frozen.
+  3. Idempotence (S-1): running the phase twice with unchanged sources yields a byte-identical store.
+  4. An empty or failed scrape leaves prior content unchanged (S-2) — no silent deletion.
+  5. `docs/2026-08-10-scrape-gold-recompose-defect.md` gains a resolution note; `README.md`'s warning
+     is removed.
+  6. Both chains green.
+- **Depends on**: —
+- **Risk**: changes what a refresh writes for every pool, and the failure mode it replaces was
+  silent. Hence the pause.
+
+### S2 — a pool sits in the same place every day
+
+- **Goal**: row position is a property of distance, and the open/closed boundary is visible.
+- **Touches**: `domain/query.py` (`FacilityStatus.distance_km`, status sort), `apps/web/api/swim/model.py`
+  (`StatusOut.distance_km`), `apps/web/api/swim/service.py`, `blocks/board.ts` (`dayRows` grouping +
+  `openToday`), the board's row rendering (the divider), `blocks/poolrank.ts` /
+  `blocks/poollist.ts` (`rowDistance` reads statuses), `locales/*` (the divider's label),
+  `blocks/board.test.ts`, `blocks/poolrank.test.ts`, `apps/web/static/js/appdata.test.ts`.
+  **Also `domain/query.py::_schedule_less_statuses` (`query.py:754-787`)** — it must take the query
+  and read `RosterEntry.geo`, or 18 of 38 statuses keep no distance.
+- **Acceptance**:
+  1. **The reported defect, pinned as RELATIVE ORDER — not as indices.** For a fixed pair of dates
+     against `gold_db` with a stated place, the facilities common to both answers appear in the
+     **same relative order** within each group. Identical *indices* are unachievable and must not be
+     asserted: a pool crossing the boundary shifts every later index in the destination group, which
+     O2 concedes is a real change in the world. (Simulated against the store: relative order holds
+     `True` for both groups, while 14 of 18 open-group and 36 of 36 closed-group indices move.)
+  2. **Both status sources carry a distance.** No status for a geo-bearing facility ships
+     `distance_km: None` — asserted over the whole answer, so the `_schedule_less_statuses` half
+     cannot be missed. A facility genuinely without geo keeps `None`, sorts last in its group by
+     name, and is never given a fabricated 0 (O4).
+  3. The divider renders only when both groups are non-empty (O3) — pinned for both empty cases.
+  4. `StatusOut.distance_km` for a closed facility matches the value an option for that facility
+     carries on a day it is open.
+  5. **Both surfaces rank on the same key, inside their own grouping.** `poolrank.ts` keeps its four
+     tiers (`now`/`soon`/`closed`/`unknown`, `poolrank.ts:155-166` — its header records why: "a phone
+     list IS the answer, and a bad sort is a wrong answer"); this plan does NOT collapse them. What
+     must change is `rowDistance` (`poolrank.ts:247-252`), which reads only
+     `row.options[].distance_km` and so leaves a status-only row at `Infinity` however much
+     `StatusOut` gains — it must read `statuses[].distance_km` too. Asserted: a status-only row sorts
+     by its real distance within its tier.
+  6. Both chains green.
+- **Depends on**: —
+
+### S3 — the owner name renders
+
+- **Goal**: a plan-bearing row is tall enough to carry its owner labels; every other row is unchanged.
+- **Touches**: `blocks/board.ts` ONLY — `rowHeight`, `drawRow`'s `const h = ROW_H` (`board.ts:413`),
+  the label cell (`:560`) and canvas sizing (`:624-626`). **`ribbonrender.ts` needs no signature
+  change**: `drawLaneStack` already takes `h` (`ribbonrender.ts:365-372`, via `drawRibbons`
+  `:488-496`) and never sees `ROW_H`, which is board.ts-private. Plus `blocks/board.test.ts`,
+  `blocks/ribbonrender.test.ts` (two shipped tests encode S3's opposite — `:164` "the row does not
+  grow to fit the stack" and `:226-231` "every real Zürich basin"; both use a local `H = 46` so they
+  keep passing, and both must be superseded explicitly). `blocks/daytail.ts` must NOT grow.
+- **Acceptance**:
+  1. City's 6-lane row and Oerlikon's 8-lane row each render **named owners**; a no-plan row keeps
+     `ROW_H = 46` byte-identical to today.
+  2. `rowHeight` is pure and tested at n = 1..10 including the 46 floor.
+  3. **H1, pinned where it can actually break.** An x-for-a-minute cannot differ between a 46px and
+     an 80px row — `ts.X` takes no height and `cursorXAt` routes through the shared `cursorX`
+     (`board.ts:677-691`), so that test would be vacuous. The real desync risk is **column 1 drifting
+     from column 2**: assert `label.style.height` (`board.ts:560`) equals `canvas.height`
+     (`board.ts:624-626`) for every row, at mixed heights.
+  4. The phone day tail is unchanged (`TAIL_H` untouched), so variant-D remains a separate question.
+  5. Both chains green; `npm run build` exits 0.
+- **Depends on**: S2 (it touches the same row-construction code; sequencing avoids a collision).
+
+### S4 — the two small recorded defects
+
+- **Goal**: close the items [[lane-stack-board]]'s ledger left open.
+- **Touches**: `blocks/detailpanel.ts` + its test; `src/swimzh/etl/silver.py` or
+  `providers/belegungsplan.py` (whichever the section-token diagnosis implicates), `tests/`.
+- **Acceptance**:
+  1. `detailpanel.ts:117`'s `publicSpan` predicate is pinned — inverting it must fail a test. It
+     currently leaves the whole suite green.
+  2. **The lane-plan attachment count is pinned.** A test over the committed fixtures asserts the
+     build attaches **7** lane plans and that `attachment.unmatched_sections` is empty. One build
+     reported `unmatched section … 'sprungbecken' matched no parsed header` and attached 6; the next
+     attached 7, so a silent drop is currently undetectable. If the cause turns out to be a genuinely
+     varying input the test cannot control, the criterion becomes: the count is asserted and the one
+     expected `unmatched_sections` member is named — never an unasserted range.
+  3. Both chains green.
+- **Depends on**: —
+
+## Accepted drift
+
+Findings the user has knowingly blessed, so `/dev:present` folds them into a
+count instead of re-listing them every run. See [[accepted-drift]]. Ships empty:
+rows are added by the human, or pasted from what `/dev:present` prints — never
+by the command itself.
+
+**Append-only, like the ledger.** Rows are added, never edited or deleted; a row
+that stops applying is reported as stale, not removed.
+
+`kind` is the bare word — `DROP`, `SUB`, `INV` — never the rendered symbol
+(`− DROP`). `key` is `intent:+<n>`, an offset counted from the
+`## Intent (verbatim)` heading line (offset 0), never a file line number.
+`+ ADD` findings have no Intent phrase to anchor and cannot be accepted.
+
+| kind | key | why | date |
+|------|-----|-----|------|
+
+## Ledger
+
+Appended by /dev:implement after each slice — never rewritten. Newest row last.
+
+| date | slice | status | divergence from plan | tech debt created | human review? |
+|------|-------|--------|----------------------|-------------------|---------------|
+| 2026-08-12 | S1 | done | (1) `compose.py` gained `carry_lane_plans` + `_lane_key`, beyond the plan's "only if the branch comment needs correcting" — the curated rebuild strands attached lane plans otherwise. (2) `etl/build.py` split into `assemble_curated` + `write_curated_store`; `build_store`'s signature and behaviour unchanged (verified byte-identical over all 57 blobs). (3) `build` runs the roster fetch and curated assemble BEFORE `atomic_swap` — neither writes, failure paths identical, now covered. (4) `_compose_schedules` writes a SUBSET of `composition.facilities` — the adjudicated fix for the deletion door. | `CuratedAssembly.facilities`/`keyed_facilities` re-run `codec.loads` over all 57 blobs on every access; called at most twice per run. | yes |
+| 2026-08-12 | S2 | done | (1) `_distance_km(query, facility)` became `_distance_km(query, geo)` — the roster half has no `Facility`, and a second entry-shaped helper is how the two halves would drift apart. (2) `_option_order`/`_status_order` extracted to module level — the two inline lambdas pushed `find_swim_options` to CRAP 28.6 against a 30 gate; extracted it is 26.5. No behaviour change to the option key. (3) `service._km_out` added so AC4's equality is structural, not two independently-written `round(...,2)` calls. (4) `poollist.ts`/`appdata.test.ts` named in Touches needed no change; `phonelist.test.ts` pinned the user-visible result instead (a closed card now states its km). | `find_swim_options` at CRAP 26.5 / CC 26 against a 30 gate; this slice added ~2, so the next change there needs a genuine extraction. `groupByOpenToday`'s CALL SITE has a permanently-surviving mutant while `dayRows` builds options before statuses — proven identity, documented at the site. `_schedule_less_statuses` still does not apply `query.radius_km` while the in-loop half does (pre-existing, now more visible). `appdata.classifyPools` still derives distance from options only, so the pool-picker shows no km for a closed pool while the board and phone list now do. | yes |
+| 2026-08-12 | S3 | done | (1) `board_render.test.ts` edited, not named in Touches — its "inside ROW_H" test hard-codes 46 and went RED after the fix, so it was a THIRD shipped test encoding S3's opposite (the two the plan named use a local `H` and stayed green). (2) `ribbonrender.ts` comment-only edit, against "board.ts ONLY for production code" — three comments asserted "the row does not grow" and "its owners are read in the DetailPanel", now false; `git diff -U0` with comment lines filtered yields zero lines, verified by the critic. | At exactly `10n` the band is **exactly 7.00px** and `ownerLabelFits` admits it with no margin — verified exact, not epsilon-lucky (`h*0.8` is representable at every real n; no DPR in the path). Guarded: mutating STACK_BOX 0.8→0.75, OWNER_LABEL_MIN_H 7→7.5, the separator 1→2, or `<`→`<=` each redden 2-3 tests. **Not eyeballed in a real browser** — every check is headless, and a 7.00px band under an 8.5px 600-weight face is the one thing arithmetic cannot settle. `stackLaneCount`'s `variant === 'lanestack'` gate and its `Number.isFinite` guard are permanently-surviving mutants (`optionRibbon` only emits lanestack under `lane_count > 0`). `daytail.ts:33` still says TAIL_H "matches the board's ROW_H" — true of the floor, no longer of every row. | yes |
+| 2026-08-12 | S4 | done | AC2 asked for ONE test pinning "7 attached, unmatched_sections empty". It ships as TWO, pinning two different worlds, and the production-shaped one pins **6** — the repo carries no `bungertwies.pdf`. Covered by AC2's own escape clause; the absence is asserted BY NAME via `report.misses`, and the critic proved the pin is not an encoded assumption by committing a stand-in sheet (two tests went red demanding a re-pin). No production code changed: `git diff src/` empty. | **The offline test double still serves `city-schwimmerbecken.pdf` for EVERY `.pdf` URL**, so five pools serve City's identical 6-lane plan in every offline suite and `oerlikon-sprungbecken` is plan-less there. Fixing it needs TWO things to move together: filename routing in `wfs_snapshot.py`, AND a human decision on `swim_lane_fields_pre_s2.json` — see Decisions, the deferral is non-negotiable. `find_unmatched_sections` returning `()` leaves the whole new pin module green; only `tests/test_cli.py`'s artifact test kills it (now stated in the module docstring). | yes |
+
+## Decisions & divergences
+
+**2026-08-12 — S4: the "6 vs 7 lane plans" anomaly is a TEST-DOUBLE ARTIFACT, not a production
+defect.** Reported three times across two plans; now diagnosed and closed. Critic verdict `approve`.
+
+`tests/providers/wfs_snapshot.py::_LANE_PDF` serves **one sheet — `city-schwimmerbecken.pdf` — for
+every `.pdf` URL**. The lane join is URL-keyed, so the five single-basin sources still bind, but to
+City's plan rather than their own. `oerlikon-sprungbecken` is the exception: it declares
+`section: "sprungbecken"`, and `_bind_stacked` (`silver.py:220-232`) routes by containment against
+the sheet's **parsed header**, which reads `Hallenbad City Schwimmerbecken`. The token matches
+nothing, the basin is silently `None`, and six attach instead of seven.
+
+The critic re-derived this independently, parsing all eight committed sheets rather than reading the
+report: blaesi 5, city 6, city-vario 4, kaeferberg 4, leimbach 5, oerlikon-schwimmerbecken 8, and
+`oerlikon-nichtschwimmer-sprungbecken` yielding TWO sections (`Nichtschwimmer`, `Sprungbecken`) at 2
+lanes each — exactly the base checkout's rebuilt gold. **`silver.py` and `belegungsplan.py` are
+correct.** `git diff src/` is empty for this slice.
+
+This also explains, in full, S3's critic finding City, Bungertwies **and** Käferberg all serving
+identical six-lane views with Oerlikon 50m serving none. All three were serving City's sheet.
+
+**The fix was built, then reverted at a gate — and the deferral is non-negotiable, not a judgement
+call.** Filename routing reddens `test_the_existing_lane_count_fields_are_byte_identical_to_before_s2`,
+whose reference `swim_lane_fields_pre_s2.json` captures Leimbach 2026-05-05 — a capture that today
+holds City's plan. **Regeneration cannot rescue it**: `gen_swim_lane_fields_pre_s2.py` dumps from a
+`git archive` of 659c76a and sets `PYTHONPATH` to that tree, so `tests.providers.wfs_snapshot`
+resolves to the OLD single-sheet double by construction. Verified empirically both ways — under a
+routed working tree the generator still reports "reproduced EXACTLY from the frozen commit", while
+the test fails. So there is **no regenerated baseline that both preserves the pre-change reference
+and matches a routed tree**; reconciling them means deleting or re-founding a fixture that exists to
+prove S2's independence. That is a human decision, and correctly out of a slice's reach.
+
+Otherwise the routing fix is clean: under it the build reports `attached 7 lane plan(s)`, no invariant
+assertion fails, and the only other movement is `checked == 19` becoming 21 as Sprungbecken's two
+options enter the fence. **The pre-S2 baseline is the sole blocker.**
+
+**AC1** — `detailpanel.ts`'s `publicSpan` predicate, found unpinned by two separate critics across two
+plans, is now pinned: inverting it and deleting it each redden the two new tests, with the other 466
+noticing nothing. That silence is precisely the hole.
+
+**2026-08-12 — S3: the owner name renders, verified on painted strings rather than on assertions.**
+Critic verdict `approve`.
+
+The critic did not settle for "a test asserts it". It built a store from the committed fixtures the
+way `conftest.py::gold_db` does, served four dates through `build_answer` at `PLACE_PRESETS[0]`, and
+drove the **compiled** board (`static/dist/blocks/board.js`) with a recording 2D context whose
+`measureText` uses a realistic 8.5px advance (0.56em) rather than the test harness' generous
+6px/char. Painted labels on 2026-08-12: `ASVZ`, `Schwimmverein Zürileu`, `Trigether`, `Sportaktiv`,
+on 60px rows. **Variant C's "whose" now ships.**
+
+Of 20 owner-bearing reserved segments that day, 16 clear the label gate; the 4 drops are all
+`Aquatic Masters Team` (84.4px block vs 101.2px needed) — the pre-existing *horizontal* gate, which
+S3 never claimed to move.
+
+**The plan's Design table does not describe the store today.** It says Oerlikon 8 / Bungertwies 4 /
+Käferberg 4 / Bläsi-Leimbach 5. The offline build attaches **6** plans, and serves 6-lane views for
+City, Bungertwies and Käferberg, with Oerlikon 50m carrying no `lane_day_view` on the sampled dates.
+`max(46, 10n)` handles the actual shapes correctly either way — but the table was written from the
+*base* checkout's store, and reconciling it is exactly S4's attachment-count criterion.
+
+**One report inaccuracy, corrected here.** The implementer said it *fixed* the two mutants that first
+survived. `max` is genuinely fixed; the `variant === 'lanestack'` gate still survives, and the
+report's own tech-debt paragraph contradicts its acceptance paragraph two paragraphs later. The code
+comment is the honest version. Recorded because a report that claims a mutant died is worse than one
+that discloses it lived — the next reader trusts the wrong sentence.
+
+**This is the first slice where the implementer mutation-tested itself before reporting**, and it
+found two survivors that way and fixed one rather than shipping them silently. The critic re-ran all
+nine claimed mutations independently and every one reddened as reported.
+
+**2026-08-12 — S2: what the slice actually delivers, measured, because it is NOT what the plan's
+Context implied.** Recorded before any summary distils it into a success story.
+
+The Context leads with "34 of 57 facilities change position". **This slice does not move that number.**
+Measured by the critic, Wed 2026-08-12 → Thu 2026-08-13 at `PLACE_PRESETS[0]`, before and after:
+
+| | before | after |
+|---|---|---|
+| facilities changing board position | 43 of 55 | **43 of 55** |
+| open group, stable indices | 12 / 18 | 12 / 18 |
+| closed group, stable indices | 17 / 36 | **0 / 36** |
+| Tannenrauch | 15 → 39 | 15 → 40 |
+
+Closed-group indices got *less* stable, because Tannenrauch now inserts at its true distance rank
+instead of being appended at an arbitrary slot. That is O2 working as chosen, not a regression.
+
+**What the slice does deliver** is that the order became explicable. The closed group was never
+sorted at all — it was in facility-iteration order:
+
+| closed group | before | after |
+|---|---|---|
+| first three | Altstetten, Bläsi, Leimbach — all `null` km | Riedtli 1.22, Bäckeranlage 1.27, Letten 1.36 |
+| last | Seebad Enge (`null`) | Hallenbad Leimbach **6.07 km** |
+
+Leimbach — the FURTHEST shut pool — was served 3rd of 38. That was the real defect. A pool that shuts
+overnight still moves groups, because it genuinely changed; the boundary is now named rather than
+silent. If the owner later wants a row that never moves, that is the interleave option rejected at
+plan time and it remains available.
+
+**AC1 did not discriminate — self-reported by the implementer, unprompted, then verified.** The
+plan's literal criterion (relative order per group across two dates) is **green before the fix**:
+facility iteration order is itself stable, so an unranked status list is consistently unranked day to
+day. 11 of 12 new Python tests are red pre-fix; that one is not. It was kept as a non-regression
+guard and now says so *inside the test*, naming `test_each_group_is_served_in_distance_order` as the
+assertion that earns the fix. **Third non-discriminating criterion in this plan** — the orchestrator's
+"0 moves" was impossible, "relative order" is trivially true, and the Pool-mode guard test below could
+not fail. Every one was caught by mutation, none by reading.
+
+**A blocking finding: a test that could not fail.** `'Pool mode draws no divider (I4)'` fed
+`swim_week_oerlikon.json`, whose seven days all carry options (`2,2,3,2,2,2,1`), so `dividerIndex`
+returned `null` regardless of the guard. Deleting `board.ts:630`'s mode guard left all 93 TS tests
+green. The guard is load-bearing on real input: four pools in the shipped store have an open first day
+and a later shut day (Bungertwies `[4,4,4,2,0,0,2]`, Riedtli, Tannenrauch, Aemtler), each of which
+would draw "No sessions published today" mid-week inside a single pool's week. Rebuilt against a
+constructed `BoardWeek` — which the critic found is *more* faithful than the committed fixture, since
+it supplies `{label, iso, answer}` exactly as `api.ts:194-199 fetchWeek` does and therefore exercises
+the live `d.date ?? d.iso` branch the committed one never reaches.
+
+**Two predicates were untestable through the door they were being tested from.** `isOpenToday(row)`
+and `row.statuses.length === 0` are equivalent on anything `dayRows` produces (options and statuses
+are disjoint there), so no test iterating `dayRows` output could tell them apart. Same for
+`groupByOpenToday`, provably the identity on that output. Both now called directly on hand-built rows
+`dayRows` cannot produce; both mutants die.
+
+**One rebuttal accepted on evidence.** The orchestrator asked for the `groupByOpenToday` *call site*
+to be pinned. The implementer showed it cannot be, and proved why rather than asserting it: `dayRows`
+builds its Map in two sequential loops and a status for an option-bearing facility joins the existing
+row, so every list it can emit is already partitioned. It delivered a two-factor guard instead —
+reordering `dayRows` to build statuses first keeps the suite green *with* the call (it absorbs the
+change) and reddens three tests *without* it. The hole as stated is closed; the single-mutant kill is
+impossible. Kept the call, with the proof written at the site.
+
+**2026-08-12 — S1: the fix opened a second silent-deletion door, and closing it is the real result of
+this slice.** Critic verdict `revise`, accepted without rebuttal.
+
+Rebuilding the curated tier from `data/` removes the re-compose feedback, but `compose` emits a
+facility for **every** curated pool whether it was scraped or not (`compose.py:344-360`), and
+`write_schedules` then UPDATEs it. So a pool the catalog **names** but this run does not scrape had
+its stored scraped facts overwritten curated-only — exit 0, no stderr line naming it. Reproduced
+twice against committed fixtures: `freibad-heuried` with `url=None` lost 8 rules and all prices;
+`planschbecken-artergut` given a unique url lost `operating_season {May 1 – Sep 30, fair_only}`.
+
+A real input class, not a hypothesis: `scrape-gold` reads the **committed** `data/catalog.json` while
+`build` uses the **live WFS** roster (`cli.py:606-609`), and `etl/scrape.py:400-404` already records
+that "WFS drift has renamed roster entries before" and must "never [be] a silent exit from BOTH
+phases." One drifted Planschbecken keeps `sharers[url] >= 2`, so not even the `fan-out inert` note
+fires.
+
+**Adjudicated fix (a) — narrow the write — over (b) accept the risk.** Trading silent staleness for
+silent deletion is a worse trade, not an equal one. `_compose_schedules` now writes only the pools it
+resolved an extract for. **The invariant landed in the write, not in the callers**, which is the
+durable part: `compose` emitting a facility per curated pool makes the write the only safe narrowing
+point, so any future caller handing `compose` a wider curated tier inherits the same risk unless the
+rule lives there.
+
+**Two false claims corrected rather than left standing.** `cli.py:619` and the defect report's
+resolution note both said the re-layer "leaves every other blob exactly as it was" — true only for
+pools the catalog OMITS. And a test docstring claimed to guard the deletion door; **mutation proved
+it does not** (reverting the `scraped_ids` filter leaves it green, because an unchanged catalog
+rewrites unscraped pools with byte-identical content — only a DRIFTED catalog exposes a too-wide
+write). Both fixed. The orchestrator had asserted that same false property when directing the fix;
+the critic caught it.
+
+**Verification standard.** AC1/AC2 proven red pre-fix by the implementer AND independently by the
+critic against a `git archive HEAD` tree with a signature-only shim. Every new guard mutation-tested:
+reverting `scraped_ids` reddens the parametrized deletion test; reducing `_lane_key` to
+`(facility_id, basin_id)` reddens both re-pointed-binding tests; removing `carry_lane_plans` reddens
+two more. The critic hunted a **third** shape of the defect across every `facility_doc` writer and
+found none, and verified `build`'s output byte-identical across the refactor rather than accepting
+the identity argument.
+
+**One deliberate deletion path remains, now pinned end-to-end:** re-pointing a `lane_plan_source` in
+`data/` drops the stale plan until the next `scrape-lanes`. Intended, documented in three places
+(docstring, README, defect report), and asserted as a targeted drop rather than a sweep.
+
+**2026-08-11 — pre-approval adversarial review (dev:plan-critic), verdict `revise` → all seven
+blocking findings accepted, none rebutted.** The critic recomputed every number from the domain
+rather than trusting the plan's.
+
+1. **The headline measurement described a state no user can reach.** "37 of 58, Tannenrauch 21→39"
+   reproduces only with **no** `lat`/`lon`; the app seeds `PLACE_PRESETS[0]` on load and always emits
+   coordinates. With a place: **34 of 57**, Tannenrauch **15→41**. Corrected in Context, with the
+   error named rather than quietly replaced.
+2. **"0 within-group moves" is unachievable and was the wrong property.** An insertion shifts every
+   later index; simulated, 14 of 18 open-group and 36 of 36 closed-group indices still move while
+   *relative order* holds. AC1 now asserts relative order.
+3. **The Design would have half-fixed the bug, invisibly.** `_schedule_less_statuses`
+   (`query.py:631,754-787`) runs OUTSIDE the facility loop and builds from `RosterEntry`, not
+   `Facility` — so 18 of 38 statuses would have kept `distance_km: None` and stayed in the unranked
+   tail, and AC4 could not catch it (it compares against an option the facility never has). Named in
+   the Design and Touches, with its own criterion.
+4. **AC5 was unsatisfiable.** `poolrank.ts` groups into **four** tiers, not two, and `rowDistance`
+   reads only `options[].distance_km` so a status-only row stays `Infinity` however much `StatusOut`
+   gains. Restated as the property that can hold; the four tiers stay.
+5. **S-2's `Facts | NothingFound | Failed` writer was YAGNI.** `atomic_swap` + the two fatal aborts
+   already guarantee it; kept as a regression test, dropped as a type.
+6. **S4's "a diagnosis is an acceptable outcome" was an escape hatch** — replaced with an assertable
+   count plus empty `unmatched_sections`.
+7. **The ROW_H enumeration was wrong**: 4 of 7 rows grow, not 7; Bläsi and Leimbach go to 50, and
+   "everything else stays 46" was false for two of them.
+
+Accepted suggestions: S3's Touches corrected (`drawLaneStack` already takes `h`; the change is
+`board.ts:413` alone) and its AC3 re-pointed at the real desync risk (label vs canvas height) since
+the x-mapping test would have been vacuous; two shipped `ribbonrender.test.ts` tests that encode S3's
+opposite are named as superseded; `openToday` dropped in favour of a derived helper; **slices
+reordered so the riskiest (`scrape-gold`) runs first**, which is where the pause now sits; `O1`
+restated with the real sort key.
+
+**2026-08-11 — row order: two groups, both distance-sorted (owner's choice).** Interleaving closed
+pools into one distance-ordered list was the alternative, and matches [[2026-07-19-ux-ascii-design]]'s
+original intent — but it costs the scannable "what's open today" block, which the owner chose to keep.
+A pool still moves between groups the day it closes; O2 makes that move visible rather than silent,
+which is the actual complaint.
+
+**2026-08-11 — the owner name is fixed by height, not by a readout.** `ROW_H = 46` and "owner inline"
+are arithmetically incompatible at six lanes; the plan that shipped them both was wrong. Raising the
+row for plan-bearing basins is possible because each row already owns its canvas and label cell. The
+alternative — a cursor-following readout — would add the board's first pointer handler and is a
+separate plan.
+
+**2026-08-11 — `scrape-gold` fix scope.** Option 2 (re-layer from sources) over option 3 (a tier tag
+on the basin): option 3 fixes basins only and leaves all ten `_ASPECTS` frozen, which the defect
+report's own measurement showed is most of the bug. Option 1 (source-attributed rows) is the schema
+change [[data-sourcing-rule]] defers.
+
+## Summary
+
+All four slices shipped 2026-08-12 through both QA chains and adversarial review (final: **967**
+Python tests at 96.36% against a 95 floor, **468** TypeScript, `npm run build` exit 0, CRAP clean both
+sides). Distilled into [[board-order-and-defects]].
+
+**The reported bug.** "when I switch dates order of swimming pools changes" — because a pool's
+position was decided by whether it happened to be open, not by where it is. Statuses carried no
+distance and were never sorted; `dayRows` rendered every option row before every status row. Both
+status sources now carry distance (including the 18 built outside the facility loop, which a half-fix
+would have missed invisibly), and the board is two distance-ordered groups with a named boundary.
+
+**Stated plainly, because the plan's framing implied otherwise:** this does NOT reduce cross-date
+positional churn — 43 of 55 facilities move both before and after. What it delivers is an *explicable*
+order. The closed group was never sorted at all: Hallenbad Leimbach, the furthest shut pool at 6.07
+km, was served 3rd of 38 and is now last.
+
+**Three defects fixed alongside it.** `scrape-gold` refreshed nothing already present, and the fix for
+that opened a second silent-deletion door which closing became the real result of S1. The owner name
+never rendered on any real basin (`ROW_H = 46` and "owner inline" are arithmetically incompatible at
+six lanes) — it now paints, verified on painted strings through the compiled board. And the "6 vs 7
+lane plans" anomaly, reported three times, is a test-double artifact rather than a production defect.
+
+**What this plan should be remembered for.** **Five** acceptance criteria across this plan and its
+predecessor turned out not to discriminate — "0 within-group moves" (impossible), "relative order"
+(trivially true), the Pool-mode divider guard (its fixture had no shut day), a `publicSpan` predicate
+two critics found unpinned, and a tautology caught in the final slice. **Every one was found by
+mutation; none by reading.** Two agents also built a fix and then declined to ship it on hitting a
+gate. Mutation-testing the tests, not just the code, is the practice that earned this plan.
+
+**Open:** the offline double still serves one sheet for every PDF (needs filename routing AND a
+decision on the pre-S2 baseline, which must move together); `find_swim_options` is at CRAP 26.5
+against a 30 gate; the 7.00px owner-label band has never been seen in a real browser.

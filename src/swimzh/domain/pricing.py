@@ -1,8 +1,13 @@
-"""Admission pricing — deliberately modest.
+"""Admission pricing — the tariff states its own age bounds; this module invents none.
 
-Prices come from HTML/PDF, go stale, and carry liability if computed wrong. So this is not
-a tariff engine: each entry stores a dated display value plus an amount, and `price_for`
-picks the entry for a person by simple age bands. Everything is stamped with `valid_as_of`.
+Prices come from HTML, go stale, and carry liability if computed wrong. So this is not a
+tariff engine: each entry stores a dated display value, an amount, and the **published**
+lower age bound it was printed under (`Erwachsene (ab 20 J.)` -> `min_age=20`).
+`price_for` picks the entry whose bound the person clears; it never guesses.
+
+`min_age=None` means the source stated no bound, so the entry is not age-resolvable at all —
+`entry_for` skips it rather than treating it as universal. An age below every published bound
+(Zürich prints nothing for under-6) yields `None`: unknown is not the adult rate.
 """
 
 from __future__ import annotations
@@ -17,22 +22,6 @@ class PriceCategory(Enum):
     CHILD = "child"  # young children (often free / reduced)
     YOUTH = "youth"  # school-age / students
     ADULT = "adult"
-    SENIOR = "senior"
-
-
-# Approximate Zürich age bands; refine per facility if their tariff differs.
-_YOUTH_MAX_AGE = 15
-_SENIOR_MIN_AGE = 65
-
-
-def category_for_age(age: int) -> PriceCategory:
-    if age <= 5:
-        return PriceCategory.CHILD
-    if age <= _YOUTH_MAX_AGE:
-        return PriceCategory.YOUTH
-    if age >= _SENIOR_MIN_AGE:
-        return PriceCategory.SENIOR
-    return PriceCategory.ADULT
 
 
 @dataclass(frozen=True, slots=True)
@@ -40,6 +29,8 @@ class PriceEntry:
     category: PriceCategory
     amount_chf: Decimal
     display: str
+    min_age: int | None = None
+    """The lower bound the tariff itself prints for this entry; `None` if it prints none."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -48,13 +39,20 @@ class PriceTable:
     valid_as_of: date | None = None
     source_url: str | None = None
 
-    def by_category(self, category: PriceCategory) -> PriceEntry | None:
-        return next((e for e in self.entries if e.category == category), None)
+    def entry_for(self, age: int | None) -> PriceEntry | None:
+        """The entry with the greatest published `min_age` this age clears.
+
+        An unknown age takes the entry with the greatest bound — the unreduced rate, the one
+        answer that can never undercharge. No age clears a bound it is below, so a table whose
+        lowest band starts at 6 returns `None` for a 3-year-old.
+        """
+        bounded = [(e.min_age, e) for e in self.entries if e.min_age is not None]
+        if age is not None:
+            bounded = [(bound, e) for bound, e in bounded if bound <= age]
+        if not bounded:
+            return None
+        return max(bounded, key=lambda pair: pair[0])[1]
 
 
 def price_for(table: PriceTable, age: int | None) -> PriceEntry | None:
-    """Pick the price entry for a person's age; adult when age is unknown."""
-    category = category_for_age(age) if age is not None else PriceCategory.ADULT
-    entry = table.by_category(category)
-    # Fall back to the adult tariff if the specific band is not published.
-    return entry if entry is not None else table.by_category(PriceCategory.ADULT)
+    return table.entry_for(age)

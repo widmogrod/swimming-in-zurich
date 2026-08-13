@@ -15,10 +15,14 @@ from typing import Any
 import yaml
 
 from swimzh.core.result import Ok
+from swimzh.domain.catalog import ScheduleFreshness
 from swimzh.etl.build import build_store
-from swimzh.storage import codec
+from swimzh.storage import catalog_json, codec
 
 DATA_DIR = Path(__file__).resolve().parents[2] / "data"
+# Since S3 the roster is a `build_store` argument sourced from the WFS; the committed catalog.json
+# IS that WFS snapshot, so it is the recorded roster double for this offline spine build test.
+_ROSTER = catalog_json.loads((DATA_DIR / "catalog.json").read_text(encoding="utf-8"))
 
 # The pre-unification short ids (S1's crosswalk) — each must still resolve via an alias.
 LEGACY_SHORT_IDS: dict[str, str] = {
@@ -35,7 +39,7 @@ LEGACY_SHORT_IDS: dict[str, str] = {
 
 def _build(tmp_path: Path, name: str = "gold.sqlite") -> sqlite3.Connection:
     db = tmp_path / name
-    result = build_store(DATA_DIR, db)
+    result = build_store(DATA_DIR, db, _ROSTER)
     assert isinstance(result, Ok), result
     return sqlite3.connect(db)
 
@@ -57,19 +61,25 @@ def test_build_yields_exactly_57_pool_rows(tmp_path: Path) -> None:
     assert conn.execute("SELECT COUNT(*) FROM pool").fetchone()[0] == 57
 
 
-def test_build_derives_curated_status_for_the_four_curated_pools(tmp_path: Path) -> None:
+def test_offline_build_is_schedule_less_freshness_comes_from_the_scrape(tmp_path: Path) -> None:
     conn = _build(tmp_path)
-    # `curation_status` is no longer a stored column: it is derived at read from `facility_doc`
-    # by the shared `codec.is_curated` rule (NULL blob → uncurated).
+    # Freshness is no longer a stored column: it is derived at read from `facility_doc` by the
+    # shared `codec.schedule_freshness` rule (NULL blob → no_source; rules present → scraped).
+    # Since delete-curated-schedule-tier S3 curated YAML carries NO schedule, so the OFFLINE
+    # `build_store` is uniformly schedule-less — NO pool derives `SCRAPED` here. `SCRAPED` freshness
+    # appears only after the atomic build's scrape phase folds the real timetable in (end-to-end in
+    # tests/test_cli.py).
     rows = conn.execute("SELECT id, facility_doc FROM pool").fetchall()
-    curated = {pool_id for pool_id, doc in rows if codec.is_curated(doc)}
-    assert curated == {
-        "hallenbad-city",
-        "hallenbad-oerlikon",
-        "hallenbad-bungertwies",
-        "schulschwimmanlage-aemtler",
+    scraped = {
+        pool_id
+        for pool_id, doc in rows
+        if codec.schedule_freshness(doc) is ScheduleFreshness.SCRAPED
     }
-    assert sum(1 for _, doc in rows if not codec.is_curated(doc)) == 53
+    assert scraped == set()
+    assert (
+        sum(1 for _, doc in rows if codec.schedule_freshness(doc) is not ScheduleFreshness.SCRAPED)
+        == 57
+    )
 
 
 def test_cutover_every_catalog_pool_id_is_a_canonical_pool_row(tmp_path: Path) -> None:
