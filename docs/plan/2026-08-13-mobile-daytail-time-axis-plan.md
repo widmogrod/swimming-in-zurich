@@ -1,8 +1,11 @@
 ---
 type: plan
-status: approved         # draft -> approved -> in-progress -> done
+status: in-progress      # draft -> approved -> in-progress -> done
 created: 2026-08-13
 feature: mobile-daytail-time-axis
+branch: plan/mobile-daytail-time-axis
+worktree: .claude/worktrees/plan-mobile-daytail-time-axis
+base_branch: main
 gates:
   qa: full               # BOTH chains: `uv run` python chain AND `npm --prefix apps/web/static/js run qa`
   review: adversarial    # critic subagent must find no blocking issues
