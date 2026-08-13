@@ -51,8 +51,49 @@ test('each card carries a day tail canvas labelled with its pool', () => {
   const { el } = build();
   const canvases = el.queryAll((c: FakeElement) => c.tagName === 'CANVAS');
   expect(canvases.length).toBe(2);
+  // NOTE: since S1 put the tail inside the card button, the canvas is `aria-hidden` and
+  // these two attributes are INERT — retained deliberately (they are the correct labelling
+  // if the canvas ever leaves the button again), not a live a11y guarantee. What a screen
+  // reader actually announces is asserted by 'a row does not announce its pool name twice'.
   expect(canvases[0].getAttribute('aria-label')).toBe('Hallenbad City');
   expect(canvases[0].getAttribute('role')).toBe('img');
+});
+
+// --- S1: the ribbon IS the tap target ------------------------------------------------
+// `_fakedom`'s dispatch does not bubble and neither `El` nor `FakeElement` has a
+// node-level `contains` (that lives on ElClassList), so "a tap on the tail reaches the
+// button" is asserted as parentage.
+
+test('the day tail lives inside the card button, so tapping the bars opens the card', () => {
+  const { el } = build();
+  const btn = must(el.query((c: FakeElement) => c.classList.contains('plist__btn')));
+  const tailBox = must(el.query((c: FakeElement) => c.classList.contains('plist__tail')));
+  expect(tailBox.parentNode).toBe(btn);
+  expect(
+    must(tailBox.query((c: FakeElement) => c.tagName === 'CANVAS')).parentNode,
+  ).toBe(tailBox);
+});
+
+test('the expanded body is NOT inside the button — a <button> may not nest the Gantt', () => {
+  const { el } = build();
+  const card = must(el.query((c: FakeElement) => c.classList.contains('plist__card')));
+  const more = must(el.query((c: FakeElement) => c.classList.contains('plist__more')));
+  expect(more.parentNode).toBe(card);
+  const btn = must(el.query((c: FakeElement) => c.classList.contains('plist__btn')));
+  expect(btn.query((c: FakeElement) => c.classList.contains('plist__more'))).toBeNull();
+});
+
+test('a row does not announce its pool name twice', () => {
+  // The button names itself from its contents. The h3 already carries `row.label`, so the
+  // canvas inside it must be aria-hidden or every one of ~58 rows says the name twice.
+  const { el } = build();
+  const btn = must(el.query((c: FakeElement) => c.classList.contains('plist__btn')));
+  const canvas = must(btn.query((c: FakeElement) => c.tagName === 'CANVAS'));
+  expect(canvas.getAttribute('aria-hidden')).toBe('true');
+  const named = btn
+    .queryAll((c: FakeElement) => c.textContent === 'Hallenbad City')
+    .filter((c: FakeElement) => c.tagName === 'H3');
+  expect(named.length).toBe(1);
 });
 
 test('a partly-reserved pool is not counted as open to you', () => {

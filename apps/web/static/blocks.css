@@ -1151,10 +1151,16 @@ body {
   contain-intrinsic-size: auto 150px;
 }
 .plist__card.is-muted { opacity: .72; }
+/* The button now WRAPS the day tail (tapping the bars opens the card), so it can no
+   longer carry the card's inline padding: it would stack with `.plist__tail`'s own
+   `var(--s3)` and shrink every plot to 24px in from each edge. The padding moves onto
+   the two text blocks that need it — and only those two: `.plist__verdict` /
+   `.plist__fair` nest inside `.plist__text` inside `.plist__head` and would double-indent.
+   Invariant X3: total inline padding around the canvas stays 12px per side. */
 .plist__btn {
   display: block;
   width: 100%;
-  padding: var(--s3) var(--s3) var(--s2);
+  padding: var(--s3) 0 0;
   background: transparent;
   border: 0;
   color: inherit;
@@ -1162,8 +1168,21 @@ body {
   text-align: left;
   cursor: pointer;
 }
-.plist__btn:focus-visible { outline: none; box-shadow: var(--focus-ring); }
-.plist__head { display: flex; align-items: flex-start; gap: var(--s2); }
+/* INSET, unlike every other control in this file. `.plist__card` is `overflow: hidden`
+   (it must be — it clips the canvas and the expanded body to the rounded corners), and
+   since the day tail moved inside the button the button's border box coincides with the
+   card's padding box on all four sides. The outset `--focus-ring` would be clipped away
+   entirely, and this rule also kills the UA outline, so a keyboard user would get no
+   focus indication whatsoever. The radius exists only so the inset ring's corners follow
+   the card's; the button paints no background of its own. */
+.plist__btn { border-radius: var(--r-md); }
+.plist__btn:focus-visible { outline: none; box-shadow: var(--focus-ring-inset); }
+.plist__head {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--s2);
+  padding-inline: var(--s3);
+}
 .plist__text { min-width: 0; }
 .plist__name {
   margin: 0;
@@ -1183,6 +1202,7 @@ body {
 }
 .plist__meta {
   margin: var(--s2) 0 0;
+  padding-inline: var(--s3);
   display: flex;
   flex-wrap: wrap;
   gap: var(--s1) var(--s3);
@@ -1203,7 +1223,17 @@ body {
 
 /* The day tail: laid out by CSS, painted by the SHARED renderer. Its height is
    set inline from TAIL_H so the canvas box and the drawing agree exactly. */
-.plist__tail { padding: var(--s1) var(--s3) var(--s3); }
+/* Top padding is var(--s3), not var(--s1): the tail used to sit below the button, so the
+   12px gap above it was `.plist__btn`'s own `var(--s2)` bottom padding plus this `var(--s1)`.
+   The tail is inside the button now and the button's bottom padding is gone, so the whole
+   gap is spelled here. The two halves are longhands because they mean different things and
+   part company in S3: the INLINE half is invariant X3 (the only inline padding around the
+   canvas, 12px per side) and moves to the `.plist__plot` wrapper; the BLOCK half is card
+   rhythm and stays. */
+.plist__tail {
+  padding-block: var(--s3);
+  padding-inline: var(--s3);
+}
 .plist__tail canvas { display: block; width: 100%; }
 
 /* --- the responsive switch -------------------------------------------------

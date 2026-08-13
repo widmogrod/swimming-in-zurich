@@ -166,15 +166,24 @@ export function createPoolList<T extends El>(el: T, opts: PoolListOpts = {}) {
       for (const f of facts) meta.appendChild(newEl(doc, 'span', undefined, f));
       btn.appendChild(meta);
     }
-    card.appendChild(btn);
 
+    // The tail lives INSIDE the button: tapping the bars is the natural gesture for
+    // opening a card, and a sibling node would never reach the handler (`_fakedom`'s
+    // dispatch does not bubble, and a real tap on a sibling is simply not on the button).
+    // `.plist__more` deliberately stays OUTSIDE it — a <button> may not contain the
+    // scrollable, focusable Gantt.
     const tailBox = newEl(doc, 'div', 'plist__tail');
     const canvas = asCanvas(doc.createElement('canvas'));
     canvas.setAttribute('role', 'img');
     canvas.setAttribute('aria-label', ranked.row.label);
+    // A <button> computes its accessible name from its contents, and the h3 above
+    // already carries `row.label` — without this every one of the ~58 rows would
+    // announce its pool name twice. `role`/`aria-label` stay but are now inert.
+    canvas.setAttribute('aria-hidden', 'true');
     canvas.style.height = `${TAIL_H}px`;
     tailBox.appendChild(canvas);
-    card.appendChild(tailBox);
+    btn.appendChild(tailBox);
+    card.appendChild(btn);
 
     // The expanded body: empty until opened, filled by the caller. Detail is INLINE —
     // no sheet, no route — which is why the phone has no equivalent of the bottom-sheet

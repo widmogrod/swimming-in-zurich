@@ -283,8 +283,34 @@ Appended by /dev:implement after each slice — never rewritten. Newest row last
 
 | date | slice | status | divergence from plan | tech debt created | human review? |
 |------|-------|--------|----------------------|-------------------|---------------|
+| 2026-08-13 | S1 | done | (1) `.plist__tail`'s VERTICAL padding also changed — the plan's padding move deletes `.plist__btn`'s `var(--s2)` bottom, which supplied 8 of the 12px above the tail; new value reproduces the old rhythm exactly. (2) new `--focus-ring-inset` token + `border-radius` on `.plist__btn`, restoring focus indication the padding move destroyed. (3) `tokens.css` and `apps/web/tests/test_design_system.py` modified — both outside S1's listed files, same reason as (2). | focus-ring guard is grep-level, not pixel-level: it pins which token the selector uses, not that the ring is visible. No layout engine in the suite — same honesty as X3. | yes |
 
 ## Decisions & divergences
+
+**2026-08-13 — S1: the padding move destroyed the card's focus ring, and the fix is an inset
+variant.** Caught by the critic, not by any gate. `--focus-ring` is a purely *outset* box-shadow
+(`tokens.css:132`) and `.plist__card` clips with `overflow: hidden`; the button's top/left/right ring
+bands were always clipped, and the one visible sliver lived in `.plist__tail`'s old 4px top padding —
+which this slice deletes. With `outline: none` on the same selector, a keyboard user was left with
+**zero** focus indication. `test_design_system.py` stayed green because it only asserted the token was
+*referenced*, and the S1 eyeball gate is scoped to X3.
+
+Fixed with a new `--focus-ring-inset` token rather than `.plist__card:has(.plist__btn:focus-visible)`.
+The `:has` route was rejected on a stated mechanism: the codebase uses `:has()` nowhere, and this ring
+would be the *only* indicator, so a browser without support gives zero indication — reintroducing the
+exact defect. An inset shadow paints inside the button's own padding box, which no ancestor
+`overflow` can reach, so it is unconditional. Verified by the re-review: the 3px band never sits under
+the canvas or the `h3` (every direct child of `btn` is inset ≥12px), and the guard is mutation-checked
+four ways.
+
+**Suggestions recorded, not taken in S1** (none blocking): `.plist__btn` is now declared in two rule
+blocks, so a future editor may miss the radius — worth folding when S3 next touches that region. The
+card's *inner* radius is 9px against the button's 10px, shaved ~1px per corner by the clip;
+`calc(var(--r-md) - 1px)` is the exact value if it reads badly at the gate. And forced-colors mode
+strips `box-shadow` entirely, leaving no indicator — true of all nine `--focus-ring` call sites, so it
+is a project-wide gap, not this slice's defect; one `@media (forced-colors: active)` rule in
+`components.css` would close it for every control at once.
+
 
 **2026-08-13 — variant B over a shared ruler.** Five treatments were mocked on live data. A shared
 pinned ruler (A/D) reads better per-pixel and costs less vertical space, but `phonebar.ts` documents
