@@ -10,9 +10,19 @@ describe("PLURAL_CATEGORIES cannot drift from CLDR", () => {
   // The table is hand-written and used as a TYPE source, so it must equal what the
   // platform actually implements. If a future CLDR revision changes a category set (fr/it
   // gained `many` in CLDR 42), this fails rather than the table silently lying to tsc.
+  //
+  // Compared as a SET (both sides sorted). `pluralCategories` is a set of categories, and
+  // ECMA-402 does not specify its order: Node 22 answers fr as ["many","one","other"] and
+  // Node 26 as ["one","many","other"]. An order-sensitive `toEqual` therefore passed
+  // locally and failed in CI for three locales (fr, it, pl) while both runtimes agreed
+  // exactly on WHICH categories exist — a false alarm about the only thing this test is
+  // for. Sorting keeps the real guard (a category appearing or disappearing) and drops the
+  // accidental one.
   test.each(LOCALES)("%s matches Intl.PluralRules", (locale) => {
-    expect([...PLURAL_CATEGORIES[locale]]).toEqual(
-      new Intl.PluralRules(locale).resolvedOptions().pluralCategories,
+    expect([...PLURAL_CATEGORIES[locale]].sort()).toEqual(
+      [
+        ...new Intl.PluralRules(locale).resolvedOptions().pluralCategories,
+      ].sort(),
     );
   });
 });
