@@ -284,8 +284,32 @@ Appended by /dev:implement after each slice — never rewritten. Newest row last
 | date | slice | status | divergence from plan | tech debt created | human review? |
 |------|-------|--------|----------------------|-------------------|---------------|
 | 2026-08-13 | S1 | done | (1) `.plist__tail`'s VERTICAL padding also changed — the plan's padding move deletes `.plist__btn`'s `var(--s2)` bottom, which supplied 8 of the 12px above the tail; new value reproduces the old rhythm exactly. (2) new `--focus-ring-inset` token + `border-radius` on `.plist__btn`, restoring focus indication the padding move destroyed. (3) `tokens.css` and `apps/web/tests/test_design_system.py` modified — both outside S1's listed files, same reason as (2). | focus-ring guard is grep-level, not pixel-level: it pins which token the selector uses, not that the ring is visible. No layout engine in the suite — same honesty as X3. | yes |
+| 2026-08-14 | S2 | done | none | the `pal.hair \|\| pal.axis` fallback arm is uncovered (daytail.ts branch 92.59% → 89.28%): no test short of a Proxy set-trap recorder can distinguish the arms, and one that only moves the number would assert nothing. | yes |
 
 ## Decisions & divergences
+
+**2026-08-14 — S2: three critic suggestions taken, two recorded instead.** Taken: (1) the mark ink
+was **unfalsifiable** — `Palette` is `Record<string, string>`, so mutating `pal.hair` to `pal.hairline`
+left both `tsc` and all ten tests green, i.e. a typo'd key would have shipped an invisible or black
+rule; now `pal.hair || pal.axis`, mirroring `board.ts:523`. (2) The test named *"…gets a rule and a
+notch"* only counted `moveTo(x, 0)`, so two full-height rules would have passed it — the notch depths
+are now asserted and the name is true. (3) `tickPercent` re-derived the window by hand; it now routes
+through `tailTimescale(100)`. That last one is not DRY housekeeping: this module exists so the strip
+and the canvas share ONE mapping, and a hand-copied window is the exact drift the design guards
+against. The ulp property was re-verified after the refactor — hour 21 still breaks `===` at 320 and
+390 and passes at 340/375, so the tolerance stays load-bearing rather than decorative.
+
+Recorded, not taken: the `tickXs` test helper mirrors production's `Math.round(x) + 0.5` convention,
+so it is not an independent oracle (acceptable for a rendering detail); and `testutil.ts` compiles
+into `dist/`, a pre-existing pattern it shares with `must`/`fake` — worth a `tsconfig` exclude
+whenever that file is next touched, but not this slice's defect. The Proxy set-trap recorder that
+would make canvas *colour* assertable is the real fix for the fallback's uncovered arm, and would
+unlock colour assertions for the board suite too; deliberately left as a wider change than this slice
+should carry.
+
+**S2 → S3 hand-off**: `drawTicks` paints at `Math.round(x) + 0.5` while `tickPercent` is exact, so a
+DOM label can sit up to 0.5px off its mark. Invisible in practice, but it means S3's eyeball gate
+confirms alignment *looks* right — it does not prove it.
 
 **2026-08-13 — S1: the padding move destroyed the card's focus ring, and the fix is an inset
 variant.** Caught by the critic, not by any gate. `--focus-ring` is a purely *outset* box-shadow
