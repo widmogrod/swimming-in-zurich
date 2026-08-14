@@ -30,3 +30,64 @@ export function must<T>(value: T | null | undefined, what = "node"): T {
 export function fake(el: El): FakeElement {
   return el as FakeElement;
 }
+
+/** One recorded 2D-context call: the method name and the arguments it was given. */
+export interface Call {
+  op: string;
+  args: unknown[];
+}
+
+/**
+ * A 2D context that RECORDS every call instead of rasterising.
+ *
+ * The component suites run headless, where `canvas.getContext('2d')` is absent and every
+ * canvas renderer returns early — so the painters stay unexecuted (and, once a module is
+ * TypeScript, unmeasured by the CRAP gate). Handing a canvas this context runs the real
+ * drawing code and leaves an inspectable trace of it.
+ *
+ * Assertions against the trace should stay STRUCTURAL — did we paint, in what order, at
+ * which coordinates — rather than pixel-exact: the point is that the drawing code executes
+ * and is self-consistent, not to pin an image.
+ *
+ * Shared by `blocks/board_render.test.ts` and `blocks/daytail.test.ts`, which paint the
+ * SAME `ribbonrender` painters onto two surfaces; a second copy of this recorder would
+ * drift from the first the next time a painter reaches for a new context method.
+ */
+export function recordingCtx(calls: Call[]): Record<string, unknown> {
+  const op =
+    (name: string) =>
+    (...args: unknown[]) => {
+      calls.push({ op: name, args });
+    };
+  return {
+    save: op("save"),
+    restore: op("restore"),
+    beginPath: op("beginPath"),
+    closePath: op("closePath"),
+    moveTo: op("moveTo"),
+    lineTo: op("lineTo"),
+    arc: op("arc"),
+    rect: op("rect"),
+    clip: op("clip"),
+    fill: op("fill"),
+    stroke: op("stroke"),
+    fillRect: op("fillRect"),
+    strokeRect: op("strokeRect"),
+    clearRect: op("clearRect"),
+    fillText: op("fillText"),
+    setLineDash: op("setLineDash"),
+    // A day tail rescales itself for the device pixel ratio before painting anything
+    // (`daytail.ts` calls this FIRST), so without it the tail cannot be recorded at all.
+    setTransform: op("setTransform"),
+    // The lane stack MEASURES an owner's name before deciding to draw it (S4), so the
+    // recorder must answer measureText or the painter cannot run at all.
+    measureText: (s: string) => ({ width: String(s).length * 6 }),
+    fillStyle: "",
+    strokeStyle: "",
+    lineWidth: 0,
+    globalAlpha: 1,
+    font: "",
+    textAlign: "",
+    textBaseline: "",
+  };
+}

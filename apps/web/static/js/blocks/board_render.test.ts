@@ -23,6 +23,7 @@ import {
   type BoardWeek,
 } from "./board.js";
 import type { El } from "../domtypes.js";
+import { recordingCtx, type Call } from "../testutil.js";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 /** The committed `/swim` answer: its Hallenbad Oerlikon row carries a real 8-lane
@@ -30,48 +31,6 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const DAY = JSON.parse(
   readFileSync(join(HERE, "..", "..", "..", "tests", "fixtures", "swim_day.json"), "utf-8"),
 ) as BoardAnswer;
-
-interface Call {
-  op: string;
-  args: unknown[];
-}
-
-/** A 2D context that records every call instead of rasterising. */
-function recordingCtx(calls: Call[]): Record<string, unknown> {
-  const op =
-    (name: string) =>
-    (...args: unknown[]) => {
-      calls.push({ op: name, args });
-    };
-  return {
-    save: op("save"),
-    restore: op("restore"),
-    beginPath: op("beginPath"),
-    closePath: op("closePath"),
-    moveTo: op("moveTo"),
-    lineTo: op("lineTo"),
-    arc: op("arc"),
-    rect: op("rect"),
-    clip: op("clip"),
-    fill: op("fill"),
-    stroke: op("stroke"),
-    fillRect: op("fillRect"),
-    strokeRect: op("strokeRect"),
-    clearRect: op("clearRect"),
-    fillText: op("fillText"),
-    setLineDash: op("setLineDash"),
-    // The lane stack MEASURES an owner's name before deciding to draw it (S4), so the
-    // recorder must answer measureText or the painter cannot run at all.
-    measureText: (s: string) => ({ width: String(s).length * 6 }),
-    fillStyle: "",
-    strokeStyle: "",
-    lineWidth: 0,
-    globalAlpha: 1,
-    font: "",
-    textAlign: "",
-    textBaseline: "",
-  };
-}
 
 /** A document whose <canvas> elements hand back the recording context, plus a window
  *  stub so the board's palette probe resolves colours instead of bailing out. */

@@ -141,6 +141,43 @@ export function formatDate(
   }).format(parseUtc(iso));
 }
 
+/**
+ * The options behind `formatHour`, exported ONLY so its `h23` pin stays falsifiable.
+ *
+ * All five `FORMAT_LOCALE` tags ALREADY default to `h23`, so nothing observable through
+ * our own locales — neither the output string nor `resolvedOptions().hourCycle` — can
+ * distinguish an implementation that sets `hourCycle` from one that drops it. The pin is
+ * therefore tested against `en-US`, which defaults to `h12`; see the test for why that
+ * foreign tag is deliberate and must not be tidied away.
+ *
+ * Known residue, stated rather than papered over: the test guards this CONSTANT, not its
+ * USE. Inlining `{ hour: '2-digit', minute: '2-digit' }` at the `formatHour` call site
+ * leaves the whole suite green, because every `FORMAT_LOCALE` tag defaults to `h23`
+ * TODAY — the day a locale that defaults to `h12` is added, that mutant ships a `6 AM`
+ * strip. Closing it needs an assertion no less circular than the code, so the guard is
+ * this note plus `HOUR_OPTS` being the single place the options exist. Keep it that way.
+ */
+export const HOUR_OPTS = {
+  hour: "2-digit",
+  minute: "2-digit",
+  hourCycle: "h23",
+} as const satisfies Intl.DateTimeFormatOptions;
+
+/**
+ * A whole hour as the phone's day-tail strip labels it — `6` → `'06:00'`.
+ *
+ * The SAME `HH:00` shape `gantt.ts` paints on the expanded card's axis, so a collapsed
+ * card and its expanded Gantt can never label the same hour differently. It is forced to
+ * `h23` because every schedule string this app shows arrives from the API as `"06:00"`:
+ * a locale-chosen `6 AM` axis would contradict the verdict text directly above it.
+ */
+export function formatHour(
+  hour: number,
+  locale: Locale = DEFAULT_LOCALE,
+): string {
+  return dtf(locale, HOUR_OPTS).format(new Date(Date.UTC(1970, 0, 1, hour)));
+}
+
 // ---- numbers and units ---------------------------------------------------------------
 
 const NUM_CACHE = new Map<string, Intl.NumberFormat>();

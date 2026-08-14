@@ -130,6 +130,13 @@
   /* One accent-derived focus ring every interactive primitive shares. The inner
      var(--accent) resolves per-theme at use, so this adapts without redeclaring. */
   --focus-ring: 0 0 0 3px color-mix(in srgb, var(--accent) 45%, transparent);
+  /* The SAME ring, drawn inward. For a control whose border box coincides with a
+     clipping ancestor's padding box — `.plist__card` sets `overflow: hidden` to keep
+     the day-tail canvas inside its rounded corners — an outset ring paints entirely in
+     clipped territory and the control shows NO focus indication at all. An inset ring
+     paints inside the control's own box, which no ancestor clip can reach. Use this
+     variant only in that situation; `--focus-ring` stays the default everywhere else. */
+  --focus-ring-inset: inset 0 0 0 3px color-mix(in srgb, var(--accent) 45%, transparent);
 }
 
 /* --- 1.4 Theming contract: dark ramp ------------------------------------- */

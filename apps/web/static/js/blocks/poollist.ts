@@ -16,10 +16,10 @@
 import { asDoc, type Doc, type El } from '../domtypes.js';
 import { fairWeatherText } from '../appdata.js';
 import { t } from '../i18n.js';
-import { formatKm } from '../datefmt.js';
+import { formatHour, formatKm } from '../datefmt.js';
 import { locale } from '../i18n.js';
 import { ribbonsFor } from './ribbonmodel.js';
-import { drawDayTail, TAIL_H } from './daytail.js';
+import { drawDayTail, STRIP_HOURS, TAIL_H, tickPercent } from './daytail.js';
 import { asCanvas, resolveFamilyPalette, type CanvasEl, type Palette } from './ribbonrender.js';
 import {
   countOpenToYou,
@@ -122,6 +122,29 @@ export function createPoolList<T extends El>(el: T, opts: PoolListOpts = {}) {
     return typeof w === 'number' && w > 0 ? w : 340;
   }
 
+  /**
+   * The hour strip — the labels the tail's bars are read against.
+   *
+   * DOM, not canvas, because a lane-stack ribbon leaves only ~4.6px of gutter and an
+   * in-canvas label collides with the bands there; the strip gets its own row instead.
+   * Positioned purely in percent (`tickPercent`), so it needs no layout measurement and
+   * cannot fall out of step with the canvas mapping — both come from `tailTimescale`.
+   *
+   * `aria-hidden`: six bare numbers per card, times ~58 cards, is noise no screen-reader
+   * user wants between one pool's verdict and the next.
+   */
+  function hourStrip(): El {
+    const strip = newEl(doc, 'div', 'plist__ticks');
+    strip.setAttribute('aria-hidden', 'true');
+    const loc = locale();
+    for (const hour of STRIP_HOURS) {
+      const label = newEl(doc, 'span', 'tnum', formatHour(hour, loc));
+      label.style.left = `${tickPercent(hour)}%`;
+      strip.appendChild(label);
+    }
+    return strip;
+  }
+
   function buildCard(ranked: RankedRow): El {
     const card = newEl(doc, 'article', 'plist__card');
     const key = rowKey(ranked.row);
@@ -166,15 +189,39 @@ export function createPoolList<T extends El>(el: T, opts: PoolListOpts = {}) {
       for (const f of facts) meta.appendChild(newEl(doc, 'span', undefined, f));
       btn.appendChild(meta);
     }
-    card.appendChild(btn);
 
+    // The plot — an hour strip over the day tail — lives INSIDE the button: tapping the
+    // bars is the natural gesture for opening a card, and a sibling node would never reach
+    // the handler (`_fakedom`'s dispatch does not bubble, and a real tap on a sibling is
+    // simply not on the button). A strip outside the button would also punch a dead 12px
+    // gap through the middle of that tap target. `.plist__more` deliberately stays OUTSIDE
+    // it — a <button> may not contain the scrollable, focusable Gantt.
+    //
+    // `.plist__plot` is the CSS contract, not decoration: it supplies the ONE inline
+    // padding both children share, so the strip's percentages and the canvas's own
+    // mapping resolve against the same content box. Neither child pads itself inline —
+    // if the strip did, every label would land ~7% (about one hour) off its bar.
+    const plot = newEl(doc, 'div', 'plist__plot');
+    plot.appendChild(hourStrip());
+
+    // `.plist__tail` STAYS, wrapping the canvas: `blocks.css`'s
+    // `.plist__tail canvas { width: 100% }` is what makes the canvas fill its box. Hoisted
+    // straight into `.plist__plot` it would lay out at its ATTRIBUTE width (the backing
+    // store, up to 2x dpr), which `tailWidth()` reads back through `clientWidth` and feeds
+    // into the next paint — the same misalignment, arriving via the DOM instead.
     const tailBox = newEl(doc, 'div', 'plist__tail');
     const canvas = asCanvas(doc.createElement('canvas'));
     canvas.setAttribute('role', 'img');
     canvas.setAttribute('aria-label', ranked.row.label);
+    // A <button> computes its accessible name from its contents, and the h3 above
+    // already carries `row.label` — without this every one of the ~58 rows would
+    // announce its pool name twice. `role`/`aria-label` stay but are now inert.
+    canvas.setAttribute('aria-hidden', 'true');
     canvas.style.height = `${TAIL_H}px`;
     tailBox.appendChild(canvas);
-    card.appendChild(tailBox);
+    plot.appendChild(tailBox);
+    btn.appendChild(plot);
+    card.appendChild(btn);
 
     // The expanded body: empty until opened, filled by the caller. Detail is INLINE —
     // no sheet, no route — which is why the phone has no equivalent of the bottom-sheet

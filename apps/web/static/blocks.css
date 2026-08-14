@@ -1151,10 +1151,19 @@ body {
   contain-intrinsic-size: auto 150px;
 }
 .plist__card.is-muted { opacity: .72; }
+/* The button now WRAPS the day tail (tapping the bars opens the card), so it can no
+   longer carry the card's inline padding: it would stack with the plot's own `var(--s3)`
+   and shrink every tail to 24px in from each edge. The padding moves onto the two text
+   blocks that need it — and only those two: `.plist__verdict` / `.plist__fair` nest inside
+   `.plist__text` inside `.plist__head` and would double-indent.
+   Invariant X3: total inline padding around the canvas stays 12px per side. Since S3 that
+   12px is declared ONCE, on `.plist__plot` (below) — the wrapper the hour strip and the
+   canvas share — not on `.plist__tail`; look there before changing any inline padding in
+   this block. */
 .plist__btn {
   display: block;
   width: 100%;
-  padding: var(--s3) var(--s3) var(--s2);
+  padding: var(--s3) 0 0;
   background: transparent;
   border: 0;
   color: inherit;
@@ -1162,8 +1171,21 @@ body {
   text-align: left;
   cursor: pointer;
 }
-.plist__btn:focus-visible { outline: none; box-shadow: var(--focus-ring); }
-.plist__head { display: flex; align-items: flex-start; gap: var(--s2); }
+/* INSET, unlike every other control in this file. `.plist__card` is `overflow: hidden`
+   (it must be — it clips the canvas and the expanded body to the rounded corners), and
+   since the day tail moved inside the button the button's border box coincides with the
+   card's padding box on all four sides. The outset `--focus-ring` would be clipped away
+   entirely, and this rule also kills the UA outline, so a keyboard user would get no
+   focus indication whatsoever. The radius exists only so the inset ring's corners follow
+   the card's; the button paints no background of its own. */
+.plist__btn { border-radius: var(--r-md); }
+.plist__btn:focus-visible { outline: none; box-shadow: var(--focus-ring-inset); }
+.plist__head {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--s2);
+  padding-inline: var(--s3);
+}
 .plist__text { min-width: 0; }
 .plist__name {
   margin: 0;
@@ -1183,6 +1205,7 @@ body {
 }
 .plist__meta {
   margin: var(--s2) 0 0;
+  padding-inline: var(--s3);
   display: flex;
   flex-wrap: wrap;
   gap: var(--s1) var(--s3);
@@ -1203,7 +1226,39 @@ body {
 
 /* The day tail: laid out by CSS, painted by the SHARED renderer. Its height is
    set inline from TAIL_H so the canvas box and the drawing agree exactly. */
-.plist__tail { padding: var(--s1) var(--s3) var(--s3); }
+/* The CSS contract behind the hour strip: `.plist__plot` supplies the ONE inline padding
+   its two children share, so the strip's percentages and the canvas resolve against the
+   SAME content box. Invariant X3 lives here now — 12px per side, declared once, so the
+   label row and the plot cannot drift by so much as a pixel. Neither child pads inline. */
+.plist__plot {
+  padding-inline: var(--s3);
+  /* Block padding is rhythm, not contract: it keeps the strip off the facts line above.
+     Only the INLINE half is the shared-content-box guarantee. */
+  padding-block-start: var(--s2);
+}
+
+/* The labels. Absolutely positioned at `tickPercent(h)%` (set inline from JS) and centred
+   on their mark — except the first, which IS the left edge of the window and would hang
+   outside the card. It also has no mark to centre on: `TICK_HOURS` omits 06:00. */
+.plist__ticks {
+  position: relative;
+  height: 12px;
+  font-size: var(--fs-micro);
+  line-height: 12px;
+  color: var(--muted);
+}
+.plist__ticks span { position: absolute; top: 0; transform: translateX(-50%); }
+/* Only correct while `STRIP_HOURS[0] === TAIL_DAY0`, i.e. the first label sits at 0%.
+   Pinned by daytail.test.ts "the FIRST labelled hour is the window start". */
+.plist__ticks span:first-child { transform: none; }
+
+/* Block padding only: the inline half is invariant X3 and moved up to `.plist__plot` in
+   S3, where the strip shares it. This half is card rhythm and stays — except the top,
+   which the strip now occupies, so the gap above the canvas is spelled by the strip's own
+   line box rather than repeated here. */
+.plist__tail {
+  padding-block: var(--s1) var(--s3);
+}
 .plist__tail canvas { display: block; width: 100%; }
 
 /* --- the responsive switch -------------------------------------------------

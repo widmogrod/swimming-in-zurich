@@ -296,6 +296,31 @@ def test_every_interactive_control_has_a_focus_visible_ring() -> None:
     )
 
 
+def test_the_phone_card_button_rings_INSET_because_its_card_clips() -> None:
+    """A11y: `.plist__card` is `overflow: hidden` (it clips the day-tail canvas and the
+    expanded body to the rounded corners), and the day tail lives INSIDE `.plist__btn`, so
+    the button's border box coincides with the card's padding box on all four sides. The
+    outset `--focus-ring` would be clipped away entirely — and the rule kills the UA
+    outline — leaving a keyboard user with no focus indication at all. So this one control
+    rings with the inset variant. This is a grep-level guard: the suite has no layout
+    engine, so it pins the DECISION (which token this selector uses), not the pixels."""
+    tokens = re.sub(r"\s+", " ", (_STATIC / "tokens.css").read_text(encoding="utf-8"))
+    blocks = re.sub(r"\s+", " ", (_STATIC / "blocks.css").read_text(encoding="utf-8"))
+    # The variant exists and is genuinely inset — an outset value here would be the bug.
+    assert "--focus-ring-inset: inset 0 0 0 3px" in tokens, (
+        "--focus-ring-inset must be defined, and must actually be an inset shadow"
+    )
+    rule = re.search(r"\.plist__btn:focus-visible \{[^}]*\}", blocks)
+    assert rule is not None, "the phone card button must keep a :focus-visible rule"
+    assert "box-shadow: var(--focus-ring-inset);" in rule.group(0), (
+        "the card button rings with the INSET token; the outset one is clipped by the card"
+    )
+    # The card must keep the clip this whole exception exists for.
+    assert re.search(r"\.plist__card \{[^}]*overflow: hidden;", blocks) is not None, (
+        "`.plist__card` clips to its rounded corners — that is why the ring must be inset"
+    )
+
+
 def test_components_do_not_import_the_blocks_layer() -> None:
     """Layer rule: a primitive may not reach up into the blocks layer."""
     offenders = []
