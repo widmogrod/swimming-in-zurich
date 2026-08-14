@@ -100,9 +100,17 @@ canvas fill its box; hoisting the canvas straight into `.plist__plot` would leav
 through `clientWidth` (`poollist.ts:118-123`) and feeds into the next paint. That is the same
 misalignment this contract exists to prevent, arriving through the DOM instead of the padding.
 
-Note in passing: a `<div>` inside a `<button>` is invalid per HTML's phrasing-content model. It is
-inert here because the tree is built with `createElement`/`appendChild` and never parsed — recorded
-so it is not re-litigated later.
+Note in passing: a `<div>` inside a `<button>` is invalid per HTML's phrasing-content model, and
+building the tree with `createElement`/`appendChild` does **not** make it conforming — the content
+model holds however the nodes are created. What `createElement` avoids is *parser fixup*: a literal
+`<div>` inside `<button>` in markup is hoisted out of the button entirely, which would break this
+tap target outright. So the structure survives as authored, and is still invalid.
+
+This is **pre-existing** and merely widened here: `.plist__btn` already wrapped `div.plist__head`
+(holding the `h3` and two `p`s) and `p.plist__meta` before this plan. See
+[[card-button-content-model]] for the consequence that actually costs something — a button's
+descendants are exposed as presentational, so `h3.plist__name` is not a navigable heading — and for
+why fixing it is its own piece of work rather than a note in this one.
 
 ```ts
 // daytail.ts — pure, no canvas

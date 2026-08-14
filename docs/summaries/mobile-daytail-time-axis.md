@@ -48,6 +48,11 @@ button.plist__btn
 the canvas lays out at its *attribute* width (the backing store, up to 2× dpr) — which `tailWidth()`
 then reads back through `clientWidth` and feeds into the next paint.
 
+Those `div`s inside a `<button>` are invalid HTML — a button takes phrasing content only, and
+building the tree with `createElement` does not change that. It is pre-existing (the button already
+wrapped `.plist__head` and `.plist__meta`) and merely widened here; what it costs, and why fixing it
+is its own piece of work, is [[card-button-content-model]].
+
 **Two defects fixed on the way.** The ribbon is now inside the card's button, so tapping the bars
 opens the card; it previously did nothing, because `poollist.ts` appended the tail to the card
 *after* closing the button. And the "now" cursor is drawn only inside the window — it was computing
