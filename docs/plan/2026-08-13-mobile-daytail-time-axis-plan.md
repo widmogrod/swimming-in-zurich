@@ -1,6 +1,6 @@
 ---
 type: plan
-status: in-progress      # draft -> approved -> in-progress -> done
+status: done             # draft -> approved -> in-progress -> done
 created: 2026-08-13
 feature: mobile-daytail-time-axis
 branch: plan/mobile-daytail-time-axis
@@ -423,5 +423,28 @@ strokes off-canvas. Recorded because the wrong mechanism would have produced the
 
 ## Summary
 
-Written when the plan reaches `done`; then distilled into
-`docs/summaries/mobile-daytail-time-axis.md` (what EXISTS now, not what was intended).
+Shipped in three slices; the eyeball gates passed 2026-08-14.
+
+The phone card's day tail is readable: six hour labels (`06`…`21`, rendered `HH:00`) sit in a DOM
+strip above every canvas, and the canvas carries a rule plus gutter notches at 09/12/15/18/21,
+painted **after** the ribbons so a lane band cannot bury them. Strip and canvas live in one
+`.plist__plot` wrapper that owns the single inline padding, and both derive their geometry from
+`tailTimescale` — one mapping, no second hand-derived window.
+
+Two defects found while mocking were fixed on the way: the ribbon is now inside the card's button
+(tapping the bars opens the card — it previously did nothing, because the tail was appended after the
+button was closed), and the "now" cursor is drawn only inside `[06:00, 22:30]` instead of being
+stroked off-canvas and silently vanishing.
+
+Three things this work paid for that were not in its brief. The tap-target move destroyed the card's
+keyboard focus ring — `--focus-ring` is purely outset and `.plist__card` clips — so a
+`--focus-ring-inset` token now exists for controls nested in a clipping card. `recordingCtx` moved
+into `testutil.ts`, making canvas draw ORDER assertable for both the board and the tail. And
+`formatHour` gives `datefmt` the hour label that `gantt.ts:194` still open-codes.
+
+Known limits, all recorded above and in the ledger: the h23 pin guards the constant rather than the
+call site; `gantt.ts` still bypasses `datefmt`; and three layout facts (X3's 12px, strip alignment,
+ring visibility) are eyeball-verified because this suite has no layout engine and no test parses
+`blocks.css`.
+
+Distilled into `docs/summaries/mobile-daytail-time-axis.md`.

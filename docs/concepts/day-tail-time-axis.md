@@ -1,8 +1,16 @@
 ---
 type: concept
 created: 2026-08-13
-links: ["[[2026-08-13-mobile-daytail-time-axis-plan]]"]
+updated: 2026-08-14
+links: ["[[2026-08-13-mobile-daytail-time-axis-plan]]", "[[mobile-daytail-time-axis]]"]
 ---
+
+> **As-built 2026-08-14.** Shipped as described. Two details this doc did not anticipate:
+> the strip and the canvas coincide because one `.plist__plot` wrapper owns the single inline
+> padding (`.plist__tail` survives inside it, because `.plist__tail canvas { width: 100% }` is the
+> only thing keeping the canvas off its attribute width); and `tickPercent` is
+> `tailTimescale(100).X(hour * 60)` rather than a hand-derived window, so "one mapping" is
+> structural rather than merely asserted.
 
 # The day tail's time axis — why the labels are DOM and the marks are canvas
 
