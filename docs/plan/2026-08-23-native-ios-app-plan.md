@@ -1,11 +1,11 @@
 ---
 type: plan
-status: approved         # draft -> approved -> in-progress -> done
+status: in-progress      # draft -> approved -> in-progress -> done
 created: 2026-08-23
 feature: native-ios-app
 branch: plan/native-ios-app
 worktree: .claude/worktrees/plan-native-ios-app
-base_branch: main
+base_branch: feat/ios
 gates:
   qa: full               # THREE chains, each run only when a slice touches its tree:
                          #  python : ruff check -> ruff format --check -> mypy -> pytest -> crap.py
