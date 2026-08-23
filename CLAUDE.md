@@ -54,6 +54,12 @@ uv run python -m swimzh.cli build --db gold.sqlite
 uv run python -m swimzh.cli scrape-gold   --db gold.sqlite   # re-run the schedule/price phase
 uv run python -m swimzh.cli scrape-lanes  --db gold.sqlite   # re-run the Belegungsplan lane phase
 
+# 2c. DERIVED EXPORT for the iOS app — offline, reads gold only, never the network.
+#     Bakes every date in a fixed 400-day horizon into a pre-resolved SQLite the app embeds,
+#     so iOS runs no schedule logic. Finishes journal_mode=DELETE + VACUUM + ANALYZE: a
+#     WAL-mode file opens fine from a read-only bundle and fails on the FIRST query.
+uv run python -m swimzh.cli export-ios --db gold.sqlite --out ios.sqlite [--days 400]
+
 # 2b. Every network command caches responses to disk per-tier (see below). Force a refetch:
 uv run python -m swimzh.cli build --db gold.sqlite --refresh    # == SWIMZH_CACHE=refresh
 SWIMZH_CACHE=off uv run python -m swimzh.cli build --db gold.sqlite   # bypass the cache entirely

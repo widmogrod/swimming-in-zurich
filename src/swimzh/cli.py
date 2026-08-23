@@ -5,6 +5,7 @@
   swimzh build-catalog --out data/catalog.json  # full pool catalog from the WFS (committed)
   swimzh scrape-gold   --db gold.sqlite     # thin re-layer: re-run just the schedule phase
   swimzh scrape-lanes  --db gold.sqlite     # thin re-layer: re-run just the lane-plan phase
+  swimzh export-ios    --db gold.sqlite --out ios.sqlite  # OFFLINE: the pre-resolved iOS store
 
 Run via: `uv run python -m swimzh.cli <command> ...`
 
@@ -40,7 +41,7 @@ import sqlite3
 import sys
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import date, datetime
 from pathlib import Path
 from typing import Final, assert_never
 from zoneinfo import ZoneInfo
@@ -63,6 +64,7 @@ from swimzh.domain.lane_plan import LanePlan
 from swimzh.domain.models import Facility, PoolId
 from swimzh.etl.build import assemble_curated, write_curated_store
 from swimzh.etl.catalog import build_catalog
+from swimzh.etl.ios_export import DEFAULT_DAYS, ExportReport, export_ios
 from swimzh.etl.lane_plans import (
     UndiscoveredSource,
     scrape_lane_plans,
@@ -703,6 +705,46 @@ def scrape_lanes(*, db_path: Path, clients: ProviderClients, fetched_at: datetim
         return result.code
 
 
+def _export_report_line(out: Path, report: ExportReport) -> str:
+    """One line an operator (and CI) can read the whole export off.
+
+    `uncovered_days` is E2's reseed signal, printed at EVERY build on purpose: the calendar is
+    seeded a year at a time, so a horizon that runs past `known_years` is the normal state and
+    the only thing that makes it visible is this number.
+    """
+    return (
+        f"ios export written to {out} ({report.bytes} bytes, {report.pools} pools, "
+        f"{report.sessions} sessions, {report.day_rows} day rows, {report.notices} notices, "
+        f"{report.warnings} warnings, horizon {report.horizon_start}..{report.horizon_end}, "
+        f"{report.uncovered_days} day(s) outside calendar coverage, "
+        f"content {report.content_hash[:12]})"
+    )
+
+
+def export_ios_store(*, db_path: Path, out: Path, today: date, days: int) -> int:
+    """Project the gold store into the pre-resolved iOS store. Exit code.
+
+    NETWORK-FREE by construction: it takes no `ProviderClients` at all — gold is the only input,
+    which is why `main` dispatches it before the live clients are ever built.
+    """
+    if not db_path.exists():
+        print(f"gold store not found at {db_path}; run `swimzh build` first", file=sys.stderr)
+        return 1
+    conn = sqlite3.connect(db_path)
+    try:
+        match export_ios(conn, out, today=today, days=days):
+            case Ok(report):
+                print(_export_report_line(out, report))
+                return 0
+            case Err(error):
+                print(f"ios export failed: {describe(error)}", file=sys.stderr)
+                return 1
+            case _ as unreachable:
+                assert_never(unreachable)
+    finally:
+        conn.close()
+
+
 def main(argv: list[str] | None = None, *, clients: ProviderClients | None = None) -> int:
     """Parse argv and dispatch. `clients` is injectable so the WFS-sourced atomic `build` (and the
     other network commands) can be driven from recorded HTTP in tests; when None the live
@@ -755,8 +797,27 @@ def main(argv: list[str] | None = None, *, clients: ProviderClients | None = Non
     )
     lanes.add_argument("--db", required=True, help="path to the existing gold SQLite file")
 
+    # No `cache_flags`: the export touches no provider, so a cache switch would be a lie.
+    ios = subparsers.add_parser(
+        "export-ios", help="project the gold store into the pre-resolved iOS SQLite (offline)"
+    )
+    ios.add_argument("--db", required=True, help="path to the existing gold SQLite file")
+    ios.add_argument("--out", required=True, help="path to the iOS SQLite file to write")
+    ios.add_argument(
+        "--days",
+        type=int,
+        default=DEFAULT_DAYS,
+        help=f"forward horizon in days (default: {DEFAULT_DAYS})",
+    )
+
     args = parser.parse_args(argv)
     now = _now()
+    if args.command == "export-ios":
+        # Dispatched BEFORE any client is built: the export is offline, and building live
+        # clients for it would open a connection pool nothing uses.
+        return export_ios_store(
+            db_path=Path(args.db), out=Path(args.out), today=now.date(), days=args.days
+        )
     if clients is None:
         return _dispatch_live(args, now=now)
     return _dispatch(args, clients=clients, now=now)

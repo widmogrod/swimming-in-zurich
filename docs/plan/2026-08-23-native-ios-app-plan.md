@@ -11,7 +11,7 @@ gates:
                          #  python : ruff check -> ruff format --check -> mypy -> pytest -> crap.py
                          #  ts     : npm --prefix apps/web/static/js run qa
                          #  swift  : see `swift_chain` below
-  swift_chain: "cd apps/ios && swift format lint --strict --recursive Sources Tests && swift build && swift test --enable-code-coverage && uv run python ../../scripts/crap_swift.py && xcodebuild -project App/SwimZH.xcodeproj -scheme SwimZH -destination 'platform=iOS Simulator,name=iPhone 16' test"
+  swift_chain: "cd apps/ios && swift format lint --strict --recursive Sources Tests && swift build && swift test --enable-code-coverage && uv run python ../../scripts/crap_swift.py && xcodebuild -project App/SwimZH.xcodeproj -scheme SwimZH -destination 'platform=iOS Simulator,name=iPhone 17' test"
   swift_chain_notes: |
     Runner is macos-latest. The existing .github/workflows/qa.yml job is ubuntu-latest and
     CANNOT build SwiftUI; S2 adds a separate `ios-qa` job pinned to macos-latest.
@@ -27,6 +27,9 @@ gates:
     the compile check, not as a licence to push logic into views.
     NOT in the chain: `xcodebuild -exportArchive`. It needs a signing identity and profile,
     which CI has not got; see S2b acc 4 for the unsigned size proxy used instead.
+    Destination is `iPhone 17`, not `iPhone 16`: the installed iOS 26.5 runtime ships the
+    iPhone 17 family (17, 17 Pro, 17 Pro Max, 17e, Air) and has no iPhone 16. A CI runner with
+    a different device set must adjust this one string.
   review: adversarial    # critic subagent must find no blocking issues
   max_rounds: 2          # revise/retry rounds per gate before a slice is blocked
 pause_after: []          # the user explicitly waived human review; see Decisions 2026-08-23
@@ -948,6 +951,48 @@ S4 acc 4's on-device ICU assertions. Unaffected and fully runnable: S1 entirely,
 `xcodebuild build -sdk iphonesimulator26.5` as a compile check. Work proceeds on that basis, and any
 slice criterion that needs a runtime is reported blocked, never assumed green.
 
+### Implementation-time corrections
+
+**2026-08-23 — simulator destination is `iPhone 17`, not `iPhone 16`.** At worktree setup the
+machine had Xcode 26.6, Swift 6.3.3 and the iOS 26.5 SDK but **zero simulator runtimes**, so no iOS
+code could be run. `xcodebuild -downloadPlatform iOS` installed the iOS 26.5 runtime, which ships
+the iPhone 17 family (17, 17 Pro, 17 Pro Max, 17e, Air) and **no iPhone 16**. The gate's destination
+string is corrected. This also lifts the approval-time blocker recorded above: the chain's closing
+`xcodebuild … test`, S2b acc 3 (`XCTMemoryMetric`, app-hosted) and S4 acc 4's on-device ICU
+assertions are now runnable. What remains genuinely unavailable is a **physical device**, so S3b
+acc 9's device launch measurement and the Instruments-based CPU/per-body checks stay unverified —
+they are reported as such, never assumed green.
+
+### S1 (2026-08-23) — what the slice proved, and three plan claims it corrected
+
+**Verified, not asserted.** The critic mutation-tested the suite with 8 injected defects and every
+one was killed: dropping `closure_code`, corrupting a session `end`, losing a horizon day,
+suppressing the holiday warning, flattening `feature_key`, faking `lane_day.confidence`, shifting
+the resolved day by +1. Acceptance 1b is genuinely proved — a test copies the store into a `0555`
+directory at `0444` and **prepares and steps** a query, with a positive control that builds a real
+WAL file and asserts the guard rejects it. The parity sweep is unsampled (400 dates × the full
+roster) and guarded against passing vacuously.
+
+**Three claims in this plan were wrong and are corrected here.**
+
+1. **`BasinOut` has 11 fields, not 12.** The plan's S1 acceptance 3 said twelve; the twelfth was the
+   `pool_id` foreign key, which is not one of `BasinOut`'s own fields
+   (`apps/web/api/pools/model.py:95-111`). The export carries all 11 plus the FK, as intended — only
+   the plan's count was wrong.
+2. **6 lane-plan basins on the recorded fixture store, not 7**, and **1 notice, not the 9** the
+   Context claims. The earlier figures were measured against live gold; the offline fixture store's
+   coverage is thinner. Consequence carried forward: **S2's Swift golden test must not hard-code
+   those counts.**
+3. **Measured export: 5.00 MB, 11,886 sessions, 16,916 day rows, 271 warnings** — against the
+   plan's projected 11,927 / 16,924. Same order, comfortably inside the 8 MB budget.
+
+**`ANALYZE` always creates `sqlite_stat1`, even on an empty database**, so "the table exists" is not
+evidence it ran — the guard counts **rows**. This is carried into S5's downloaded-store validation.
+
+**The calendar debt is now visible at every build.** 269 of the 400 horizon days fall outside
+`known_years: [2026]`; the CLI prints the count on every run. Seeding 2027 in
+`data/calendar/zurich.yaml` remains owed before a first release.
+
 ## Accepted drift
 
 Findings the user has knowingly blessed, so `/dev:present` folds them into a
@@ -972,6 +1017,7 @@ Appended by /dev:implement after each slice — never rewritten. Newest row last
 
 | date | slice | status | divergence from plan | tech debt created | human review? |
 |------|-------|--------|----------------------|-------------------|---------------|
+| 2026-08-23 | S1 | done | `feature_key` gains a deterministic `#n` suffix on a repeated kind (a bare `kind` violates the plan's own PK); `ExportReport.uncovered_days` additive; `days < 1` returns `Err` not a raise; gate destination iPhone 16→17 (orchestrator, machine has no iPhone 16) | `day_warning` re-resolves every facility per date — a second resolver pass beside `find_swim_options`, ~2× sweep cost (0.5 s total); `render_warning` has no unknown-code arm and would `KeyError` on missing params | **yes — 3 unverified plan claims corrected, see Decisions** |
 
 ## Decisions & divergences
 
