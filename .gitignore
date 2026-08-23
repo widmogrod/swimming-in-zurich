@@ -44,3 +44,15 @@ apps/web/static/js/.eslintcache
 # Local dev env (copied from .env.example; never commit real .env)
 .env
 !.env.example
+
+# Swift / Xcode build output
+apps/ios/.build/
+apps/ios/.swiftpm/
+**/xcuserdata/
+DerivedData/
+
+# The iOS bundled store is the ONE committed `.sqlite`, so it is exempted from the
+# blanket rule above. It is a DERIVED artifact — like `data/catalog.json` — built offline
+# from the recorded cassettes, and the Swift and Xcode chains both need it on a fresh
+# checkout that has no gold store and no network. Regenerate with `make ios-fixtures`.
+!apps/ios/Sources/SwimZHKit/Resources/ios.sqlite

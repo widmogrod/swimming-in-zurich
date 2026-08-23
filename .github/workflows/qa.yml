@@ -66,3 +66,42 @@ jobs:
       # CRAP reads the coverage vitest just wrote — must run AFTER test (mirrors pytest→crap).
       - name: CRAP gate (TS, formula-parity with scripts/crap.py)
         run: npm run crap
+
+  # The Swift chain. SEPARATE job and pinned to macOS: the `qa` job above is ubuntu-latest
+  # and cannot build SwiftUI at all. `swift format` ships with Xcode, so no third-party
+  # linter is installed. From S2b this job also runs `scripts/crap_swift.py`, which reads
+  # the coverage `swift test` writes — which is why the order below is fixed.
+  ios-qa:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # The chain needs iOS 26 and Swift 6.2 (`isolated deinit`); the runner image ships
+      # several Xcodes and does not always default to the newest.
+      - name: Select Xcode
+        run: sudo xcode-select -s /Applications/Xcode_26.app || xcodebuild -version
+
+      # `App` as well as the package: `swift build` below compiles only the package, so
+      # without it the SwiftUI layer — the one S3a grows most — would drift unchecked.
+      - name: Format lint (swift format, strict — package AND app)
+        working-directory: apps/ios
+        run: swift format lint --strict --recursive Sources Tests App
+
+      - name: Build the package
+        working-directory: apps/ios
+        run: swift build
+
+      # SwiftPM only: no simulator, no network. This is where the rule layer is proved,
+      # including the replay of the generated eligibility contract and the golden answers.
+      - name: Test the package
+        working-directory: apps/ios
+        run: swift test
+
+      # The app target cannot be imported by `swift test`, so the compile check and the
+      # app-hosted tests need a simulator. `-project` is required: with none, xcodebuild
+      # searches the cwd, which holds Package.swift and no .xcodeproj.
+      - name: Build and test the app in the simulator
+        working-directory: apps/ios
+        run: |
+          xcodebuild -project App/SwimZH.xcodeproj -scheme SwimZH \
+            -destination 'platform=iOS Simulator,name=iPhone 17' test

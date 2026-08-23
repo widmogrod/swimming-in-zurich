@@ -11,7 +11,7 @@ gates:
                          #  python : ruff check -> ruff format --check -> mypy -> pytest -> crap.py
                          #  ts     : npm --prefix apps/web/static/js run qa
                          #  swift  : see `swift_chain` below
-  swift_chain: "cd apps/ios && swift format lint --strict --recursive Sources Tests && swift build && swift test --enable-code-coverage && uv run python ../../scripts/crap_swift.py && xcodebuild -project App/SwimZH.xcodeproj -scheme SwimZH -destination 'platform=iOS Simulator,name=iPhone 17' test"
+  swift_chain: "cd apps/ios && swift format lint --strict --recursive Sources Tests App && swift build && swift test --enable-code-coverage && uv run python ../../scripts/crap_swift.py && xcodebuild -project App/SwimZH.xcodeproj -scheme SwimZH -destination 'platform=iOS Simulator,name=iPhone 17' test"
   swift_chain_notes: |
     Runner is macos-latest. The existing .github/workflows/qa.yml job is ubuntu-latest and
     CANNOT build SwiftUI; S2 adds a separate `ios-qa` job pinned to macos-latest.
@@ -27,6 +27,8 @@ gates:
     the compile check, not as a licence to push logic into views.
     NOT in the chain: `xcodebuild -exportArchive`. It needs a signing identity and profile,
     which CI has not got; see S2b acc 4 for the unsigned size proxy used instead.
+    The lint covers `App` too, not just `Sources Tests`: the app target is where S3a and S3b
+    grow the view layer, and an unlinted target drifts silently (widened after S2's review).
     Destination is `iPhone 17`, not `iPhone 16`: the installed iOS 26.5 runtime ships the
     iPhone 17 family (17, 17 Pro, 17 Pro Max, 17e, Air) and has no iPhone 16. A CI runner with
     a different device set must adjust this one string.
@@ -993,6 +995,65 @@ evidence it ran — the guard counts **rows**. This is carried into S5's downloa
 `known_years: [2026]`; the CLI prints the count on every run. Seeding 2027 in
 `data/calendar/zurich.yaml` remains owed before a first release.
 
+### S2 (2026-08-24) — a green test that proved nothing, and what replaced it
+
+**The slice's most valuable output was a deletion.** `failedOpenLeaksNoSQLiteMemory` claimed to be
+the runtime proof that `Store` closes the handle `sqlite3_open_v2` hands back even on failure. It
+could not fail. Apple's system libsqlite3 is built with `SQLITE_CONFIG_MEMSTATUS` **off**, so
+`sqlite3_memory_used()` is identically 0 — verified independently by the orchestrator by leaking
+2,000 failed opens:
+
+```
+baseline memory_used: 0
+after leaking 2000 failed opens: 0
+highwater: 0
+leaked non-nil handles: 2000
+```
+
+Its own guard (`#expect(before >= 0, "MEMSTATUS must be on for this canary to mean anything")`) was a
+tautology, because the API returns 0 rather than a negative sentinel when memstatus is off. The test
+is deleted and **acceptance 7's first footgun is now documented as a structural (grep-only)
+guarantee** — an honest weak proof beats a green test that proves nothing. Three metrics were tried
+and all are dead ends on this platform, each named in `StoreTests`' header: file-descriptor counts
+(a missing file allocates a connection and **no** descriptor), `sqlite3_memory_used` (memstatus
+off), and `malloc_zone_statistics` (Swift Testing parallelises suites, so a process-wide delta is
+other tests' noise). The grep was tightened to compensate: the close must be on the error path, a
+second must exist for the deinit, and there must be **exactly one** `sqlite3_open_v2` call, so a
+future second open path cannot ride on the first one's close. Residual tech debt, recorded: an
+`if false { sqlite3_close_v2(candidate) }` would still satisfy a grep.
+
+**The ghost-state hole was real.** Nothing pinned CLAUDE.md's load-bearing invariant on the client.
+The critic mutated `Store.statuses` to `WHERE status = 'closed'` and the golden test **still
+passed** — only the newly added `ghostStatusesSurvive` / `ghostStatesAreNeverDrawnAsClosed` caught
+it. The committed store carries 2,520 `no_source` and 507 `open_unscheduled` day rows that the
+golden fixture's three pools never exercise, so ghost coverage has to come from the store, not the
+fixture. `TodayView.statusLabel` became a `static func` over `(status, closureCode)` so the
+four-state mapping is drivable from a test.
+
+**The golden test is not circular**, which was the main thing worth checking about a port. The
+fixture is generated from `swimzh.domain.query.find_swim_options` — the *domain* — while Swift reads
+the SQLite projection, so domain → export → Swift is closed by an independent oracle. Non-vacuity is
+real: 75 `open_at_query_time=true` / 21 `false`, 10 distinct `(eligible, reason_code)` pairs, both
+price brackets.
+
+**Two client-side honesty rules with no Python counterpart**, both deliberate and both tested.
+`SessionAccess.unknown` (→ "check with the pool", never "welcome") and `DayWarning.rendered`'s
+default arm exist because the client reads a **store that can be newer than the binary** — which S5
+makes routine by downloading one. `SeniorsOnly`/`AdultsOnly` now decode a missing `min_age` to
+`.unknown` rather than falling back to `access.py`'s dataclass defaults: a domain default is not a
+client assumption.
+
+**Toolchain facts learned here, carried forward.** `isolated deinit` (Swift 6.2, macOS 15.4+) is
+mandatory for any actor holding a C handle under strict concurrency — a nonisolated deinit cannot
+touch a non-Sendable `OpaquePointer` at all, which is why the package platform is `macOS "15.4"` and
+not `.v15`. The repo's `.gitignore` blanket-ignores `*.sqlite`, so a committed store needs an
+explicit negation — **S5's downloaded-store work hits this same rule.**
+
+**Unverified, and reported rather than assumed:** acceptance 5 (the app usable in Airplane Mode) is
+a human check the user waived. The substitute is `SourceLintTests.noNetwork`, now recursive over
+both targets and mutation-checked, proving neither target references `URLSession`, `Network`,
+`NWConnection` or `CFSocket` at all. That is a strong structural claim, but it is not the criterion.
+
 ## Accepted drift
 
 Findings the user has knowingly blessed, so `/dev:present` folds them into a
@@ -1018,6 +1079,7 @@ Appended by /dev:implement after each slice — never rewritten. Newest row last
 | date | slice | status | divergence from plan | tech debt created | human review? |
 |------|-------|--------|----------------------|-------------------|---------------|
 | 2026-08-23 | S1 | done | `feature_key` gains a deterministic `#n` suffix on a repeated kind (a bare `kind` violates the plan's own PK); `ExportReport.uncovered_days` additive; `days < 1` returns `Err` not a raise; gate destination iPhone 16→17 (orchestrator, machine has no iPhone 16) | `day_warning` re-resolves every facility per date — a second resolver pass beside `find_swim_options`, ~2× sweep cost (0.5 s total); `render_warning` has no unknown-code arm and would `KeyError` on missing params | **yes — 3 unverified plan claims corrected, see Decisions** |
+| 2026-08-24 | S2 | done | `Store` is an actor not a struct; `priceFor` returns `PriceEntry?` (the plan's `Admission` was the wrong type); `eligibility(person, access)` argument order; added `SessionAccess.unknown`; strict `min_age` decoding; extra files beyond Touches (committed 1.75 MB store, `scripts/ios_fixtures.py`, app-hosted test target); acc 7's open-failure proof is **structural only** | no runtime proof of the open-failure close (grep only — no metric on Apple's SQLite can observe it); committed store is a **140-day** horizon, not 400; the store is not byte-reproducible (`gold_valid_as_of` moves with the wall clock); `DayWarning.rendered` duplicates Python's renderer; `/swim` still omits `min_age` | **yes — acc 5 (Airplane Mode) UNVERIFIED, human check waived** |
 
 ## Decisions & divergences
 

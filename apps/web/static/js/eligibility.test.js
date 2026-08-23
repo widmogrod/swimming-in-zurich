@@ -107,14 +107,50 @@ test('this module agrees with the SERVER on every access type × gender × age',
   const { cases } = load('eligibility_contract.json');
   assert.ok(cases.length > 0);
   for (const c of cases) {
-    const got = eligForAccess(c.access, c.gender, c.age);
-    assert.equal(got, c.ui, `${c.access} gender=${c.gender || 'unset'} age=${c.age}: ` +
+    // `access_params` carries the arm's OWN fields, so a session whose page publishes a
+    // non-default bound is decided by that bound and not by this module's constant.
+    const got = eligForAccess(c.access, c.gender, c.age, c.access_params);
+    assert.equal(got, c.ui, `${c.access}${JSON.stringify(c.access_params)} ` +
+      `gender=${c.gender || 'unset'} age=${c.age}: ` +
       `server said ${c.code} (allowed=${c.allowed}) → ${c.ui}, UI drew ${got}`);
   }
   // The contract must actually exercise the kinds this plan added.
   for (const a of ['GirlsOnly', 'GenderDiverse', 'AccompaniedChildren']) {
     assert.ok(cases.some((c) => c.access === a), `contract missing access ${a}`);
   }
+  // ...and it must exercise the PARAMETERISED arms away from their defaults, or replaying
+  // it proves nothing about reading the published bound. Fails if the fixture is the old,
+  // narrower one rather than skipping.
+  for (const [a, bounds] of [
+    ['SeniorsOnly', [59, 60, 61]],
+    ['AdultsOnly', [17, 18, 19]],
+    ['GenderDiverse', [15, 16, 17]],
+  ]) {
+    for (const b of bounds) {
+      assert.ok(
+        cases.some((c) => c.access === a && c.access_params && c.access_params.min_age === b),
+        `contract missing ${a}(min_age=${b}) — regenerate with SWIMZH_REGENERATE_ELIGIBILITY_CONTRACT=1`,
+      );
+    }
+  }
+});
+
+test('the PUBLISHED bound decides, not the module default', () => {
+  // The unguarded-mirror harm, made a test. A page that says "ab 17 Jahren" must move the
+  // threshold with it; reading the constant instead draws ✕ on someone the server welcomes.
+  assert.equal(eligForAccess('AdultsOnly', '', 17, { min_age: 17 }), 'in');
+  assert.equal(eligForAccess('AdultsOnly', '', 18, { min_age: 19 }), 'no');
+  assert.equal(eligForAccess('SeniorsOnly', '', 59, { min_age: 59 }), 'in');
+  assert.equal(eligForAccess('SeniorsOnly', '', 60, { min_age: 61 }), 'no');
+  assert.equal(eligForAccess('GenderDiverse', '', 15, { min_age: 15 }), 'chk');
+  assert.equal(eligForAccess('GenderDiverse', '', 16, { min_age: 17 }), 'no');
+  // No params (the `/swim` browser case, which sends only the class name) still falls back
+  // to the domain defaults — 60 / 18 / 16.
+  assert.equal(eligForAccess('AdultsOnly', '', 18), 'in');
+  assert.equal(eligForAccess('SeniorsOnly', '', 59), 'no');
+  assert.equal(eligForAccess('GenderDiverse', '', 15), 'no');
+  // A params object with no bound is the same as none.
+  assert.equal(eligForAccess('AdultsOnly', '', 17, { note: '' }), 'no');
 });
 
 test('the aemtler Thursday girls-only session never reads ✓ for an adult man', () => {

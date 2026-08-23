@@ -24,25 +24,25 @@ export const ELIG_IN = 'in';
 export const ELIG_CHK = 'chk';
 export const ELIG_NO = 'no';
 
-// Domain defaults (access.py): SeniorsOnly.min_age=60, AdultsOnly.min_age=18. The
-// `/swim` access field carries only the class name, so the thresholds live here.
+// Domain DEFAULTS (access.py): SeniorsOnly.min_age=60, AdultsOnly.min_age=18, and — for
+// GenderDiverse, which has no default because the domain requires the field — the one bound
+// the city publishes today, "ab 16 Jahren".
+//
+// These are FALLBACKS, not the rule. `eligForAccess` takes the session's own
+// `access_params` and prefers the bound stated there, because the bound is a FIELD of the
+// access arm and the scraper emits whatever the page publishes. Relying on the constants
+// alone was a documented, unguarded mirror: a page that started saying "ab 14 Jahren" would
+// have left both QA chains green while this module drew ✕ on a 15-year-old the server had
+// answered `gender_diverse_confirm` (?) — a hard exclusion the domain never issued, the
+// mirror image of the harm this module was fixed for.
+//
+// The generated contract now carries `access_params` per case and exercises each of the
+// three arms at default ± 1, so reading the constant instead of the parameter FAILS.
+// `/swim`'s `OptionOut` still sends only the class name, so a browser caller has no params
+// to pass and gets the defaults; the iOS client reads them from the store. Carrying
+// `min_age` on the `/swim` wire remains the outstanding half of this fix.
 const SENIORS_MIN_AGE = 60;
 const ADULTS_MIN_AGE = 18;
-// GenderDiverse.min_age is REQUIRED in the domain (no default) but still does not cross
-// the wire — `/swim` sends only the class name. Exactly one cell citywide produces this
-// arm today and it publishes "ab 16 Jahren", which is why 16 is the mirrored value.
-//
-// THIS MIRROR IS UNGUARDED. The generated contract fixture pins only the representative
-// instance hand-written in `REPRESENTATIVE_ACCESS` (access.py) — `GenderDiverse(min_age=16)`
-// — never a bound actually parsed from a page. The scraper emits whatever the page
-// publishes, so a page that starts saying "ab 14 Jahren" would leave BOTH QA chains green
-// while this constant silently disagrees with the server: a 15-year-old would get the
-// server's `gender_diverse_confirm` (?) but be drawn ✕ — a hard exclusion the domain never
-// issued, the mirror image of the harm this module was fixed for.
-//
-// The honest guard is carrying `min_age` on the wire (an `OptionOut` field, so the browser
-// decides from the session's own bound instead of a constant); that is an API change and
-// out of this slice's scope. The same caveat applies to the two thresholds above.
 const GENDER_DIVERSE_MIN_AGE = 16;
 
 // Access types anyone may attend → always ✓.
@@ -75,29 +75,39 @@ function girlsOnly(gender) {
   return ELIG_CHK; // 'female' | '' | null | undefined
 }
 
-function genderDiverse(age) {
+function genderDiverse(age, threshold) {
   // *"offen für trans und nicht-binäre Personen ab N Jahren"*. Mirrors `_gender_diverse`:
   // NEVER a hard deny on gender — being trans is not a value of the gender filter (a trans
   // woman's gender is female), so deciding this from it would wrongly exclude her. The
   // published age is the one checkable fact, and above it the answer is ? not ✓.
-  if (ageKnown(age) && age < GENDER_DIVERSE_MIN_AGE) return ELIG_NO;
+  if (ageKnown(age) && age < threshold) return ELIG_NO;
   return ELIG_CHK;
 }
 
+// The bound this session actually publishes, or the domain default when the caller has no
+// params to give (`/swim` sends only the class name). `params.min_age` is the arm's OWN
+// field, exactly as `dataclasses.asdict(access)` emits it.
+function boundFrom(params, fallback) {
+  const stated = params && params.min_age;
+  return typeof stated === 'number' && Number.isFinite(stated) ? stated : fallback;
+}
+
 /**
- * eligForAccess(access, gender, age) → 'in' | 'chk' | 'no'.
+ * eligForAccess(access, gender, age, params) → 'in' | 'chk' | 'no'.
  * @param {string} access domain access class name (see module header).
  * @param {string} gender '' | 'female' | 'male' | 'diverse' (missing ⇒ unset).
  * @param {number|null} age viewer age, or null/undefined if unknown.
+ * @param {{min_age?: number, club?: string, note?: string}|null} [params] the access arm's
+ *   own fields, when the caller has them; the published bound wins over the default.
  */
-export function eligForAccess(access, gender = '', age = null) {
+export function eligForAccess(access, gender = '', age = null, params = null) {
   if (OPEN_TO_ALL.has(access)) return ELIG_IN;
   if (NEVER_PUBLIC.has(access)) return ELIG_NO;
   if (access === 'WomenOnly') return womenOnly(gender);
-  if (access === 'SeniorsOnly') return minAge(age, SENIORS_MIN_AGE);
-  if (access === 'AdultsOnly') return minAge(age, ADULTS_MIN_AGE);
+  if (access === 'SeniorsOnly') return minAge(age, boundFrom(params, SENIORS_MIN_AGE));
+  if (access === 'AdultsOnly') return minAge(age, boundFrom(params, ADULTS_MIN_AGE));
   if (access === 'GirlsOnly') return girlsOnly(gender);
-  if (access === 'GenderDiverse') return genderDiverse(age);
+  if (access === 'GenderDiverse') return genderDiverse(age, boundFrom(params, GENDER_DIVERSE_MIN_AGE));
   // Accompaniment is not an attribute the filter carries, so this is never decidable
   // either way — ? (check with the pool), never ✓ and never ✕.
   if (access === 'AccompaniedChildren') return ELIG_CHK;

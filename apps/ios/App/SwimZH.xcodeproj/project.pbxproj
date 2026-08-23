@@ -1,0 +1,385 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 60;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		1A00000000000000000001D /* SwimZHApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A000000000000000000018 /* SwimZHApp.swift */; };
+		1A00000000000000000001E /* TodayView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A000000000000000000019 /* TodayView.swift */; };
+		1A00000000000000000001F /* TodayModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A00000000000000000001A /* TodayModel.swift */; };
+		1A000000000000000000020 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 1A00000000000000000001B /* Assets.xcassets */; };
+		1A000000000000000000021 /* BundledStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A00000000000000000001C /* BundledStoreTests.swift */; };
+		1A000000000000000000024 /* SwimZHKit in Frameworks */ = {isa = PBXBuildFile; productRef = 1A000000000000000000023 /* SwimZHKit */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		1A000000000000000000026 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 1A000000000000000000001 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 1A000000000000000000006;
+			remoteInfo = SwimZH;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXFileReference section */
+		1A000000000000000000008 /* SwimZH.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = SwimZH.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		1A000000000000000000009 /* SwimZHTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = SwimZHTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		1A000000000000000000018 /* SwimZHApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SwimZHApp.swift; sourceTree = "<group>"; };
+		1A000000000000000000019 /* TodayView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TodayView.swift; sourceTree = "<group>"; };
+		1A00000000000000000001A /* TodayModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TodayModel.swift; sourceTree = "<group>"; };
+		1A00000000000000000001B /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		1A00000000000000000001C /* BundledStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BundledStoreTests.swift; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		1A00000000000000000000B /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				1A000000000000000000024 /* SwimZHKit in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		1A00000000000000000000E /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		1A000000000000000000002 = {
+			isa = PBXGroup;
+			children = (
+				1A000000000000000000004 /* SwimZH */,
+				1A000000000000000000005 /* SwimZHTests */,
+				1A000000000000000000003 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		1A000000000000000000003 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				1A000000000000000000008 /* SwimZH.app */,
+				1A000000000000000000009 /* SwimZHTests.xctest */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		1A000000000000000000004 /* SwimZH */ = {
+			isa = PBXGroup;
+			children = (
+				1A000000000000000000018 /* SwimZHApp.swift */,
+				1A000000000000000000019 /* TodayView.swift */,
+				1A00000000000000000001A /* TodayModel.swift */,
+				1A00000000000000000001B /* Assets.xcassets */,
+			);
+			path = SwimZH;
+			sourceTree = "<group>";
+		};
+		1A000000000000000000005 /* SwimZHTests */ = {
+			isa = PBXGroup;
+			children = (
+				1A00000000000000000001C /* BundledStoreTests.swift */,
+			);
+			path = SwimZHTests;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		1A000000000000000000006 /* SwimZH */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 1A000000000000000000010 /* Build configuration list for PBXNativeTarget "SwimZH" */;
+			buildPhases = (
+				1A00000000000000000000A /* Sources */,
+				1A00000000000000000000B /* Frameworks */,
+				1A00000000000000000000C /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = SwimZH;
+			packageProductDependencies = (
+				1A000000000000000000023 /* SwimZHKit */,
+			);
+			productName = SwimZH;
+			productReference = 1A000000000000000000008 /* SwimZH.app */;
+			productType = "com.apple.product-type.application";
+		};
+		1A000000000000000000007 /* SwimZHTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 1A000000000000000000011 /* Build configuration list for PBXNativeTarget "SwimZHTests" */;
+			buildPhases = (
+				1A00000000000000000000D /* Sources */,
+				1A00000000000000000000E /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				1A000000000000000000025 /* PBXTargetDependency */,
+			);
+			name = SwimZHTests;
+			packageProductDependencies = (
+			);
+			productName = SwimZHTests;
+			productReference = 1A000000000000000000009 /* SwimZHTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		1A000000000000000000001 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 2660;
+				LastUpgradeCheck = 2660;
+				TargetAttributes = {
+					1A000000000000000000006 = {
+						CreatedOnToolsVersion = 26.6;
+					};
+					1A000000000000000000007 = {
+						CreatedOnToolsVersion = 26.6;
+						TestTargetID = 1A000000000000000000006;
+					};
+				};
+			};
+			buildConfigurationList = 1A00000000000000000000F /* Build configuration list for PBXProject "SwimZH" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = 1A000000000000000000002;
+			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				1A000000000000000000022 /* XCLocalSwiftPackageReference "../.." */,
+			);
+			productRefGroup = 1A000000000000000000003 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				1A000000000000000000006 /* SwimZH */,
+				1A000000000000000000007 /* SwimZHTests */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		1A00000000000000000000C /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				1A000000000000000000020 /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		1A00000000000000000000A /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				1A00000000000000000001E /* TodayView.swift in Sources */,
+				1A00000000000000000001F /* TodayModel.swift in Sources */,
+				1A00000000000000000001D /* SwimZHApp.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		1A00000000000000000000D /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				1A000000000000000000021 /* BundledStoreTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		1A000000000000000000025 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 1A000000000000000000006 /* SwimZH */;
+			targetProxy = 1A000000000000000000026 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		1A000000000000000000012 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 6.0;
+			};
+			name = Debug;
+		};
+		1A000000000000000000013 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_NO_COMMON_BLOCKS = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_VERSION = 6.0;
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
+		1A000000000000000000014 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGNING_ALLOWED = NO;
+				CODE_SIGNING_REQUIRED = NO;
+				CODE_SIGN_IDENTITY = "";
+				CURRENT_PROJECT_VERSION = 1;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				MARKETING_VERSION = 0.1;
+				PRODUCT_BUNDLE_IDENTIFIER = ch.swimzh.SwimZH;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Debug;
+		};
+		1A000000000000000000015 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGNING_ALLOWED = NO;
+				CODE_SIGNING_REQUIRED = NO;
+				CODE_SIGN_IDENTITY = "";
+				CURRENT_PROJECT_VERSION = 1;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				MARKETING_VERSION = 0.1;
+				PRODUCT_BUNDLE_IDENTIFIER = ch.swimzh.SwimZH;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Release;
+		};
+		1A000000000000000000016 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGNING_ALLOWED = NO;
+				CODE_SIGNING_REQUIRED = NO;
+				CODE_SIGN_IDENTITY = "";
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				MARKETING_VERSION = 0.1;
+				PRODUCT_BUNDLE_IDENTIFIER = ch.swimzh.SwimZHTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				TARGETED_DEVICE_FAMILY = 1;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/SwimZH.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/SwimZH";
+			};
+			name = Debug;
+		};
+		1A000000000000000000017 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGNING_ALLOWED = NO;
+				CODE_SIGNING_REQUIRED = NO;
+				CODE_SIGN_IDENTITY = "";
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				MARKETING_VERSION = 0.1;
+				PRODUCT_BUNDLE_IDENTIFIER = ch.swimzh.SwimZHTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				TARGETED_DEVICE_FAMILY = 1;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/SwimZH.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/SwimZH";
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		1A00000000000000000000F /* Build configuration list for PBXProject "SwimZH" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				1A000000000000000000012 /* Debug */,
+				1A000000000000000000013 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		1A000000000000000000010 /* Build configuration list for PBXNativeTarget "SwimZH" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				1A000000000000000000014 /* Debug */,
+				1A000000000000000000015 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		1A000000000000000000011 /* Build configuration list for PBXNativeTarget "SwimZHTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				1A000000000000000000016 /* Debug */,
+				1A000000000000000000017 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+
+/* Begin XCLocalSwiftPackageReference section */
+		1A000000000000000000022 /* XCLocalSwiftPackageReference "../.." */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = ..;
+		};
+/* End XCLocalSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		1A000000000000000000023 /* SwimZHKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = SwimZHKit;
+		};
+/* End XCSwiftPackageProductDependency section */
+	};
+	rootObject = 1A000000000000000000001 /* Project object */;
+}
