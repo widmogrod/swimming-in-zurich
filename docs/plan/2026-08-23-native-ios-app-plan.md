@@ -1,6 +1,6 @@
 ---
 type: plan
-status: in-progress      # draft -> approved -> in-progress -> done
+status: done             # draft -> approved -> in-progress -> done
 created: 2026-08-23
 feature: native-ios-app
 branch: plan/native-ios-app
@@ -1585,5 +1585,59 @@ exist as claimed, "57 pools, 26 carrying 224 rules" is exact, and `lane_day` is 
 
 ## Summary
 
-Written when the plan reaches `done`; then distilled into
-`docs/summaries/native-ios-app.md` (what EXISTS now, not what was intended).
+**What exists now.** `apps/ios/` is a native SwiftUI app for iOS 26 that answers "where can I swim
+in Zürich?" entirely offline, from a SQLite file it carries. Seven slices, all seven green, three
+QA chains (Python, TypeScript, Swift) and three CRAP gates.
+
+The architecture that made it small: **iOS runs no schedule logic at all.** `swimzh export-ios`
+pre-resolves every date in a fixed 400-day horizon into a derived store — sessions, day statuses,
+notices, warnings, lane plans, feature hours, prices — and `SwimZHKit` computes only what depends on
+the *user*: eligibility, the price bracket, distance, and the wall clock. The correctness core stayed
+in Python, in one copy. The parity sweep proves it: every pool on every one of 400 dates, unsampled,
+against `find_swim_options` itself.
+
+**Fifteen defects were found that a passing test suite could not see.** They cluster into three
+shapes, and the shapes are the reusable knowledge:
+
+1. **A claim true only at one instant, or only on today** — seven instances, the last in five
+   languages at once and one in a *derived value* rather than a label. "Open now · until 09:00" about
+   a date four months out; "Closed today" reachable on ninety future dates; "no lanes open to the
+   public" beside "Opens 06:00"; a lane count read at noon on a day nobody is standing in. The rule
+   that emerged: **`at:` is meaningless off today**, and ghost/closed rows are day-agnostic while
+   session rows are not, so every new sentence must be checked against both.
+2. **A gate that looked enforced and was not** — four instances. A leak canary against
+   `sqlite3_memory_used()`, which Apple ships with statistics **off** (2,000 deliberately leaked
+   handles still report 0). CI tests that silently skipped because a build step was missing. A
+   staleness check that **regenerated the file before checking it**. And a coverage sweep that
+   iterated its own evidence table, so any unlisted claim went unchecked.
+3. **A `rendered` claim outrunning its evidence** — four instances. The union/disjointness test proves
+   every field is *classified*; it can never prove a "rendered" claim is *true*. Five fields were
+   declared rendered that the phone structurally could not render.
+
+**Three findings were overturned on evidence**, twice against the reviewer and twice against the
+orchestrator's own instructions — a privacy code that would have caused the rejection it claimed to
+prevent, a proposed assertion that was a tautology, a deletion that would have introduced a false
+"split not published", and a fix instruction that was insufficient because a fixed midday moment
+still mis-tiers a morning session.
+
+**What is NOT built, deliberately.** The crowd/occupancy badge: the source does not exist and its
+integration is deferred on legal grounds, so the client renders **no row** rather than a permanent
+"unavailable" implying otherwise. The refresh path is complete and tested but **inert** — no manifest
+URL is configured, because hosting was out of scope.
+
+**What is NOT verified.** Every criterion needing human eyes or a physical device: truncation at the
+largest accessibility sizes, light/dark on a notched device, Instruments CPU and per-body timing,
+device launch under 1 s, and the live-water row on screen in any state or language. The user waived
+these; they are recorded as unverified in the ledger, never marked done.
+
+**Numbers as shipped.** App minus the store: **2,088,982 B** against a 4 MB ratchet and the user's
+30 MB ceiling. Store: 1.79 MB (140-day fixture; a release build is 400 days, ~5 MB). Peak memory
+62.1% of the 100 MB budget. 301 Swift kit tests, 20 simulator tests, 71 gate self-tests, 1,086 Python
+tests at 96.20%, 498 TypeScript tests.
+
+**Owed before a first release**, in order: seed **2027** into `data/calendar/zurich.yaml` — 269 of the
+first export's 400 days already fall outside `known_years`; eyeball `CA92.1` in a browser; host the
+manifest and set `SWIMZHStoreManifestURL`; have a native speaker read the Polish and German catalogs;
+and look at the app on a real device.
+
+Distilled into `docs/summaries/native-ios-app.md`.
