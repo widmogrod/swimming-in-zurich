@@ -213,21 +213,112 @@ struct SourceLintTests {
     #expect(!elsewhere.isEmpty, "nothing in the package splits a string — the ban proves nothing")
   }
 
-  @Test("NOTHING in either target reaches the network — the offline floor is structural")
-  func noNetwork() throws {
-    // The app's premise is that it answers with no network at all, and the plan's S2
-    // acceptance 5 (the simulator in Airplane Mode) is a human eyeball the user waived. This
-    // is the assertable half of the same claim, and a stronger one in one respect: an
-    // eyeball proves the app worked offline once, whereas this proves there is no network
-    // code to work with — the app CANNOT be reaching anything. It covers the app target as
-    // well as the kit, because a fetch added to a view would be just as fatal.
-    var scanned = 0
-    for file in try Self.swiftFiles() + Self.appSwiftFiles() {
-      scanned += 1
-      for banned in ["URLSession", "import Network", "NWConnection", "CFSocket", "CFStream"] {
-        #expect(!file.text.contains(banned), "\(file.name) references \(banned)")
+  // MARK: - S5 acceptance 0: the offline floor becomes a NAMED SEAM, not an absolute ban
+
+  /// The tokens that mean "this file can reach the network".
+  static let networkTokens = [
+    "URLSession", "import Network", "NWConnection", "CFSocket", "CFStream",
+  ]
+
+  /// The ONLY two files in either target permitted to contain them, by full path.
+  ///
+  /// By path and not by basename, deliberately: an `App/SwimZH/Live.swift` would otherwise
+  /// inherit the kit's permission, and the whole value of an allowlist is that widening it is a
+  /// visible edit rather than a filename.
+  static let networkSeam: Set<String> = ["SwimZHKit/Live.swift", "SwimZHKit/Refresh.swift"]
+
+  /// Every file outside the seam that references the network, with the token it used.
+  ///
+  /// A pure function over (path, text) pairs so the lint itself can be TESTED — see
+  /// `theNetworkLintFailsWhenACallIsAddedOutsideTheSeam`. A lint nobody has ever seen fail is a
+  /// lint nobody knows works.
+  static func networkViolations(in files: [(path: String, text: String)]) -> [String] {
+    files
+      .filter { !networkSeam.contains($0.path) }
+      .flatMap { file in
+        networkTokens
+          .filter { code(file.text).contains($0) }
+          .map { "\(file.path) references \($0)" }
+      }
+  }
+
+  /// Both targets' files, path-qualified as `networkViolations` wants them.
+  static func allFiles() throws -> [(path: String, text: String)] {
+    try swiftFiles().map { (path: "SwimZHKit/\($0.name)", text: $0.text) }
+      + appSwiftFiles().map { (path: "App/\($0.name)", text: $0.text) }
+  }
+
+  @Test("only the two named files reach the network — everything else is offline by construction")
+  func noNetworkOutsideTheSeam() throws {
+    // S2 shipped this as an ABSOLUTE ban across both targets, as the structural substitute for
+    // the Airplane Mode eyeball the user waived. S5 needs a Baditicker read and a store
+    // download, so the ban is NARROWED rather than deleted: the claim changes from "there is no
+    // network code" to "there are exactly two files of it, and here they are". Everything the
+    // app ANSWERS still comes out of the bundled store; the two seam files add facts that cannot
+    // be baked and degrade to an explicit unavailable state when they fail.
+    let files = try Self.allFiles()
+    let violations = Self.networkViolations(in: files)
+    #expect(violations.isEmpty, "\(violations)")
+    #expect(files.count >= 9, "the lint must actually have read both targets, saw \(files.count)")
+  }
+
+  @Test("the seam is real, and it is where the transport lives")
+  func theSeamIsNotVacuous() throws {
+    // Without this the allowlist could name two files that do not exist, or two that contain no
+    // networking at all, and the "exactly two files" claim above would be a claim about nothing.
+    //
+    // `Live.swift` owns the one transport (`URLSessionFetcher`); `Refresh.swift` reaches the
+    // network only THROUGH it, and names it once — as the default argument of `refresh`, which
+    // is what keeps the app target from naming a transport at any call site.
+    let files = try Self.allFiles()
+    for allowed in Self.networkSeam {
+      #expect(files.contains { $0.path == allowed }, "allowlisted \(allowed) does not exist")
+    }
+    let live = try #require(files.first { $0.path == "SwimZHKit/Live.swift" })
+    #expect(
+      Self.code(live.text).contains("URLSession("),
+      "Live.swift no longer constructs the transport — the seam has moved")
+    // EXACTLY the allowlisted files reach the network: not fewer (an allowlist entry that
+    // reaches nothing is decorative) and not more (that is what the lint above catches).
+    let reaching = files.filter { file in
+      Self.networkTokens.contains { Self.code(file.text).contains($0) }
+    }
+    #expect(Set(reaching.map(\.path)) == Self.networkSeam, "\(reaching.map(\.path))")
+  }
+
+  @Test("the network lint FAILS when a call is added outside the seam")
+  func theNetworkLintFailsWhenACallIsAddedOutsideTheSeam() throws {
+    // The mutation S5's acceptance 0 asks for. Three shapes, because the interesting failures
+    // are the near-misses: a view that fetches, a KIT file that fetches, and a file that took a
+    // seam file's NAME in the other target hoping to inherit its permission.
+    let real = try Self.allFiles()
+    let cases = [
+      ("App/PoolRowView.swift", "let task = URLSession.shared.dataTask(with: url)"),
+      ("SwimZHKit/Answer.swift", "import Network"),
+      ("App/Live.swift", "URLSession.shared.data(from: url)"),
+    ]
+    for (path, body) in cases {
+      let violations = Self.networkViolations(in: real + [(path: path, text: body)])
+      #expect(violations.count == 1, "\(path) slipped past the lint: \(violations)")
+      #expect(violations.first?.hasPrefix(path) == true)
+    }
+    // ...and the control: the same call inside a seam file is allowed, so the cases above are
+    // detecting the LOCATION and not merely the token.
+    #expect(
+      Self.networkViolations(
+        in: [(path: "SwimZHKit/Live.swift", text: "URLSession.shared.data(from: url)")]
+      ).isEmpty)
+  }
+
+  @Test("the app target still reaches nothing at all")
+  func theAppTargetIsEntirelyOffline() throws {
+    // The seam is in the KIT, where it is unit-tested. A fetch in a view would be a rule in a
+    // view — the thing this whole package is arranged to prevent — and it would be measured by
+    // neither the CRAP gate nor any test.
+    for file in try Self.appSwiftFiles() {
+      for banned in Self.networkTokens {
+        #expect(!Self.code(file.text).contains(banned), "App/\(file.name) references \(banned)")
       }
     }
-    #expect(scanned >= 9, "the lint must actually have read both targets, saw \(scanned) files")
   }
 }

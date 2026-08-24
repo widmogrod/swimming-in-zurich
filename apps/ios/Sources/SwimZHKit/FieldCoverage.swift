@@ -106,6 +106,18 @@ public enum FieldCoverage {
     "FacilityDetailOut.provenance",
     "FacilityDetailOut.lane_panels",
     "FacilityDetailOut.last_admission_before_min",
+    // --- the one fact that cannot be baked (S5) ---------------------------------------
+    //
+    // A LIVE READING, fetched from the Baditicker feed at the moment the sheet opens and
+    // rendered by `liveWaterRow` as the sheet's first basin row. It is claimed rendered on the
+    // same terms as everything else above — `FieldCoverageTests.rowEvidence` maps it to the
+    // `live-water` row id and builds that row from the real store, and a UI lint asserts the
+    // sheet actually passes a `LiveTemp` into `detailSections`.
+    //
+    // Its UNAVAILABLE state is part of the claim, not a fallback: no key, no feed, a bath the
+    // feed does not carry and an empty sensor cell each render a sentence saying so. What is
+    // never rendered is a number nobody measured.
+    "FacilityDetailOut.live_water_temp",
   ]
 
   /// Fields the phone knowingly does not render, each with the reason it does not.
@@ -139,10 +151,6 @@ public enum FieldCoverage {
       + "sheet says. `facility_name` is the rendered identity. Declaring an id `rendered` "
       + "because the code passes it around is exactly the aspirational claim this file's own "
       + "history warns about.",
-    "FacilityDetailOut.live_water_temp":
-      "S5 OWNS IT: it is a NETWORK read, and `SourceLintTests.noNetwork` bans networking in "
-      + "both targets — so this slice structurally cannot render it, nor the explicit "
-      + "unavailable state that must come with it. S5 narrows the lint and adds both.",
   ]
 
   /// Every field the phone has classified. Equality with the generated file is the test.

@@ -207,3 +207,42 @@ def test_absent_open_cell_is_unknown_not_closed() -> None:
     assert not (unknown & closed), "a reading is either unknown or closed, never both"
     # And an explicit "geschlossen" still parses as a real False, not swept into unknown.
     assert result.value["fb012"].is_open is False
+
+
+def test_the_recorded_feeds_open_vocabulary_is_the_one_both_clients_assume() -> None:
+    """The one assumption the Python and Swift readers of this feed both rest on.
+
+    They do NOT parse `openClosedTextPlain` identically. This module reads
+    `open_cell.lower() == "offen"`, so any wording it does not recognise — `geöffnet`, say —
+    becomes **False, i.e. closed**. `apps/ios/Sources/SwimZHKit/Live.swift` substring-matches
+    and answers **unknown**, which is what `TempReading.is_open`'s own docstring asks for
+    ("absent is not closed").
+
+    On every body the feed has actually served, the difference is invisible: the vocabulary is
+    exactly ``""`` / ``offen`` / ``geschlossen``. This test pins that, so the day the city
+    rewords the cell it fails HERE — loudly, next to the code that would start reporting open
+    baths as shut — instead of silently on 25 pools.
+    """
+    import re
+
+    cells = re.findall(
+        r"<openClosedTextPlain\b[^>]*>(.*?)</openClosedTextPlain>",
+        FIXTURE.read_text(encoding="utf-8"),
+        re.IGNORECASE | re.DOTALL,
+    )
+    unwrapped = {
+        re.sub(r"^<!\[CDATA\[(.*?)\]\]>$", r"\1", cell.strip(), flags=re.DOTALL).strip()
+        for cell in cells
+    }
+    assert unwrapped == {"", "offen", "geschlossen"}, unwrapped
+
+    # ...and the counts the two implementations' comments quote, read off the file rather than
+    # remembered: six empty temperature cells, five empty open cells, out of 25 baths.
+    temps = re.findall(
+        r"<temperatureWater\b[^>]*>(.*?)</temperatureWater>",
+        FIXTURE.read_text(encoding="utf-8"),
+        re.IGNORECASE | re.DOTALL,
+    )
+    assert len(temps) == 25
+    assert sum(1 for cell in temps if not cell.strip()) == 6
+    assert sum(1 for cell in cells if not re.sub(r"<!\[CDATA\[|\]\]>", "", cell).strip()) == 5

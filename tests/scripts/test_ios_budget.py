@@ -191,16 +191,24 @@ def test_the_committed_budget_file_states_a_limit_for_every_gated_number() -> No
         assert isinstance(budgets[name]["limit_bytes"], int), name
         assert budgets[name]["why"].strip(), f"{name} carries no reason"
     # The numbers themselves, so a silent loosening shows up as a diff in this test too.
-    # The live ratchet is TIGHTER than the plan's 4 MB, which is kept as the ceiling on the
-    # ratchet: a limit with that much slack would not bite until the app was finished, which
-    # is the audit-at-the-end failure this gate exists to prevent.
+    # The live ratchet was TIGHTER than the plan's 4 MB for S2b and S3b, deliberately: a limit
+    # with that much slack would not bite until the app was finished, which is the
+    # audit-at-the-end failure this gate exists to prevent. S5 spent the last of that margin,
+    # so the two are now EQUAL and the plan's figure is the live limit. There is no headroom
+    # left inside the plan: the next raise has to move `plan_ratchet_bytes`, which is a decision
+    # about the plan rather than about a build.
     #
-    # RAISED at S3b, 1 MB -> 2 MB, and this literal is where that becomes visible. S3b landed
-    # the canvas renderer, Swift Charts, the detail sheet, the pools browser and the
-    # access-types legend at once and measured 1,339,498 B; 2 MB keeps ~1.57x headroom and
-    # still leaves the plan's 4 MB as the next deliberate step. The reason is recorded in
-    # `budgets.json`'s own `why`, which the assertion above requires to be non-empty.
-    assert budgets["app_minus_sqlite"]["limit_bytes"] == 2 * 1024 * 1024
+    # RAISED TWICE, and this literal is where each raise becomes visible.
+    #  * S3b, 1 MB -> 2 MB: the canvas renderer, Swift Charts, the detail sheet, the pools
+    #    browser and the access-types legend landed together, measuring 1,339,498 B.
+    #  * S5, 2 MB -> the plan's 4 MB: S4's five compiled catalogs took the measurement to
+    #    1,908,758 B (91% of the 2 MB limit), and S5's live client, refresh path and the sheet
+    #    row that renders them took it to 2,072,598 B — 98.8%, i.e. 24 KB of headroom, which is
+    #    a gate that would fail on the next comment. 4 MB is the figure the PLAN ratcheted to
+    #    and it is not a widening beyond it: `plan_ratchet_bytes` is unchanged, the two are now
+    #    equal, and the 30 MB ceiling the user set is still 7x away. Any future raise has to
+    #    move the plan's own number, which is a different and larger conversation.
+    assert budgets["app_minus_sqlite"]["limit_bytes"] == 4 * 1024 * 1024
     assert budgets["app_minus_sqlite"]["plan_ratchet_bytes"] == 4 * 1024 * 1024
     assert (
         budgets["app_minus_sqlite"]["limit_bytes"]

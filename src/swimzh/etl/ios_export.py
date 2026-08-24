@@ -82,7 +82,11 @@ _ZURICH = ZoneInfo("Europe/Zurich")
 
 #: Bumped whenever a client would read the store wrongly. The iOS refresh path rejects a
 #: downloaded store whose `schema_version` is not the one the installed app was built against.
-SCHEMA_VERSION: Final = 1
+#:
+#: 1 -> 2 (S5): `pool.baditicker_poiid`. A client built against 2 reads that column and would
+#: fail on a version-1 store, which is exactly what the version exists to stop — and, the other
+#: way round, a version-1 binary would silently show no live temperature for any pool.
+SCHEMA_VERSION: Final = 2
 
 #: The horizon length. 400 days ≈ 13 months, so a weekly release always answers "a year from now".
 DEFAULT_DAYS: Final = 400
@@ -128,7 +132,11 @@ CREATE TABLE pool (
     curated                  INTEGER,
     valid_as_of              TEXT,
     last_admission_before_s  INTEGER,
-    operating_season         TEXT
+    operating_season         TEXT,
+    -- The Baditicker feed key, so the CLIENT can ask for this pool's live water temperature.
+    -- The KEY is persisted; the READING never is (`domain/query.py`'s import-token rule) — a
+    -- reading is a fact about an instant and would be a lie the moment the file was written.
+    baditicker_poiid         TEXT
 ) STRICT;
 CREATE TABLE pool_basin (
     pool_id            TEXT NOT NULL REFERENCES pool(pool_id),
@@ -232,6 +240,7 @@ TABLE_COLUMNS: Final[Mapping[str, tuple[str, ...]]] = {
         "valid_as_of",
         "last_admission_before_s",
         "operating_season",
+        "baditicker_poiid",
     ),
     "pool_basin": (
         "pool_id",
@@ -427,6 +436,7 @@ def _pool_row(row: RosterEntry, facility: Facility | None) -> Row:
         ),
         int(last_admission.total_seconds()) if last_admission is not None else None,
         _season_doc(season) if season is not None else None,
+        facility.identity.baditicker_poiid if facility is not None else None,
     )
 
 
@@ -941,3 +951,93 @@ def export_ios(
             uncovered_days=sum(1 for day in dates if not calendar.covers(day)),
         )
     )
+
+
+# --- The release manifest ---------------------------------------------------------------
+#
+# The store the app SHIPS WITH is the offline floor; the store it may DOWNLOAD is described by
+# this one small JSON file beside it. Every field is read back OUT of the finished store rather
+# than remembered from the export that wrote it, which is what makes acceptance 5's "fields
+# agree with the store's `meta`" true by construction instead of by discipline: there is no
+# second source for them to disagree with.
+#
+# `sha256` and `bytes` are the two the client checks before it trusts a byte of the download.
+# They are computed from the file on disk, after `atomic_swap` committed it — hashing the
+# in-memory rows would describe a file nobody has, and the file is the thing being served.
+
+
+@dataclass(frozen=True, slots=True)
+class StoreManifest:
+    """What a client needs to decide whether to download a store, and to know it got it intact.
+
+    `schema_version` is the gate a bad upload cannot get past: a client rejects a manifest whose
+    version is not the one it was built against and goes on serving the store it already has.
+    """
+
+    schema_version: int
+    built_at: str
+    horizon_end: str
+    url: str
+    sha256: str
+    bytes: int
+
+    def to_json(self) -> str:
+        """The wire form — snake_case keys, sorted, newline-terminated, so a re-release of an
+        unchanged store produces a byte-identical file and `diff` says nothing changed."""
+        return json.dumps(dataclasses.asdict(self), indent=2, sort_keys=True) + "\n"
+
+
+def _store_meta(store: Path) -> Mapping[str, str]:
+    """The finished store's `meta` table, read back read-only."""
+    conn = sqlite3.connect(f"file:{store}?mode=ro", uri=True)
+    try:
+        return {key: value for key, value in conn.execute("SELECT key, value FROM meta")}
+    finally:
+        conn.close()
+
+
+def _sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for block in iter(lambda: handle.read(1 << 20), b""):
+            digest.update(block)
+    return digest.hexdigest()
+
+
+def manifest_for(store: Path, *, url: str) -> Result[StoreManifest, ProviderError]:
+    """Describe an already-written iOS store, reading every claim back out of the file."""
+    if not store.exists():
+        return Err(ProviderSpecific(provider="ios_export", detail=f"no store at {store}"))
+    try:
+        meta = _store_meta(store)
+    except sqlite3.DatabaseError as exc:
+        return Err(SchemaMismatch(source="ios_export", detail=f"unreadable store: {exc}"))
+    missing = [key for key in ("schema_version", "built_at", "horizon_end") if key not in meta]
+    if missing:
+        return Err(SchemaMismatch(source="ios_export", detail=f"meta missing {missing}"))
+    return Ok(
+        StoreManifest(
+            schema_version=int(meta["schema_version"]),
+            built_at=meta["built_at"],
+            horizon_end=meta["horizon_end"],
+            url=url,
+            sha256=_sha256(store),
+            bytes=store.stat().st_size,
+        )
+    )
+
+
+def write_manifest(store: Path, out: Path, *, url: str) -> Result[StoreManifest, ProviderError]:
+    """Write `manifest.json` beside a finished store. Whole-file write through `atomic_swap`,
+    like every other artifact here: a half-written manifest served to a phone is a download that
+    fails its hash check on every launch."""
+    match manifest_for(store, url=url):
+        case Ok(manifest):
+            with atomic_swap(out) as staging:
+                staging.path.write_text(manifest.to_json(), encoding="utf-8")
+                staging.commit()
+            return Ok(manifest)
+        case Err(error):
+            return Err(error)
+        case _ as unreachable:  # pragma: no cover - exhaustiveness
+            assert_never(unreachable)

@@ -85,14 +85,14 @@ struct FieldCoverageTests {
     }
   }
 
-  @Test("every FacilityDetailOut field is rendered, except the one that needs a network")
+  @Test("every FacilityDetailOut field is rendered, except the identifier it is addressed by")
   func facilityDetailIsRendered() throws {
     let generated = try Self.generatedFields().filter { $0.hasPrefix("FacilityDetailOut.") }
     #expect(generated.count >= 15)
-    // `live_water_temp` is S5's: it is a network read, and `SourceLintTests.noNetwork` bans
-    // networking in BOTH targets — so this slice structurally cannot render it. `facility_id`
-    // is an identifier, not a fact a swimmer reads.
-    let stillOmitted = Set(["FacilityDetailOut.live_water_temp", "FacilityDetailOut.facility_id"])
+    // `live_water_temp` was the last holdout and S5 moved it: the network lint is now a seam
+    // rather than a ban, and the reading — or the honest reason there is none — is the sheet's
+    // first basin row. `facility_id` stays out: it is an identifier, not a fact a swimmer reads.
+    let stillOmitted = Set(["FacilityDetailOut.facility_id"])
     for field in generated {
       if stillOmitted.contains(field) {
         #expect(FieldCoverage.deliberatelyOmitted[field] != nil, "\(field)")
@@ -162,7 +162,43 @@ struct FieldCoverageTests {
     "OptionOut.source": "source",
     "OptionOut.curated": "curated",
     "OptionOut.valid_as_of": "valid-as-of",
+    // The live reading (S5). Its evidence row is built for every pool that carries a Baditicker
+    // key, from the real store — see the `live` argument in the sweep below.
+    "FacilityDetailOut.live_water_temp": "live-water",
   ]
+
+  /// The `FacilityDetailOut` fields whose evidence is NOT a `DetailRow`, and what it is instead.
+  ///
+  /// This list exists because of a hole found in review: `renderedRowsExistForEveryClaimedField`
+  /// iterates `rowEvidence`, so a field claimed rendered with NO entry there is silently
+  /// unchecked — which is how `live_water_temp` was first moved into `renderedFields` on
+  /// evidence that did not exist. Naming the exceptions turns "has no row" from an invisible
+  /// default into a deliberate, justified statement, and `everyClaimedSheetFieldHasEvidence`
+  /// fails on anything in neither list.
+  static let nonRowEvidence: [String: String] = [
+    "FacilityDetailOut.facility_name":
+      "the sheet's TITLE, not a row — evidence is UILintTests.detailSheetRendersTheName"
+  ]
+
+  @Test("every claimed FacilityDetailOut field carries evidence, row or named exception")
+  func everyClaimedSheetFieldHasEvidence() throws {
+    // The gap this closes: the sweep below loops over `rowEvidence`, so a field declared
+    // rendered and absent from it was checked by NOTHING. That is how a `rendered` claim
+    // outran its evidence for the fourth time in this plan — the union test proves a field is
+    // CLASSIFIED, never that a rendered claim is TRUE.
+    let claimed = FieldCoverage.renderedFields.filter { $0.hasPrefix("FacilityDetailOut.") }
+    #expect(claimed.count >= 13)
+    for field in claimed {
+      let evidence = Self.rowEvidence[field] ?? Self.nonRowEvidence[field]
+      #expect(
+        evidence?.isEmpty == false,
+        "\(field) is declared rendered with no evidence in rowEvidence or nonRowEvidence"
+      )
+    }
+    // ...and the exceptions cannot smuggle a field past the row check: an entry in both lists
+    // would let a missing row hide behind a sentence.
+    #expect(Set(Self.rowEvidence.keys).isDisjoint(with: Self.nonRowEvidence.keys))
+  }
 
   @Test("every claimed detail field produces a real row, on a real pool, from the real store")
   func renderedRowsExistForEveryClaimedField() async throws {
@@ -176,8 +212,16 @@ struct FieldCoverageTests {
     // feature AND a lane plan, so a one-pool check would have to drop three fields to pass.
     for pool in try await store.pools() {
       guard let detail = try await store.facility(poolID: pool.id, on: day) else { continue }
+      // The live reading is threaded in for exactly the pools that publish one, which is what
+      // the app does: 23 of the 57 carry a Baditicker key, and a pool with no key gets no row
+      // rather than an empty one. The reading stands in for the feed — fetching it is
+      // `LiveTests`' business; what is proved HERE is that the field reaches a rendered row
+      // built from the real store, which is the standard every other claimed field is held to.
+      let live: LiveTemp? = detail.baditickerPOIID.map { _ in
+        .reading(TempReading(measuredAt: Date(), celsius: 21.5, isOpen: true))
+      }
       for section in detailSections(
-        detail, on: day, for: Person(age: 30), in: Self.en)
+        detail, on: day, for: Person(age: 30), in: Self.en, live: live)
       {
         titles.insert(Self.en(section.title))
         rowCount += section.rows.count

@@ -82,6 +82,7 @@ struct FacilityDetailTests {
     lastAdmission: Int? = nil,
     freshness: String = "scraped",
     panels: [LanePanel] = [],
+    poiid: String? = nil,
     provenance: Provenance = Provenance(
       source: "stadt-zuerich.ch", curated: false, validAsOf: "2026-08-24")
   ) -> FacilityDetail {
@@ -91,6 +92,7 @@ struct FacilityDetailTests {
       basins: basins, lockers: lockers, rentals: rentals, features: features,
       operatingSeason: season, lastAdmissionBeforeSeconds: lastAdmission,
       provenance: provenance,
+      baditickerPOIID: poiid,
       lanePanels: panels)
   }
 

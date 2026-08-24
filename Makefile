@@ -103,3 +103,33 @@ ios-qa:  ## Swift chain: locale check -> format lint -> build -> test+coverage -
 	cd apps/ios && xcodebuild -project App/SwimZH.xcodeproj -scheme SwimZH \
 		-destination '$(IOS_DESTINATION)' test
 	@echo "iOS QA: all green"
+
+# --- the weekly release ---------------------------------------------------------------------
+#
+# ONE command produces the two files a release needs: the pre-resolved store and the manifest
+# that describes it. Every manifest field is read back OUT of the finished store, so the two
+# cannot disagree — which is the whole of S5 acceptance 5.
+#
+# WHERE they are uploaded is deliberately not this repo's business (hosting is out of scope in
+# the plan), so `IOS_STORE_URL` has no default: a manifest carrying a placeholder URL is one
+# every installed phone would fetch, fail on, and retry forever. The export refuses without it.
+#
+# The release store is written OUTSIDE the package's Resources on purpose. The committed
+# resource is the OFFLINE FLOOR — a small, deterministic, cassette-built store the test suite
+# replays against — and overwriting it with a live 400-day export would swap a reproducible
+# fixture for one that moves with the wall clock. `make ios-export` is the command that does
+# that deliberately.
+IOS_RELEASE_DIR ?= dist/ios
+IOS_STORE_URL ?=
+
+.PHONY: ios-release
+
+ios-release:  ## Build the release store + manifest.json (IOS_STORE_URL=https://… required)
+	@test -n "$(IOS_STORE_URL)" || { \
+		echo "IOS_STORE_URL is required: make ios-release IOS_STORE_URL=https://host/path/ios.sqlite"; \
+		exit 2; }
+	mkdir -p $(IOS_RELEASE_DIR)
+	uv run python -m swimzh.cli export-ios --db gold.sqlite \
+		--out $(IOS_RELEASE_DIR)/ios.sqlite \
+		--manifest $(IOS_RELEASE_DIR)/manifest.json \
+		--url '$(IOS_STORE_URL)'

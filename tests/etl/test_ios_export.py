@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import ast
 import dataclasses
+import hashlib
 import json
 import os
 import shutil
@@ -78,7 +79,9 @@ from swimzh.etl.ios_export import (
     _not_wal,
     export_ios,
     horizon,
+    manifest_for,
     render_warning,
+    write_manifest,
 )
 from swimzh.storage import codec
 from swimzh.storage.rows import PoolRow, PoolSpine
@@ -920,3 +923,123 @@ def test_the_ios_parity_golden_fixture_is_current(exported: _Export) -> None:
     # 3 pools × 5 dates × 3 personas, and the answers are not all empty.
     assert len(cases) == len(_PARITY_POOLS) * len(_PARITY_DATES) * len(_PARITY_PERSONAS)
     assert any(case["options"] for case in cases)
+
+
+# --- S5: the Baditicker key, and the release manifest --------------------------------------
+
+
+def test_the_baditicker_key_reaches_the_client_but_the_reading_never_does(
+    exported: _Export, store: sqlite3.Connection
+) -> None:
+    """The KEY is a standing fact about a pool and is exported; the READING is a fact about an
+    instant and would be a lie the moment the file was written, so the client fetches it live.
+
+    The second half is the one worth a test: a temperature column that quietly appeared in the
+    export would be a stale number rendered as a current one on every phone for a week.
+    """
+    keyed = {
+        row["pool_id"]: row["baditicker_poiid"]
+        for row in _rows(store, "SELECT pool_id, baditicker_poiid FROM pool")
+        if row["baditicker_poiid"] is not None
+    }
+    expected = {
+        str(f.identity.facility_id): f.identity.baditicker_poiid
+        for f in exported.facilities
+        if f.identity.baditicker_poiid is not None
+    }
+    assert keyed == expected
+    # Non-vacuity: the registry really does carry keys, so the equality above is not two empty
+    # dicts agreeing with each other.
+    assert len(keyed) >= 20, keyed
+
+    columns = {row[1] for row in store.execute("PRAGMA table_info(pool)")}
+    for reading in ("water_temp_c", "live_temp_c", "measured_at", "occupancy"):
+        assert reading not in columns, f"pool.{reading} bakes a live reading into a weekly file"
+
+
+def test_the_manifest_states_exactly_what_the_store_says_about_itself(
+    exported: _Export, tmp_path: Path
+) -> None:
+    """S5 acceptance 5: the manifest's fields agree with the store's `meta` — by construction,
+    because every one of them is read back out of the finished file."""
+    out = tmp_path / "manifest.json"
+    result = write_manifest(exported.path, out, url="https://example.test/ios.sqlite")
+    assert isinstance(result, Ok), result
+
+    written = json.loads(out.read_text(encoding="utf-8"))
+    connection = sqlite3.connect(exported.path)
+    try:
+        meta: dict[str, str] = {
+            str(key): str(value) for key, value in connection.execute("SELECT key, value FROM meta")
+        }
+    finally:
+        connection.close()
+    assert written["schema_version"] == int(meta["schema_version"])
+    assert written["built_at"] == meta["built_at"]
+    assert written["horizon_end"] == meta["horizon_end"]
+    assert written["url"] == "https://example.test/ios.sqlite"
+    assert written["bytes"] == exported.path.stat().st_size
+    assert written["sha256"] == hashlib.sha256(exported.path.read_bytes()).hexdigest()
+    # The client checks the hash before it trusts a byte of a download, so the digest must be of
+    # the file as served — not of the rows the export happened to hold in memory.
+    assert len(written["sha256"]) == 64
+
+
+def test_a_manifest_for_a_missing_or_unreadable_store_is_a_typed_error(tmp_path: Path) -> None:
+    absent = manifest_for(tmp_path / "nothing.sqlite", url="https://example.test/x")
+    assert isinstance(absent, Err), absent
+
+    junk = tmp_path / "junk.sqlite"
+    junk.write_bytes(b"not a database at all")
+    assert isinstance(manifest_for(junk, url="https://example.test/x"), Err)
+
+
+def test_the_cli_writes_the_store_and_its_manifest_in_one_run(
+    gold_db: Path, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    out = tmp_path / "ios.sqlite"
+    manifest = tmp_path / "manifest.json"
+    code = main(
+        [
+            "export-ios",
+            "--db",
+            str(gold_db),
+            "--out",
+            str(out),
+            "--days",
+            "3",
+            "--manifest",
+            str(manifest),
+            "--url",
+            "https://example.test/ios.sqlite",
+        ]
+    )
+    assert code == 0, capsys.readouterr()
+    described = json.loads(manifest.read_text(encoding="utf-8"))
+    assert described["bytes"] == out.stat().st_size
+    assert described["schema_version"] == SCHEMA_VERSION
+
+
+def test_a_manifest_without_a_url_is_refused_rather_than_given_a_placeholder(
+    gold_db: Path, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Where the store is hosted is the operator's call (hosting is out of scope). A default
+    would be a URL every installed phone fetches, fails on, and retries forever."""
+    out = tmp_path / "ios.sqlite"
+    manifest = tmp_path / "manifest.json"
+    code = main(
+        [
+            "export-ios",
+            "--db",
+            str(gold_db),
+            "--out",
+            str(out),
+            "--days",
+            "2",
+            "--manifest",
+            str(manifest),
+        ]
+    )
+    assert code == 2
+    assert "--url" in capsys.readouterr().err
+    assert not manifest.exists()

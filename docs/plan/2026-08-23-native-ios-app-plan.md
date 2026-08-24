@@ -1292,6 +1292,53 @@ lacked `usage: .asProvided`, so en-GB rendered a 12.5 m basin as **"41 ft"**; `f
 interpolated a clause **key**, rendering "Closed — closureClause.out_of_season"; and the six raw
 dates above.
 
+### S5 (2026-08-24) — a brick that had not happened yet, and a claim nothing was checking
+
+**The most serious defect of the plan is one that could not fire today.** `StoreHost.store()`
+adopted an *installed* store after probing `metadata()` — which reads only the `meta` table and so
+**always succeeds for a well-formed store of any version**. Acceptance 2's version guard was enforced
+on the *download* path only. Not reachable with today's binaries, because no released build has ever
+written an installed store — but this slice **bumped the schema 1→2**, so it goes live at the next
+bump: a phone carrying a downloaded v2 store updates to a v3 binary, adopts a store the code cannot
+read, and every detail read throws `no such column`. `TodayModel:116` swallows it with `try?`, so the
+user gets a **spinner that never resolves, with nothing logged** — permanently, while offline. That is
+exactly the brick `appStoreSchemaVersion` exists to prevent. Fixed by gating adoption on the version
+and proven by neutering the guard: the test fails with precisely that mechanism.
+
+**A `rendered` claim outran its evidence for the fourth time — and this time the hole was general.**
+`live_water_temp` moved into `renderedFields` citing a `rowEvidence` entry that **did not exist**.
+The mutation check is the finding: deleting the entry left the suite **green**, because the sweep
+iterates `rowEvidence`, so any claimed field missing from it was silently unchecked. Three other
+fields could have drifted the same way. `everyClaimedSheetFieldHasEvidence` now forces "this field
+has no row evidence" to be something a human writes down.
+
+**A scope reduction that is correct and must not be undone.** The crowd/occupancy badge is
+**unbuilt**, and the reason is an owner decision recorded twice in the tree, not a missing adapter:
+`data/sources.md:18` defers CrowdMonitor as *"Commercial; ToS unclear … Deferred until vendor terms
+verified"* with an open action at `:70`, and `docs/2026-08-02-gold-coverage-gaps.md:474-481`
+explicitly dropped deriving the crowdmonitor uids because the registry keys are display names rather
+than protocol uids — building for them *"would quietly advance an integration deferred on legal
+grounds."* The client therefore renders **no row at all**: a permanent "unavailable" row would imply a
+source that does not exist. Water temperature (Baditicker, OGD, no ToS gate) is implemented in full
+and was proved against the **live feed fetched that day**, not only the cassette.
+
+**The offline guarantee survived contact with a network client.** `noNetwork` became a **path-keyed
+allowlist of exactly `Live.swift` and `Refresh.swift`** — so `App/Live.swift` and
+`SwimZHKit/Sub/Live.swift` both fall outside — with the lint still asserting every other file in both
+targets is clean, and a mutation test covering a view fetch, a kit fetch and a name-squat. Narrowing
+the lint rather than deleting it is what keeps "this app works offline" checkable.
+
+**"Opening is not reading", one layer up.** A test caught `StoreHost` adopting an installed store
+that merely *opened*: `sqlite3_open_v2` is lazy, so junk and WAL files pass and fail on the first
+query — the same trap S1 recorded for the bundled store.
+
+**An honest refusal.** The reviewer's suggestion to fix `baditicker.py:120` (which reads any
+unrecognised open/closed wording as **closed**, against its own docstring) was declined with cause:
+it changes what the **web** reports for wording that has never appeared in the feed, and wants its own
+review. Instead the shared assumption is pinned by a vocabulary test beside the Python code, which
+fails the day that input becomes real. The divergence — Swift answers *unknown*, Python answers
+*closed* — is documented in three places.
+
 ## Accepted drift
 
 Findings the user has knowingly blessed, so `/dev:present` folds them into a
@@ -1322,6 +1369,7 @@ Appended by /dev:implement after each slice — never rewritten. Newest row last
 | 2026-08-24 | S3a | done | `stripLayout` takes a kit-local `TypeSize`, not SwiftUI's `DynamicTypeSize` (the kit may not import SwiftUI — an existing lint forbids it), bridged by rank and pinned case-by-case; a **sixth tier `scheduled`** and a **fifth day state** added so an off-today answer makes no wall-clock claim; `.closed(.noSessions)` reworded from "Closed today"; `TodayView.statusLabel` (shipped in S2) **deleted** rather than repaired; many files beyond Touches, all forced by "logic goes in SwimZHKit" | `app_minus_sqlite` 299,090 → 686,442 B (headroom 3.5× → 1.5×; `budgets.json` untouched as gate configuration — S3b will likely need it raised deliberately); every filter change, search keystroke included, re-queries the store; `Tier.scheduled`'s verdict shows the day's outer span only, so a long midday gap reads as continuous; `renderedFields` proves drift detection, not that a pixel is drawn | **yes — acc 4's visual half and acc 7's appearance check UNVERIFIED (waived human checks); nothing has looked at a screen** |
 | 2026-08-24 | S3b | done | `laneSummary` is a **function taking `isToday`**, not a computed property; `ribbonmodel.ts` (the **production** module, not just its test) gained `NO_SPLIT_LABEL_KEY` + `label_key`; size ratchet raised **1 MB → 2 MB** deliberately (measured 1,339,498 B, still half the plan's 4 MB); files well beyond Touches (`PoolBrowser`, `AccessExplainer`, `FacilityDetail`, 20 colorsets) forced by "every rule lives in SwimZHKit" | `RibbonCanvas.drawLanes` is unreachable against today's export and kept **with a recorded reason** (deleting it would render a `lane_count = 0` basin as "split not published"); `Ribbon.segments` always nil in the shipped app, so its a11y fact is dead in production; `noDomainTokenComparisonsInTheApp` enumerates six tokens **by hand** with no mechanism keeping the list honest; per-basin lane panel still inert for scraped pools (CLAUDE.md's flat-scrape limitation); `LanePlan.swift:471` is a latent off-today instant claim for a zero-length session (no such row exists today) | **yes — acc 9's device budgets and acc 10's notched/light-dark check UNVERIFIED (no physical device; waived)** |
 | 2026-08-24 | S4 | done | five web catalogs gained 198 keys each (409 total) — the web stays the single source for every sentence, iOS included; `DayWarning.message` now takes a `Format`; an absent stamp is **no row**, not a labelled blank; `UIMark.voiceOverLabel` moved into the kit; `panel.clubSlot` split into two non-plural keys (xcstringstool refuses a plural whose forms do not interpolate the number); CI workflow edited (`setup-node` + `npm ci` + the locale check on `ios-qa`); files far beyond Touches | `app_minus_sqlite` **1,908,758 B of the 2 MB limit — 91% used, 188 KB headroom**; S5 will need the deliberate step to 4 MB. `Format.swift:153` uses `Date.AttributedStyle`, deprecated in macOS 15. `ZurichClock.instant` **rolls over** out-of-range components (`2026-13-45` → 14 Feb 2027), so a corrupt store shows a plausible wrong date. `Localized` is `@unchecked Sendable` around a `Bundle`. Polish plural `other` forms are fraction-genitives not reviewed by a native speaker. `noSentencesInTheApp` needs ≥2 words, so a one-word literal plus a hand-written allowlist entry passes both lints | **yes — Polish/German wording unreviewed by native speakers; fr-CH renders differently on phone vs web** |
+| 2026-08-24 | S5 | done | **NO crowd/occupancy client — the source does not exist** (`data/sources.md:18,70` defers CrowdMonitor pending vendor terms; `docs/2026-08-02-gold-coverage-gaps.md:474-481` dropped the uid derivation as it would advance a legally-deferred integration). Half of acc 1 is **unbuilt, not degraded**, and renders no row rather than a false "unavailable". Export `SCHEMA_VERSION` bumped 1→2; `Store.close()` added (the Design had none — `replaceItemAt` with an open fd serves the old inode silently); `DetailRow.muted` added; size ratchet raised **2 MB → 4 MB** (measured 2,088,982 B, 99.6% of the old limit) | refresh path is **INERT in the shipped build** — no `SWIMZHStoreManifestURL`, hosting out of scope; `make ios-release` unexercised end to end; `LiveClient` caches a FAILURE for the same 2 min as a success; `baditicker.py:120` reads any unrecognised open/closed wording as **CLOSED**, against its own docstring (Swift answers UNKNOWN — the honest side; pinned by a vocabulary test, Python bug real and unfixed); `builtAt` compared as a **string**, mis-sorts across a DST offset change (fails safe); `TodayModel:116`'s `try?` silently swallows any future store error | **yes — nobody has SEEN the live-water row on screen in any state or language; the new muting is a flag and a lint, not a pixel** |
 
 ## Decisions & divergences
 

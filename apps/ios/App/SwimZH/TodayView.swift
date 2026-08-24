@@ -12,8 +12,10 @@
 //  * the filter bar via `safeAreaBar(edge:)` — see `FilterBar.swift`.
 //  * `List`, not `LazyVStack`: not for speed (both are lazy, and 57 rows is noise either way)
 //    but for `.swipeActions` and system row and section styling.
-//  * NO `.refreshable`: the store is bundle-only until S5, so a pull-to-refresh would be a
-//    lie — it would spin and change nothing.
+//  * NO `.refreshable`: since S5 the store CAN be updated, but not by pulling on a list. The
+//    published store changes weekly and the check runs at launch and on foreground; a
+//    pull-to-refresh would spin for a second and, on all but one day in seven, change nothing.
+//    A gesture that usually does nothing is a gesture that teaches the reader to distrust it.
 //
 // Every sentence on this screen is a `Message` from the package, rendered by the one
 // `Localized` in the environment (see `Localization.swift`). There is not a single
@@ -31,6 +33,9 @@ struct TodayView: View {
   /// carries `matchedTransitionSource(id:in:)`, the destination carries
   /// `navigationTransition(.zoom(sourceID:in:))`, and they meet on this namespace.
   @Namespace private var zoom
+  /// Foregrounding is the only moment a refresh is worth attempting beyond launch: the store is
+  /// republished weekly, so anything more eager would be a wakeup that learns nothing.
+  @Environment(\.scenePhase) private var scenePhase
 
   var body: some View {
     NavigationStack {
@@ -45,12 +50,23 @@ struct TodayView: View {
         .navigationDestination(for: String.self) { poolID in
           FacilitySheetLoader(
             poolID: poolID, day: model.filters.day, person: model.filters.person,
-            load: { await model.facility($0) }
+            load: { await model.facility($0) },
+            live: { await model.liveTemperature(poiid: $0) }
           )
           .navigationTransition(.zoom(sourceID: poolID, in: zoom))
         }
     }
-    .task { await model.load() }
+    .task {
+      await model.load()
+      // AFTER the screen has answered. The refresh is a background nicety; making the first
+      // answer wait on a network round trip would trade the app's whole premise — an answer
+      // with no network — for a store that is at most seven days fresher.
+      await model.refreshStore()
+    }
+    .onChange(of: scenePhase) { _, phase in
+      guard phase == .active else { return }
+      Task { await model.refreshStore() }
+    }
   }
 
   /// The two screens that are not about a date: the whole roster, and what the session labels
@@ -62,7 +78,8 @@ struct TodayView: View {
         NavigationLink {
           PoolsBrowser(
             pools: model.pools, day: model.filters.day, person: model.filters.person,
-            load: { await model.facility($0) })
+            load: { await model.facility($0) },
+            live: { await model.liveTemperature(poiid: $0) })
         } label: {
           Label(Message("nav.allPools"), systemImage: "list.bullet", localized)
         }

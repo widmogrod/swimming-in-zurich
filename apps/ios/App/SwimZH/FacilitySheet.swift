@@ -18,6 +18,13 @@ struct FacilitySheet: View {
   let detail: FacilityDetail
   let day: String
   let person: Person
+  /// The live water temperature, when it has been asked for. Nil means "not asked yet", not
+  /// "unavailable" — the unavailable states are values of `LiveTemp` and each says its own
+  /// reason. See `SwimZHKit.liveWaterRow`.
+  let live: LiveTemp?
+  /// The instant the live reading's age is stated as of. Threaded in rather than read here, so
+  /// the sheet and its loader cannot disagree about what "now" is — and so a test can state it.
+  let asOf: Date
 
   var body: some View {
     List {
@@ -41,7 +48,7 @@ struct FacilitySheet: View {
   }
 
   private var sections: [DetailSection] {
-    detailSections(detail, on: day, for: person, in: localized)
+    detailSections(detail, on: day, for: person, in: localized, live: live, at: asOf)
   }
 }
 
@@ -84,7 +91,13 @@ struct DetailRowView: View {
       }
     } else {
       LabeledContent {
-        Text(verbatim: rendered).multilineTextAlignment(.trailing)
+        Text(verbatim: rendered)
+          .multilineTextAlignment(.trailing)
+          // A weaker fact, shown as one. `row.muted` is set by ONE rule in the kit — a live
+          // water reading that is hours old, or that the sensor has not taken — so a
+          // nine-hour-old temperature does not read with the weight of a nine-minute-old one.
+          // The words are unchanged either way; only the emphasis moves.
+          .foregroundStyle(row.muted ? AnyShapeStyle(.secondary) : AnyShapeStyle(.primary))
       } label: {
         Text(row.label, localized)
       }

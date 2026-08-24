@@ -142,6 +142,13 @@ public struct FacilityDetail: Equatable, Sendable, Identifiable {
   /// wire, in minutes — the export stores seconds).
   public let lastAdmissionBeforeSeconds: Int?
   public let provenance: Provenance
+  /// The Baditicker feed key, or nil when this pool publishes no live water temperature.
+  ///
+  /// The KEY is in the store; the READING never is. A temperature baked into a weekly export
+  /// would be presented as current for a week — the exact temporal-claim defect this project
+  /// has now found eight times — so the client asks the feed at read time and says so, or says
+  /// nothing at all. Nil is a first-class answer here: no key, no row, no invented number.
+  public let baditickerPOIID: String?
   public let lanePanels: [LanePanel]
 
   public var id: String { poolID }
@@ -162,12 +169,23 @@ public struct DetailRow: Equatable, Sendable, Identifiable {
   public let label: Wording
   public let value: Wording
   public let caveat: Wording?
+  /// Whether this row's value should be shown with LESS weight than a plain fact.
+  ///
+  /// It says nothing new — a muted row's words are already true on their own — it stops a
+  /// weaker fact from being read with the confidence of a stronger one. Today exactly one rule
+  /// sets it: a live reading that is hours old, or absent altogether, must not sit in the same
+  /// visual register as this morning's measurement. The web draws the same distinction
+  /// (`detailpanel.ts`'s `muted`/`stale`).
+  public let muted: Bool
 
-  public init(id: String, label: Wording, value: Wording, caveat: Wording? = nil) {
+  public init(
+    id: String, label: Wording, value: Wording, caveat: Wording? = nil, muted: Bool = false
+  ) {
     self.id = id
     self.label = label
     self.value = value
     self.caveat = caveat
+    self.muted = muted
   }
 }
 
@@ -190,14 +208,22 @@ public func detailSections(
   _ detail: FacilityDetail,
   on day: String,
   for person: Person,
-  in localized: Localized
+  in localized: Localized,
+  live: LiveTemp? = nil,
+  at now: Date = Date()
 ) -> [DetailSection] {
   let format = localized.format
   return [
     section("where", "detail.section.where", whereRows(detail)),
     section("admission", "detail.section.admission", admissionRows(detail, person, format)),
     section("season", "detail.section.season", seasonRows(detail, format)),
-    section("basins", "detail.section.basins", detail.basins.flatMap { basinRows($0, format) }),
+    section(
+      "basins", "detail.section.basins",
+      // The LIVE reading first, then the published physicals. Facility-level rather than
+      // per-basin because that is what the feed publishes — one temperature per bath — and
+      // pinning it to a basin would be a precision the source does not have.
+      (live.map { [liveWaterRow($0, at: now, in: localized).row] } ?? [])
+        + detail.basins.flatMap { basinRows($0, format) }),
     section(
       "features", "detail.section.features",
       detail.features.flatMap { featureRows($0, on: day, localized) }),
@@ -820,4 +846,116 @@ extension LanePanel {
       roster: day.clubRoster()
     )
   }
+}
+
+// MARK: - The live water temperature, said honestly
+
+/// One live-water row, plus the two facts a view needs in order not to lie with it.
+///
+/// `hasReading` is what the tests assert against: it is false for EVERY unavailable state, and
+/// the row's value in that case is a sentence — never a number, never a dash, never a zero. A
+/// dash reads as "cold" beside a °C label, and a zero is a temperature somebody might swim in.
+///
+/// `isStale` does not change what is SAID — the age is stated either way. It is carried onto the
+/// row as `DetailRow.muted`, which the sheet renders in the secondary style, so a reading taken
+/// nine hours ago does not sit in the same visual register as one taken nine minutes ago.
+public struct LiveWaterRow: Equatable, Sendable {
+  public let row: DetailRow
+  public let hasReading: Bool
+  public let isStale: Bool
+}
+
+/// The live reading, as the sheet says it. The port of the web's `liveTempText`, arm for arm.
+///
+/// THE WHOLE POINT IS THE CLOCK. A reading is a fact about an instant, so its age is derived
+/// HERE from `now` — not stored when it was fetched, and never omitted for a reading old enough
+/// that omitting it would present last March's water as this morning's.
+public func liveWaterRow(
+  _ live: LiveTemp, at now: Date, in localized: Localized
+)
+  -> LiveWaterRow
+{
+  switch live {
+  case .unavailable(let reason):
+    // The CODE, never the technical reason: "no baditicker key" reaching a reader is jargon in
+    // every language, which is what the web's pseudolocale pass found.
+    return LiveWaterRow(
+      row: DetailRow(
+        id: "live-water", label: .key("detail.fact.liveWater"),
+        value: .key(reason.messageKey), muted: true),
+      hasReading: false, isStale: false)
+  case .reading(let reading):
+    return LiveWaterRow(
+      row: DetailRow(
+        id: "live-water", label: .key("detail.fact.liveWater"),
+        value: liveWaterValue(reading, localized.format),
+        caveat: liveWaterCaveat(reading, at: now, in: localized),
+        // Muted for the two weaker answers, exactly as the web mutes them: a stale reading,
+        // and an empty sensor cell ("not yet measured", which is a live answer but not a
+        // measurement).
+        muted: reading.celsius == nil || reading.isStale(at: now)),
+      hasReading: reading.celsius != nil,
+      isStale: reading.isStale(at: now))
+  }
+}
+
+/// The reading itself: a temperature, or the honest "not yet measured" for the empty cell five
+/// of the feed's rows ship. `LiveTemp.reading` with no celsius is a LIVE answer — the bath is
+/// there, the sensor has not reported — and rendering it as 0 °C is the invented number this
+/// whole type exists to prevent.
+private func liveWaterValue(_ reading: TempReading, _ format: Format) -> Wording {
+  guard let celsius = reading.celsius else { return .key("detail.notYetMeasured") }
+  return .verbatim(format.temperature(celsius: celsius))
+}
+
+/// When it was measured — the fact that keeps a reading from being read as "now".
+///
+/// An unmeasured cell carries the feed's open/closed state instead, when it has one, because
+/// "not yet measured" plus "open" is a different (and more useful) statement than "not yet
+/// measured" alone. An absent cell is UNKNOWN, not closed, so it carries nothing.
+///
+/// A reading stamped in the FUTURE says only "measured", with no age: our clock and the feed's
+/// disagree, and "measured -3 min ago" is worse than saying less.
+private func liveWaterCaveat(
+  _ reading: TempReading, at now: Date, in localized: Localized
+)
+  -> Wording?
+{
+  guard reading.celsius != nil else {
+    switch reading.isOpen {
+    case true: return .key("detail.liveOpen")
+    case false: return .key("detail.liveClosed")
+    default: return nil
+    }
+  }
+  guard let age = humanizedAge(reading.age(at: now), localized) else {
+    return .key("detail.tempMeasured")
+  }
+  return .message(Message("detail.liveMeasuredAgo", ["age": age]))
+}
+
+/// An elapsed interval in the coarsest unit that is still true, exactly as the web's
+/// `humanizeAge` picks it: minutes under an hour, hours under a day, days beyond.
+///
+/// Nil for a negative interval — see `liveWaterCaveat`. Zero minutes is NOT nil: "measured 0 min
+/// ago" is true, and a reading taken this minute is the one case where "now" is honest.
+func humanizedAge(_ interval: TimeInterval, _ localized: Localized) -> String? {
+  guard interval >= 0 else { return nil }
+  let minutes = Int(interval / 60)
+  if minutes < 60 {
+    return renderedAge("age.minutes", minutes, localized)
+  }
+  let hours = Int((Double(minutes) / 60).rounded())
+  if hours < 24 {
+    return renderedAge("age.hours", hours, localized)
+  }
+  return renderedAge("age.days", Int((Double(minutes) / (60 * 24)).rounded()), localized)
+}
+
+/// `age.minutes` and `age.hours` interpolate a formatted number; `age.days` is a PLURAL entry
+/// and selects on the count, so it must reach Foundation as an integer. The difference comes
+/// from the web catalogs and is not ours to smooth over — it is why this goes through the
+/// generated table rather than through one hand-written branch.
+private func renderedAge(_ key: String, _ count: Int, _ localized: Localized) -> String {
+  localized(Message(key, ["count": localized.format.integer(count)], count: count))
 }

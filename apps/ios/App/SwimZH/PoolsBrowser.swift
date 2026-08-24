@@ -19,6 +19,10 @@ struct PoolsBrowser: View {
   let day: String
   let person: Person
   let load: (String) async -> FacilityDetail?
+  /// The live water temperature for a pool's Baditicker key — passed down rather than reached
+  /// for, so the browser and the find screen share the one client (and so its 2-minute cache is
+  /// shared too).
+  let live: (String?) async -> LiveTemp
 
   @State private var kind: String?
   @State private var search = ""
@@ -27,7 +31,8 @@ struct PoolsBrowser: View {
     List {
       ForEach(shown) { pool in
         NavigationLink {
-          FacilitySheetLoader(poolID: pool.id, day: day, person: person, load: load)
+          FacilitySheetLoader(
+            poolID: pool.id, day: day, person: person, load: load, live: live)
         } label: {
           PoolBrowserRow(pool: pool)
         }
@@ -116,18 +121,59 @@ struct FacilitySheetLoader: View {
   let day: String
   let person: Person
   let load: (String) async -> FacilityDetail?
+  let live: (String?) async -> LiveTemp
+
+  @Environment(\.scenePhase) private var scenePhase
 
   @State private var detail: FacilityDetail?
+  /// The live reading, or the honest reason there is none. It starts nil — meaning "not asked
+  /// yet" — and the sheet omits the row entirely until the answer arrives, because a row that
+  /// said "unavailable" for the first 300 ms and then a temperature would be two claims.
+  @State private var reading: LiveTemp?
+  /// The instant the reading's AGE is stated as of. It is `@State` rather than `Date()` at the
+  /// point of use because that is the difference between "measured 3 min ago" being true when
+  /// the sheet opened and being true now: SwiftUI re-evaluates a body when its state changes,
+  /// not when the clock moves, so a sheet left open would go on printing the age it had at
+  /// load. Moving this is what makes the sentence re-render.
+  @State private var asOf = Date()
 
   var body: some View {
     content
-      .task { detail = await load(poolID) }
+      .task {
+        let detail = await load(poolID)
+        self.detail = detail
+        // ONE fetch, after the sheet has something to show. It cannot fail visibly: every
+        // failure inside `LiveClient` is already an `.unavailable` state with its own sentence.
+        await reask()
+        // ...and then once a minute for as long as the sheet is on screen, because the age it
+        // prints is a fact about the clock. Structured concurrency cancels this when the view
+        // goes away, and most iterations are served from `LiveClient`'s cache, so the cost is
+        // one re-worded sentence per minute rather than a request.
+        while !Task.isCancelled {
+          try? await Task.sleep(for: .seconds(LiveClient.reaskInterval))
+          guard !Task.isCancelled else { return }
+          await reask()
+        }
+      }
+      // Time passes while the app is in the background too, and `Task.sleep` is not a promise
+      // about wall-clock. Coming back to the foreground is the one moment a stale age is
+      // certain, so it is re-asked there as well.
+      .onChange(of: scenePhase) { _, phase in
+        guard phase == .active else { return }
+        Task { await reask() }
+      }
+  }
+
+  /// Ask again, and restate the age as of now.
+  private func reask() async {
+    reading = await live(detail?.baditickerPOIID)
+    asOf = Date()
   }
 
   @ViewBuilder
   private var content: some View {
     if let detail {
-      FacilitySheet(detail: detail, day: day, person: person)
+      FacilitySheet(detail: detail, day: day, person: person, live: reading, asOf: asOf)
     } else {
       ProgressView()
     }

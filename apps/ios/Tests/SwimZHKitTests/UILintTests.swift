@@ -211,6 +211,40 @@ struct UILintTests {
     #expect(!code.contains("Text(detail.poolID)"))
   }
 
+  @Test("the sheet asks for a live reading, and hands it to the rule that words it")
+  func detailSheetRendersTheLiveReading() throws {
+    // The evidence behind `FacilityDetailOut.live_water_temp`'s move into `renderedFields`.
+    // `FieldCoverageTests` proves the ROW is built from the real store; this proves the app
+    // actually asks for a reading and passes it in, which is the half a kit test cannot see.
+    let sheet = try #require(try Self.appFiles().first { $0.name == "FacilitySheet.swift" })
+    #expect(Self.code(sheet.text).contains("live: live"), "the sheet drops the live reading")
+
+    let loader = try #require(try Self.appFiles().first { $0.name == "PoolsBrowser.swift" })
+    let code = Self.code(loader.text)
+    #expect(code.contains("await live(detail?.baditickerPOIID)"), "nothing fetches a reading")
+    // The age is a fact about the clock, so the sheet must re-ask while it is open and on
+    // returning to the foreground. Without both, a sheet left idle keeps printing the age it
+    // had when it was opened — the same understating temporal claim in a new place.
+    #expect(code.contains("LiveClient.reaskInterval"), "the sheet never re-asks while open")
+    #expect(code.contains("scenePhase"), "the sheet never re-asks on foreground")
+    #expect(code.contains("asOf = Date()"), "the age is never restated")
+
+    // ...and `muted` is CONSUMED. `liveWaterRow` sets it for a stale or unmeasured reading, and
+    // a flag no view reads is a claim the kit makes and the app quietly drops.
+    #expect(
+      Self.code(sheet.text).contains("row.muted"),
+      "FacilitySheet ignores DetailRow.muted — a stale reading renders like a fresh one")
+    // The wording is the KIT's: a view that formatted a temperature or decided what to say
+    // when there is no reading would be a rule nothing measures.
+    #expect(!code.contains("°C"))
+    for file in try Self.appFiles() {
+      #expect(
+        !Self.code(file.text).contains("LiveUnavailable."),
+        "App/\(file.name) decides what an unavailable reading says — that belongs to liveWaterRow"
+      )
+    }
+  }
+
   @Test("the app target contains no SWITCH mapping a state string to a sentence")
   func noStateToStringInTheApp() throws {
     // The condition S3a's deletion of `TodayView.statusLabel` created, and which S3b had to
@@ -525,9 +559,13 @@ struct UILintTests {
     // so adding one is a deliberate edit.
     let allowed: Set<String> = [
       "\u{FFFC} \u{FFFC}", ", ", " · ", "· \u{FFFC}",
-      // An `os_log` format string. It goes to the console for whoever has to fix the store,
-      // never to a reader — which is the whole point of S4 moving it off the error screen.
+      // `os_log` format strings. They go to the console for whoever has to fix the store or
+      // debug an upload, never to a reader — which is the whole point of S4 moving the first
+      // one off the error screen. The refresh pair are the reason a failed refresh needs no UI
+      // at all: the operator gets the reason, the swimmer gets the app they already had.
       "store unreadable: \u{FFFC}",
+      "store refresh skipped: \u{FFFC}",
+      "store refreshed to \u{FFFC}",
     ]
     for file in try Self.appFiles() {
       for literal in Self.stringLiterals(in: Self.code(file.text)) {

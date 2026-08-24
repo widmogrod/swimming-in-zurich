@@ -66,6 +66,16 @@ final class TodayModel {
 
   private var store: Store?
   private var metadata: StoreMetadata?
+  /// Owns the connection and the swap. NOT a `Store` any more: the store in use may be the
+  /// bundled one or a downloaded one, and only one type may decide which — see `StoreHost`.
+  private var host: StoreHost?
+  /// The live water-temperature client. One per app, because its 2-minute cache is only worth
+  /// having if every sheet shares it.
+  private let live = LiveClient()
+  /// When a store refresh was last ATTEMPTED — not last succeeded. Offline, every attempt fails
+  /// in milliseconds, and retrying on every foreground would be a pointless wakeup an hour's
+  /// worth of times.
+  private var lastRefreshAttempt: Date?
   private var favourites: Favourites = Favourites()
   /// Set only while `load` installs the initial filters, so that assignment's `didSet` does not
   /// race the first `refresh`. It deliberately does NOT cover a refresh in flight: a keystroke
@@ -112,9 +122,20 @@ final class TodayModel {
     startRefresh()
   }
 
+  /// One pool's live water temperature, asked for when its sheet opens.
+  ///
+  /// Returns a STATE, never throws and never nil: offline, unkeyed and provider-error all render
+  /// as their own sentence. A `nil` here would become an absent row, which reads as "this pool
+  /// has no water temperature" — a different and false statement.
+  func liveTemperature(poiid: String?) async -> LiveTemp {
+    await live.temperature(poiid: poiid)
+  }
+
   func load(now: Date = Date()) async {
     do {
-      let store = try self.store ?? Store.bundled()
+      let host = try self.host ?? StoreHost.standard()
+      self.host = host
+      let store = try await host.store()
       self.store = store
       let metadata = try await store.metadata()
       self.metadata = metadata
@@ -218,5 +239,35 @@ final class TodayModel {
   private func startRefresh() {
     pendingRefresh?.cancel()
     pendingRefresh = Task { await refresh() }
+  }
+
+  /// Look for a newer published store, and install it if there is one.
+  ///
+  /// SILENT IN EVERY DIRECTION. No spinner while it runs, no banner when it fails, no message
+  /// when it succeeds: the app already answered the question with the store it had, and a
+  /// refresh that failed has taken nothing away from the reader. The only visible consequence
+  /// of success is that the answers change — which is what a data update IS.
+  ///
+  /// Every decision inside it belongs to `SwimZHKit`: whether an attempt is due, whether a
+  /// manifest is worth acting on, whether a downloaded file may be trusted, and the order of
+  /// the swap. This method sequences; it decides nothing.
+  func refreshStore(now: Date = Date()) async {
+    guard let host, shouldRefreshStore(lastAttempt: lastRefreshAttempt, now: now) else { return }
+    lastRefreshAttempt = now
+    let outcome = await host.refresh(
+      manifestURL: RefreshConfiguration.manifestURL(Bundle.main.infoDictionary), now: now)
+    switch outcome {
+    case .skipped(let reason):
+      // Logged, not shown. An operator debugging a botched upload needs the reason; a swimmer
+      // looking for a pool does not, and telling them would be an error state for something
+      // that did not go wrong for them.
+      Self.log.info("store refresh skipped: \(String(describing: reason), privacy: .public)")
+    case .installed(let builtAt):
+      Self.log.info("store refreshed to \(builtAt, privacy: .public)")
+      // The connection was closed and reopened under us, so everything derived from the old
+      // store — the horizon, the day chips, the roster, the current answer — is re-read.
+      store = nil
+      await load(now: now)
+    }
   }
 }

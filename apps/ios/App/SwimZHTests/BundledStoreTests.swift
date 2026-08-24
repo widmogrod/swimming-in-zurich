@@ -21,7 +21,7 @@ struct BundledStoreTests {
   func storeIsInTheAppBundle() async throws {
     let store = try Store.bundled()
     let metadata = try await store.metadata()
-    #expect(metadata.schemaVersion == 1)
+    #expect(metadata.schemaVersion == 2)
     #expect(metadata.horizonStart < metadata.horizonEnd)
 
     let answer = try await store.answer(

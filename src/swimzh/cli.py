@@ -64,7 +64,7 @@ from swimzh.domain.lane_plan import LanePlan
 from swimzh.domain.models import Facility, PoolId
 from swimzh.etl.build import assemble_curated, write_curated_store
 from swimzh.etl.catalog import build_catalog
-from swimzh.etl.ios_export import DEFAULT_DAYS, ExportReport, export_ios
+from swimzh.etl.ios_export import DEFAULT_DAYS, ExportReport, export_ios, write_manifest
 from swimzh.etl.lane_plans import (
     UndiscoveredSource,
     scrape_lane_plans,
@@ -721,7 +721,40 @@ def _export_report_line(out: Path, report: ExportReport) -> str:
     )
 
 
-def export_ios_store(*, db_path: Path, out: Path, today: date, days: int) -> int:
+def _write_ios_manifest(*, store: Path, manifest: Path, url: str) -> int:
+    """Write the release manifest beside a finished store. Exit code.
+
+    The URL is REQUIRED rather than defaulted: where the store is hosted is the operator's
+    call (hosting is out of scope), and a manifest carrying a placeholder URL is one a client
+    would dutifully fetch and fail on.
+    """
+    if not url:
+        print("--manifest requires --url (where the store will be hosted)", file=sys.stderr)
+        return 2
+    match write_manifest(store, manifest, url=url):
+        case Ok(described):
+            print(
+                f"ios manifest written to {manifest} (schema {described.schema_version}, "
+                f"built {described.built_at}, horizon end {described.horizon_end}, "
+                f"{described.bytes} bytes, sha256 {described.sha256[:12]})"
+            )
+            return 0
+        case Err(error):
+            print(f"ios manifest failed: {describe(error)}", file=sys.stderr)
+            return 1
+        case _ as unreachable:
+            assert_never(unreachable)
+
+
+def export_ios_store(
+    *,
+    db_path: Path,
+    out: Path,
+    today: date,
+    days: int,
+    manifest: Path | None = None,
+    url: str | None = None,
+) -> int:
     """Project the gold store into the pre-resolved iOS store. Exit code.
 
     NETWORK-FREE by construction: it takes no `ProviderClients` at all — gold is the only input,
@@ -735,7 +768,12 @@ def export_ios_store(*, db_path: Path, out: Path, today: date, days: int) -> int
         match export_ios(conn, out, today=today, days=days):
             case Ok(report):
                 print(_export_report_line(out, report))
-                return 0
+                # The manifest describes the file that was just committed, so it is written
+                # AFTER the export and only if the export succeeded: a manifest naming a store
+                # that does not exist is a download every phone retries forever.
+                if manifest is None:
+                    return 0
+                return _write_ios_manifest(store=out, manifest=manifest, url=url or "")
             case Err(error):
                 print(f"ios export failed: {describe(error)}", file=sys.stderr)
                 return 1
@@ -809,6 +847,14 @@ def main(argv: list[str] | None = None, *, clients: ProviderClients | None = Non
         default=DEFAULT_DAYS,
         help=f"forward horizon in days (default: {DEFAULT_DAYS})",
     )
+    ios.add_argument(
+        "--manifest",
+        help="also write the release manifest.json describing the exported store (needs --url)",
+    )
+    ios.add_argument(
+        "--url",
+        help="the URL the exported store will be served from; recorded in the manifest",
+    )
 
     args = parser.parse_args(argv)
     now = _now()
@@ -816,7 +862,12 @@ def main(argv: list[str] | None = None, *, clients: ProviderClients | None = Non
         # Dispatched BEFORE any client is built: the export is offline, and building live
         # clients for it would open a connection pool nothing uses.
         return export_ios_store(
-            db_path=Path(args.db), out=Path(args.out), today=now.date(), days=args.days
+            db_path=Path(args.db),
+            out=Path(args.out),
+            today=now.date(),
+            days=args.days,
+            manifest=Path(args.manifest) if args.manifest else None,
+            url=args.url,
         )
     if clients is None:
         return _dispatch_live(args, now=now)

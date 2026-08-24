@@ -54,3 +54,54 @@ days ship warned. The export report counts those days so the signal is visible a
 Beyond `horizon_end` the client renders an explicit "beyond the published horizon" state — never
 "closed", and never an empty list. That is the same invariant which protects schedule-less pools,
 applied along the time axis.
+
+
+## The published contract (added by S5)
+
+A store is not only a file the build produces; once it can be **downloaded**, it is an interface.
+`swimzh export-ios --manifest --url <URL>` emits `manifest.json` beside the store, every field read
+back out of the finished store rather than remembered:
+
+```
+{schema_version, built_at, horizon_end, url, sha256, bytes}
+```
+
+`make ios-release` produces both in one run and **requires** `IOS_STORE_URL` — a manifest with no URL
+is refused (exit 2) rather than given a placeholder, because a placeholder is a URL that silently
+fails at 3 a.m.
+
+**`schema_version` is the brick guard.** It is `2` as of S5 (the `pool.baditicker_poiid` column), and
+`tests/scripts/test_ios_schema_version.py` joins the Python constant to the Swift literal so the two
+languages cannot drift. A client **rejects** any store whose version is not its own — on download and
+on adoption — and keeps serving the one it has. A bad upload must never brick an installed app, and
+the bundled store is the floor that makes that possible.
+
+**A downloaded store is validated exactly like the bundled one**, in this order, each step
+separately provable: byte length → sha256 → the **not-WAL** header byte (a WAL file opens fine and
+fails on the first *prepare*) → `PRAGMA integrity_check` → `schema_version` from the store's own
+`meta` → `sqlite_stat1` **row count**. That last one is not pedantry: `ANALYZE` always *creates*
+`sqlite_stat1`, so checking the table exists proves nothing.
+
+**The swap is atomic and closes first.** `FileManager.replaceItemAt` exchanges the *file* while an
+open connection still holds a descriptor to the **old inode** — a live reader would go on serving the
+previous data with no error to reveal it. So every connection is closed before the swap and reopened
+after. The temp file lives in Application Support, not `tmp`: `replaceItemAt` requires the same
+volume, and `Caches`/`tmp` are system-purgeable and must never hold the only copy.
+
+## The one live seam (added by S5)
+
+The export is offline by construction, and the client's *offline* guarantee is structural: a lint
+asserts that **no file in either iOS target** references `URLSession`, `Network`, `NWConnection` or
+`CFSocket` — except exactly two, `Live.swift` and `Refresh.swift`, keyed by path so a new
+`App/Live.swift` cannot squat the name. Narrowing that lint rather than deleting it is what keeps
+"this app works offline" a checkable claim instead of a hope.
+
+Through that seam the client reads **water temperature** (Baditicker, a 2-minute in-process TTL
+matching the web runtime). A reading is a fact about **one instant**: its age is derived at render and
+never stored, a stale reading is flagged rather than shown as current, and an absent reading is an
+explicit state — never zero, never blank.
+
+**Occupancy is deliberately absent**, not degraded. `data/sources.md` defers CrowdMonitor pending
+vendor terms, and the crowdmonitor crosswalk keys are display names rather than protocol uids.
+Building a crowd badge would quietly advance an integration the owner deferred on legal grounds, so
+the client renders **no row at all** — an "unavailable" row would imply a source that does not exist.

@@ -14,6 +14,8 @@
 import Foundation
 import Testing
 
+import SwimZHKit
+
 @testable import SwimZH
 
 @Suite("App correctness, in the built bundle")
@@ -70,10 +72,27 @@ struct AppCorrectnessTests {
     let reasons = try #require(userDefaults)["NSPrivacyAccessedAPITypeReasons"] as? [String]
     #expect(reasons == ["CA92.1"], "CA92.1 is the app's-own-defaults reason; 1C8F.1 is App Groups")
 
-    // The three claims the app can actually keep, because it has no networking code at all
-    // (a SwimZHKit source lint fails the build if any appears in either target).
+    // The three claims the app can still keep now that S5 has opened a network seam. The app
+    // reaches exactly two things — the city's public Baditicker feed and, if one is configured,
+    // a store manifest — and sends NOTHING about the reader to either: no identifier, no
+    // location, no query, not even which pool is on screen. Neither host is a tracking domain,
+    // and nothing is collected. A source lint keeps the seam to two named files.
     #expect(manifest["NSPrivacyTracking"] as? Bool == false)
     #expect((manifest["NSPrivacyTrackingDomains"] as? [String])?.isEmpty == true)
     #expect((manifest["NSPrivacyCollectedDataTypes"] as? [Any])?.isEmpty == true)
+  }
+
+  @Test("the shipped app configures no store manifest, so it downloads nothing by default")
+  func noManifestIsConfigured() {
+    // Where a published store is HOSTED is out of this repo's scope, so the URL is
+    // configuration and the shipped build carries none: this app fetches a live water
+    // temperature when a sheet is opened and otherwise reaches nothing at all. Turning the
+    // weekly refresh on is a deliberate `Info.plist` edit, and this test is what makes that
+    // edit visible rather than incidental.
+    //
+    // `Bundle.main` matters here: the same assertion in the package's own suite would be about
+    // the TEST RUNNER's plist, which is nobody's app.
+    #expect(Self.info[RefreshConfiguration.infoKey] == nil)
+    #expect(RefreshConfiguration.manifestURL(Self.info) == nil)
   }
 }

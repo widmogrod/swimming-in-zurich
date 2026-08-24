@@ -51,6 +51,11 @@ public enum StoreError: Error, Equatable {
   case query(sql: String, code: Int32, message: String)
   case malformedRow(table: String, detail: String)
   case missingBundledStore
+  /// The connection was closed before the swap and this reader outlived it. It is a state, not
+  /// a defect: `StoreHost` closes the old connection so `replaceItemAt` cannot leave a reader
+  /// holding an fd to the OLD INODE — which would go on serving last week's data with no error
+  /// to reveal it. A query against a closed handle says so instead.
+  case closed
 }
 
 /// The `meta` table — what this store is and how far it reaches.
@@ -75,7 +80,7 @@ public struct StoreMetadata: Equatable, Sendable {
 private let poolDetailSQL = """
   SELECT name, kind, address, description, phone, url, freshness, admission_state,
          prices_doc, source, curated, valid_as_of, last_admission_before_s,
-         operating_season
+         operating_season, baditicker_poiid
   FROM pool WHERE pool_id = ?;
   """
 
@@ -100,6 +105,9 @@ private let featureSQL = """
 public actor Store {
   private let handle: OpaquePointer
   private var poolCache: [String: PoolRecord]?
+  /// Whether `close()` has already run. The refresh path closes deliberately; the deinit is
+  /// the fallback for a store nobody closed.
+  private var isClosed = false
 
   /// Opens the pre-resolved export at `path`, read-only and immutable.
   public init(path: URL) throws {
@@ -110,6 +118,18 @@ public actor Store {
   /// `Sendable`, so a nonisolated deinit cannot touch the handle at all — the compiler says
   /// so. Isolating it keeps the close on the actor that owns the connection.
   isolated deinit {
+    if !isClosed { sqlite3_close_v2(handle) }
+  }
+
+  /// Close the connection NOW, rather than whenever the last reference happens to go.
+  ///
+  /// This exists for one reason and it is not tidiness. `FileManager.replaceItemAt` exchanges
+  /// the FILE; an open connection keeps its fd on the old inode and keeps answering from it,
+  /// silently, forever. So the refresh closes every connection before the swap and opens a new
+  /// one after it. Idempotent: a second call is a no-op, never a double free.
+  public func close() {
+    guard !isClosed else { return }
+    isClosed = true
     sqlite3_close_v2(handle)
   }
 
@@ -220,6 +240,34 @@ public actor Store {
       goldValidAsOf: values["gold_valid_as_of"] ?? "",
       contentHash: values["content_hash"] ?? ""
     )
+  }
+
+  /// `PRAGMA integrity_check`'s first answer — `"ok"` for a sound file.
+  ///
+  /// Run against a store this app DOWNLOADED, never against the bundled one: the bundle is
+  /// signed and the export already checked it. A downloaded file arrived over somebody's
+  /// network from somebody's CDN, and a store that fails this check would fail at some
+  /// arbitrary later read instead — after the previous one had been replaced.
+  public func integrityCheck() throws -> String {
+    var answer = "no answer"
+    try each(sql: "PRAGMA integrity_check;") { row in answer = row.text(0) }
+    return answer
+  }
+
+  /// How many ROWS `sqlite_stat1` carries.
+  ///
+  /// Rows, not existence: `ANALYZE` always CREATES the table, even on an empty database, so
+  /// its presence proves nothing at all (measured in S1). A populated one is what gives the
+  /// device's first query a real plan.
+  public func statisticsRowCount() throws -> Int {
+    var present = false
+    try each(sql: "SELECT count(*) FROM sqlite_master WHERE name = 'sqlite_stat1';") { row in
+      present = (row.intOrNil(0) ?? 0) == 1
+    }
+    guard present else { return 0 }
+    var rows = 0
+    try each(sql: "SELECT count(*) FROM sqlite_stat1;") { row in rows = row.intOrNil(0) ?? 0 }
+    return rows
   }
 
   /// Every pool in the store, for the browser screen and for search.
@@ -456,6 +504,7 @@ public actor Store {
       operatingSeason: row.operatingSeason,
       lastAdmissionBeforeSeconds: row.lastAdmissionBeforeSeconds,
       provenance: row.provenance,
+      baditickerPOIID: row.baditickerPOIID,
       // Only the basins that actually carry a parsed Belegungsplan. A basin with no plan gets
       // no panel at all rather than an empty one: an empty panel reads as "no lane is
       // reserved", which is a claim, where absence is the honest state.
@@ -488,7 +537,8 @@ public actor Store {
             validAsOf: row.textOrNil(11)
           ),
           lastAdmissionBeforeSeconds: row.intOrNil(12),
-          operatingSeason: row.textOrNil(13).flatMap(OperatingSeason.decode(json:))
+          operatingSeason: row.textOrNil(13).flatMap(OperatingSeason.decode(json:)),
+          baditickerPOIID: row.textOrNil(14)
         )
       } catch {
         failure = error
@@ -550,6 +600,7 @@ public actor Store {
     bind: [String] = [],
     body: (SQLiteRow) throws -> Void
   ) throws {
+    guard !isClosed else { throw StoreError.closed }
     var statement: OpaquePointer?
     let prepared = sqlite3_prepare_v2(handle, sql, -1, &statement, nil)
     guard prepared == SQLITE_OK, let statement else {
@@ -591,6 +642,7 @@ private struct FacilityRow {
   let provenance: Provenance
   let lastAdmissionBeforeSeconds: Int?
   let operatingSeason: OperatingSeason?
+  let baditickerPOIID: String?
 }
 
 extension LockerDetail {

@@ -42,7 +42,7 @@ struct StoreTests {
   func bundledStoreAnswers() async throws {
     let store = try Store.bundled()
     let meta = try await store.metadata()
-    #expect(meta.schemaVersion == 1)
+    #expect(meta.schemaVersion == 2)
     #expect(meta.horizonStart < meta.horizonEnd)
     #expect(!meta.contentHash.isEmpty)
     let answer = try await store.answer(
@@ -193,7 +193,7 @@ struct StoreTests {
     // metadata() PREPARES AND STEPS. Opening proves nothing: a WAL-mode file opens fine
     // here and fails right at this point with SQLITE_CANTOPEN.
     let meta = try await store.metadata()
-    #expect(meta.schemaVersion == 1)
+    #expect(meta.schemaVersion == 2)
     #expect(!manager.fileExists(atPath: copy.path + "-wal"))
     #expect(!manager.fileExists(atPath: copy.path + "-shm"))
   }
