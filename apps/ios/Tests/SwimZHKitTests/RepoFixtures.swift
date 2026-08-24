@@ -39,6 +39,14 @@ enum RepoFixtures {
     return url.appending(path: "Fixtures/haversine.json")
   }()
 
+  /// Which store the fixtures beside it describe (`scripts/ios_fixtures.py`). Written in the
+  /// same breath as the store, so it cannot go stale — it exists to tell "these fixtures
+  /// describe another store" apart from "this code is wrong", which look identical in a diff.
+  static let storeIdentity: URL = {
+    let here = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+    return here.appending(path: "Fixtures/store_identity.json")
+  }()
+
   /// The iOS field-coverage contract generated from the pydantic response models
   /// (`scripts/field_coverage.py`, staleness-gated by
   /// `apps/web/tests/test_field_coverage_contract.py`).

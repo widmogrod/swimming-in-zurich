@@ -38,10 +38,19 @@ hooks:  ## Install pre-commit + pre-push git hooks
 .PHONY: ios-export ios-fixtures ios-field-coverage ios-locales ios-locales-check ios-qa
 
 IOS_STORE := apps/ios/Sources/SwimZHKit/Resources/ios.sqlite
+IOS_RELEASE_DIR ?= dist/ios
 IOS_DESTINATION ?= platform=iOS Simulator,name=iPhone 17
 
-ios-export:  ## Project the LIVE gold store into the bundled iOS store (the release path)
-	uv run python -m swimzh.cli export-ios --db gold.sqlite --out $(IOS_STORE)
+# Deliberately writes to the RELEASE dir, never to $(IOS_STORE). Those are two different
+# artifacts that briefly shared one path, and the sharing was a trap: $(IOS_STORE) is the
+# COMMITTED, deterministic, offline 140-day fixture that every Swift golden and lane test is
+# generated against, while this target projects the LIVE 400-day gold store. Running this
+# against $(IOS_STORE) silently replaced the fixture with live data and failed ten Swift
+# tests with a 200-line lane-strip diff that looked like a code defect. Regenerate the
+# fixture with `make ios-fixtures`; build a shippable store with this or `ios-release`.
+ios-export:  ## Project the LIVE gold store into a RELEASE store (never the committed fixture)
+	mkdir -p $(IOS_RELEASE_DIR)
+	uv run python -m swimzh.cli export-ios --db gold.sqlite --out $(IOS_RELEASE_DIR)/ios.sqlite
 
 ios-fixtures:  ## Regenerate the COMMITTED offline store + geo fixture (no network, deterministic)
 	uv run python scripts/ios_fixtures.py
@@ -119,7 +128,6 @@ ios-qa:  ## Swift chain: locale check -> format lint -> build -> test+coverage -
 # replays against — and overwriting it with a live 400-day export would swap a reproducible
 # fixture for one that moves with the wall clock. `make ios-export` is the command that does
 # that deliberately.
-IOS_RELEASE_DIR ?= dist/ios
 IOS_STORE_URL ?=
 
 .PHONY: ios-release

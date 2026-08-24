@@ -38,6 +38,27 @@ struct StoreTests {
     try #require(Bundle.module.url(forResource: "ios", withExtension: "sqlite"))
   }
 
+  @Test("the bundled store is the one the fixtures beside it were generated from")
+  func bundledStoreIsTheFixtureStore() async throws {
+    // The failure this exists to name. `make ios-export` once projected the LIVE 400-day gold
+    // store over this committed offline 140-day one; every golden and lane fixture then
+    // described a store that was no longer there, and the suite reported ten issues as
+    // per-field diffs of lane strips and session times — which reads as a code defect, not as
+    // "you replaced the store". One assertion, one sentence, one fix.
+    let identity = try RepoFixtures.json(at: RepoFixtures.storeIdentity)
+    let expected = try #require(identity["content_hash"] as? String)
+    let meta = try await Store.bundled().metadata()
+    #expect(
+      meta.contentHash == expected,
+      """
+      The bundled store is not the one these fixtures describe.
+        bundled:  \(meta.contentHash) (\(meta.horizonStart) … \(meta.horizonEnd))
+        fixtures: \(expected)
+      Regenerate the store AND its fixtures together: `make ios-fixtures`.
+      `make ios-export` builds a RELEASE store into dist/ios/ and must not touch this one.
+      """)
+  }
+
   @Test("the bundled store opens and answers")
   func bundledStoreAnswers() async throws {
     let store = try Store.bundled()
