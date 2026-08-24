@@ -1,0 +1,71 @@
+{
+  "_note": "GENERATED from swimzh.domain.access.ACCESS_TYPES by scripts/ios_fixtures.py \u2014 do NOT hand-edit. Replayed by the Swift AccessExplainerTests, which asserts the phone's copy of this prose has not drifted from the domain's. Regenerate with `make ios-fixtures`.",
+  "types": [
+    {
+      "class_name": "PublicSwim",
+      "key": "public",
+      "label": "Public swim",
+      "description": "Open public swimming \u2014 anyone may enter during these hours."
+    },
+    {
+      "class_name": "LaneSwim",
+      "key": "lane-swim",
+      "label": "Lane swim",
+      "description": "Lane swimming (Bahnenschwimmen) \u2014 public, organised into lanes for laps/training."
+    },
+    {
+      "class_name": "FamilyTime",
+      "key": "family",
+      "label": "Family time",
+      "description": "Family/children session \u2014 public, oriented to families and kids."
+    },
+    {
+      "class_name": "WomenOnly",
+      "key": "women-only",
+      "label": "Women only",
+      "description": "Women-only session (Frauenbad / Frauenschwimmen) \u2014 reserved for women."
+    },
+    {
+      "class_name": "SeniorsOnly",
+      "key": "seniors-only",
+      "label": "Seniors only",
+      "description": "Seniors session \u2014 reserved for guests aged 60 and over."
+    },
+    {
+      "class_name": "SchoolReserved",
+      "key": "school-reserved",
+      "label": "School reserved",
+      "description": "Reserved for school classes \u2014 not open to the public."
+    },
+    {
+      "class_name": "ClubReserved",
+      "key": "club-reserved",
+      "label": "Club reserved",
+      "description": "Reserved for a club/association \u2014 not open to the public."
+    },
+    {
+      "class_name": "AdultsOnly",
+      "key": "adults-only",
+      "label": "Adults only",
+      "description": "Adults-only public window \u2014 reserved for guests aged 18 and over (typical for school-pool evening swims)."
+    },
+    {
+      "class_name": "GirlsOnly",
+      "key": "girls-only",
+      "label": "Girls only",
+      "description": "Girls-only session (f\u00fcr M\u00e4dchen) \u2014 the pool publishes no age cutoff, so confirm with the venue."
+    },
+    {
+      "class_name": "GenderDiverse",
+      "key": "gender-diverse",
+      "label": "Trans and non-binary",
+      "description": "Session open to trans and non-binary people aged 16 and over."
+    },
+    {
+      "class_name": "AccompaniedChildren",
+      "key": "accompanied-children",
+      "label": "Children with an adult",
+      "description": "For children only when accompanied by an adult (f\u00fcr Kinder nur mit Erwachsenen)."
+    }
+  ]
+}

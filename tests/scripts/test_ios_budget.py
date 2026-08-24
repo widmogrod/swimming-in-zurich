@@ -191,10 +191,16 @@ def test_the_committed_budget_file_states_a_limit_for_every_gated_number() -> No
         assert isinstance(budgets[name]["limit_bytes"], int), name
         assert budgets[name]["why"].strip(), f"{name} carries no reason"
     # The numbers themselves, so a silent loosening shows up as a diff in this test too.
-    # The live ratchet is TIGHTER than the plan's 4 MB — 4 MB is 14x the measured size and
-    # would not bite until the app was finished, which is the audit-at-the-end failure this
-    # slice exists to prevent. The plan's figure is kept as the ceiling on the ratchet.
-    assert budgets["app_minus_sqlite"]["limit_bytes"] == 1 * 1024 * 1024
+    # The live ratchet is TIGHTER than the plan's 4 MB, which is kept as the ceiling on the
+    # ratchet: a limit with that much slack would not bite until the app was finished, which
+    # is the audit-at-the-end failure this gate exists to prevent.
+    #
+    # RAISED at S3b, 1 MB -> 2 MB, and this literal is where that becomes visible. S3b landed
+    # the canvas renderer, Swift Charts, the detail sheet, the pools browser and the
+    # access-types legend at once and measured 1,339,498 B; 2 MB keeps ~1.57x headroom and
+    # still leaves the plan's 4 MB as the next deliberate step. The reason is recorded in
+    # `budgets.json`'s own `why`, which the assertion above requires to be non-empty.
+    assert budgets["app_minus_sqlite"]["limit_bytes"] == 2 * 1024 * 1024
     assert budgets["app_minus_sqlite"]["plan_ratchet_bytes"] == 4 * 1024 * 1024
     assert (
         budgets["app_minus_sqlite"]["limit_bytes"]

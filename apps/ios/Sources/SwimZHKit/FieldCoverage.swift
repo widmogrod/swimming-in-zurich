@@ -61,6 +61,51 @@ public enum FieldCoverage {
     "PoolOut.lat",
     "PoolOut.lon",
     "PoolOut.freshness",
+    // --- /pools: the facts the detail sheet adds (S3b) --------------------------------
+    "PoolOut.description",
+    "PoolOut.phone",
+    "PoolOut.url",
+    // --- the lane quartet: derived on the client, drawn by the ribbon (S3b) ----------
+    //
+    // All four are rendered by the day-tail canvas and its VoiceOver layer, and each by a
+    // DIFFERENT part of it — which is why they are four fields and not one. Each is named by
+    // the path that ACTUALLY EXECUTES against the committed store, because two of them used to
+    // cite paths that never run:
+    //   * `lane_availability` — the session line's "5 of 8 lanes open"
+    //     (`SwimOption.laneSummary(isToday:)`), on today while the session is running.
+    //   * `lane_timeline`     — the same line's OFF-TODAY and not-yet-open answer: its first
+    //     segment is the split the session opens with, which is the only lane claim a row may
+    //     make when there is no wall clock to read. (It also feeds the ribbon's thickness, via
+    //     the `lanes` variant — see `RibbonCanvas.drawLanes`, which no store row reaches today.)
+    //   * `lane_day_view`     — the lane stack's sub-rows, and the expanded Gantt.
+    //   * `lane_best_public`  — the "Most lanes free" spoken fact on the ribbon, and the
+    //     "Most lanes free" row in the detail sheet's lane panel. NOT a drawn band: nothing
+    //     paints one, and the earlier comment saying so was describing the web.
+    "OptionOut.lane_availability",
+    "OptionOut.lane_timeline",
+    "OptionOut.lane_day_view",
+    "OptionOut.lane_best_public",
+    // --- the provenance stamp, now that there is a sheet to put it on (S3b) ----------
+    //
+    // `SwimOption.provenance` is the FACILITY's (`query.py:544`), so all three are read from
+    // the `pool` row and rendered in the sheet's "Where this came from" section.
+    "OptionOut.source",
+    "OptionOut.curated",
+    "OptionOut.valid_as_of",
+    // --- FacilityDetailOut: the sheet (S3b) -------------------------------------------
+    "FacilityDetailOut.facility_name",
+    "FacilityDetailOut.address",
+    "FacilityDetailOut.freshness",
+    "FacilityDetailOut.basins",
+    "FacilityDetailOut.features",
+    "FacilityDetailOut.lockers",
+    "FacilityDetailOut.rentals",
+    "FacilityDetailOut.admission",
+    "FacilityDetailOut.prices",
+    "FacilityDetailOut.operating_season",
+    "FacilityDetailOut.provenance",
+    "FacilityDetailOut.lane_panels",
+    "FacilityDetailOut.last_admission_before_min",
   ]
 
   /// Fields the phone knowingly does not render, each with the reason it does not.
@@ -70,88 +115,28 @@ public enum FieldCoverage {
   /// The lane quartet and every `FacilityDetailOut` field move into `renderedFields` in S3b,
   /// and the disjointness assertion is what forces the move to be a real edit here.
   public static let deliberatelyOmitted: [String: String] = [
-    // --- provenance: carried by the store, read by nothing yet ------------------------
+    // --- what S3b still does NOT render, and why ------------------------------------
     //
-    // These three were briefly declared RENDERED, which was false: `SwimOption` has no
-    // `source`, `curated` or `validAsOf` property, `Store` never selects the columns, and no
-    // view could draw them. That is the one hole the union/disjointness test cannot see — it
-    // checks that every field is CLASSIFIED, not that a "rendered" claim is true — so the
-    // reasons below are the only thing standing behind it.
-    "OptionOut.valid_as_of":
-      "S3b: the detail sheet's source stamp. The `pool` table carries `valid_as_of`, but "
-      + "`PoolRecord` does not read it and no S3a surface shows it. The list already states "
-      + "the store-wide `gold_valid_as_of` in its provenance footer.",
-    "OptionOut.source":
-      "S3b: the detail sheet's source stamp. Not on `SwimOption` and not selected by `Store`.",
-    "OptionOut.curated":
-      "S3b: the detail sheet's source stamp. Note CLAUDE.md's caveat — every schedule is "
-      + "scraped, so `curated` is False everywhere and `freshness` is the signal the list "
-      + "row actually renders.",
-    // --- /swim statuses ----------------------------------------------------------------
+    // Everything else moved into `renderedFields` above. These three did not, and each is a
+    // different KIND of not-yet: one waits on the message catalog, one is an identifier no
+    // swimmer wants, and one needs a network this app deliberately has no code for.
     "OptionOut.reason_params":
       "S4 OWNS IT: the params (min_age, club) are interpolation VALUES for a message this app "
-      + "does not yet render. S3a renders the outcome as a mark via reason_code (uiMark); the "
+      + "does not yet render. The outcome is rendered as a mark via reason_code (uiMark); the "
       + "sentence they fill in arrives with the message catalog.",
     "StatusOut.detail_code":
-      "S4: it is an i18n KEY, not a sentence. S3a renders the state itself (`status` + "
+      "S4: it is an i18n KEY, not a sentence. The state itself is rendered (`status` + "
       + "`closure_code` + the pool's own `detail_params[\"text\"]`); rendering the raw code "
       + "beside it would show a swimmer an identifier.",
-    // --- the lane quartet: S3b's per-lane stack --------------------------------------
-    "OptionOut.lane_availability":
-      "S3b: the per-lane stack. Only 7 basins carry a parsed Belegungsplan, and the derivation "
-      + "is 7 functions of lane_plan.py that S3b ports against a generated fixture.",
-    "OptionOut.lane_timeline":
-      "S3b: the per-lane stack — the boundary-by-boundary split the ribbon paints.",
-    "OptionOut.lane_day_view":
-      "S3b: the per-lane stack — which lane and whose, across the whole weekday.",
-    "OptionOut.lane_best_public":
-      "S3b: the per-lane stack — the best-time-to-come window inside one session.",
-    // --- /pools: detail-sheet facts ---------------------------------------------------
-    "PoolOut.description":
-      "S3b: the facility detail sheet. A paragraph of prose has no place in a scannable list "
-      + "row, and truncating it there would be worse than omitting it.",
-    "PoolOut.phone":
-      "S3b: the facility detail sheet, where a tappable number belongs beside the address.",
-    "PoolOut.url":
-      "S3b: the facility detail sheet. A link out of an offline app is a considered action, "
-      + "not a list-row affordance.",
-    // --- FacilityDetailOut: the whole sheet is S3b ------------------------------------
     "FacilityDetailOut.facility_id":
-      "S3b: the facility detail sheet, governed by this mechanism from S3a on.",
-    "FacilityDetailOut.facility_name":
-      "S3b: the facility detail sheet's title.",
-    "FacilityDetailOut.address":
-      "S3b: the facility detail sheet's address block.",
-    "FacilityDetailOut.freshness":
-      "S3b: the detail sheet's schedule-freshness stamp. The LIST row already renders the same "
-      + "derived value (PoolOut.freshness), so no state is hidden meanwhile.",
-    "FacilityDetailOut.basins":
-      "S3b: the detail sheet's basin table — all 12 BasinOut fields incl. physical_source.",
-    "FacilityDetailOut.features":
-      "S3b: the detail sheet's features, incl. closed_reason.",
-    "FacilityDetailOut.lockers":
-      "S3b: the detail sheet's locker table.",
-    "FacilityDetailOut.rentals":
-      "S3b: the detail sheet's rental table.",
-    "FacilityDetailOut.admission":
-      "S3b: the detail sheet's admission kind. The row already shows the resolved price for "
-      + "the person (OptionOut.price), which is the part a swimmer acts on.",
-    "FacilityDetailOut.prices":
-      "S3b: the detail sheet's full tariff table.",
-    "FacilityDetailOut.operating_season":
-      "S3b: the detail sheet's season line. Out of season the LIST already says so, as "
-      + "closed + out_of_season, so nothing is concealed in the meantime.",
-    "FacilityDetailOut.provenance":
-      "S3b: the detail sheet's source stamp — together with the three OptionOut provenance "
-      + "fields above, which S3a does not render either. S3a states only the store-wide "
-      + "`gold_valid_as_of`, in the list's provenance footer.",
-    "FacilityDetailOut.lane_panels":
-      "S3b: the per-basin lane panels — the same port as the lane quartet above.",
-    "FacilityDetailOut.last_admission_before_min":
-      "S3b: the detail sheet's last-admission line.",
+      "NOT A FACT FOR A SWIMMER: it is the key the sheet is addressed BY, not something the "
+      + "sheet says. `facility_name` is the rendered identity. Declaring an id `rendered` "
+      + "because the code passes it around is exactly the aspirational claim this file's own "
+      + "history warns about.",
     "FacilityDetailOut.live_water_temp":
-      "S5 OWNS IT: that slice adds the Baditicker client and requires the badge to show an "
-      + "explicit unavailable state offline. S3a renders neither the reading nor that state.",
+      "S5 OWNS IT: it is a NETWORK read, and `SourceLintTests.noNetwork` bans networking in "
+      + "both targets — so this slice structurally cannot render it, nor the explicit "
+      + "unavailable state that must come with it. S5 narrows the lint and adds both.",
   ]
 
   /// Every field the phone has classified. Equality with the generated file is the test.

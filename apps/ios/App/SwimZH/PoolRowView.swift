@@ -15,14 +15,27 @@ import SwimZHKit
 struct PoolRowView: View {
   let row: PoolRow
   let isFavourite: Bool
+  /// Whether the answer is for the day the user is standing in. It reaches the canvas, which
+  /// draws the "now" cursor ONLY on today: a cursor on a future date would be a present-tense
+  /// claim about a day nobody is in, which is the bug class this app has already shipped twice.
+  let isToday: Bool
+  let isExpanded: Bool
+  let namespace: Namespace.ID
   let onToggleFavourite: () -> Void
+  let onToggleExpanded: () -> Void
+
+  @State private var selectedBlock: String?
 
   var body: some View {
-    // ONE container. See the header.
+    // ONE container. See the header. Everything the row can grow into — its day tail and its
+    // expanded lane chart — lives inside this `VStack`, so the `ForEach` element that produced
+    // it always resolves to exactly one view.
     VStack(alignment: .leading, spacing: 6) {
       header
       verdict
       sessions
+      tail
+      expanded
     }
     .padding(.vertical, 2)
     .accessibilityElement(children: .combine)
@@ -42,16 +55,72 @@ struct PoolRowView: View {
       Image(systemName: row.tier.symbol)
         .foregroundStyle(row.tier.accent)
         .accessibilityHidden(true)
-      Text(row.poolName)
-        .font(.headline)
-        // A pool name is NEVER truncated: it is the one thing a row exists to say, and at an
-        // accessibility size it is allowed to take as many lines as it needs.
-        .fixedSize(horizontal: false, vertical: true)
+      // The name opens the facility sheet. `matchedTransitionSource` is HALF of the zoom
+      // transition — the destination carries the other half — and neither works alone.
+      NavigationLink(value: row.poolID) {
+        Text(row.poolName)
+          .font(.headline)
+          // A pool name is NEVER truncated: it is the one thing a row exists to say, and at an
+          // accessibility size it is allowed to take as many lines as it needs.
+          .fixedSize(horizontal: false, vertical: true)
+      }
+      .buttonStyle(.plain)
+      .matchedTransitionSource(id: row.poolID, in: namespace)
       Spacer(minLength: 4)
       favouriteMark
       Image(systemName: row.mark.symbol)
         .foregroundStyle(row.mark.accent)
         .accessibilityLabel(row.mark.voiceOverLabel)
+      laneToggle
+    }
+  }
+
+  /// The disclosure for the per-lane chart, shown ONLY where there is a parsed lane plan to
+  /// show. A chevron that expands into nothing is worse than no chevron.
+  @ViewBuilder
+  private var laneToggle: some View {
+    if !panels.isEmpty {
+      Button(action: onToggleExpanded) {
+        Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
+          .font(.caption)
+          .foregroundStyle(.secondary)
+      }
+      .buttonStyle(.plain)
+      .contentShape(Rectangle())
+      .accessibilityLabel(isExpanded ? "Hide the lane plan" : "Show the lane plan")
+    }
+  }
+
+  /// The day tail: this row's whole day as a ribbon, with the hour marks.
+  ///
+  /// Built from `dayRibbon(for:)` in the package, so the phone paints the same encoding the
+  /// desktop board does from the same facts.
+  private var tail: some View {
+    RibbonCanvas(day: dayRibbon(for: row), isToday: isToday, selection: $selectedBlock)
+  }
+
+  /// The expanded lane chart — ONE at a time, never 57 in the list.
+  ///
+  /// `TodayModel` holds a single expanded row id, so opening a second row closes the first;
+  /// this branch is what turns that into "at most one `Chart` exists". 57 live charts inside a
+  /// `List` is the shape with credible reports of 100% CPU and 50–150 ms hangs.
+  @ViewBuilder
+  private var expanded: some View {
+    if isExpanded {
+      ForEach(panels) { panel in
+        LaneGanttView(panel: panel)
+      }
+    }
+  }
+
+  /// The lane panels this row can show — one per basin with a parsed Belegungsplan, taken from
+  /// the options themselves so no second read is needed.
+  private var panels: [LanePanel] {
+    var seen: Set<String> = []
+    return row.options.compactMap { option in
+      guard let day = option.laneDayView, !seen.contains(option.basinID) else { return nil }
+      seen.insert(option.basinID)
+      return LanePanel(basinID: option.basinID, basinName: option.basinName, day: day)
     }
   }
 
@@ -102,7 +171,7 @@ struct PoolRowView: View {
   private var sessions: some View {
     VStack(alignment: .leading, spacing: 2) {
       ForEach(row.inlineOptions) { option in
-        SessionLine(option: option)
+        SessionLine(option: option, isToday: isToday)
       }
       moreSessions
     }
@@ -131,6 +200,10 @@ struct PoolRowView: View {
 /// One session inside a row.
 struct SessionLine: View {
   let option: SwimOption
+  /// Whether this answer is for the day the user is standing in. The lane line's wording
+  /// depends on it, because off today the store is asked at a fixed midday moment and nothing
+  /// read from that moment may be spoken as a fact about now (invariant E1).
+  let isToday: Bool
 
   var body: some View {
     HStack(spacing: 6) {
@@ -142,12 +215,31 @@ struct SessionLine: View {
         .foregroundStyle(.secondary)
         .lineLimit(1)
       Spacer(minLength: 0)
+      lanes
       fairWeather
       price
       Image(systemName: option.mark.symbol)
         .font(.caption2)
         .foregroundStyle(option.mark.accent)
         .accessibilityLabel(option.mark.voiceOverLabel)
+    }
+  }
+
+  /// "5 of 8 lanes open" — `OptionOut.lane_availability`, rendered.
+  ///
+  /// The SENTENCE is the package's (`SwimOption.laneSummary(isToday:)`), including the edge
+  /// case that matters: zero public lanes is not "0 of 8 open", which reads as a measurement,
+  /// but "no lanes open to the public", which is what the plan says. Absent for a basin with no
+  /// published plan — never an empty string, which would read as "no lanes free". `isToday` is
+  /// threaded in rather than assumed: the split is a wall-clock fact and off today there is no
+  /// wall clock to read it from.
+  @ViewBuilder
+  private var lanes: some View {
+    if let summary = option.laneSummary(isToday: isToday) {
+      Text(summary)
+        .font(.caption2)
+        .foregroundStyle(.secondary)
+        .lineLimit(1)
     }
   }
 

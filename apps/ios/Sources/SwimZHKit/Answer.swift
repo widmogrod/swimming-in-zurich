@@ -35,6 +35,60 @@ public struct SwimOption: Equatable, Sendable, Identifiable {
   public let openAtQueryTime: Bool
   public let price: PriceEntry?
   public let distanceKm: Double?
+  // --- the lane quartet (S3b) ------------------------------------------------------------
+  //
+  // All four are DERIVED on the client, from the `lane_day` row for this basin and this day's
+  // weekday, at the queried instant (invariant E1: the plan is baked, the clock is not). They
+  // are nil for the ~50 basins with no parsed Belegungsplan — nil meaning "no plan published",
+  // which the ribbon renders as its own state and never as "no lanes free".
+  /// `OptionOut.lane_availability` — the split at the queried instant.
+  public let laneAvailability: LaneAvailability?
+  /// `OptionOut.lane_timeline` — the split boundary by boundary across this session.
+  public let laneTimeline: LaneTimeline?
+  /// `OptionOut.lane_day_view` — which lane and whose, across the whole weekday.
+  public let laneDayView: LaneDay?
+  /// `OptionOut.lane_best_public` — the best time to come, BOUNDED by this session's hours.
+  public let laneBestPublic: PublicWindow?
+
+  public init(
+    poolID: String,
+    poolName: String,
+    poolKind: String,
+    basinID: String,
+    basinName: String,
+    lengthM: Double?,
+    lanes: Int?,
+    window: TimeWindow,
+    access: SessionAccess,
+    weather: String,
+    eligibility: EligibilityResult,
+    openAtQueryTime: Bool,
+    price: PriceEntry?,
+    distanceKm: Double?,
+    laneAvailability: LaneAvailability? = nil,
+    laneTimeline: LaneTimeline? = nil,
+    laneDayView: LaneDay? = nil,
+    laneBestPublic: PublicWindow? = nil
+  ) {
+    self.poolID = poolID
+    self.poolName = poolName
+    self.poolKind = poolKind
+    self.basinID = basinID
+    self.basinName = basinName
+    self.lengthM = lengthM
+    self.lanes = lanes
+    self.window = window
+    self.access = access
+    self.weather = weather
+    self.eligibility = eligibility
+    self.openAtQueryTime = openAtQueryTime
+    self.price = price
+    self.distanceKm = distanceKm
+    self.laneAvailability = laneAvailability
+    self.laneTimeline = laneTimeline
+    self.laneDayView = laneDayView
+    self.laneBestPublic = laneBestPublic
+  }
 
   public var id: String { "\(poolID)|\(basinID)|\(window.start.hhmm)|\(access.kind)" }
 

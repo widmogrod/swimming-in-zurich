@@ -122,6 +122,20 @@ public enum ZurichClock {
     return self.day(of: moved)
   }
 
+  /// The weekday of a store day key, MONDAY == 0 — matching `domain/schedule.Weekday` and
+  /// `date.weekday()`, which is how the export keys its `lane_day` rows.
+  ///
+  /// `Calendar` numbers Sunday as 1, so the shift is not cosmetic: off by one here would read
+  /// every basin's lane plan from the wrong day of the week, and would be invisible to every
+  /// test that did not check a specific club's hours.
+  public static func weekday(of day: String) -> Int? {
+    guard let instant = instant(day: day, at: TimeOfDay(hour: 12, minute: 0)) else { return nil }
+    guard let sundayFirst = calendar.dateComponents([.weekday], from: instant).weekday else {
+      return nil
+    }
+    return (sundayFirst + 5) % 7
+  }
+
   /// Every day key from `start` through `end` inclusive, in order.
   ///
   /// `limit` is a hard stop, not a preference: this walks a horizon read from a store the app

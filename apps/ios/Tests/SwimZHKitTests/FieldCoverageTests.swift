@@ -64,30 +64,35 @@ struct FieldCoverageTests {
     }
   }
 
-  @Test("the lane quartet is omitted NOW and must move in S3b")
-  func laneQuartetStartsOmitted() {
-    // The handover, mechanised: S3b acceptance 2 moves these four into `renderedFields`, and
-    // the disjointness assertion above makes that a real edit rather than an addition.
+  @Test("the lane quartet MOVED into renderedFields (S3b acceptance 2)")
+  func laneQuartetIsRendered() {
+    // The handover S3a mechanised, completed. The disjointness assertion above is what made
+    // this a real edit rather than an addition — the four could not simply be added.
     for field in [
       "OptionOut.lane_availability",
       "OptionOut.lane_timeline",
       "OptionOut.lane_day_view",
       "OptionOut.lane_best_public",
     ] {
-      #expect(FieldCoverage.deliberatelyOmitted[field] != nil, "\(field) lost its S3b reason")
-      #expect(!FieldCoverage.renderedFields.contains(field))
+      #expect(FieldCoverage.renderedFields.contains(field), "\(field) has not moved")
+      #expect(FieldCoverage.deliberatelyOmitted[field] == nil)
     }
   }
 
-  @Test("FacilityDetailOut is governed by the mechanism from this slice on")
-  func facilityDetailIsGoverned() throws {
+  @Test("every FacilityDetailOut field is rendered, except the one that needs a network")
+  func facilityDetailIsRendered() throws {
     let generated = try Self.generatedFields().filter { $0.hasPrefix("FacilityDetailOut.") }
     #expect(generated.count >= 15)
+    // `live_water_temp` is S5's: it is a network read, and `SourceLintTests.noNetwork` bans
+    // networking in BOTH targets — so this slice structurally cannot render it. `facility_id`
+    // is an identifier, not a fact a swimmer reads.
+    let stillOmitted = Set(["FacilityDetailOut.live_water_temp", "FacilityDetailOut.facility_id"])
     for field in generated {
-      #expect(
-        FieldCoverage.deliberatelyOmitted[field] != nil,
-        "\(field) is not classified — S3b's detail sheet is governed by this file, not by prose"
-      )
+      if stillOmitted.contains(field) {
+        #expect(FieldCoverage.deliberatelyOmitted[field] != nil, "\(field)")
+        continue
+      }
+      #expect(FieldCoverage.renderedFields.contains(field), "\(field) is still not rendered")
     }
   }
 
@@ -109,21 +114,123 @@ struct FieldCoverageTests {
   @Test("a `rendered` claim is backed by something the kit can actually reach")
   func renderedClaimsAreNotAspirational() {
     // The hole the union/disjointness test cannot see: it checks that every field is
-    // CLASSIFIED, not that a "rendered" claim is TRUE. Three provenance fields were declared
-    // rendered while `SwimOption` had no such property and `Store` never selected the columns —
-    // no view could have drawn them. There is no general mechanism for this, so the three that
-    // were wrong are pinned by name, beside the reason they are now omitted.
-    for field in [
-      "OptionOut.source", "OptionOut.curated", "OptionOut.valid_as_of",
-      // Same category, found one round later: only `reason_code` reaches a pixel (through
-      // `uiMark`). The params are interpolation VALUES for a message S4 has not shipped.
-      "OptionOut.reason_params",
-    ] {
+    // CLASSIFIED, not that a "rendered" claim is TRUE. Three provenance fields were once
+    // declared rendered while `SwimOption` had no such property and `Store` never selected the
+    // columns — no view could have drawn them.
+    //
+    // Those three ARE rendered now, in the detail sheet's source stamp, which is why they have
+    // moved out of this list and into `renderedRowsExistForEveryClaimedField` below — where the
+    // claim is checked against real rows built from the committed store instead of being
+    // restated. What stays here is the one field still declared rendered by nothing.
+    for field in ["OptionOut.reason_params"] {
       #expect(
         FieldCoverage.deliberatelyOmitted[field] != nil,
         "\(field) is declared rendered, but nothing renders it"
       )
       #expect(!FieldCoverage.renderedFields.contains(field))
     }
+  }
+
+  /// Which `DetailRow` id proves each claimed field reaches a swimmer's eye.
+  ///
+  /// This is the mechanism S3a said did not exist. It cannot be fully general — a row id is
+  /// still a hand-written link between a wire field and a rendered line — but it is far
+  /// stronger than a declaration: the rows are built from the REAL committed store, so a field
+  /// the store never populates, or one `detailSections` forgets, fails here by name.
+  static let rowEvidence: [String: String] = [
+    "FacilityDetailOut.address": "address",
+    "PoolOut.description": "description",
+    "PoolOut.phone": "phone",
+    "PoolOut.url": "url",
+    "FacilityDetailOut.freshness": "freshness",
+    "FacilityDetailOut.admission": "admission",
+    "FacilityDetailOut.prices": "price-0",
+    "FacilityDetailOut.last_admission_before_min": "last-admission",
+    "FacilityDetailOut.operating_season": "season",
+    "FacilityDetailOut.basins": "basin-",
+    "FacilityDetailOut.features": "feature-",
+    "FacilityDetailOut.lockers": "locker-",
+    "FacilityDetailOut.rentals": "rental-",
+    "FacilityDetailOut.lane_panels": "panel-",
+    "FacilityDetailOut.provenance": "source",
+    "OptionOut.source": "source",
+    "OptionOut.curated": "curated",
+    "OptionOut.valid_as_of": "valid-as-of",
+  ]
+
+  @Test("every claimed detail field produces a real row, on a real pool, from the real store")
+  func renderedRowsExistForEveryClaimedField() async throws {
+    let store = try Store.bundled()
+    let metadata = try await store.metadata()
+    let day = metadata.horizonStart
+    var ids: Set<String> = []
+    var titles: Set<String> = []
+    var rowCount = 0
+    // ACROSS the whole roster, not one pool: no single pool in the city has a season AND a
+    // feature AND a lane plan, so a one-pool check would have to drop three fields to pass.
+    for pool in try await store.pools() {
+      guard let detail = try await store.facility(poolID: pool.id, on: day) else { continue }
+      for section in detailSections(detail, on: day, for: Person(age: 30)) {
+        titles.insert(section.title)
+        rowCount += section.rows.count
+        ids.formUnion(section.rows.map(\.id))
+      }
+    }
+    // Distinct row IDS collide across pools by design ("address" is "address" everywhere), so
+    // the non-vacuity floor counts ROWS as well: an empty sheet would satisfy neither.
+    #expect(rowCount > 400, "only \(rowCount) rows across the roster — did the sheet break?")
+    #expect(titles.count >= 7, "only \(titles.sorted()) sections ever appeared")
+    for (field, evidence) in Self.rowEvidence {
+      #expect(FieldCoverage.renderedFields.contains(field), "\(field) is not claimed rendered")
+      #expect(
+        ids.contains { $0 == evidence || $0.hasPrefix(evidence) },
+        "\(field) is declared rendered, but no `\(evidence)` row exists on any pool"
+      )
+    }
+    // `facility_name` has no row of its own — it is the sheet's TITLE — so its evidence is a
+    // lint over the app target (`UILintTests.detailSheetRendersTheName`), not a row here.
+    #expect(!FieldCoverage.renderedFields.contains("FacilityDetailOut.facility_id"))
+  }
+
+  @Test("the lane quartet reaches a pixel too, on a basin that has a plan")
+  func laneQuartetReachesAPixel() async throws {
+    // The same standard applied to the four fields acceptance 2 moves: each is claimed rendered
+    // by a DIFFERENT part of the ribbon, so each is checked separately against a real option.
+    let store = try Store.bundled()
+    let metadata = try await store.metadata()
+    var checked = 0
+    var bestPublicChecked = 0
+    for offset in 0..<7 {
+      guard let day = ZurichClock.day(metadata.horizonStart, plus: offset) else { continue }
+      let answer = try await store.answer(
+        onDay: day, at: TimeOfDay(hour: 12, minute: 0), for: Person())
+      for option in answer.options where option.laneDayView != nil {
+        checked += 1
+        let ribbon = optionRibbon(option.ribbonInput)
+        // lane_availability → the session line's own sentence, on today while it is running.
+        #expect(option.laneSummary(isToday: true) != nil)
+        // lane_timeline → the SAME line's off-today answer, which is its first segment's
+        // split. (Its other consumer, the ribbon's thickness, is the `lanes` variant, which
+        // no store row reaches — see `RibbonCanvas.drawLanes`.)
+        let opening = try #require(option.laneTimeline?.segments.first?.availability)
+        #expect(option.laneSummary(isToday: false) == opening.summary)
+        // lane_day_view → the stack's sub-rows.
+        #expect(ribbon.variant == "lanestack", "\(option.poolID)")
+        #expect((ribbon.strips?.count ?? 0) > 0)
+        // lane_best_public → the "Most lanes free" spoken fact. Asserted by ITS OWN label:
+        // this used to assert `facts.contains("Lanes")`, which is the lane-stack fact and
+        // would have passed unchanged with `lane_best_public` dropped entirely.
+        let facts = a11yFacts(for: ribbon).map(\.label)
+        #expect(facts.contains("Lanes"))
+        if option.laneBestPublic != nil {
+          #expect(facts.contains("Most lanes free"), "\(option.poolID)")
+          bestPublicChecked += 1
+        }
+      }
+    }
+    #expect(checked > 5, "only \(checked) options with a lane plan — this proved little")
+    #expect(
+      bestPublicChecked > 5,
+      "only \(bestPublicChecked) options had a best-public window — too few to claim it renders")
   }
 }

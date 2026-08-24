@@ -22,6 +22,11 @@
 		1A000000000000000000047 /* FilterBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A000000000000000000046 /* FilterBar.swift */; };
 		1A000000000000000000049 /* PoolRowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A000000000000000000048 /* PoolRowView.swift */; };
 		1A00000000000000000004B /* TypeSizeBridgeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A00000000000000000004A /* TypeSizeBridgeTests.swift */; };
+		1A000000000000000000051 /* RibbonCanvas.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A000000000000000000050 /* RibbonCanvas.swift */; };
+		1A000000000000000000053 /* LaneGanttView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A000000000000000000052 /* LaneGanttView.swift */; };
+		1A000000000000000000055 /* FacilitySheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A000000000000000000054 /* FacilitySheet.swift */; };
+		1A000000000000000000057 /* PoolsBrowser.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A000000000000000000056 /* PoolsBrowser.swift */; };
+		1A000000000000000000059 /* AccessTypesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A000000000000000000058 /* AccessTypesView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -51,6 +56,11 @@
 		1A000000000000000000046 /* FilterBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FilterBar.swift; sourceTree = "<group>"; };
 		1A000000000000000000048 /* PoolRowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PoolRowView.swift; sourceTree = "<group>"; };
 		1A00000000000000000004A /* TypeSizeBridgeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TypeSizeBridgeTests.swift; sourceTree = "<group>"; };
+		1A000000000000000000050 /* RibbonCanvas.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RibbonCanvas.swift; sourceTree = "<group>"; };
+		1A000000000000000000052 /* LaneGanttView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LaneGanttView.swift; sourceTree = "<group>"; };
+		1A000000000000000000054 /* FacilitySheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FacilitySheet.swift; sourceTree = "<group>"; };
+		1A000000000000000000056 /* PoolsBrowser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PoolsBrowser.swift; sourceTree = "<group>"; };
+		1A000000000000000000058 /* AccessTypesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccessTypesView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -103,6 +113,11 @@
 				1A000000000000000000044 /* DayStrip.swift */,
 				1A000000000000000000046 /* FilterBar.swift */,
 				1A000000000000000000048 /* PoolRowView.swift */,
+				1A000000000000000000050 /* RibbonCanvas.swift */,
+				1A000000000000000000052 /* LaneGanttView.swift */,
+				1A000000000000000000054 /* FacilitySheet.swift */,
+				1A000000000000000000056 /* PoolsBrowser.swift */,
+				1A000000000000000000058 /* AccessTypesView.swift */,
 			);
 			path = SwimZH;
 			sourceTree = "<group>";
@@ -245,6 +260,11 @@
 				1A000000000000000000045 /* DayStrip.swift in Sources */,
 				1A000000000000000000047 /* FilterBar.swift in Sources */,
 				1A000000000000000000049 /* PoolRowView.swift in Sources */,
+				1A000000000000000000051 /* RibbonCanvas.swift in Sources */,
+				1A000000000000000000053 /* LaneGanttView.swift in Sources */,
+				1A000000000000000000055 /* FacilitySheet.swift in Sources */,
+				1A000000000000000000057 /* PoolsBrowser.swift in Sources */,
+				1A000000000000000000059 /* AccessTypesView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

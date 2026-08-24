@@ -28,6 +28,13 @@ final class TodayModel {
   private(set) var chips: [DayChip] = []
   private(set) var kinds: [String] = []
   private(set) var today: String = ""
+  /// The whole roster, for the all-pools browser. 57 small value types — the pool cache the
+  /// store actor already holds, handed over once rather than re-read per screen.
+  private(set) var pools: [PoolRecord] = []
+  /// The ONE row whose lane chart is open. A single id rather than a set, and that is what
+  /// makes "one chart at a time" true rather than hoped for: opening a second row closes the
+  /// first, so a `List` can never hold 57 live charts.
+  private(set) var expandedPoolID: String?
 
   var filters: Filters = Filters(day: "") {
     didSet { reloadIfNeeded(oldValue) }
@@ -55,6 +62,26 @@ final class TodayModel {
 
   func isFavourite(_ poolID: String) -> Bool { favourites.contains(poolID) }
 
+  func isExpanded(_ poolID: String) -> Bool { expandedPoolID == poolID }
+
+  /// Open this row's lane chart, closing whichever was open. A toggle rather than a set: see
+  /// `expandedPoolID`.
+  func toggleExpanded(_ poolID: String) {
+    expandedPoolID = expandedPoolID == poolID ? nil : poolID
+  }
+
+  /// One pool's detail sheet, read when it is opened.
+  ///
+  /// NOT cached. A `FacilityDetail` carries the store's largest documents (every basin, every
+  /// locker, every feature's resolved days), and one 57-pool answer already peaks at about half
+  /// the app's memory ceiling — so holding sheets for pools nobody is looking at is exactly the
+  /// spend the budget cannot absorb. Six indexed reads, off the scrolling path, is the cheaper
+  /// side of that trade.
+  func facility(_ poolID: String) async -> FacilityDetail? {
+    guard let store else { return nil }
+    return try? await store.facility(poolID: poolID, on: filters.day)
+  }
+
   func toggleFavourite(_ poolID: String) {
     favourites.toggle(poolID)
     UserDefaults.standard.set(favourites.encoded, forKey: Self.favouritesKey)
@@ -73,7 +100,8 @@ final class TodayModel {
       // From the ROSTER, not from one day's answer: an answer is already narrowed by the
       // radius, so a kind filter built from it would silently lose the kinds that happen to be
       // far away today.
-      kinds = Set(try await store.pools().map(\.kind)).sorted()
+      pools = try await store.pools()
+      kinds = poolKinds(pools)
       // Open on today when the horizon contains it, and on the horizon's first day when it
       // does not — a store whose horizon has run out must still show something real.
       installingFilters = true

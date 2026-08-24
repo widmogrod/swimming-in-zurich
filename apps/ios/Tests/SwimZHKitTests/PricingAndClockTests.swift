@@ -138,4 +138,55 @@ struct ClockTests {
     #expect(ZurichClock.instant(day: "not-a-day", at: TimeOfDay(hour: 12, minute: 0)) == nil)
     #expect(ZurichClock.instant(day: "2026-08", at: TimeOfDay(hour: 12, minute: 0)) == nil)
   }
+
+  /// A known week, named day by day. 2026-08-24 is a Monday, so this walks Mon→Sun and back
+  /// round to Monday — the SUNDAY WRAP included, which is the only place `(weekday + 5) % 7`
+  /// can go wrong (`Calendar` numbers Sunday 1, so Sunday is the value that has to fold).
+  static let knownWeek: [(day: String, weekday: Int, name: String)] = [
+    ("2026-08-24", 0, "Monday"),
+    ("2026-08-25", 1, "Tuesday"),
+    ("2026-08-26", 2, "Wednesday"),
+    ("2026-08-27", 3, "Thursday"),
+    ("2026-08-28", 4, "Friday"),
+    ("2026-08-29", 5, "Saturday"),
+    ("2026-08-30", 6, "Sunday"),
+    ("2026-08-31", 0, "Monday again"),
+  ]
+
+  @Test("every weekday maps to the export's MONDAY == 0 numbering, Sunday wrap included")
+  func weekdayNumbering() {
+    // This function is the date→lane-plan JOIN: `Store.laneDays` reads `lane_day WHERE
+    // weekday = ?` through it. Nothing tested it, and an off-by-one would be SILENT — all six
+    // real basins publish a plan for all seven weekdays, so a wrong day returns a full,
+    // plausible plan (a club's Sunday reservations shown on a Wednesday) with the chain green.
+    for entry in Self.knownWeek {
+      #expect(ZurichClock.weekday(of: entry.day) == entry.weekday, "\(entry.name)")
+    }
+    #expect(ZurichClock.weekday(of: "not-a-day") == nil)
+  }
+
+  @Test("the numbering agrees with Foundation's own, independently of the shift being tested")
+  func weekdayAgreesWithFoundation() throws {
+    // An oracle rather than a second copy of the table: `DateFormatter` with a fixed POSIX
+    // locale names the day, so this fails if the shift is wrong even where the table above is
+    // also wrong. Walked over a whole year so no single month's alignment can carry it.
+    let names = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+    let formatter = DateFormatter()
+    formatter.locale = Locale(identifier: "en_US_POSIX")
+    formatter.timeZone = ZurichClock.timeZone
+    formatter.dateFormat = "EEEE"
+    var day = "2026-01-01"
+    for _ in 0..<366 {
+      let instant = try #require(ZurichClock.instant(day: day, at: TimeOfDay(hour: 12, minute: 0)))
+      let index = try #require(ZurichClock.weekday(of: day))
+      #expect(names[index] == formatter.string(from: instant), "\(day)")
+      day = try #require(ZurichClock.day(day, plus: 1))
+    }
+  }
+
+  // The store-backed half lives in `LanePlanTests.storeJoinsTheRightWeekdaysPlan`, next to the
+  // lane fixture it needs. Note that asserting `option.laneDayView?.weekday ==
+  // ZurichClock.weekday(of: day)` would be a TAUTOLOGY — `Store.laneDays` passes the queried
+  // weekday into `LaneDay.decode` rather than reading the row's own column — so that test
+  // compares the STRIPS against an independently derived weekday instead.
 }

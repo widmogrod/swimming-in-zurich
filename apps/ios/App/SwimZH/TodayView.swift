@@ -23,6 +23,10 @@ import SwimZHKit
 
 struct TodayView: View {
   @State private var model = TodayModel()
+  /// The zoom transition's namespace. BOTH halves are required and neither works alone: the row
+  /// carries `matchedTransitionSource(id:in:)`, the destination carries
+  /// `navigationTransition(.zoom(sourceID:in:))`, and they meet on this namespace.
+  @Namespace private var zoom
 
   var body: some View {
     NavigationStack {
@@ -33,8 +37,40 @@ struct TodayView: View {
           placement: .navigationBarDrawer(displayMode: .always),
           prompt: "Find a pool"
         )
+        .toolbar { browseMenu }
+        .navigationDestination(for: String.self) { poolID in
+          FacilitySheetLoader(
+            poolID: poolID, day: model.filters.day, person: model.filters.person,
+            load: { await model.facility($0) }
+          )
+          .navigationTransition(.zoom(sourceID: poolID, in: zoom))
+        }
     }
     .task { await model.load() }
+  }
+
+  /// The two screens that are not about a date: the whole roster, and what the session labels
+  /// mean. Both are pushes rather than tabs — this app has one primary task, and a tab bar
+  /// would give three equal ones.
+  private var browseMenu: some ToolbarContent {
+    ToolbarItem(placement: .topBarTrailing) {
+      Menu {
+        NavigationLink {
+          PoolsBrowser(
+            pools: model.pools, day: model.filters.day, person: model.filters.person,
+            load: { await model.facility($0) })
+        } label: {
+          Label("All pools", systemImage: "list.bullet")
+        }
+        NavigationLink {
+          AccessTypesView()
+        } label: {
+          Label("What the labels mean", systemImage: "questionmark.circle")
+        }
+      } label: {
+        Label("Browse", systemImage: "ellipsis.circle")
+      }
+    }
   }
 
   @ViewBuilder
@@ -111,7 +147,11 @@ struct TodayView: View {
             PoolRowView(
               row: row,
               isFavourite: model.isFavourite(row.poolID),
-              onToggleFavourite: { model.toggleFavourite(row.poolID) }
+              isToday: list.isToday,
+              isExpanded: model.isExpanded(row.poolID),
+              namespace: zoom,
+              onToggleFavourite: { model.toggleFavourite(row.poolID) },
+              onToggleExpanded: { model.toggleExpanded(row.poolID) }
             )
           }
         } header: {

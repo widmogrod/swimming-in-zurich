@@ -44,9 +44,228 @@ struct UILintTests {
   @Test("the lint can see the app target it is meant to police")
   func appIsVisible() throws {
     let files = try Self.appFiles()
-    #expect(files.count >= 8, "found \(files.map(\.name))")
-    for expected in ["TodayView.swift", "DayStrip.swift", "FilterBar.swift", "PoolRowView.swift"] {
+    #expect(files.count >= 12, "found \(files.map(\.name))")
+    for expected in [
+      "TodayView.swift", "DayStrip.swift", "FilterBar.swift", "PoolRowView.swift",
+      "RibbonCanvas.swift", "LaneGanttView.swift", "FacilitySheet.swift",
+    ] {
       #expect(files.contains { $0.name == expected }, "missing \(expected)")
+    }
+  }
+
+  // MARK: - S3b acceptance 5 and 7: what a Canvas must and must not carry
+
+  /// Every `Canvas` construction in `code`, with the modifier chain that follows it.
+  ///
+  /// A regex would be the obvious tool and the wrong one: `RibbonCanvas` CONTAINS "Canvas", so
+  /// a naive match reports the type declaration as a canvas site and the lint passes on a file
+  /// with no canvas in it at all. The scan therefore requires a word boundary before the token
+  /// and a `(` or `{` after it — the two ways a `Canvas` can be built.
+  ///
+  /// The site runs to the end of the enclosing declaration, approximated by the next top-level
+  /// `private`/`var`/`func`/`}`. Generous on purpose: a site cut too short would miss a
+  /// modifier and fail a compliant file.
+  static func canvasSites(in code: String) -> [String] {
+    let characters = Array(code)
+    let token = Array("Canvas")
+    var sites: [String] = []
+    var index = 0
+    while index + token.count < characters.count {
+      guard Array(characters[index..<(index + token.count)]) == token else {
+        index += 1
+        continue
+      }
+      let before = index == 0 ? " " : characters[index - 1]
+      // `Canvas(...)` and `Canvas { ... }` are both constructions; `Canvas` followed by a space
+      // and then a brace is the trailing-closure form.
+      let after = characters[(index + token.count)...].first { !$0.isWhitespace }
+      guard !before.isLetter, !before.isNumber, before != "_", after == "(" || after == "{" else {
+        index += 1
+        continue
+      }
+      let rest = String(characters[index...])
+      let end =
+        ["\n  private ", "\n  var ", "\n  func ", "\n}"]
+        .compactMap { rest.range(of: $0)?.lowerBound }
+        .min() ?? rest.endIndex
+      sites.append(String(rest[..<end]))
+      index += token.count
+    }
+    return sites
+  }
+
+  @Test("every Canvas in the app target carries accessibilityChildren")
+  func everyCanvasIsAccessible() throws {
+    // Apple states it twice: "A canvas doesn't offer interactivity or accessibility for
+    // individual elements." A ribbon without `accessibilityChildren` is one opaque rectangle to
+    // a screen reader, so this fails outright rather than warning.
+    var canvases = 0
+    for file in try Self.appFiles() {
+      for site in Self.canvasSites(in: Self.code(file.text)) {
+        canvases += 1
+        #expect(
+          site.contains(".accessibilityChildren"),
+          "\(file.name): a Canvas with no accessibilityChildren — VoiceOver sees one blank rect"
+        )
+      }
+    }
+    #expect(canvases >= 2, "the lint found \(canvases) canvases — it is scanning nothing")
+  }
+
+  @Test("the canvas lint really would catch a Canvas without accessibilityChildren")
+  func canvasLintIsNotVacuous() {
+    let bad = """
+      private var plot: some View {
+        Canvas { context, size in
+          context.fill(path, with: .color(.red))
+        }
+        .frame(height: 40)
+      }
+      """
+    let good = """
+      private var plot: some View {
+        Canvas { context, size in
+          context.fill(path, with: .color(.red))
+        }
+        .accessibilityChildren { EmptyView() }
+      }
+      """
+    #expect(UILintTests.canvasSites(in: bad).count == 1)
+    #expect(UILintTests.canvasSites(in: bad).first?.contains(".accessibilityChildren") == false)
+    #expect(UILintTests.canvasSites(in: good).first?.contains(".accessibilityChildren") == true)
+    // ...and the word boundary really holds: `RibbonCanvas` is a TYPE, not a canvas site.
+    #expect(UILintTests.canvasSites(in: "struct RibbonCanvas: View {}").isEmpty)
+  }
+
+  @Test("`drawingGroup()` is applied to nothing")
+  func noDrawingGroup() throws {
+    // `Canvas` is already Metal-backed, so `drawingGroup()` adds an offscreen render pass and
+    // buys nothing — it is a pessimisation dressed as a performance fix.
+    for file in try Self.appFiles() {
+      #expect(
+        !Self.code(file.text).contains("drawingGroup("),
+        "\(file.name) applies drawingGroup() — Canvas is already Metal-backed"
+      )
+    }
+  }
+
+  @Test("the ribbon and the cursor are TWO canvases, and only the cursor is on a timeline")
+  func theTwoCanvasSplitSurvives() throws {
+    // The whole canvas redraws on every invalidation, so a moving cursor inside the ribbon's
+    // canvas would repaint every ribbon once a minute. The split is the CPU guard, and it is
+    // structural — this is what stops a later edit from quietly merging the two.
+    let canvas = try #require(try Self.appFiles().first { $0.name == "RibbonCanvas.swift" })
+    let code = Self.code(canvas.text)
+    #expect(Self.canvasSites(in: code).count >= 2, "the two-canvas split has collapsed")
+    #expect(code.contains("TimelineView("))
+    // `paused:` comes from the package's pure policy, never from a literal or an inline guess:
+    // whether TimelineView self-pauses off-screen is undocumented.
+    #expect(code.contains("paused: animationPaused(scenePhase:"))
+    // ...and the STATIC canvas must not be inside the timeline, or the split buys nothing.
+    let timeline = try #require(code.range(of: "TimelineView("))
+    #expect(
+      !code[..<timeline.lowerBound].contains("TimelineView("),
+      "the static ribbon canvas must be built outside the TimelineView"
+    )
+  }
+
+  // MARK: - S3b acceptance 8: Swift Charts, one at a time
+
+  @Test("`Chart` appears in exactly one file, and it is not the row's day tail")
+  func chartsAreBuiltOneAtATime() throws {
+    // 57 live charts inside a `List` is the shape with credible reports of 100% CPU and
+    // 50-150 ms hangs. The ribbons are Canvas; the Gantt is the one chart, built only for the
+    // expanded row.
+    let holders = try Self.appFiles()
+      .filter { Self.code($0.text).contains("Chart(") }
+      .map(\.name)
+    #expect(holders == ["LaneGanttView.swift"], "Chart( appears in \(holders)")
+    // ...and the row builds it behind its expansion flag, which `TodayModel` keeps to ONE id.
+    let row = try #require(try Self.appFiles().first { $0.name == "PoolRowView.swift" })
+    #expect(Self.code(row.text).contains("if isExpanded"))
+    let model = try #require(try Self.appFiles().first { $0.name == "TodayModel.swift" })
+    #expect(
+      Self.code(model.text).contains("expandedPoolID = expandedPoolID == poolID ? nil : poolID"),
+      "the expansion must be a single id — a Set would allow 57 open charts"
+    )
+  }
+
+  // MARK: - The zoom transition, and the sheet's rendered identity
+
+  @Test("the zoom transition has BOTH halves — neither works alone")
+  func zoomTransitionIsComplete() throws {
+    let row = try #require(try Self.appFiles().first { $0.name == "PoolRowView.swift" })
+    #expect(Self.code(row.text).contains(".matchedTransitionSource(id:"))
+    let view = try #require(try Self.appFiles().first { $0.name == "TodayView.swift" })
+    #expect(Self.code(view.text).contains(".navigationTransition(.zoom(sourceID:"))
+  }
+
+  @Test("the detail sheet renders the pool's NAME, which is why its id stays omitted")
+  func detailSheetRendersTheName() throws {
+    // `FacilityDetailOut.facility_name` has no `DetailRow` of its own — it is the sheet's
+    // title — so this lint is its evidence, and the reason `facility_id` is deliberately NOT
+    // claimed rendered (see `FieldCoverage.deliberatelyOmitted`).
+    let sheet = try #require(try Self.appFiles().first { $0.name == "FacilitySheet.swift" })
+    let code = Self.code(sheet.text)
+    #expect(code.contains(".navigationTitle(detail.name)"))
+    #expect(!code.contains("Text(detail.poolID)"))
+  }
+
+  @Test("the app target contains no SWITCH mapping a state string to a sentence")
+  func noStateToStringInTheApp() throws {
+    // The condition S3a's deletion of `TodayView.statusLabel` created, and which S3b had to
+    // keep while adding the canvas, the sheet, the browser and the legend: every sentence the
+    // app shows comes from `SwimZHKit`, where a test drives it. A second path to one mapping is
+    // exactly how the two drifted last time.
+    //
+    // NARROW, AND SAID SO. This checks exactly one shape — no arm of a switch over a raw state
+    // string may RETURN a string literal — which is the shape of the deleted `statusLabel`. It
+    // does not ban a switch on a string per se: `familyColor` maps a family to an ASSET and
+    // `RibbonCanvas.draw` dispatches a variant to a drawing function; neither is a sentence.
+    // It is NOT a general "no domain logic in the app" gate, and it did not see the real S3b
+    // defect — `if panel.day.confidence != "complete" { Text("Some lanes could not…") }`, an
+    // `if` rather than a `case`. `noDomainTokenComparisonsInTheApp` below is the check that
+    // catches that shape.
+    for file in try Self.appFiles() {
+      for line in Self.code(file.text).split(separator: "\n") {
+        let text = line.trimmingCharacters(in: .whitespaces)
+        guard text.hasPrefix("case \"") else { continue }
+        #expect(
+          !text.contains("return \""),
+          "\(file.name): `\(text)` maps a state to a SENTENCE — that belongs in SwimZHKit"
+        )
+      }
+    }
+  }
+
+  /// Tokens the EXPORT writes and `SwimZHKit` interprets. Comparing one in the app target means
+  /// a domain rule has a second home there, where nothing scores or drives it.
+  ///
+  /// Deliberately not every string the domain uses: ribbon `variant`s and access `family`
+  /// names are the app layer's own dispatch keys (to a drawing function, to an asset colour),
+  /// and both are named in `noStateToStringInTheApp`'s comment as legitimate. These six are
+  /// the ones that decide WHAT A SWIMMER IS TOLD.
+  static let domainStateTokens = [
+    "complete", "partial", "scraped", "awaiting_scrape", "no_source", "out_of_season",
+  ]
+
+  @Test("the app target never compares a domain state token itself")
+  func noDomainTokenComparisonsInTheApp() throws {
+    // The check the switch lint could not make. `LaneGanttView` asked `confidence != "complete"`
+    // and shipped its own copy of the sentence, while `FacilityDetail` in the package asked
+    // `confidence == "partial"` — the same fact, two homes, OPPOSITE polarities, and for any
+    // token that was neither the sheet stayed silent while the Gantt shouted. The fix is a kit
+    // predicate (`LaneDay.isComplete`); this is what stops the next one being written here.
+    for file in try Self.appFiles() {
+      let code = Self.code(file.text)
+      for token in Self.domainStateTokens {
+        for form in ["== \"\(token)\"", "!= \"\(token)\""] {
+          #expect(
+            !code.contains(form),
+            "\(file.name) tests `\(form)` — that predicate belongs in SwimZHKit"
+          )
+        }
+      }
     }
   }
 

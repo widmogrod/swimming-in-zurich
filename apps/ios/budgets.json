@@ -9,12 +9,12 @@
     "the gate. Raise a limit only deliberately, with the reason recorded in the plan."
   ],
   "app_minus_sqlite": {
-    "limit_bytes": 1048576,
+    "limit_bytes": 2097152,
     "plan_ratchet_bytes": 4194304,
     "ceiling_bytes": 31457280,
-    "measured_bytes": 299090,
+    "measured_bytes": 1339498,
     "how": "sum of every bundled Mach-O's __TEXT segment (size -m) + every non-Mach-O resource, minus ios.sqlite",
-    "why": "Tightened to 1 MB from the plan's 4 MB (kept above as plan_ratchet_bytes) because 4 MB is 14x the measured 299,090 B: a ratchet with that much slack would not bite until S3b, which is the 'audited at the end' failure this slice exists to prevent. 3.5x headroom is enough for S3a's filters and day strip. RAISE IT DELIBERATELY, up to the plan's 4 MB and never past the 30 MB ceiling, recording the reason - do not silently widen it to make a build pass. Measured context: a stripped hello-world SwiftUI binary is ~71 KB and a 2,771-line synthetic app ~127 KB, so the ceiling was never in play. This is an UNSIGNED PROXY, not the thinned download: -exportArchive needs a signing identity CI has not got. Measured on the Debug configuration the gate builds."
+    "why": "RAISED DELIBERATELY to 2 MB at S3b (was 1 MB at S2b), still HALF the plan's 4 MB ratchet and 6.7% of the 30 MB ceiling. S3b measured 1,339,498 B against the 1 MB limit - the canvas renderer, Swift Charts, the detail sheet, the pools browser and the access-types legend all landed at once, and Charts is the single largest contributor. The number is honest growth, not slack: S3a measured 686,442 B, so the app roughly doubled with the visual half of the product. 2 MB keeps ~1.57x headroom, which is the same bite S2b argued for and enough for S4's five catalogs, while leaving the plan's 4 MB as the next deliberate step rather than the default. Do NOT widen this to make a build pass. Still an UNSIGNED PROXY on the Debug configuration, not the thinned download: -exportArchive needs a signing identity CI has not got. Measured context: a stripped hello-world SwiftUI binary is ~71 KB, so the 30 MB ceiling was never in play."
   },
   "sqlite": {
     "limit_bytes": 8388608,
@@ -25,8 +25,8 @@
   "peak_memory": {
     "limit_bytes": 104857600,
     "how": "XCTMemoryMetric in the app-hosted MetricTests, over a full 57-pool answer",
-    "measured_bytes": 52531675,
-    "why": "The plan's 100 MB ceiling, deliberately generous. XCTMemoryMetric is meaningless against an XCUIApplication because it measures the test runner, hence an app-hosted unit test. Measured on Xcode 26 it emits two sub-metrics: XCTMetric_Memory.physical (the delta) read 0.000 kB across all five iterations - useless, as the plan predicted - and XCTMetric_Memory.physical_peak read 51.3 MB. So the gate is task_vm_info.phys_footprint against this limit; XCTMemoryMetric is the loose ratchet beside it."
+    "measured_bytes": 65077750,
+    "why": "The plan's 100 MB ceiling, deliberately generous. XCTMemoryMetric is meaningless against an XCUIApplication because it measures the test runner, hence an app-hosted unit test. Measured on Xcode 26 it emits two sub-metrics: XCTMetric_Memory.physical (the delta) read 0.000 kB across all five iterations - useless, as the plan predicted - and XCTMetric_Memory.physical_peak reported '51.3 MB'. So the gate is task_vm_info.phys_footprint against this limit; XCTMemoryMetric is the loose ratchet beside it. UNITS, because the earlier prose here was wrong: Xcode's 'MB' labels are KiB scaled by 1000, so its '51.3 MB' is 52,531,675 B = 50.1 MiB = 52.5 MB, and S3b's '63.55 MB' is 65,077,750 B = 62.1 MiB = 65.1 MB. Those are the measured_bytes figures, unchanged; only the prose was mislabelled. S3b's rise from 52.5 to 65.1 MB is the visual half of the app, the lane derivations now attached to every option, and the detail sheet, all landing at once. Against the 100 MB (104,857,600 B) limit that is 62.1% used - headroom 38%, down from 50% at S2b - worth knowing before S5 adds a downloaded store and a live client."
   },
   "launch_seconds": {
     "target": 1.0,

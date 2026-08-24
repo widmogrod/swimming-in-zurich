@@ -70,6 +70,33 @@ public struct StoreMetadata: Equatable, Sendable {
   }
 }
 
+// The detail sheet's reads. Named constants rather than literals at the call site: the
+// column ORDER is what `facilityRow` decodes by index, so the two must be read together.
+private let poolDetailSQL = """
+  SELECT name, kind, address, description, phone, url, freshness, admission_state,
+         prices_doc, source, curated, valid_as_of, last_admission_before_s,
+         operating_season
+  FROM pool WHERE pool_id = ?;
+  """
+
+private let basinSQL = """
+  SELECT basin_id, name, kind, length_m, width_m, lanes, nominal_temp_c,
+         measured_temp_c, diving_platforms_m, physical_source, lane_plan_url
+  FROM pool_basin WHERE pool_id = ? ORDER BY basin_id;
+  """
+
+private let lockerSQL = """
+  SELECT ord, doc FROM pool_locker WHERE pool_id = ? ORDER BY ord;
+  """
+
+private let rentalSQL = """
+  SELECT ord, doc FROM pool_rental WHERE pool_id = ? ORDER BY ord;
+  """
+
+private let featureSQL = """
+  SELECT feature_key, doc FROM pool_feature WHERE pool_id = ? ORDER BY feature_key;
+  """
+
 public actor Store {
   private let handle: OpaquePointer
   private var poolCache: [String: PoolRecord]?
@@ -171,7 +198,9 @@ public actor Store {
     let reach = Reach(near: near, radiusKm: radiusKm)
     return Answer(
       day: day,
-      options: try options(on: day, at: time, for: person, pools: pools, reach: reach),
+      options: try options(
+        on: day, at: time, for: person, pools: pools, reach: reach,
+        lanes: try laneDays(on: day)),
       statuses: try statuses(on: day, pools: pools, reach: reach),
       notices: try notices(on: day),
       warnings: try warnings(on: day)
@@ -240,12 +269,47 @@ public actor Store {
     }
   }
 
+  /// The `lane_day` rows for this day's WEEKDAY, keyed by basin.
+  ///
+  /// One read per answer rather than one per option: a Belegungsplan is a weekly plan, so the
+  /// whole city's parsed lane data for a weekday is six rows. Mapping the date to a weekday is
+  /// calendar ARITHMETIC, not a date rule (invariant E1) — it asks which key to read, never
+  /// whether the day is a school holiday.
+  private func laneDays(on day: String) throws -> [String: LaneDay] {
+    guard let weekday = ZurichClock.weekday(of: day) else { return [:] }
+    var days: [String: LaneDay] = [:]
+    try each(
+      sql: """
+        SELECT basin_id, lane_count, strips, unresolved_lanes, confidence
+        FROM lane_day WHERE weekday = ?;
+        """,
+      bind: [String(weekday)]
+    ) { row in
+      // A malformed plan is DROPPED, not defaulted: `LaneDay.decode` returns nil rather than
+      // an empty plan, and an option with no lane data renders as "split not published" —
+      // which is true — where an empty plan would render as "no lanes free", which is not.
+      guard
+        let decoded = LaneDay.decode(
+          basinID: row.text(0),
+          weekday: weekday,
+          laneCount: row.intOrNil(1) ?? 0,
+          strips: row.text(2),
+          unresolvedLanes: row.text(3),
+          confidence: row.text(4)
+        )
+      else { return }
+      days[decoded.basinID] = decoded
+    }
+    return days
+  }
+
   private func options(
     on day: String,
     at time: TimeOfDay,
     for person: Person,
     pools: [String: PoolRecord],
-    reach: Reach
+    reach: Reach,
+    lanes: [String: LaneDay]
   ) throws -> [SwimOption] {
     var options: [SwimOption] = []
     try each(
@@ -269,6 +333,7 @@ public actor Store {
         kind: row.text(7),
         params: AccessParams.decode(json: row.text(8))
       )
+      let lane = lanes[row.text(1)]
       options.append(
         SwimOption(
           poolID: pool.id,
@@ -284,7 +349,16 @@ public actor Store {
           eligibility: eligibility(person, access),
           openAtQueryTime: openAtQueryTime(window, at: time),
           price: priceFor(pool.admission, person),
-          distanceKm: distance
+          distanceKm: distance,
+          // The lane quartet, derived here rather than baked: all four depend on the CLOCK
+          // (`availability(at:)`) or on this session's own hours (the timeline and the
+          // best-public window are both bounded by `window`), and E1 puts clock questions on
+          // the client. `best_public` is bounded by the SESSION deliberately: "come at 09:00"
+          // is not an answer for a row whose hours end at 08:00.
+          laneAvailability: lane?.availability(at: time),
+          laneTimeline: lane?.availabilityTimeline(within: window),
+          laneDayView: lane,
+          laneBestPublic: lane?.bestPublicTime(within: window)
         )
       )
     }
@@ -349,6 +423,120 @@ public actor Store {
     return decoded
   }
 
+  // MARK: - The facility sheet
+
+  /// Everything the detail sheet shows about one pool, on one date.
+  ///
+  /// SIX reads, one pool. That is deliberate at this size: the sheet is opened one pool at a
+  /// time and off the scrolling path, so the cost is a keystroke's worth of work once, where
+  /// caching it would mean holding a second copy of the store's largest documents beside the
+  /// list model the memory budget is already half spent on.
+  ///
+  /// Returns nil for a pool the store does not have — a store the app did not write can be
+  /// missing one (S5 downloads them), and an empty sheet is a better answer than a fabricated
+  /// pool.
+  public func facility(poolID: String, on day: String) throws -> FacilityDetail? {
+    guard let row = try facilityRow(poolID: poolID) else { return nil }
+    let basins = try basinRows(poolID: poolID)
+    let lanes = try laneDays(on: day)
+    return FacilityDetail(
+      poolID: poolID,
+      name: row.name,
+      kind: row.kind,
+      address: row.address,
+      description: row.description,
+      phone: row.phone,
+      url: row.url,
+      freshness: row.freshness,
+      admission: row.admission,
+      basins: basins,
+      lockers: try documents(table: lockerSQL, bind: poolID).compactMap(LockerDetail.decode),
+      rentals: try documents(table: rentalSQL, bind: poolID).compactMap(RentalDetail.decode),
+      features: try featureRows(poolID: poolID),
+      operatingSeason: row.operatingSeason,
+      lastAdmissionBeforeSeconds: row.lastAdmissionBeforeSeconds,
+      provenance: row.provenance,
+      // Only the basins that actually carry a parsed Belegungsplan. A basin with no plan gets
+      // no panel at all rather than an empty one: an empty panel reads as "no lane is
+      // reserved", which is a claim, where absence is the honest state.
+      lanePanels: basins.compactMap { basin in
+        lanes[basin.basinID].map {
+          LanePanel(basinID: basin.basinID, basinName: basin.name, day: $0)
+        }
+      }
+    )
+  }
+
+  /// The `pool` row's own facts, including the four columns the list never reads.
+  private func facilityRow(poolID: String) throws -> FacilityRow? {
+    var found: FacilityRow?
+    var failure: Error?
+    try each(sql: poolDetailSQL, bind: [poolID]) { row in
+      do {
+        found = FacilityRow(
+          name: row.text(0),
+          kind: row.text(1),
+          address: row.textOrNil(2),
+          description: row.textOrNil(3),
+          phone: row.textOrNil(4),
+          url: row.textOrNil(5),
+          freshness: row.text(6),
+          admission: try Store.admission(state: row.text(7), doc: row.textOrNil(8)),
+          provenance: Provenance(
+            source: row.textOrNil(9),
+            curated: (row.intOrNil(10) ?? 0) != 0,
+            validAsOf: row.textOrNil(11)
+          ),
+          lastAdmissionBeforeSeconds: row.intOrNil(12),
+          operatingSeason: row.textOrNil(13).flatMap(OperatingSeason.decode(json:))
+        )
+      } catch {
+        failure = error
+      }
+    }
+    if let failure { throw failure }
+    return found
+  }
+
+  private func basinRows(poolID: String) throws -> [BasinDetail] {
+    var basins: [BasinDetail] = []
+    try each(sql: basinSQL, bind: [poolID]) { row in
+      basins.append(
+        BasinDetail(
+          basinID: row.text(0),
+          name: row.text(1),
+          kind: row.text(2),
+          lengthM: row.doubleOrNil(3),
+          widthM: row.doubleOrNil(4),
+          lanes: row.intOrNil(5),
+          nominalTempC: row.doubleOrNil(6),
+          measuredTempC: row.doubleOrNil(7),
+          divingPlatformsM: decodeDoc(row.text(8)) ?? [],
+          physicalSource: row.text(9),
+          lanePlanURL: row.textOrNil(10)
+        ))
+    }
+    return basins
+  }
+
+  private func featureRows(poolID: String) throws -> [FeatureDetail] {
+    var features: [FeatureDetail] = []
+    try each(sql: featureSQL, bind: [poolID]) { row in
+      guard let feature = FeatureDetail.decode(key: row.text(0), json: row.text(1)) else { return }
+      features.append(feature)
+    }
+    return features
+  }
+
+  /// The `(ordinal, doc)` pairs of a document table — the shape lockers and rentals share.
+  private func documents(table sql: String, bind poolID: String) throws -> [(Int, String)] {
+    var documents: [(Int, String)] = []
+    try each(sql: sql, bind: [poolID]) { row in
+      documents.append((row.intOrNil(0) ?? 0, row.text(1)))
+    }
+    return documents
+  }
+
   // MARK: - The one place a statement exists
 
   /// Prepares `sql`, binds `bind` as TEXT, steps it, and hands each row to `body`.
@@ -387,6 +575,33 @@ public actor Store {
       }
       try body(SQLiteRow(statement: statement))
     }
+  }
+}
+
+/// The `pool` row behind the detail sheet, decoded once so `facility` reads as prose.
+private struct FacilityRow {
+  let name: String
+  let kind: String
+  let address: String?
+  let description: String?
+  let phone: String?
+  let url: String?
+  let freshness: String
+  let admission: Admission
+  let provenance: Provenance
+  let lastAdmissionBeforeSeconds: Int?
+  let operatingSeason: OperatingSeason?
+}
+
+extension LockerDetail {
+  static func decode(_ pair: (ordinal: Int, doc: String)) -> LockerDetail? {
+    decode(ordinal: pair.ordinal, json: pair.doc)
+  }
+}
+
+extension RentalDetail {
+  static func decode(_ pair: (ordinal: Int, doc: String)) -> RentalDetail? {
+    decode(ordinal: pair.ordinal, json: pair.doc)
   }
 }
 

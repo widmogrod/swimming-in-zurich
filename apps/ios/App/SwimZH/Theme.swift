@@ -86,3 +86,28 @@ extension BannerModel.Kind {
     }
   }
 }
+
+/// The colour family, resolved from the Asset Catalog. Inside a `Canvas` a named colour still
+/// resolves correctly through `GraphicsContext.environment`, which is why the ribbon can obey
+/// dark mode and contrast settings without a single channel value in this file.
+func familyColor(_ family: String) -> Color {
+  switch family {
+  case "public": return Color("FamPublic")
+  case "lane": return Color("FamLane")
+  case "family": return Color("FamFamily")
+  case "women": return Color("FamWomen")
+  case "seniors": return Color("FamSeniors")
+  case "adults": return Color("FamAdults")
+  case "school": return Color("FamSchool")
+  case "club": return Color("FamClub")
+  case "girls": return Color("FamGirls")
+  case "diverse": return Color("FamDiverse")
+  case "accompanied": return Color("FamAccompanied")
+  case "closed": return Color("FamClosed")
+  case "unknown": return Color("FamUnknown")
+  // The web maps an unknown access class onto its PUBLIC colour. This does not, deliberately:
+  // painting a session nobody has classified in the open-to-all hue is the "looks open to you"
+  // lie the whole family vocabulary exists to prevent.
+  default: return Color("FamOther")
+  }
+}

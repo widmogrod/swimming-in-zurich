@@ -1185,6 +1185,59 @@ promising the pool's own words is now true. Three fields are pinned by name in
 `renderedClaimsAreNotAspirational` because **no general mechanism exists**. S3b moves five more
 fields into `renderedFields` and carries exactly the same exposure.
 
+### S3b (2026-08-24) — the eighth defect, found twice, and two reviewer findings overturned
+
+**The bug class reached a derived value, not just a label.** `lane_availability` is the split at the
+**queried instant**, so at 04:00 a session opening at 06:00 rendered "no lanes open to the public"
+beside "Opens 06:00" — two true statements composing a false impression. Found on a simulator
+screenshot, not by a test.
+
+**Then the fix was found to be half a fix.** It branched on `openAtQueryTime`, which is pure
+time-of-day containment — but `TodayModel` queries the store at a fixed **12:00** for every non-today
+day, so off-today that flag means *"covers midday"*, true for essentially every long session. Traced:
+`hallenbad-city`/`city-50m` on 2026-09-07 runs 06:00–22:00 with **5 of 6** public lanes at 12:00 and
+**6 of 6** at its 06:00 opening — a row two weeks out printed the wrong number. The tell was that
+`a11yFacts` already used the opening split, so **the spoken fact and the printed line disagreed on
+the same row**. `laneSummary` now takes `isToday`, and the test derives `openAtQueryTime` from the
+same `time` it reads availability at, so the coupling cannot be decoupled by a literal again.
+**Carry-forward: `at:` is meaningless off today.** A full sweep found one latent instance left
+(`LanePlan.swift:471`, reachable only for a zero-length session, of which the store has none).
+
+**Two reviewer findings were overturned on the code, and the reviewer conceded both.**
+
+1. The proposed store-backed weekday assertion was a **tautology**: `Store.laneDays` never reads the
+   `weekday` column — it passes the queried weekday *into* `LaneDay.decode` — so
+   `laneDayView?.weekday == weekday(of: day)` compares a value with itself. Reviewer's words: *"My
+   finding named the right gap and the wrong instrument."* The replacement is independent: a
+   `DateFormatter` oracle over 366 days, an eight-day table covering the Sunday→Monday wrap, and a
+   store-backed comparison of the served **strips**. It has teeth because `city-50m`'s seven weekday
+   strip blobs are pairwise distinct, so a ±1 shift changes the answer on every day.
+2. "Delete the unreachable `drawLanes`" was refused with cause: `RibbonCanvas.draw` has
+   `default: drawUnpublished`, so deleting the `lanes` arm routes a `lane_count = 0` row — which the
+   export schema permits — to **"split not published"** for a basin that did publish one. The exact
+   lie the ribbon vocabulary exists to prevent. Reviewer: *"my finding failed its own 'name a cost
+   that disappears' test on this branch."*
+
+**A test that could not fail, again.** `tapAtMidpointOnARealDay` asserted `hit.width <= expected.width`
+— but `block(at:)` returns the *narrowest* containing block and a block contains its own midpoint, so
+it was a theorem, not a test. Now asserts exact identity, restricted to blocks whose `(x, width)`
+frame is unique in the row, with the count floor on the filtered set. **1-D hit-testing genuinely
+cannot distinguish two basins with identical hours** — a product limitation, now stated rather than
+hidden behind a passing assertion.
+
+**Measurement correction worth keeping.** Xcode's memory readouts labelled "MB" are **KiB scaled by
+1000**: its "63.55 MB" is 65,077,750 B = 62.1 MiB. Both `budgets.json` entries recorded the
+mislabelled figure. Real headroom against the 100 MB ceiling is **38%**, not 36%.
+
+**Two generated contracts had no staleness gate** — editing `domain.access.ACCESS_TYPES` would have
+left the fixture stale, the Swift test passing, and the two copies drifting together, which is
+precisely what the module header said it prevented. `test_ios_fixture_contracts.py` now gates both,
+and the reviewer probed it with six independent mutations rather than reading it.
+
+**`lane_plans.json`'s "49 cases over 7 basins" is really two distinct plans.** All six real basins
+share byte-identical strips (one recorded cassette); the seventh is synthetic, and is the only source
+of `partial == true` anywhere. Also: the plan's Context says 7 lane-plan basins; the store has **6**.
+
 ## Accepted drift
 
 Findings the user has knowingly blessed, so `/dev:present` folds them into a
@@ -1213,6 +1266,7 @@ Appended by /dev:implement after each slice — never rewritten. Newest row last
 | 2026-08-24 | S2 | done | `Store` is an actor not a struct; `priceFor` returns `PriceEntry?` (the plan's `Admission` was the wrong type); `eligibility(person, access)` argument order; added `SessionAccess.unknown`; strict `min_age` decoding; extra files beyond Touches (committed 1.75 MB store, `scripts/ios_fixtures.py`, app-hosted test target); acc 7's open-failure proof is **structural only** | no runtime proof of the open-failure close (grep only — no metric on Apple's SQLite can observe it); committed store is a **140-day** horizon, not 400; the store is not byte-reproducible (`gold_valid_as_of` moves with the wall clock); `DayWarning.rendered` duplicates Python's renderer; `/swim` still omits `min_age` | **yes — acc 5 (Airplane Mode) UNVERIFIED, human check waived** |
 | 2026-08-24 | S2b | done | metric tests landed in the existing `App/SwimZHTests/`, not the plan's `Tests/MetricTests/` (a SwiftPM target cannot import the app — the plan's path would measure the runner); size ratchet enforced by a Run Script build phase, not a test (the `.app` exists only inside `xcodebuild`); `app_minus_sqlite` ratcheted to **1 MB**, tighter than the plan's 4 MB; `scripts/ios_budget.py` + `tests/scripts/**` required by acc 4 but absent from Touches | size proxy is the **Debug** build, not the release/thinned figure; `escaped_bodies` reports but does not score a closure-valued property (refactor to a `func`, do **not** edit the `escaped == []` assertion); `MemoryMetricTests` restates the 100 MB ceiling (joined by a string-match pytest, not a generated constant); no `XCTMemoryMetric` baseline (baselines do not travel across device configurations) | **yes — `CA92.1` documentation-verified but still not browser-eyeballed before first upload** |
 | 2026-08-24 | S3a | done | `stripLayout` takes a kit-local `TypeSize`, not SwiftUI's `DynamicTypeSize` (the kit may not import SwiftUI — an existing lint forbids it), bridged by rank and pinned case-by-case; a **sixth tier `scheduled`** and a **fifth day state** added so an off-today answer makes no wall-clock claim; `.closed(.noSessions)` reworded from "Closed today"; `TodayView.statusLabel` (shipped in S2) **deleted** rather than repaired; many files beyond Touches, all forced by "logic goes in SwimZHKit" | `app_minus_sqlite` 299,090 → 686,442 B (headroom 3.5× → 1.5×; `budgets.json` untouched as gate configuration — S3b will likely need it raised deliberately); every filter change, search keystroke included, re-queries the store; `Tier.scheduled`'s verdict shows the day's outer span only, so a long midday gap reads as continuous; `renderedFields` proves drift detection, not that a pixel is drawn | **yes — acc 4's visual half and acc 7's appearance check UNVERIFIED (waived human checks); nothing has looked at a screen** |
+| 2026-08-24 | S3b | done | `laneSummary` is a **function taking `isToday`**, not a computed property; `ribbonmodel.ts` (the **production** module, not just its test) gained `NO_SPLIT_LABEL_KEY` + `label_key`; size ratchet raised **1 MB → 2 MB** deliberately (measured 1,339,498 B, still half the plan's 4 MB); files well beyond Touches (`PoolBrowser`, `AccessExplainer`, `FacilityDetail`, 20 colorsets) forced by "every rule lives in SwimZHKit" | `RibbonCanvas.drawLanes` is unreachable against today's export and kept **with a recorded reason** (deleting it would render a `lane_count = 0` basin as "split not published"); `Ribbon.segments` always nil in the shipped app, so its a11y fact is dead in production; `noDomainTokenComparisonsInTheApp` enumerates six tokens **by hand** with no mechanism keeping the list honest; per-basin lane panel still inert for scraped pools (CLAUDE.md's flat-scrape limitation); `LanePlan.swift:471` is a latent off-today instant claim for a zero-length session (no such row exists today) | **yes — acc 9's device budgets and acc 10's notched/light-dark check UNVERIFIED (no physical device; waived)** |
 
 ## Decisions & divergences
 

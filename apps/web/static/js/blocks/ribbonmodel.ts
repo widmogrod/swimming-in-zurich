@@ -1,4 +1,4 @@
-import { t } from '../i18n.js';
+import { t, type MessageKey } from '../i18n.js';
 import { hhmmToMin, isPublicSegment, minToHhmm } from './cursor.js';
 // ribbonmodel.js — PURE mapping of a `/swim` option/status → a ribbon render state.
 //
@@ -119,6 +119,11 @@ export interface Ribbon {
   style?: string;
   [k: string]: unknown;
 }
+
+/** The i18n key for the "lane split not published" label — the one ribbon field whose
+ *  rendered form is locale-dependent. Exported so the golden fixture can carry the key
+ *  rather than a translation. */
+export const NO_SPLIT_LABEL_KEY: MessageKey = 'insight.noSplit.label';
 
 /** access class name → colour-family key ('other' for an unknown type). */
 export function accessFamily(access: string): string {
@@ -243,7 +248,12 @@ export function optionRibbon(option: RibbonOption): Ribbon {
     variant: 'unpublished',
     style: 'solid',
     sheath: false,
-    label: t('insight.noSplit.label'),
+    label: t(NO_SPLIT_LABEL_KEY),
+    // The KEY beside the rendered label. `label` is locale-dependent output, so it is the one
+    // field of a ribbon that cannot appear in a cross-client golden fixture without pinning
+    // this suite's locale into it; the key is the thing both clients actually agree on, and
+    // the iOS port renders it through its own catalog.
+    label_key: NO_SPLIT_LABEL_KEY,
   };
 }
 
