@@ -12,7 +12,7 @@ import Foundation
 /// rather than taken from any framework constant.
 private let earthRadiusKm = 6_371.0088
 
-public struct GeoPoint: Equatable, Sendable {
+public struct GeoPoint: Equatable, Hashable, Sendable {
   public let lat: Double
   public let lon: Double
 

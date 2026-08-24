@@ -36,29 +36,43 @@ struct BundledStoreTests {
     #expect(!answer.statuses.isEmpty)
   }
 
-  @Test("no ghost state is ever rendered as 'closed'")
-  func ghostStatesAreNeverDrawnAsClosed() {
-    // CLAUDE.md's load-bearing rule, at the last place it can be broken: the label. A pool
-    // whose schedule is UNKNOWN must not be told to the user as shut.
-    let ghosts = ["awaiting_scrape", "no_source", "open_unscheduled"]
-    let closedLabels = Set(
-      [nil, "out_of_season", "no_sessions", "unmapped"].map {
-        TodayView.statusLabel(status: "closed", closureCode: $0)
-      }
+  @Test("no ghost state reaches the screen worded as a closure")
+  @MainActor
+  func ghostStatesAreNeverDrawnAsClosed() async throws {
+    // CLAUDE.md's load-bearing rule, asserted where the APP can break it: the rows a real screen
+    // would draw, built by the real model from the real bundled store.
+    //
+    // It used to drive `TodayView.statusLabel`, a pass-through kept alive only by this test —
+    // and which had already drifted from the path the rows use. So the subject is now the model
+    // output itself, which is the only thing a user ever sees.
+    let horizonStart = try await Store.bundled().metadata().horizonStart
+    let noon = try #require(
+      ZurichClock.instant(day: horizonStart, at: TimeOfDay(hour: 12, minute: 0))
     )
-    var ghostLabels: Set<String> = []
-    for ghost in ghosts {
-      let label = TodayView.statusLabel(status: ghost, closureCode: nil)
-      #expect(!closedLabels.contains(label), "\(ghost) reads as a closure: \(label)")
-      #expect(!label.lowercased().contains("closed"), "\(ghost) reads as closed: \(label)")
-      #expect(label != ghost, "\(ghost) is shown as its raw code")
-      ghostLabels.insert(label)
+    let model = TodayModel()
+    await model.load(now: noon)
+    guard case .ready(let list, _) = model.state else {
+      Issue.record("the model did not become ready: \(model.state)")
+      return
     }
-    // Distinct from each other, too: three states collapsed into one sentence would be the
-    // same loss of honesty one step later.
-    #expect(ghostLabels.count == ghosts.count)
-    // And the four closure reasons stay distinguishable rather than all reading "Closed".
-    #expect(closedLabels.count == 4, "saw \(closedLabels.sorted())")
+
+    let rows = list.sections.flatMap(\.rows)
+    let ghosts = rows.filter { $0.state?.isUnknownHours == true }
+    let closures = rows.filter { $0.state?.isClosureClaim == true }
+    // The committed store carries both families on this day; without them the loop below would
+    // be vacuously true.
+    #expect(!ghosts.isEmpty, "no ghost rows on \(horizonStart) — the store changed")
+    #expect(!closures.isEmpty, "no closed rows on \(horizonStart) — the store changed")
+
+    let closureVerdicts = Set(closures.map(\.verdict.head))
+    for ghost in ghosts {
+      let said = ghost.verdict.head
+      #expect(ghost.tier == .unknown, "\(ghost.poolName) is filed under \(ghost.tier)")
+      #expect(!said.lowercased().contains("closed"), "\(ghost.poolName) reads: \(said)")
+      #expect(!closureVerdicts.contains(said), "\(ghost.poolName) shares a closed sentence")
+      // ...and never the ✕ mark either: nobody was excluded from anything.
+      #expect(ghost.mark == .check)
+    }
   }
 
   @Test("the today screen reaches `ready` with no network available to it")
@@ -75,10 +89,101 @@ struct BundledStoreTests {
       ZurichClock.instant(day: horizonStart, at: TimeOfDay(hour: 12, minute: 0))
     )
     await model.load(now: day)
-    guard case .ready(let answer, _) = model.state else {
+    guard case .ready(let list, _) = model.state else {
       Issue.record("the model did not become ready: \(model.state)")
       return
     }
-    #expect(!answer.options.isEmpty)
+    // The model publishes the DERIVED list, not the raw answer: holding both would mean the
+    // whole 57-pool answer plus a copy of it, which is the one thing the 100 MB budget cannot
+    // absorb. So the assertion is on the rows a screen would draw.
+    #expect(!list.sections.isEmpty)
+    #expect(!list.beyondHorizon)
+    #expect(list.sections.flatMap(\.rows).count > 1)
+    // ...and the day strip really was built from the store's own horizon.
+    #expect(model.chips.count > 100)
+    #expect(model.chips.first?.day == horizonStart)
+    #expect(!model.kinds.isEmpty)
+  }
+
+  @Test("an app left open across midnight stops calling yesterday today")
+  @MainActor
+  func todayIsRereadNotCaptured() async throws {
+    // `today` used to be captured once, in `load`. An app left open overnight therefore went on
+    // treating yesterday as today: the clock tiers resumed on a stale day, and the "Today" chip
+    // pointed at the day before. Both are re-read now, and the chips are re-marked with them.
+    let meta = try await Store.bundled().metadata()
+    let lateLastNight = try #require(
+      ZurichClock.instant(day: meta.horizonStart, at: TimeOfDay(hour: 23, minute: 50))
+    )
+    let tomorrow = try #require(ZurichClock.day(meta.horizonStart, plus: 1))
+    let earlyToday = try #require(
+      ZurichClock.instant(day: tomorrow, at: TimeOfDay(hour: 0, minute: 20))
+    )
+
+    let model = TodayModel()
+    await model.load(now: lateLastNight)
+    #expect(model.today == meta.horizonStart)
+    #expect(model.chips.first(where: \.isToday)?.day == meta.horizonStart)
+
+    // Midnight passes. The user has touched nothing; the next refresh is all that happens.
+    await model.refresh(now: earlyToday)
+    #expect(model.today == tomorrow, "the model still thinks today is \(model.today)")
+    #expect(model.chips.filter(\.isToday).count == 1)
+    #expect(model.chips.first(where: \.isToday)?.day == tomorrow)
+
+    // ...and the selected day — still yesterday, because nothing moved it — is now correctly
+    // treated as another day, so no wall-clock claim is made about it.
+    guard case .ready(let list, _) = model.state else {
+      Issue.record("the model did not become ready: \(model.state)")
+      return
+    }
+    #expect(list.day == meta.horizonStart)
+    #expect(!list.isToday)
+    for row in list.sections.flatMap(\.rows) {
+      #expect(!row.tier.isWallClockClaim, "\(row.poolName) tiered as \(row.tier) on yesterday")
+    }
+  }
+
+  @Test("selecting another day makes the model drop every wall-clock claim")
+  @MainActor
+  func pickingAnotherDayStopsTheClock() async throws {
+    // The end-to-end half of the day-leak fix: `listModel` refuses to tier a non-today answer
+    // by the clock, but only if `TodayModel` actually tells it which day is today AND asks the
+    // store at the fixed off-today moment. This drives the real screen state at 07:30, the hour
+    // that used to put an early-morning session months away into "Open now".
+    let meta = try await Store.bundled().metadata()
+    let morning = try #require(
+      ZurichClock.instant(day: meta.horizonStart, at: TimeOfDay(hour: 7, minute: 30))
+    )
+    let model = TodayModel()
+    await model.load(now: morning)
+    guard case .ready(let today, _) = model.state else {
+      Issue.record("the model did not become ready: \(model.state)")
+      return
+    }
+    #expect(today.isToday)
+
+    // Now select a day well inside the horizon but not today, exactly as tapping a chip does.
+    let other = try #require(ZurichClock.day(meta.horizonStart, plus: 60))
+    #expect(meta.covers(day: other))
+    // Assigning the filter is what a chip tap does; awaiting the work it spawned is what makes
+    // this a test of behaviour rather than of scheduling.
+    model.filters.day = other
+    await model.pendingRefresh?.value
+    guard case .ready(let future, _) = model.state else {
+      Issue.record("the model did not become ready: \(model.state)")
+      return
+    }
+    #expect(!future.isToday)
+    #expect(future.openToYouCount == 0)
+    #expect(future.headline.contains("pools with sessions"))
+    for row in future.sections.flatMap(\.rows) {
+      #expect(!row.tier.isWallClockClaim, "\(row.poolName) tiered as \(row.tier) on \(other)")
+      #expect(row.verdict.head != "Open now")
+      #expect(row.verdict.head != "Done for today")
+      #expect(!row.openToYou)
+    }
+    // ...and it really did read a day with sessions, so the loop is not vacuously true.
+    #expect(future.sections.contains { $0.tier == .scheduled })
   }
 }

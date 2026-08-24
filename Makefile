@@ -35,7 +35,7 @@ hooks:  ## Install pre-commit + pre-push git hooks
 # Order is load-bearing here as in the other two: from S2b, `crap_swift.py` reads the
 # coverage `swift test` writes, so tests run before the gate.
 
-.PHONY: ios-export ios-fixtures ios-qa
+.PHONY: ios-export ios-fixtures ios-field-coverage ios-qa
 
 IOS_STORE := apps/ios/Sources/SwimZHKit/Resources/ios.sqlite
 IOS_DESTINATION ?= platform=iOS Simulator,name=iPhone 17
@@ -45,6 +45,12 @@ ios-export:  ## Project the LIVE gold store into the bundled iOS store (the rele
 
 ios-fixtures:  ## Regenerate the COMMITTED offline store + geo fixture (no network, deterministic)
 	uv run python scripts/ios_fixtures.py
+
+# The field-coverage contract the phone is measured against. Staleness-gated by
+# `apps/web/tests/test_field_coverage_contract.py`, so this target is a convenience: the gate
+# fails either way, and its message names the pytest form.
+ios-field-coverage:  ## Regenerate field_coverage.json from the pydantic response models
+	uv run python scripts/field_coverage.py
 
 # The lint covers `App` as well as the package: `swift build` compiles only the package, so
 # without it the SwiftUI layer — the one S3a grows most — would never be linted at all.

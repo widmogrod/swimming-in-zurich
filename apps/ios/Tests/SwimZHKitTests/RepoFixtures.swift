@@ -39,6 +39,14 @@ enum RepoFixtures {
     return url.appending(path: "Fixtures/haversine.json")
   }()
 
+  /// The iOS field-coverage contract generated from the pydantic response models
+  /// (`scripts/field_coverage.py`, staleness-gated by
+  /// `apps/web/tests/test_field_coverage_contract.py`).
+  static let fieldCoverage: URL = {
+    let here = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+    return here.appending(path: "Fixtures/field_coverage.json")
+  }()
+
   static func json(at url: URL) throws -> [String: Any] {
     let data = try Data(contentsOf: url)
     guard let object = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {

@@ -11,7 +11,7 @@
     target. Everything it answers comes from the SQLite store in this bundle.
   * NSPrivacyCollectedDataTypes empty — nothing leaves the device, because nothing can.
   * NSPrivacyAccessedAPITypes declares NSPrivacyAccessedAPICategoryUserDefaults with reason
-    CA92.1. @AppStorage IS UserDefaults, S3a's local-only favourites use it, and shipping
+    CA92.1. S3a's local-only favourites are one string in UserDefaults.standard, and shipping
     without the declaration is an ITMS-91055 upload rejection — a failure that only appears
     at upload time, which is exactly why it is done now rather than at submission.
 

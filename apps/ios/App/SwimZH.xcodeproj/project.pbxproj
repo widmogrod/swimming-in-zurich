@@ -16,6 +16,12 @@
 		1A00000000000000000002B /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 1A00000000000000000002A /* PrivacyInfo.xcprivacy */; };
 		1A00000000000000000002D /* AppCorrectnessTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A00000000000000000002C /* AppCorrectnessTests.swift */; };
 		1A00000000000000000002F /* MemoryMetricTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A00000000000000000002E /* MemoryMetricTests.swift */; };
+		1A000000000000000000041 /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A000000000000000000040 /* Theme.swift */; };
+		1A000000000000000000043 /* TypeSizeBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A000000000000000000042 /* TypeSizeBridge.swift */; };
+		1A000000000000000000045 /* DayStrip.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A000000000000000000044 /* DayStrip.swift */; };
+		1A000000000000000000047 /* FilterBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A000000000000000000046 /* FilterBar.swift */; };
+		1A000000000000000000049 /* PoolRowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A000000000000000000048 /* PoolRowView.swift */; };
+		1A00000000000000000004B /* TypeSizeBridgeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A00000000000000000004A /* TypeSizeBridgeTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -39,6 +45,12 @@
 		1A00000000000000000002A /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		1A00000000000000000002C /* AppCorrectnessTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppCorrectnessTests.swift; sourceTree = "<group>"; };
 		1A00000000000000000002E /* MemoryMetricTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemoryMetricTests.swift; sourceTree = "<group>"; };
+		1A000000000000000000040 /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Theme.swift; sourceTree = "<group>"; };
+		1A000000000000000000042 /* TypeSizeBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TypeSizeBridge.swift; sourceTree = "<group>"; };
+		1A000000000000000000044 /* DayStrip.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DayStrip.swift; sourceTree = "<group>"; };
+		1A000000000000000000046 /* FilterBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FilterBar.swift; sourceTree = "<group>"; };
+		1A000000000000000000048 /* PoolRowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PoolRowView.swift; sourceTree = "<group>"; };
+		1A00000000000000000004A /* TypeSizeBridgeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TypeSizeBridgeTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -86,6 +98,11 @@
 				1A00000000000000000001A /* TodayModel.swift */,
 				1A00000000000000000001B /* Assets.xcassets */,
 				1A00000000000000000002A /* PrivacyInfo.xcprivacy */,
+				1A000000000000000000040 /* Theme.swift */,
+				1A000000000000000000042 /* TypeSizeBridge.swift */,
+				1A000000000000000000044 /* DayStrip.swift */,
+				1A000000000000000000046 /* FilterBar.swift */,
+				1A000000000000000000048 /* PoolRowView.swift */,
 			);
 			path = SwimZH;
 			sourceTree = "<group>";
@@ -96,6 +113,7 @@
 				1A00000000000000000001C /* BundledStoreTests.swift */,
 				1A00000000000000000002C /* AppCorrectnessTests.swift */,
 				1A00000000000000000002E /* MemoryMetricTests.swift */,
+				1A00000000000000000004A /* TypeSizeBridgeTests.swift */,
 			);
 			path = SwimZHTests;
 			sourceTree = "<group>";
@@ -222,6 +240,11 @@
 				1A00000000000000000001E /* TodayView.swift in Sources */,
 				1A00000000000000000001F /* TodayModel.swift in Sources */,
 				1A00000000000000000001D /* SwimZHApp.swift in Sources */,
+				1A000000000000000000041 /* Theme.swift in Sources */,
+				1A000000000000000000043 /* TypeSizeBridge.swift in Sources */,
+				1A000000000000000000045 /* DayStrip.swift in Sources */,
+				1A000000000000000000047 /* FilterBar.swift in Sources */,
+				1A000000000000000000049 /* PoolRowView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -232,6 +255,7 @@
 				1A000000000000000000021 /* BundledStoreTests.swift in Sources */,
 				1A00000000000000000002D /* AppCorrectnessTests.swift in Sources */,
 				1A00000000000000000002F /* MemoryMetricTests.swift in Sources */,
+				1A00000000000000000004B /* TypeSizeBridgeTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

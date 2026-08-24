@@ -59,7 +59,8 @@ struct AppCorrectnessTests {
       try PropertyListSerialization.propertyList(
         from: Data(contentsOf: url), format: nil) as? [String: Any] ?? [:]
 
-    // @AppStorage IS UserDefaults, and S3a's favourites use it. Declaring the category
+    // S3a's favourites are one string in `UserDefaults.standard` (`TodayModel`). Declaring the
+    // category
     // without a valid reason code is its own rejection (ITMS-91055), so both halves are
     // asserted, not just the presence of the array.
     let types = manifest["NSPrivacyAccessedAPITypes"] as? [[String: Any]] ?? []

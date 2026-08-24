@@ -820,6 +820,12 @@ swaps atomically into Application Support. A failed, absent, or version-mismatch
   Application Support), `src/swimzh/etl/ios_export.py` (emit `manifest.json` beside the store),
   `Makefile` (`make ios-release`), `docs/concepts/ios-resolved-export.md`.
 - **Acceptance**:
+  0. **The offline lint is narrowed, not deleted.** `SourceLintTests.noNetwork` (shipped in S2)
+     bans `URLSession`/`Network`/`NWConnection`/`CFSocket` in **both** targets, which S5 cannot
+     satisfy. It becomes an allowlist of exactly `Live.swift` and `Refresh.swift`, with the lint
+     still asserting every other file in both targets is clean, and a test proving the lint fails
+     when a network call is added outside the seam. This is the S3a-surfaced conflict recorded in
+     Decisions; do not discover it again.
   1. Airplane Mode: the app is fully usable; the crowd and temperature badges show the explicit
      unavailable state and never a stale or zero value. A test drives a failing transport and
      asserts that state.
@@ -1113,6 +1119,72 @@ it put the proxy at 2.15× the whole ratchet.
 cannot import the app target, so the plan's path would have measured the test runner — the precise
 mismeasurement acceptance 3 forbids.
 
+### S5 must deliberately narrow the offline lint (found during S3a, 2026-08-24)
+
+**A conflict between two slices, surfaced early rather than mid-implementation.** S2 shipped
+`SourceLintTests.noNetwork`, which asserts that **neither** iOS target references `URLSession`,
+`Network`, `NWConnection` or `CFSocket`. It is the structural substitute for S2's waived Airplane
+Mode check and, as it stands, the strongest evidence the app is genuinely offline.
+
+S5 cannot be implemented against it. S5's Touches name `Sources/SwimZHKit/Live.swift` (a Baditicker
+client) and `Refresh.swift` (a manifest fetch), and its acceptance 1 requires the crowd and
+temperature badges to render an explicit unavailable state — which presumes a network read that can
+fail. The same conflict already shows in S3a's field coverage:
+`FacilityDetailOut.live_water_temp` had to be omitted because no target may contain networking.
+
+**Resolution, decided here so S5 does not discover it mid-slice.** S5 narrows the lint rather than
+deleting it: networking is permitted **only** in `Live.swift` and `Refresh.swift`, and the lint
+asserts that every other file in both targets is still clean — the seam becomes named and testable
+instead of absent. S5's acceptance gains this explicitly, and any later file wanting a network call
+must change the lint's allowlist deliberately, which is the point. If the user would rather keep the
+absolute ban, the alternative is dropping live data from the plan; that is a scope decision, not one
+to take quietly.
+
+### S3a (2026-08-24) — one bug class, found twice, by grepping for a word
+
+**The wall clock leaked across days, and no test could express it.** `listModel` took a
+time-of-day but no reference day, while the strip offers the whole 400-day horizon. At 07:30,
+selecting 2026-12-20 rendered **"Open now · until 09:00"** and counted the pool in "N open to you";
+at 22:00 every future day read **"Done for today"**. The web had already solved this —
+`api.ts:90` pins `DAY_MOMENT = "T12:00"` for any non-today date — and the Swift port simply had no
+notion of "today". The tell was that the failing case **could not be written**: the function took no
+argument that would let a test state it.
+
+**The orchestrator's first fix instruction was wrong, and the implementer said so.** Substituting the
+web's fixed 12:00 moment is *not* sufficient: at 12:00 a 06:00–09:00 session still tiers `.past`
+("Done for today") and an 11:00–13:00 one still tiers `.now` ("Open now") — both false for a future
+date. The correct fix removes clock tiering entirely off-today (a sixth tier `scheduled`, "Open that
+day", with `openToYou` forced false), and keeps the 12:00 moment only for the *store query* so
+`openAtQueryTime` still matches the web. Recorded because the rebuttal was right and the reasoning is
+the reusable part.
+
+**Then the same bug turned up one layer down, from the same technique.** A grep of the *app* target
+for temporal wording found `"+2 more today"` rendering on `.scheduled` rows. The implementer ran the
+same grep over the *kit* and found `dayStateLabel(.closed(.noSessions))` returning **"Closed
+today"** — and ghost/closed rows are built with no reference to which day is today, so the string
+was reachable on ninety-odd future dates in the committed store. Now "Closed — no sessions", which
+is what the closure code actually says and is true on whatever day the row belongs to.
+`stateLabelsAreDayAgnostic` pins the whole family. **The exposure is structural and S3b/S4 inherit
+it**: session rows are day-aware, ghost and closed rows are not, so any new sentence must be checked
+against both.
+
+**Two more defects nothing else would have caught.** `today` was captured once at load, so an app
+left open across midnight kept treating yesterday as today — the "Today" chip pointed at the day
+before and clock tiers resumed on a stale day. And `TodayView.statusLabel`, a pass-through shipped in
+S2, had drifted from the row's own path on the `unmapped` arm: it said "reason not classified" while
+the list quoted the pool's own words. It was **deleted**, not repaired — a second path to one mapping
+is what produced the drift, and after the deletion the app target contains no state-to-string logic
+at all. **S3b should preserve that condition as it adds the canvas.**
+
+**A hole in the field-coverage mechanism, used at introduction.** The union/disjointness test proves
+every field is *classified*; it can never prove a `rendered` claim is *true*. Five fields were
+declared rendered that the phone structurally cannot render — `SwimOption` carries no `source`,
+`curated` or `validAsOf` at all — and one omission reason then rested on that false claim. Four moved
+to `deliberatelyOmitted`; `detail_params` was made genuinely rendered instead, so the comment
+promising the pool's own words is now true. Three fields are pinned by name in
+`renderedClaimsAreNotAspirational` because **no general mechanism exists**. S3b moves five more
+fields into `renderedFields` and carries exactly the same exposure.
+
 ## Accepted drift
 
 Findings the user has knowingly blessed, so `/dev:present` folds them into a
@@ -1140,6 +1212,7 @@ Appended by /dev:implement after each slice — never rewritten. Newest row last
 | 2026-08-23 | S1 | done | `feature_key` gains a deterministic `#n` suffix on a repeated kind (a bare `kind` violates the plan's own PK); `ExportReport.uncovered_days` additive; `days < 1` returns `Err` not a raise; gate destination iPhone 16→17 (orchestrator, machine has no iPhone 16) | `day_warning` re-resolves every facility per date — a second resolver pass beside `find_swim_options`, ~2× sweep cost (0.5 s total); `render_warning` has no unknown-code arm and would `KeyError` on missing params | **yes — 3 unverified plan claims corrected, see Decisions** |
 | 2026-08-24 | S2 | done | `Store` is an actor not a struct; `priceFor` returns `PriceEntry?` (the plan's `Admission` was the wrong type); `eligibility(person, access)` argument order; added `SessionAccess.unknown`; strict `min_age` decoding; extra files beyond Touches (committed 1.75 MB store, `scripts/ios_fixtures.py`, app-hosted test target); acc 7's open-failure proof is **structural only** | no runtime proof of the open-failure close (grep only — no metric on Apple's SQLite can observe it); committed store is a **140-day** horizon, not 400; the store is not byte-reproducible (`gold_valid_as_of` moves with the wall clock); `DayWarning.rendered` duplicates Python's renderer; `/swim` still omits `min_age` | **yes — acc 5 (Airplane Mode) UNVERIFIED, human check waived** |
 | 2026-08-24 | S2b | done | metric tests landed in the existing `App/SwimZHTests/`, not the plan's `Tests/MetricTests/` (a SwiftPM target cannot import the app — the plan's path would measure the runner); size ratchet enforced by a Run Script build phase, not a test (the `.app` exists only inside `xcodebuild`); `app_minus_sqlite` ratcheted to **1 MB**, tighter than the plan's 4 MB; `scripts/ios_budget.py` + `tests/scripts/**` required by acc 4 but absent from Touches | size proxy is the **Debug** build, not the release/thinned figure; `escaped_bodies` reports but does not score a closure-valued property (refactor to a `func`, do **not** edit the `escaped == []` assertion); `MemoryMetricTests` restates the 100 MB ceiling (joined by a string-match pytest, not a generated constant); no `XCTMemoryMetric` baseline (baselines do not travel across device configurations) | **yes — `CA92.1` documentation-verified but still not browser-eyeballed before first upload** |
+| 2026-08-24 | S3a | done | `stripLayout` takes a kit-local `TypeSize`, not SwiftUI's `DynamicTypeSize` (the kit may not import SwiftUI — an existing lint forbids it), bridged by rank and pinned case-by-case; a **sixth tier `scheduled`** and a **fifth day state** added so an off-today answer makes no wall-clock claim; `.closed(.noSessions)` reworded from "Closed today"; `TodayView.statusLabel` (shipped in S2) **deleted** rather than repaired; many files beyond Touches, all forced by "logic goes in SwimZHKit" | `app_minus_sqlite` 299,090 → 686,442 B (headroom 3.5× → 1.5×; `budgets.json` untouched as gate configuration — S3b will likely need it raised deliberately); every filter change, search keystroke included, re-queries the store; `Tier.scheduled`'s verdict shows the day's outer span only, so a long midday gap reads as continuous; `renderedFields` proves drift detection, not that a pixel is drawn | **yes — acc 4's visual half and acc 7's appearance check UNVERIFIED (waived human checks); nothing has looked at a screen** |
 
 ## Decisions & divergences
 

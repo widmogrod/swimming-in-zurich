@@ -109,4 +109,36 @@ public enum ZurichClock {
     components.timeZone = timeZone
     return calendar.date(from: components)
   }
+
+  /// The Zurich calendar day `days` after `day`, as the store's key. Nil for a malformed key.
+  ///
+  /// This is date ARITHMETIC, not a date rule (invariant E1): it answers "which key comes
+  /// next", never "is that day a school holiday". Going through `Calendar` rather than adding
+  /// 86_400 seconds is what keeps it right across the two days a year Zurich changes offset,
+  /// and the anchor is midday so a DST jump can never land the result on the wrong date.
+  public static func day(_ day: String, plus days: Int) -> String? {
+    guard let start = instant(day: day, at: TimeOfDay(hour: 12, minute: 0)) else { return nil }
+    guard let moved = calendar.date(byAdding: .day, value: days, to: start) else { return nil }
+    return self.day(of: moved)
+  }
+
+  /// Every day key from `start` through `end` inclusive, in order.
+  ///
+  /// `limit` is a hard stop, not a preference: this walks a horizon read from a store the app
+  /// did not write (S5 downloads them), and a corrupt `horizon_end` far in the future must not
+  /// turn the day strip into an unbounded allocation. The published horizon is ~400 days.
+  public static func days(
+    from start: String,
+    through end: String,
+    limit: Int = 1_000
+  ) -> [String] {
+    guard start <= end, instant(day: start, at: TimeOfDay(hour: 12, minute: 0)) != nil else {
+      return []
+    }
+    var days: [String] = [start]
+    while days.count < limit, let next = day(days[days.count - 1], plus: 1), next <= end {
+      days.append(next)
+    }
+    return days
+  }
 }
