@@ -140,6 +140,42 @@ struct SourceLintTests {
     }
   }
 
+  @Test("the launch measurement is actually wired into the app, at both ends")
+  func launchSignpostIsWired() throws {
+    // An instrument nothing calls measures nothing, and this is the exact shape of that
+    // failure: `LaunchSignpost` can be green in its own suite while the app never starts
+    // it. Both ends are required — a `start()` with no `dataOnScreen()` leaves Apple's
+    // extended launch measurement open forever, and a `dataOnScreen()` with no `start()`
+    // reports the plain first-frame number, which is the false-excellent one.
+    let app = try Self.appSwiftFiles()
+    let code = app.map { Self.code($0.text) }.joined(separator: "\n")
+    #expect(code.contains("LaunchSignpost.shared.start()"), "no app-start signpost")
+    #expect(code.contains("LaunchSignpost.shared.dataOnScreen()"), "no data-on-screen signpost")
+
+    // ...and the end is on the view that shows DATA, never on the loading shell: closing
+    // the interval when a spinner appears would make the launch number excellent and false.
+    // BOTH halves are needed. "it appears after `case .ready`" alone still passes if the
+    // spinner ALSO closes it, which is the very mistake this lint exists to catch — so the
+    // `.loading` arm is checked negatively, on its own.
+    let view = try #require(app.first { $0.name == "TodayView.swift" })
+    let body = Self.code(view.text)
+    let ready = try #require(body.range(of: "case .ready"))
+    #expect(
+      body[ready.lowerBound...].contains("dataOnScreen()"),
+      "the interval must close in the `.ready` branch"
+    )
+
+    let loading = try #require(body.range(of: "case .loading"))
+    // The `.loading` arm runs to the next `case` — the `.failed` arm, which closes the
+    // interval legitimately (a launch that ended in an error is still a launch that ended).
+    let afterLoading = body[loading.upperBound...]
+    let nextCase = try #require(afterLoading.range(of: "case ."))
+    #expect(
+      !afterLoading[..<nextCase.lowerBound].contains("dataOnScreen()"),
+      "the loading shell closes the launch interval — that is the false-excellent number"
+    )
+  }
+
   @Test("NOTHING in either target reaches the network — the offline floor is structural")
   func noNetwork() throws {
     // The app's premise is that it answers with no network at all, and the plan's S2

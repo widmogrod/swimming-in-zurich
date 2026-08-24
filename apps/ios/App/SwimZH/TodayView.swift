@@ -34,9 +34,18 @@ struct TodayView: View {
       ProgressView()
     case .failed(let message):
       ContentUnavailableView(
-        "Cannot read the pool data", systemImage: "xmark.icloud", description: Text(message))
+        "Cannot read the pool data", systemImage: "xmark.icloud", description: Text(message)
+      )
+      // The launch is over even though there is no data: leaving the extended measurement
+      // open would never end it, and every failed launch would silently poison the field
+      // numbers rather than showing up as a slow one.
+      .onAppear { LaunchSignpost.shared.dataOnScreen() }
     case .ready(let answer, let metadata):
       answerList(answer, metadata)
+        // Here, and nowhere earlier: this is the first moment REAL data is on screen. The
+        // `.loading` spinner above is a frame the user cannot read, and closing the
+        // measurement there would report an excellent launch and a false one.
+        .onAppear { LaunchSignpost.shared.dataOnScreen() }
     }
   }
 

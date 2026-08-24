@@ -10,6 +10,15 @@ import SwimZHKit
 
 @main
 struct SwimZHApp: App {
+  init() {
+    // As early as the app can. Apple measures launch as time-to-first-frame, so without
+    // this the official number would stop when the empty shell is drawn and the store
+    // load — the slow part, and the part the user is actually waiting for — would fall
+    // outside it. `LaunchSignpost` extends the measurement over it; `TodayView` closes it
+    // when real data is on screen. See `Sources/SwimZHKit/LaunchSignpost.swift`.
+    LaunchSignpost.shared.start()
+  }
+
   var body: some Scene {
     WindowGroup {
       TodayView()

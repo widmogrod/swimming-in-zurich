@@ -1054,6 +1054,65 @@ a human check the user waived. The substitute is `SourceLintTests.noNetwork`, no
 both targets and mutation-checked, proving neither target references `URLSession`, `Network`,
 `NWConnection` or `CFSocket` at all. That is a strong structural claim, but it is not the criterion.
 
+### S2b (2026-08-24) — a critic finding refuted on Apple's own evidence
+
+**The dispute, and how it was settled.** The reviewer raised as *blocking* that
+`PrivacyInfo.xcprivacy`'s `CA92.1` was the App Group reason and must become `54BD.1`. The
+orchestrator fetched Apple's machine-readable payload directly
+(`.../NSPrivacyAccessedAPITypeReasons.json`, retrieved 2026-08-24) rather than adjudicate on
+recall. It says the opposite:
+
+| code | meaning |
+|---|---|
+| **`CA92.1`** | "information that is **only accessible to the app itself**" — what this app does |
+| `1C8F.1` | members of the same **App Group** |
+| `C56D.1` | third-party **SDK wrapper** only |
+| `AC6B.1` | **MDM** managed configuration |
+
+`54BD.1` is not a User Defaults reason at all. **The finding was refuted and the code was not
+changed** — applying it would have introduced the exact App Store defect the criterion exists to
+prevent. Only the citation moved, from the rendered page to the JSON payload plus its retrieval
+date. The lesson is sharper than the outcome: the reviewer cited the *same* JSON URL it recommended
+because rendered Apple pages are unreliable, and still inverted two of the four codes. Per-code
+quotations get re-read, never recalled. The plan's acceptance 5 requirement to verify in a browser
+stands, and the manifest still asks for that check before the first upload.
+
+**A real finding, taken.** The new Python tests were macOS-only but land in the **ubuntu** `qa` job
+(`pyproject.toml:84` `testpaths` collects `tests/scripts/`; `qa.yml:9,29` runs `uv run pytest` on
+`ubuntu-latest`) — the next push would have gone red. The trigger is subtle and worth recording:
+`/bin/echo` on Linux is an **ELF** binary, and `ios_budget.is_macho` tests only Mach-O magics, so it
+is counted as a *resource*, not code. Split into platform-independent arithmetic tests that still
+run everywhere and macOS-only bundle tests behind a skip.
+
+**Three measurements that change what later slices can assume.**
+
+1. **`XCTMemoryMetric` is half-useless on Xcode 26.** It emits two sub-metrics:
+   `XCTMetric_Memory.physical` (the delta) read **0.000 kB across all five iterations**, while
+   `physical_peak` read 51.3 MB. The plan predicted "a delta, not a peak" — correct, and the useless
+   half is the one it named. The gate is therefore a hard `task_vm_info.phys_footprint` assertion,
+   with `XCTMemoryMetric` kept only as a loose ratchet.
+2. **Half the memory budget is already spent.** One full 57-pool answer peaks at ~51 MB of the
+   100 MB ceiling **before any UI exists**. S3a and S3b have far less headroom than the number
+   suggests — exactly the kind of fact that is worthless discovered at the end.
+3. **Size is a non-issue and the ratchet was a ceiling.** `app_minus_sqlite` measures **299,090 B**
+   — 7% of the plan's 4 MB and 1% of the 30 MB the user set. The ratchet was tightened to **1 MB**
+   (the plan's 4 MB kept as `plan_ratchet_bytes`), because a limit at 14× the measurement does not
+   bite until the app is finished, which is the audit-at-the-end failure this slice exists to
+   prevent.
+
+**Toolchain facts that would silently break future tooling.** llvm-cov reports a function's start
+line as the **body-brace line**, not the `func` line (`Store.answer` is declared at 143 and reported
+at 149) — any join on the declaration line misses every multi-line signature. A Debug build puts the
+real code in `SwimZH.debug.dylib` behind a 40 KB stub, so `size -m` on the executable alone measures
+nothing; the proxy sums every Mach-O in the bundle. And `xcodebuild … test` copies ~8.8 MB of XCTest
+support **into the .app**, so a size gate running inside the test command must exclude it — measured,
+it put the proxy at 2.15× the whole ratchet.
+
+**Divergence worth naming:** the app-hosted metric tests landed in the existing
+`apps/ios/App/SwimZHTests/`, not the plan's `apps/ios/Tests/MetricTests/`. A SwiftPM test target
+cannot import the app target, so the plan's path would have measured the test runner — the precise
+mismeasurement acceptance 3 forbids.
+
 ## Accepted drift
 
 Findings the user has knowingly blessed, so `/dev:present` folds them into a
@@ -1080,6 +1139,7 @@ Appended by /dev:implement after each slice — never rewritten. Newest row last
 |------|-------|--------|----------------------|-------------------|---------------|
 | 2026-08-23 | S1 | done | `feature_key` gains a deterministic `#n` suffix on a repeated kind (a bare `kind` violates the plan's own PK); `ExportReport.uncovered_days` additive; `days < 1` returns `Err` not a raise; gate destination iPhone 16→17 (orchestrator, machine has no iPhone 16) | `day_warning` re-resolves every facility per date — a second resolver pass beside `find_swim_options`, ~2× sweep cost (0.5 s total); `render_warning` has no unknown-code arm and would `KeyError` on missing params | **yes — 3 unverified plan claims corrected, see Decisions** |
 | 2026-08-24 | S2 | done | `Store` is an actor not a struct; `priceFor` returns `PriceEntry?` (the plan's `Admission` was the wrong type); `eligibility(person, access)` argument order; added `SessionAccess.unknown`; strict `min_age` decoding; extra files beyond Touches (committed 1.75 MB store, `scripts/ios_fixtures.py`, app-hosted test target); acc 7's open-failure proof is **structural only** | no runtime proof of the open-failure close (grep only — no metric on Apple's SQLite can observe it); committed store is a **140-day** horizon, not 400; the store is not byte-reproducible (`gold_valid_as_of` moves with the wall clock); `DayWarning.rendered` duplicates Python's renderer; `/swim` still omits `min_age` | **yes — acc 5 (Airplane Mode) UNVERIFIED, human check waived** |
+| 2026-08-24 | S2b | done | metric tests landed in the existing `App/SwimZHTests/`, not the plan's `Tests/MetricTests/` (a SwiftPM target cannot import the app — the plan's path would measure the runner); size ratchet enforced by a Run Script build phase, not a test (the `.app` exists only inside `xcodebuild`); `app_minus_sqlite` ratcheted to **1 MB**, tighter than the plan's 4 MB; `scripts/ios_budget.py` + `tests/scripts/**` required by acc 4 but absent from Touches | size proxy is the **Debug** build, not the release/thinned figure; `escaped_bodies` reports but does not score a closure-valued property (refactor to a `func`, do **not** edit the `escaped == []` assertion); `MemoryMetricTests` restates the 100 MB ceiling (joined by a string-match pytest, not a generated constant); no `XCTMemoryMetric` baseline (baselines do not travel across device configurations) | **yes — `CA92.1` documentation-verified but still not browser-eyeballed before first upload** |
 
 ## Decisions & divergences
 

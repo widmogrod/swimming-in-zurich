@@ -48,10 +48,24 @@ ios-fixtures:  ## Regenerate the COMMITTED offline store + geo fixture (no netwo
 
 # The lint covers `App` as well as the package: `swift build` compiles only the package, so
 # without it the SwiftUI layer — the one S3a grows most — would never be linted at all.
-ios-qa:  ## Swift chain: format lint -> build -> test -> simulator test
+#
+# The closing `xcodebuild ... test` carries THREE things `swift test` structurally cannot:
+# the app target's compile check, the app-hosted metric/correctness tests, and — as the app
+# target's last build phase — `scripts/ios_budget.py`, so a size regression fails right
+# there rather than needing a step of its own to remember.
+#
+# `pytest tests/scripts` runs HERE and not only in the Python chain, because two of the
+# gate's own tests — the CRAP offender path and the coverage join — skip without
+# `apps/ios/.build`, which the ubuntu `qa` job never has. Without this step they would be
+# dead code in CI on every runner. It goes after the CRAP step so the build directory and
+# the coverage data exist, and `--no-cov` because the coverage floor belongs to the Python
+# chain alone and must not be computed from this partial selection.
+ios-qa:  ## Swift chain: format lint -> build -> test+coverage -> CRAP -> gate tests -> simulator test
 	cd apps/ios && swift format lint --strict --recursive Sources Tests App
 	cd apps/ios && swift build
-	cd apps/ios && swift test
+	cd apps/ios && swift test --enable-code-coverage
+	uv run python scripts/crap_swift.py
+	uv run pytest tests/scripts --no-cov
 	cd apps/ios && xcodebuild -project App/SwimZH.xcodeproj -scheme SwimZH \
 		-destination '$(IOS_DESTINATION)' test
 	@echo "iOS QA: all green"

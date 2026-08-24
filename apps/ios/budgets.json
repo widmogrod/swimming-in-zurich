@@ -1,0 +1,36 @@
+{
+  "_comment": [
+    "Non-functional budgets for the iOS app, as a committed ratchet. Two size numbers,",
+    "never one: `ios.sqlite` grows with the data horizon and the binary grows with the",
+    "app, so a combined figure would let a weekly data refresh mask a code regression.",
+    "Enforced by scripts/ios_budget.py, which runs as a Run Script build phase on the",
+    "app target and therefore fires inside the chain's closing `xcodebuild ... test`.",
+    "`measured_bytes` is informational (refresh it with `--record`); `limit_bytes` is",
+    "the gate. Raise a limit only deliberately, with the reason recorded in the plan."
+  ],
+  "app_minus_sqlite": {
+    "limit_bytes": 1048576,
+    "plan_ratchet_bytes": 4194304,
+    "ceiling_bytes": 31457280,
+    "measured_bytes": 299090,
+    "how": "sum of every bundled Mach-O's __TEXT segment (size -m) + every non-Mach-O resource, minus ios.sqlite",
+    "why": "Tightened to 1 MB from the plan's 4 MB (kept above as plan_ratchet_bytes) because 4 MB is 14x the measured 299,090 B: a ratchet with that much slack would not bite until S3b, which is the 'audited at the end' failure this slice exists to prevent. 3.5x headroom is enough for S3a's filters and day strip. RAISE IT DELIBERATELY, up to the plan's 4 MB and never past the 30 MB ceiling, recording the reason - do not silently widen it to make a build pass. Measured context: a stripped hello-world SwiftUI binary is ~71 KB and a 2,771-line synthetic app ~127 KB, so the ceiling was never in play. This is an UNSIGNED PROXY, not the thinned download: -exportArchive needs a signing identity CI has not got. Measured on the Debug configuration the gate builds."
+  },
+  "sqlite": {
+    "limit_bytes": 8388608,
+    "measured_bytes": 1794048,
+    "how": "the size of ios.sqlite inside the built bundle",
+    "why": "The plan's 8 MB bound, which S1's export test also asserts. It is deliberately NOT tightened to the committed 140-day fixture store (1.75 MB): `make ios-export` swaps in the real 400-day store, measured at 5.00 MB, and a ratchet below that would fail the release build rather than catch a regression."
+  },
+  "peak_memory": {
+    "limit_bytes": 104857600,
+    "how": "XCTMemoryMetric in the app-hosted MetricTests, over a full 57-pool answer",
+    "measured_bytes": 52531675,
+    "why": "The plan's 100 MB ceiling, deliberately generous. XCTMemoryMetric is meaningless against an XCUIApplication because it measures the test runner, hence an app-hosted unit test. Measured on Xcode 26 it emits two sub-metrics: XCTMetric_Memory.physical (the delta) read 0.000 kB across all five iterations - useless, as the plan predicted - and XCTMetric_Memory.physical_peak read 51.3 MB. So the gate is task_vm_info.phys_footprint against this limit; XCTMemoryMetric is the loose ratchet beside it."
+  },
+  "launch_seconds": {
+    "target": 1.0,
+    "how": "the OSSignposter interval in LaunchSignpost, registered with MetricKit extendLaunchMeasurement(forTaskID:)",
+    "why": "NOT a CI gate. Xcode stores performance baselines per device configuration precisely because they do not travel, and no published simulator-variance figure was found. S2b ships the instrument; the number is read on a real device."
+  }
+}

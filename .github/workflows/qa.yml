@@ -81,6 +81,14 @@ jobs:
       - name: Select Xcode
         run: sudo xcode-select -s /Applications/Xcode_26.app || xcodebuild -version
 
+      # The CRAP gate below is Python — beside scripts/crap.py, one interpreter the repo
+      # already has, and no build of its own before the chain can run it — so this job
+      # needs uv too. The gate itself imports only the standard library.
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
       # `App` as well as the package: `swift build` below compiles only the package, so
       # without it the SwiftUI layer — the one S3a grows most — would drift unchecked.
       - name: Format lint (swift format, strict — package AND app)
@@ -93,13 +101,33 @@ jobs:
 
       # SwiftPM only: no simulator, no network. This is where the rule layer is proved,
       # including the replay of the generated eligibility contract and the golden answers.
-      - name: Test the package
+      # --enable-code-coverage is what the CRAP gate below reads; without it that gate has
+      # no input at all, which is why the two steps are adjacent and in this order.
+      - name: Test the package (with coverage)
         working-directory: apps/ios
-        run: swift test
+        run: swift test --enable-code-coverage
+
+      # Order is load-bearing, exactly as pytest->crap.py and vitest->crap_ts.mjs: this
+      # reads the coverage the step above writes and is stale without it. It scores
+      # Sources/SwimZHKit only - the thin app target is excluded, because a SwiftUI view
+      # body reports inflated executable lines and cannot be unit-tested headlessly.
+      - name: CRAP gate (Swift)
+        run: uv run python scripts/crap_swift.py
+
+      # The gate's OWN tests, and they run here rather than only in the ubuntu `qa` job
+      # because two of them - the CRAP offender path and the coverage join - skip without
+      # `apps/ios/.build`, which that job never has. Without this step they would be dead
+      # code in CI on every runner. After the CRAP step so the build directory and the
+      # coverage data exist; --no-cov because the coverage floor belongs to the Python
+      # chain alone and must not be computed from this partial selection.
+      - name: Gate self-tests (crap_swift + ios_budget)
+        run: uv run pytest tests/scripts --no-cov
 
       # The app target cannot be imported by `swift test`, so the compile check and the
       # app-hosted tests need a simulator. `-project` is required: with none, xcodebuild
       # searches the cwd, which holds Package.swift and no .xcodeproj.
+      # Also where the size ratchet fires: scripts/ios_budget.py is the app target's last
+      # build phase, so a regression in app_minus_sqlite or sqlite fails this step.
       - name: Build and test the app in the simulator
         working-directory: apps/ios
         run: |

@@ -13,6 +13,9 @@
 		1A000000000000000000020 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 1A00000000000000000001B /* Assets.xcassets */; };
 		1A000000000000000000021 /* BundledStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A00000000000000000001C /* BundledStoreTests.swift */; };
 		1A000000000000000000024 /* SwimZHKit in Frameworks */ = {isa = PBXBuildFile; productRef = 1A000000000000000000023 /* SwimZHKit */; };
+		1A00000000000000000002B /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 1A00000000000000000002A /* PrivacyInfo.xcprivacy */; };
+		1A00000000000000000002D /* AppCorrectnessTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A00000000000000000002C /* AppCorrectnessTests.swift */; };
+		1A00000000000000000002F /* MemoryMetricTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A00000000000000000002E /* MemoryMetricTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -33,6 +36,9 @@
 		1A00000000000000000001A /* TodayModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TodayModel.swift; sourceTree = "<group>"; };
 		1A00000000000000000001B /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		1A00000000000000000001C /* BundledStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BundledStoreTests.swift; sourceTree = "<group>"; };
+		1A00000000000000000002A /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		1A00000000000000000002C /* AppCorrectnessTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppCorrectnessTests.swift; sourceTree = "<group>"; };
+		1A00000000000000000002E /* MemoryMetricTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemoryMetricTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -79,6 +85,7 @@
 				1A000000000000000000019 /* TodayView.swift */,
 				1A00000000000000000001A /* TodayModel.swift */,
 				1A00000000000000000001B /* Assets.xcassets */,
+				1A00000000000000000002A /* PrivacyInfo.xcprivacy */,
 			);
 			path = SwimZH;
 			sourceTree = "<group>";
@@ -87,6 +94,8 @@
 			isa = PBXGroup;
 			children = (
 				1A00000000000000000001C /* BundledStoreTests.swift */,
+				1A00000000000000000002C /* AppCorrectnessTests.swift */,
+				1A00000000000000000002E /* MemoryMetricTests.swift */,
 			);
 			path = SwimZHTests;
 			sourceTree = "<group>";
@@ -101,6 +110,7 @@
 				1A00000000000000000000A /* Sources */,
 				1A00000000000000000000B /* Frameworks */,
 				1A00000000000000000000C /* Resources */,
+				1A00000000000000000003A /* Size budget */,
 			);
 			buildRules = (
 			);
@@ -174,12 +184,31 @@
 		};
 /* End PBXProject section */
 
+/* Begin PBXShellScriptBuildPhase section */
+		1A00000000000000000003A /* Size budget */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputPaths = (
+			);
+			name = "Size budget";
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "# The two size ratchets, applied to the bundle that was just built.\n#\n# It lives HERE, as the app target's last phase, rather than as an extra command in\n# the QA chain, because the artifact it measures only exists inside an xcodebuild\n# build -- and putting it in the chain would be one more step to forget. A regression\n# fails the build, which is the closing `xcodebuild ... test` of the Swift chain.\n#\n# `size -m` is a host tool, so this cannot be an in-simulator test. /usr/bin/python3\n# ships with the Command Line Tools; the script imports only the standard library.\nset -e\nPYTHON=\"$(command -v python3 || echo /usr/bin/python3)\"\nexec \"$PYTHON\" \"$SRCROOT/../../../scripts/ios_budget.py\" \"$TARGET_BUILD_DIR/$WRAPPER_NAME\"\n";
+		};
+/* End PBXShellScriptBuildPhase section */
+
 /* Begin PBXResourcesBuildPhase section */
 		1A00000000000000000000C /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
 				1A000000000000000000020 /* Assets.xcassets in Resources */,
+				1A00000000000000000002B /* PrivacyInfo.xcprivacy in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -201,6 +230,8 @@
 			buildActionMask = 2147483647;
 			files = (
 				1A000000000000000000021 /* BundledStoreTests.swift in Sources */,
+				1A00000000000000000002D /* AppCorrectnessTests.swift in Sources */,
+				1A00000000000000000002F /* MemoryMetricTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
