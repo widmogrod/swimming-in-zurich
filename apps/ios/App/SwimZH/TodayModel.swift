@@ -11,6 +11,7 @@
 // pool cache stays, because it is per-store rather than per-day.
 
 import Foundation
+import OSLog
 import SwimZHKit
 
 @MainActor
@@ -19,9 +20,32 @@ final class TodayModel {
   enum State {
     case loading
     case ready(ListModel, StoreMetadata)
-    /// The store could not be opened or read. Shown as itself — never as an empty list, which
-    /// would read as "nothing is open today".
+    /// The store could not be opened or read. Shown as ITS OWN screen — never as an empty
+    /// list, which would read as "nothing is open today".
+    ///
+    /// The payload is a DIAGNOSTIC, not a sentence for the reader: a `StoreError`'s English
+    /// detail names a table and a row. S3b put it on screen; S4 sends it to the log and shows
+    /// `error.store.title` / `error.store.body` instead — one of the two strings in this app
+    /// that could never have been translated, because it is generated at the failure site.
     case failed(String)
+  }
+
+  /// The renderer the model needs for the sentences it builds through `SwimZHKit` — the row
+  /// verdicts' numbers, the day chips' weekdays. It is the SAME `AppLocale` the views resolve
+  /// from the environment; both come from `AppLocale.current`, so there is one answer to
+  /// "which language is this" rather than two that must agree.
+  private let localized: Localized
+
+  init(localized: Localized = .current) {
+    self.localized = localized
+  }
+
+  private static let log = Logger(subsystem: "ch.swimzh.app", category: "store")
+
+  /// Record why the store could not be read. The reader sees a sentence; whoever has to fix it
+  /// sees the table and the row.
+  func log(_ diagnostic: String) {
+    Self.log.error("store unreadable: \(diagnostic, privacy: .public)")
   }
 
   private(set) var state: State = .loading
@@ -152,7 +176,8 @@ final class TodayModel {
           favourites: favourites,
           horizon: metadata,
           today: today,
-          at: time
+          at: time,
+          format: localized.format
         ),
         metadata
       )
@@ -175,7 +200,9 @@ final class TodayModel {
     let current = ZurichClock.day(of: now)
     guard current != today, let metadata else { return }
     today = current
-    chips = dayChips(from: metadata.horizonStart, through: metadata.horizonEnd, today: today)
+    chips = dayChips(
+      from: metadata.horizonStart, through: metadata.horizonEnd, today: today,
+      format: localized.format)
   }
 
   private func reloadIfNeeded(_ old: Filters) {

@@ -130,41 +130,43 @@ public struct DayWarning: Equatable, Sendable {
     self.params = params
   }
 
-  /// The warning as `find_swim_options` renders it today, reproduced verbatim from
-  /// `etl/ios_export.render_warning` — FOR THE TWO KNOWN CODES.
+  /// The warning as a catalog message: the code chooses the sentence, the params fill it in.
   ///
-  /// Outside those two the renderers deliberately differ, and this one is the better
-  /// behaviour: `render_warning` has no unknown-code arm, so it falls into the holiday
-  /// branch and raises `KeyError` on the missing params. That is defensible in Python, where
-  /// the export writes the code and the renderer in the same commit; it is not defensible
-  /// here, where a client reads a store that S5 downloads and that can be built by a newer
-  /// export. So an unrecognised code renders as itself (see `default:` below) rather than
-  /// crashing or fabricating a sentence about pools it never named. The golden fixture only
-  /// ever exercises the two known codes, so parity is unaffected.
+  /// S2 rendered this as English glued together here, reproducing
+  /// `etl/ios_export.render_warning` verbatim so the golden fixture could prove the
+  /// decomposition. S4 keys it off `code` + `params` instead, which is what the S2 header
+  /// promised and what the ledger recorded as debt ("`DayWarning.rendered` duplicates Python's
+  /// renderer"). The Python renderer is now the TEST's oracle, not a second implementation:
+  /// `GoldenAnswerTests` renders these messages through the English catalog and compares.
   ///
-  /// English is deliberate and temporary: it is what makes the decomposition provable
-  /// against the golden fixture, which carries `QueryResult.warnings` as rendered strings.
-  /// S4 localises the client by keying off `code` + `params`; this stays as the parity
-  /// witness.
-  public var rendered: String {
+  /// The unknown-code arm survives the change and still differs from Python's deliberately:
+  /// `render_warning` has no unknown arm and would `KeyError`. That is defensible in an export
+  /// where the code and the renderer ship in one commit; it is not defensible in a client that
+  /// S5 lets download a store built by a newer export. So an unrecognised code rides through
+  /// the passthrough key rather than crashing or borrowing the holiday sentence's claim about
+  /// pools it never named.
+  /// It takes a `Format` for ONE parameter, and that parameter is the reason: `params["date"]`
+  /// is Python's `date.isoformat()` — `2026-12-25` — so a warning that interpolated it raw
+  /// would tell a Polish reader "2026-12-25 jest dniem ustawowo wolnym" where the browser says
+  /// "25 grudnia 2026". It was the sixth machine date found on this surface, and the one a
+  /// three-day sample missed by three days; the sweeps that now cover the whole horizon are
+  /// what turned it up.
+  ///
+  /// `year` and `pools` stay verbatim: a year is the same four digits in every locale here,
+  /// and `pools` is a list of proper nouns the exporter already joined.
+  public func message(_ format: Format) -> Message {
     switch code {
     case Self.calendarCoverage:
-      return
-        "calendar data not available for \(params["year"] ?? ""); "
-        + "holiday-dependent schedules may be inaccurate"
+      return Message("warning.calendar_coverage", ["year": params["year"] ?? ""])
     case Self.holidayHoursUnverified:
-      return
-        "\(params["date"] ?? "") is a public holiday and these pools do not publish their "
-        + "holiday hours; the times shown are their usual weekday hours and are "
-        + "unconfirmed: \(params["pools"] ?? "")"
+      return Message(
+        "warning.holiday_hours_unverified",
+        [
+          "date": format.storeDate(params["date"] ?? ""),
+          "pools": params["pools"] ?? "",
+        ])
     default:
-      // A store built by a newer export can carry a code this binary has never seen, and
-      // S5 downloads exactly such stores. Falling through to the holiday sentence would
-      // have rendered it as " is a public holiday ... : " — a fabricated claim about pools
-      // it never named. The code itself is the honest minimum: it is also the i18n key S4
-      // renders from, so a client that knows the key says the sentence and one that does
-      // not says the key, and neither invents a fact.
-      return code
+      return Message("warning.unknown", ["code": code])
     }
   }
 }

@@ -61,14 +61,6 @@ extension UIMark {
     case .no: return "xmark.circle.fill"
     }
   }
-
-  var voiceOverLabel: String {
-    switch self {
-    case .attend: return "You may attend"
-    case .check: return "Check with the pool"
-    case .no: return "Not open to you"
-    }
-  }
 }
 
 extension BannerModel.Kind {

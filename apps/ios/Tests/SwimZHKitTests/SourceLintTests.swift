@@ -176,6 +176,43 @@ struct SourceLintTests {
     )
   }
 
+  // MARK: - S4 acceptance 5: never re-parse a formatted date
+
+  @Test("`Format.swift` never takes a formatted string apart")
+  func formatResultsAreNeverSplit() throws {
+    // The web learned this one the hard way: `formatLabel(...).split(' ')` assumed three
+    // space-separated tokens and produced silent nonsense in every locale that uses none.
+    //
+    // "Do not apply a separator to a FormatStyle result" is not decidable from source — a grep
+    // cannot tell what a variable holds. This is its decidable form: `Format.swift` is the one
+    // module in the package allowed to hold a format result, so banning the two operators
+    // THERE bans the mistake. A future need for them is a reviewed exception, not a quiet edit.
+    let format = try #require(try Self.swiftFiles().first { $0.name == "Format.swift" })
+    let code = Self.code(format.text)
+    for banned in [".split(", ".components(separatedBy:"] {
+      #expect(
+        !code.contains(banned),
+        "Format.swift uses \(banned) — a formatted string must never be taken apart")
+    }
+    // ...and the RIGHT tool is genuinely in use, so the ban above cannot pass because the
+    // module stopped formatting dates at all. `.attributed` + a `dateField` run is the
+    // platform telling us which characters are the weekday.
+    #expect(code.contains(".attributed"), "Format.swift no longer formats attributed dates")
+    #expect(code.contains("run.dateField"), "Format.swift no longer reads DateFieldAttribute")
+  }
+
+  @Test("the split ban is not vacuous — the operators really are absent, not just unused")
+  func formatSplitBanIsNotVacuous() throws {
+    // A lint that scanned an empty file would pass forever. Both halves: the file is real and
+    // substantial, and the banned tokens are ones this codebase does use elsewhere — so their
+    // absence here is a property of THIS file rather than of the project's style.
+    let format = try #require(try Self.swiftFiles().first { $0.name == "Format.swift" })
+    #expect(format.text.count > 2000, "Format.swift looks truncated")
+    let elsewhere = try Self.swiftFiles()
+      .filter { $0.name != "Format.swift" && Self.code($0.text).contains(".split(") }
+    #expect(!elsewhere.isEmpty, "nothing in the package splits a string — the ban proves nothing")
+  }
+
   @Test("NOTHING in either target reaches the network — the offline floor is structural")
   func noNetwork() throws {
     // The app's premise is that it answers with no network at all, and the plan's S2

@@ -25,7 +25,15 @@ let package = Package(
   targets: [
     .target(
       name: "SwimZHKit",
-      resources: [.copy("Resources/ios.sqlite")]
+      resources: [
+        .copy("Resources/ios.sqlite"),
+        // `.process`, which is what makes Xcode run `xcstringstool` on it and emit the five
+        // `.lproj`s into the resource bundle. SwiftPM itself does NOT — verified: `swift build`
+        // copies the raw JSON through and `Bundle.module.localizations` reports only `en`.
+        // That is why the package's own tests compile the catalog themselves
+        // (`Tests/SwimZHKitTests/CatalogFixture.swift`) instead of reading `Bundle.module`.
+        .process("Resources/Localizable.xcstrings"),
+      ]
     ),
     .testTarget(
       name: "SwimZHKitTests",

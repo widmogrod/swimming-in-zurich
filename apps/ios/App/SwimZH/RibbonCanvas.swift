@@ -28,6 +28,9 @@ struct RibbonCanvas: View {
   /// "Open now" about a date four months out.
   let isToday: Bool
   let selection: Binding<String?>
+  /// Passed IN rather than read from the environment: the canvas's VoiceOver layout is built
+  /// by `a11yBlocks`, which needs the renderer, and a row already holds one.
+  let localized: Localized
 
   @Environment(\.scenePhase) private var scenePhase
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -73,7 +76,7 @@ struct RibbonCanvas: View {
         SpatialTapGesture().onEnded { tap in
           selection.wrappedValue =
             block(
-              at: tap.location.x, in: day, width: proxy.size.width
+              at: tap.location.x, in: day, width: proxy.size.width, localized: localized
             )?.id
         }
       )
@@ -81,12 +84,12 @@ struct RibbonCanvas: View {
         // The canvas's accessibility, built by hand because there is none. Each element is a
         // real view laid out over the block it stands for, so VoiceOver's focus rectangle lands
         // where the ribbon was painted.
-        ForEach(a11yBlocks(for: day, width: proxy.size.width)) { block in
+        ForEach(a11yBlocks(for: day, width: proxy.size.width, in: localized)) { block in
           Color.clear
             .frame(width: block.width, height: proxy.size.height)
             .position(x: block.x + block.width / 2, y: proxy.size.height / 2)
-            .accessibilityLabel(block.label)
-            .accessibilityFacts(block)
+            .accessibilityLabel(Text(block.label, localized))
+            .accessibilityFacts(block, localized)
         }
       }
     }
@@ -311,10 +314,11 @@ extension View {
   /// A loop rather than a literal chain because the facts are DATA: how many there are depends
   /// on whether the basin has a lane plan, a best-public window, or an incomplete one — so a
   /// fixed chain of modifiers could not carry them.
-  func accessibilityFacts(_ block: A11yBlock) -> some View {
+  func accessibilityFacts(_ block: A11yBlock, _ localized: Localized) -> some View {
     block.customContent.reduce(AnyView(self)) { view, fact in
       AnyView(
-        view.accessibilityCustomContent(Text(verbatim: fact.label), Text(verbatim: fact.value)))
+        view.accessibilityCustomContent(
+          Text(fact.label, localized), Text(fact.value, localized)))
     }
   }
 }

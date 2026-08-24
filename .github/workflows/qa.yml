@@ -89,6 +89,25 @@ jobs:
         with:
           enable-cache: true
 
+      # Node, for the ONE step below that needs it: the iOS string catalog is a projection of
+      # the web's TypeScript message catalogs, and the check that it is not stale has to import
+      # the compiled `dist/locales/*.js`. Without this the converter's pytest SKIPS on both
+      # runners — the ubuntu `qa` job never builds the TS either — and S4 acceptance 1 is
+      # unasserted in CI while looking enforced.
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install JS dependencies
+        working-directory: apps/web/static/js
+        run: npm ci
+
+      # Builds `dist/` and then CHECKS — it must not regenerate, or the check downstream would
+      # compare generator output against generator output. See the Makefile's own note.
+      - name: Locale catalog is not stale
+        run: make ios-locales-check
+
       # `App` as well as the package: `swift build` below compiles only the package, so
       # without it the SwiftUI layer — the one S3a grows most — would drift unchecked.
       - name: Format lint (swift format, strict — package AND app)

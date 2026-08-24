@@ -17,6 +17,7 @@ import SwiftUI
 import SwimZHKit
 
 struct DayStrip: View {
+  @Environment(\.localized) private var localized
   let chips: [DayChip]
   @Binding var selection: String
 
@@ -49,7 +50,9 @@ struct DayStrip: View {
   private var legend: some View {
     let layout = stripLayout(for: typeSize, width: 0)
     if layout.labelsCollapsed, let chip = chips.first(where: { $0.day == selection }) {
-      Text(chip.accessibilityLabel)
+      // The formatter's own words for the date — read off its `DateFieldAttribute` runs by
+      // `Format.dayParts`, never split out of a rendered string.
+      Text(verbatim: chip.accessibilityLabel)
         .font(.subheadline.weight(.semibold))
         .padding(.horizontal)
     }
@@ -81,7 +84,7 @@ struct DayStrip: View {
     // The whole chip is the target, gaps included — without this only the glyphs are tappable
     // and the 44 pt rule is satisfied on paper only.
     .contentShape(Rectangle())
-    .accessibilityLabel(chip.accessibilityLabel)
+    .accessibilityLabel(Text(verbatim: chip.accessibilityLabel))
     .accessibilityAddTraits(chip.day == selection ? [.isSelected, .isButton] : .isButton)
   }
 
@@ -90,11 +93,11 @@ struct DayStrip: View {
       // At an accessibility size the caption is dropped rather than shrunk: the legend above
       // carries it, and squeezing three glyphs into a chip is the failure this rule exists to
       // avoid.
-      Text(layout.labelsCollapsed ? "" : chip.caption)
+      captionText(chip, layout: layout)
         .font(.caption2)
         .foregroundStyle(.secondary)
         .lineLimit(1)
-      Text(chip.number)
+      Text(verbatim: chip.number)
         .font(.headline)
         .lineLimit(1)
         .minimumScaleFactor(0.8)
@@ -103,6 +106,20 @@ struct DayStrip: View {
     .background(chipBackground(chip), in: .rect(cornerRadius: 12))
     .overlay(chipBorder(chip))
     .overlay(alignment: .bottom) { todayMarker(chip) }
+  }
+
+  /// The chip's caption: the today WORD (ours) or the weekday (the formatter's).
+  ///
+  /// At an accessibility size it is dropped rather than shrunk — an empty `Text` keeps the
+  /// chip's two-line rhythm without squeezing three glyphs into it, and the legend above
+  /// carries the date instead.
+  @ViewBuilder
+  private func captionText(_ chip: DayChip, layout: StripLayout) -> some View {
+    if layout.labelsCollapsed {
+      Text(verbatim: "")
+    } else {
+      Text(chip.caption, localized)
+    }
   }
 
   /// A TINTED background rather than a filled one, so the label keeps `.primary` and its

@@ -110,9 +110,8 @@ public struct LaneDay: Equatable, Sendable {
   ///
   /// Never an empty lane row and no caveat: an unread lane drawn as empty says "nobody has
   /// booked it", which is the opposite of "we could not tell".
-  public var incompleteLanesCaveat: String? {
-    isComplete
-      ? nil : "Some lanes could not be read from the pool's plan, so this is incomplete."
+  public var incompleteLanesCaveat: Message? {
+    isComplete ? nil : Message("lane.incompleteCaveat")
   }
 }
 
@@ -432,12 +431,19 @@ extension LaneAvailability {
   /// "0 of 8 open", which reads as a measurement; it is rendered as "no lanes open to the
   /// public", which is what the plan actually says. And a `partial` count says so, because a
   /// count drawn from a plan with unreadable lanes is a floor, not a number.
-  public var summary: String {
-    let base =
-      publicLanes == 0
-      ? "no lanes open to the public"
-      : "\(publicLanes) of \(laneCount) lanes open"
-    return partial ? "\(base) — some lanes unreadable" : base
+  ///
+  /// FOUR KEYS, NOT TWO PLUS A SUFFIX. S3b built the partial variant by appending "— some
+  /// lanes unreadable" to a finished sentence, which is a sentence glued onto a sentence: the
+  /// clause lands in a different place in German and cannot be appended at all in Polish
+  /// without re-inflecting what precedes it. Each of the four is a whole translatable unit.
+  public func summary(_ format: Format) -> Message {
+    if publicLanes == 0 {
+      return Message(partial ? "lane.nonePublic.partial" : "lane.nonePublic")
+    }
+    return Message(
+      partial ? "lane.publicOfTotal.partial" : "lane.publicOfTotal",
+      ["public": format.integer(publicLanes)],
+      count: laneCount)
   }
 }
 
@@ -464,13 +470,13 @@ extension SwimOption {
   /// public lanes at 12:00 and 6 of 6 at its 06:00 opening, so a row two weeks out printed
   /// "5 of 6 lanes open" where this rule says "6 of 6". A wall-clock split is only ever a
   /// claim about the day the user is standing in (invariant E1).
-  public func laneSummary(isToday: Bool) -> String? {
+  public func laneSummary(isToday: Bool, format: Format) -> Message? {
     guard laneAvailability != nil || laneTimeline != nil else { return nil }
-    if isToday, openAtQueryTime, let live = laneAvailability { return live.summary }
+    if isToday, openAtQueryTime, let live = laneAvailability { return live.summary(format) }
     guard let opening = laneTimeline?.segments.first?.availability else {
-      return laneAvailability?.summary
+      return laneAvailability?.summary(format)
     }
-    return opening.summary
+    return opening.summary(format)
   }
 }
 
@@ -482,8 +488,19 @@ extension LaneHold {
   /// driven by a test, so a sentence written there is a sentence nothing checks — and this one
   /// has to be day-agnostic (the lane panel is reachable from any date in the horizon), which
   /// is exactly the property this project has already got wrong twice.
-  public func spoken(lane: Int) -> String {
-    let hours = "\(window.start.hhmm) to \(window.end.hhmm)"
-    return "Lane \(lane), \(hours), \(owner ?? "open to the public")"
+  ///
+  /// The HOLDER is the one part that is not ours: a club's name is a proper noun and rides
+  /// through verbatim, while "open to the public" — the fallback for an unheld lane — is our
+  /// sentence and comes from the catalog. Composing them in Swift would put an English clause
+  /// inside a translated one.
+  public func spoken(lane: Int, in localized: Localized) -> Message {
+    Message(
+      "lane.spoken",
+      [
+        "lane": localized.format.integer(lane),
+        "start": window.start.hhmm,
+        "end": window.end.hhmm,
+        "holder": owner ?? localized(Message("lane.openToPublic")),
+      ])
   }
 }

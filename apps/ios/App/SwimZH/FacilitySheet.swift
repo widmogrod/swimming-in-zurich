@@ -14,6 +14,7 @@ import SwiftUI
 import SwimZHKit
 
 struct FacilitySheet: View {
+  @Environment(\.localized) private var localized
   let detail: FacilityDetail
   let day: String
   let person: Person
@@ -21,28 +22,33 @@ struct FacilitySheet: View {
   var body: some View {
     List {
       ForEach(sections) { section in
-        Section(section.title) {
+        Section {
           ForEach(section.rows) { row in
             DetailRowView(row: row)
           }
+        } header: {
+          // iOS 26 renders a section header exactly as written; it no longer upper-cases it.
+          // The catalog entries are therefore sentence case in all five languages.
+          Text(section.title, localized)
         }
       }
     }
     .listStyle(.insetGrouped)
     // The sheet's rendered identity is the pool's NAME, never its id — which is why
     // `FacilityDetailOut.facility_id` stays deliberately omitted from `renderedFields`.
-    .navigationTitle(detail.name)
+    .navigationTitle(Text(verbatim: detail.name))
     .navigationBarTitleDisplayMode(.inline)
   }
 
   private var sections: [DetailSection] {
-    detailSections(detail, on: day, for: person)
+    detailSections(detail, on: day, for: person, in: localized)
   }
 }
 
 /// One line of the sheet. ONE view per `ForEach` element (the laziness rule), so everything a
 /// row can grow into — its caveat, its link — lives inside a single `VStack`.
 struct DetailRowView: View {
+  @Environment(\.localized) private var localized
   let row: DetailRow
 
   var body: some View {
@@ -53,20 +59,34 @@ struct DetailRowView: View {
     .accessibilityElement(children: .combine)
   }
 
+  /// The row's value, rendered ONCE and reused: a URL test and a `tel:` build both need the
+  /// characters, and rendering it twice would be two chances to disagree.
+  private var rendered: String { localized(row.value) }
+
   @ViewBuilder
   private var value: some View {
-    if let url = URL(string: row.value), row.value.hasPrefix("http") {
+    if let url = URL(string: rendered), rendered.hasPrefix("http") {
       Link(destination: url) {
-        LabeledContent(row.label) { Text(row.value).lineLimit(1).truncationMode(.middle) }
+        LabeledContent {
+          Text(verbatim: rendered).lineLimit(1).truncationMode(.middle)
+        } label: {
+          Text(row.label, localized)
+        }
       }
     } else if row.id == "phone" {
       // `tel:` is the one URL an offline app can still act on usefully.
-      Link(destination: URL(string: "tel:\(row.value.filter { !$0.isWhitespace })")!) {
-        LabeledContent(row.label) { Text(row.value) }
+      Link(destination: URL(string: "tel:\(rendered.filter { !$0.isWhitespace })")!) {
+        LabeledContent {
+          Text(verbatim: rendered)
+        } label: {
+          Text(row.label, localized)
+        }
       }
     } else {
-      LabeledContent(row.label) {
-        Text(row.value).multilineTextAlignment(.trailing)
+      LabeledContent {
+        Text(verbatim: rendered).multilineTextAlignment(.trailing)
+      } label: {
+        Text(row.label, localized)
       }
     }
   }
@@ -76,7 +96,7 @@ struct DetailRowView: View {
   @ViewBuilder
   private var caveat: some View {
     if let caveat = row.caveat {
-      Text(caveat)
+      Text(caveat, localized)
         .font(.caption2)
         .foregroundStyle(.secondary)
         .fixedSize(horizontal: false, vertical: true)

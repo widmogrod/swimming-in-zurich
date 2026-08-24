@@ -307,9 +307,16 @@ public struct RibbonDayViewInput: Equatable, Sendable, Decodable {
 public struct RibbonStatusInput: Equatable, Sendable, Decodable {
   public let facility: String?
   public let status: String?
+  /// The SERVER's own prose for the state, when the input came off a `/swim` payload. It is
+  /// English in one branch and curated German in the other (CLAUDE.md), so nothing user-facing
+  /// reads it any more; it survives because the golden fixture carries it and dropping the
+  /// field would change what the parity test compares.
   public let detail: String?
   public let closureCode: String?
   public let detailParams: [String: String]?
+  /// The catalog key for the state's sentence, set on the APP's path (`DayState.ribbonInput`)
+  /// and absent on the wire. This is what replaces `detail` for anything a reader sees.
+  public let labelKey: String?
 
   enum CodingKeys: String, CodingKey {
     case facility
@@ -317,6 +324,7 @@ public struct RibbonStatusInput: Equatable, Sendable, Decodable {
     case detail
     case closureCode = "closure_code"
     case detailParams = "detail_params"
+    case labelKey = "label_key"
   }
 
   public init(
@@ -324,13 +332,15 @@ public struct RibbonStatusInput: Equatable, Sendable, Decodable {
     status: String?,
     detail: String?,
     closureCode: String? = nil,
-    detailParams: [String: String]? = nil
+    detailParams: [String: String]? = nil,
+    labelKey: String? = nil
   ) {
     self.facility = facility
     self.status = status
     self.detail = detail
     self.closureCode = closureCode
     self.detailParams = detailParams
+    self.labelKey = labelKey
   }
 }
 
@@ -457,7 +467,7 @@ public func statusRibbon(_ status: RibbonStatusInput) -> Ribbon {
     style: closed ? "dashed" : "dotted",
     family: closed ? "closed" : "unknown",
     access: nil, facility: status.facility, basin: nil, start: nil, end: nil, sheath: nil,
-    laneCount: nil, strips: nil, segments: nil, bestPublic: nil, labelKey: nil,
+    laneCount: nil, strips: nil, segments: nil, bestPublic: nil, labelKey: status.labelKey,
     detail: status.detail, closureCode: status.closureCode, detailParams: status.detailParams,
     // Carried on the ghost so the canvas can render the SPECIFIC freshness state
     // (`awaiting_scrape` vs `no_source`) rather than one merged bucket.

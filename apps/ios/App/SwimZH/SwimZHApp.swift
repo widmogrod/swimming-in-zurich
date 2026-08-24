@@ -19,9 +19,15 @@ struct SwimZHApp: App {
     LaunchSignpost.shared.start()
   }
 
+  /// The reader's language and regional formatting, resolved ONCE from the system's preference
+  /// list and injected. One `Localized` for the whole app: a view that built its own would be a
+  /// second answer to "which language is this", and the two would eventually differ.
+  private let localized = Localized.current
+
   var body: some Scene {
     WindowGroup {
       TodayView()
+        .environment(\.localized, localized)
     }
   }
 }

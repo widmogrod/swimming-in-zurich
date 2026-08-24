@@ -64,12 +64,31 @@ struct BundledStoreTests {
     #expect(!ghosts.isEmpty, "no ghost rows on \(horizonStart) — the store changed")
     #expect(!closures.isEmpty, "no closed rows on \(horizonStart) — the store changed")
 
-    let closureVerdicts = Set(closures.map(\.verdict.head))
+    // Rendered, and in EVERY language: the verdicts are catalog messages now, so "does this
+    // say closed" is a question about what a reader sees rather than about a Swift literal —
+    // and a German translation that said "geschlossen" on a ghost row would be invisible to an
+    // English-only check. Same shape as `DayStateTests.ghostStatesAreNeverClosed`, run here
+    // against the REAL store rather than against constructed states.
+    let shutWords: [Language: [String]] = [
+      .en: ["closed", "shut"], .de: ["geschlossen"], .fr: ["ferm"], .it: ["chius"],
+      .pl: ["zamkni", "nieczynn"],
+    ]
+    for language in Language.allCases {
+      let localized = Localized(locale: AppLocale(language))
+      let closureVerdicts = Set(closures.map { localized($0.verdict.head) })
+      for ghost in ghosts {
+        let said = localized(ghost.verdict.head)
+          .folding(options: [.diacriticInsensitive, .caseInsensitive], locale: nil)
+        #expect(ghost.tier == .unknown, "\(ghost.poolName) is filed under \(ghost.tier)")
+        for word in shutWords[language] ?? [] {
+          #expect(!said.contains(word), "\(language)/\(ghost.poolName) reads: \(said)")
+        }
+        #expect(
+          !closureVerdicts.contains(localized(ghost.verdict.head)),
+          "\(language)/\(ghost.poolName) shares a closed sentence")
+      }
+    }
     for ghost in ghosts {
-      let said = ghost.verdict.head
-      #expect(ghost.tier == .unknown, "\(ghost.poolName) is filed under \(ghost.tier)")
-      #expect(!said.lowercased().contains("closed"), "\(ghost.poolName) reads: \(said)")
-      #expect(!closureVerdicts.contains(said), "\(ghost.poolName) shares a closed sentence")
       // ...and never the ✕ mark either: nobody was excluded from anything.
       #expect(ghost.mark == .check)
     }
@@ -176,11 +195,13 @@ struct BundledStoreTests {
     }
     #expect(!future.isToday)
     #expect(future.openToYouCount == 0)
-    #expect(future.headline.contains("pools with sessions"))
+    // The KEY, not the sentence: which message the model chose is the claim under test, and
+    // it holds in every language. The English wording is pinned in `ListModelTests`.
+    #expect(future.headline.key == "headline.poolsWithSessions")
     for row in future.sections.flatMap(\.rows) {
       #expect(!row.tier.isWallClockClaim, "\(row.poolName) tiered as \(row.tier) on \(other)")
-      #expect(row.verdict.head != "Open now")
-      #expect(row.verdict.head != "Done for today")
+      #expect(row.verdict.head.key != "mobile.verdict.openNow")
+      #expect(row.verdict.head.key != "mobile.verdict.doneForToday")
       #expect(!row.openToYou)
     }
     // ...and it really did read a day with sessions, so the loop is not vacuously true.

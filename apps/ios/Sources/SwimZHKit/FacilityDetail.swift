@@ -151,13 +151,19 @@ public struct FacilityDetail: Equatable, Sendable, Identifiable {
 
 /// One line of the sheet: a label, a value, and — where the source is uncertain — the caveat
 /// that says so.
+///
+/// All three are `Wording`, and that is the point of the type. A row mixes OUR words with the
+/// POOL's in a way no other surface here does: the label "Water" is ours, the value "26 °C" is
+/// a formatted number, the basin's name is the pool's own, and a locker's `raw` line is the
+/// source's sentence quoted for exactly the reason we do not paraphrase it. Making the
+/// distinction a type stops the sheet localising a proper noun or leaving a heading in English.
 public struct DetailRow: Equatable, Sendable, Identifiable {
   public let id: String
-  public let label: String
-  public let value: String
-  public let caveat: String?
+  public let label: Wording
+  public let value: Wording
+  public let caveat: Wording?
 
-  public init(id: String, label: String, value: String, caveat: String? = nil) {
+  public init(id: String, label: Wording, value: Wording, caveat: Wording? = nil) {
     self.id = id
     self.label = label
     self.value = value
@@ -167,7 +173,7 @@ public struct DetailRow: Equatable, Sendable, Identifiable {
 
 public struct DetailSection: Equatable, Sendable, Identifiable {
   public let id: String
-  public let title: String
+  public let title: Message
   public let rows: [DetailRow]
 }
 
@@ -176,370 +182,486 @@ public struct DetailSection: Equatable, Sendable, Identifiable {
 /// `day` is the date the list was showing, and only the two genuinely date-dependent parts use
 /// it: a feature's resolved hours, and which weekday's lane plan to show. Everything else is a
 /// standing fact about the pool and is worded without reference to any day.
+///
+/// `format` is threaded through rather than reached for, because every number on this sheet —
+/// a price, a temperature, a length, a lane count — reads differently per region, and a
+/// default would quietly format in the device's locale while the words came from the app's.
 public func detailSections(
   _ detail: FacilityDetail,
   on day: String,
-  for person: Person
+  for person: Person,
+  in localized: Localized
 ) -> [DetailSection] {
-  [
-    section("where", "Where", whereRows(detail)),
-    section("admission", "Admission", admissionRows(detail, person)),
-    section("season", "Season", seasonRows(detail)),
-    section("basins", "Basins", detail.basins.flatMap(basinRows)),
-    section("features", "Features", detail.features.flatMap { featureRows($0, on: day) }),
-    section("lockers", "Lockers", detail.lockers.map(lockerRow)),
-    section("rentals", "Rentals", detail.rentals.map(rentalRow)),
-    section("lanes", "Lane plans", detail.lanePanels.flatMap(lanePanelRows)),
-    section("source", "Where this came from", provenanceRows(detail)),
+  let format = localized.format
+  return [
+    section("where", "detail.section.where", whereRows(detail)),
+    section("admission", "detail.section.admission", admissionRows(detail, person, format)),
+    section("season", "detail.section.season", seasonRows(detail, format)),
+    section("basins", "detail.section.basins", detail.basins.flatMap { basinRows($0, format) }),
+    section(
+      "features", "detail.section.features",
+      detail.features.flatMap { featureRows($0, on: day, localized) }),
+    section("lockers", "detail.section.lockers", detail.lockers.map { lockerRow($0, format) }),
+    section("rentals", "detail.section.rentals", detail.rentals.map { rentalRow($0, format) }),
+    section(
+      "lanes", "detail.section.lanes", detail.lanePanels.flatMap { lanePanelRows($0, format) }),
+    section("source", "detail.section.provenance", provenanceRows(detail, format)),
   ].compactMap { $0 }
 }
 
 /// A section with no rows is omitted entirely rather than shown empty: an empty "Lockers"
 /// heading reads as "this pool has no lockers", which is a claim the data does not make.
-private func section(_ id: String, _ title: String, _ rows: [DetailRow]) -> DetailSection? {
-  rows.isEmpty ? nil : DetailSection(id: id, title: title, rows: rows)
+private func section(_ id: String, _ titleKey: String, _ rows: [DetailRow]) -> DetailSection? {
+  rows.isEmpty ? nil : DetailSection(id: id, title: Message(titleKey), rows: rows)
 }
 
 private func whereRows(_ detail: FacilityDetail) -> [DetailRow] {
   var rows: [DetailRow] = []
   if let address = detail.address, !address.isEmpty {
-    rows.append(DetailRow(id: "address", label: "Address", value: address))
+    rows.append(
+      DetailRow(id: "address", label: .key("detail.fact.address"), value: .verbatim(address)))
   }
   if let phone = detail.phone, !phone.isEmpty {
-    rows.append(DetailRow(id: "phone", label: "Phone", value: phone))
+    rows.append(DetailRow(id: "phone", label: .key("detail.fact.phone"), value: .verbatim(phone)))
   }
   if let url = detail.url, !url.isEmpty {
-    rows.append(DetailRow(id: "url", label: "Website", value: url))
+    rows.append(DetailRow(id: "url", label: .key("detail.fact.website"), value: .verbatim(url)))
   }
   if let description = detail.description, !description.isEmpty {
-    rows.append(DetailRow(id: "description", label: "About", value: description))
+    // The pool's own blurb, in the pool's own language. Untranslated by policy, like a notice.
+    rows.append(
+      DetailRow(
+        id: "description", label: .key("detail.fact.about"), value: .verbatim(description)))
   }
   rows.append(
     DetailRow(
-      id: "freshness", label: "Schedule", value: freshnessLabel(detail.freshness),
-      caveat: freshnessCaveat(detail.freshness)))
+      id: "freshness", label: .key("detail.fact.schedule"),
+      value: .message(freshnessLabel(detail.freshness)),
+      caveat: freshnessCaveat(detail.freshness).map { .message($0) }))
   return rows
 }
 
 /// The three-state `ScheduleFreshness`, said in words. `no_source` is NEVER "closed" — that is
 /// the invariant the whole vocabulary exists to protect.
-public func freshnessLabel(_ freshness: String) -> String {
+public func freshnessLabel(_ freshness: String) -> Message {
   switch freshness {
-  case "scraped": return "Published by the pool"
-  case "awaiting_scrape": return "Not published yet"
-  case "no_source": return "No timetable to read"
-  default: return "Unrecognised state: \(freshness)"
+  case "scraped": return Message("freshness.scraped")
+  case "awaiting_scrape": return Message("freshness.awaiting")
+  case "no_source": return Message("freshness.noSource")
+  default: return Message("freshness.unknown", ["state": freshness])
   }
 }
 
-func freshnessCaveat(_ freshness: String) -> String? {
+func freshnessCaveat(_ freshness: String) -> Message? {
   switch freshness {
   case "scraped": return nil
-  case "awaiting_scrape":
-    return "This pool has a timetable page, but it has not been read into this app yet."
-  case "no_source":
-    return "This pool publishes no timetable of its own. That is not the same as being closed."
-  default:
-    // A store built by a newer export can carry a state this binary has never seen.
-    return "This app does not recognise this state; check with the pool."
+  case "awaiting_scrape": return Message("freshness.awaiting.caveat")
+  case "no_source": return Message("freshness.noSource.caveat")
+  // A store built by a newer export can carry a state this binary has never seen.
+  default: return Message("freshness.unknown.caveat")
   }
 }
 
-private func admissionRows(_ detail: FacilityDetail, _ person: Person) -> [DetailRow] {
+private func admissionRows(
+  _ detail: FacilityDetail, _ person: Person, _ format: Format
+) -> [DetailRow] {
   var rows = [
-    DetailRow(id: "admission", label: "Entry", value: admissionLabel(detail.admission))
+    DetailRow(
+      id: "admission", label: .key("detail.fact.entry"),
+      value: .message(admissionLabel(detail.admission)))
   ]
   if case .tariff(let prices) = detail.admission {
     rows += prices.entries.enumerated().map { index, entry in
       DetailRow(
         id: "price-\(index)",
-        label: entry.category.rawValue.capitalized,
-        value: entry.display,
-        caveat: entry.minAge.map { "Published for ages \($0) and over." })
+        label: .message(priceCategoryLabel(entry.category)),
+        // The pool's OWN price line ("Erwachsene CHF 8.00"), quoted rather than rebuilt: it is
+        // a dated fact off their page, and re-formatting it would silently restate it.
+        value: .verbatim(entry.display),
+        caveat: entry.minAge.map {
+          .message(Message("price.minAgeCaveat", ["minAge": format.integer($0)]))
+        })
     }
     if let bracket = priceFor(prices, person) {
       rows.append(
-        DetailRow(id: "your-price", label: "Your rate", value: bracket.display))
+        DetailRow(
+          id: "your-price", label: .key("detail.fact.yourRate"),
+          value: .verbatim(bracket.display)))
     }
-    if let validAsOf = prices.validAsOf {
+    // The store writes this as `date.isoformat()` — a machine key — so it goes through
+    // `Format.storeDate` before a reader sees it, exactly like the two on the today screen.
+    // The EMPTY guard is not defensive noise: the exporter writes `... or ""` for an absent
+    // stamp, and a row reading "Prices read" with nothing after it is the invisible degradation
+    // this sheet's every other honesty caveat exists to avoid. No stamp, no row.
+    if let validAsOf = prices.validAsOf, !validAsOf.isEmpty {
       rows.append(
         DetailRow(
-          id: "price-valid", label: "Prices read", value: validAsOf,
-          caveat: "Prices come from the pool's own page and can change without notice."))
+          id: "price-valid", label: .key("detail.fact.pricesRead"),
+          value: .verbatim(format.storeDate(validAsOf)),
+          caveat: .key("price.staleCaveat")))
     }
     if let source = prices.sourceURL {
-      rows.append(DetailRow(id: "price-source", label: "Tariff page", value: source))
+      rows.append(
+        DetailRow(
+          id: "price-source", label: .key("detail.fact.tariffPage"), value: .verbatim(source)))
     }
   }
   if let seconds = detail.lastAdmissionBeforeSeconds {
     rows.append(
       DetailRow(
-        id: "last-admission", label: "Last admission",
-        value: "\(seconds / 60) minutes before closing"))
+        id: "last-admission", label: .key("detail.fact.lastAdmission"),
+        // The DURATION comes from `Duration`'s own units style, not from a plural catalog
+        // entry: Polish's `other` category is the fraction form and is spelled the same as
+        // `few` for a feminine noun ("1,5 minuty" / "2 minuty"), so a catalog entry would need
+        // two identical forms — which the web's own parity test reads as a copy-paste.
+        value: .message(
+          Message("detail.lastAdmission.value", ["duration": format.minutes(seconds / 60)]))))
   }
   return rows
 }
 
-public func admissionLabel(_ admission: Admission) -> String {
-  switch admission {
-  case .free: return "Free"
-  case .tariff: return "Paid — see the rates below"
-  // NOT "free": an unstated admission is unknown, and printing "free" would send somebody to a
-  // turnstile with no money.
-  case .unknown: return "Not published — check with the pool"
+/// The tariff's own categories, said in words. An arm this binary has not heard of rides
+/// through as itself rather than being folded into "Adult", which would misprice somebody.
+func priceCategoryLabel(_ category: PriceCategory) -> Message {
+  switch category {
+  case .adult: return Message("priceCategory.adult")
+  case .youth: return Message("priceCategory.youth")
+  case .child: return Message("priceCategory.child")
   }
 }
 
-private func seasonRows(_ detail: FacilityDetail) -> [DetailRow] {
+public func admissionLabel(_ admission: Admission) -> Message {
+  switch admission {
+  case .free: return Message("admission.free")
+  case .tariff: return Message("admission.tariff")
+  // NOT "free": an unstated admission is unknown, and printing "free" would send somebody to a
+  // turnstile with no money.
+  case .unknown: return Message("admission.unknown")
+  }
+}
+
+private func seasonRows(_ detail: FacilityDetail, _ format: Format) -> [DetailRow] {
   guard let season = detail.operatingSeason else { return [] }
   return [
     DetailRow(
-      id: "season", label: "Open season", value: seasonLabel(season),
-      caveat: season.weather == fairOnlyWeather
-        ? "Published for fair weather; the pool may not open in poor weather." : nil)
+      id: "season", label: .key("detail.fact.season"),
+      value: .message(seasonLabel(season, format)),
+      caveat: season.weather == fairOnlyWeather ? .key("season.fairWeatherCaveat") : nil)
   ]
 }
 
 /// "May to September", or "1 May to 15 September" — but only when the page said days.
-public func seasonLabel(_ season: OperatingSeason) -> String {
-  let from = monthName(season.startMonth)
-  let to = monthName(season.endMonth)
+///
+/// The MONTH NAMES come from the formatter, never from a table in this file. Polish alone
+/// settles it: a hand-written list would be nominative, and even the formatter's standalone
+/// names are lower-cased there, which no capitalisation rule applied afterwards could produce.
+public func seasonLabel(_ season: OperatingSeason, _ format: Format) -> Message {
+  let from = format.monthName(season.startMonth)
+  let to = format.monthName(season.endMonth)
   guard season.precision == "day", let startDay = season.startDay, let endDay = season.endDay
-  else { return "\(from) to \(to)" }
-  return "\(startDay) \(from) to \(endDay) \(to)"
+  else { return Message("season.range", ["from": from, "to": to]) }
+  return Message(
+    "season.rangeWithDays",
+    [
+      "startDay": format.integer(startDay), "from": from,
+      "endDay": format.integer(endDay), "to": to,
+    ])
 }
 
-func monthName(_ month: Int) -> String {
-  let names = [
-    "January", "February", "March", "April", "May", "June", "July", "August", "September",
-    "October", "November", "December",
-  ]
-  return names.indices.contains(month - 1) ? names[month - 1] : "month \(month)"
-}
-
-private func basinRows(_ basin: BasinDetail) -> [DetailRow] {
+private func basinRows(_ basin: BasinDetail, _ format: Format) -> [DetailRow] {
   var rows = [
     DetailRow(
-      id: "basin-\(basin.basinID)", label: basin.name, value: basinKindLabel(basin.kind))
+      // The basin's NAME is the pool's own word for it ("Hauptbecken", "Lehrschwimmbecken"),
+      // so it is the one row label on this sheet that is not a message.
+      id: "basin-\(basin.basinID)", label: .verbatim(basin.name),
+      value: .message(basinKindLabel(basin.kind)))
   ]
-  if let size = basinSize(basin) {
+  if let size = basinSize(basin, format) {
     rows.append(
       DetailRow(
-        id: "basin-\(basin.basinID)-size", label: "Size", value: size,
+        id: "basin-\(basin.basinID)-size", label: .key("basin.fact.size"), value: .message(size),
         caveat: physicalSourceCaveat(basin.physicalSource)))
   }
   if let lanes = basin.lanes {
     rows.append(
-      DetailRow(id: "basin-\(basin.basinID)-lanes", label: "Lanes", value: "\(lanes)"))
+      DetailRow(
+        id: "basin-\(basin.basinID)-lanes", label: .key("basin.fact.lanes"),
+        value: .verbatim(format.integer(lanes))))
   }
   if let temp = basin.measuredTempC ?? basin.nominalTempC {
     rows.append(
       DetailRow(
-        id: "basin-\(basin.basinID)-temp", label: "Water", value: "\(temp) °C",
-        caveat: basin.measuredTempC == nil ? "The pool's stated temperature, not a reading." : nil
-      ))
+        id: "basin-\(basin.basinID)-temp", label: .key("basin.fact.water"),
+        value: .verbatim(format.temperature(celsius: temp)),
+        caveat: basin.measuredTempC == nil ? .key("basin.tempNominalCaveat") : nil))
   }
   if !basin.divingPlatformsM.isEmpty {
     rows.append(
       DetailRow(
-        id: "basin-\(basin.basinID)-diving", label: "Diving",
-        value: basin.divingPlatformsM.map { "\($0) m" }.joined(separator: ", ")))
+        id: "basin-\(basin.basinID)-diving", label: .key("basin.fact.diving"),
+        value: .verbatim(
+          basin.divingPlatformsM.map { format.length(metres: $0) }
+            .joined(separator: ", "))))
   }
   if let plan = basin.lanePlanURL {
     rows.append(
-      DetailRow(id: "basin-\(basin.basinID)-plan", label: "Lane plan", value: plan))
+      DetailRow(
+        id: "basin-\(basin.basinID)-plan", label: .key("basin.fact.lanePlan"),
+        value: .verbatim(plan)))
   }
   return rows
 }
 
-func basinSize(_ basin: BasinDetail) -> String? {
+func basinSize(_ basin: BasinDetail, _ format: Format) -> Message? {
   switch (basin.lengthM, basin.widthM) {
-  case (let length?, let width?): return "\(length) × \(width) m"
-  case (let length?, nil): return "\(length) m"
-  case (nil, let width?): return "\(width) m wide"
+  case (let length?, let width?):
+    return Message(
+      "basin.size.lengthByWidth",
+      ["length": format.number(length, fractionDigits: 0), "width": format.length(metres: width)])
+  case (let length?, nil):
+    return Message("basin.size.length", ["length": format.length(metres: length)])
+  case (nil, let width?):
+    return Message("basin.size.width", ["width": format.length(metres: width)])
   default: return nil
   }
 }
 
-public func basinKindLabel(_ kind: String) -> String {
+public func basinKindLabel(_ kind: String) -> Message {
   switch kind {
-  case "swimmer": return "Swimmers' pool"
-  case "non_swimmer": return "Non-swimmers' pool"
-  case "diving": return "Diving pool"
-  case "learner": return "Learner pool"
-  case "paddling": return "Paddling pool"
-  case "multi_purpose": return "Multi-purpose pool"
-  case "thermal": return "Thermal pool"
-  case "outdoor": return "Outdoor pool"
-  default: return kind.replacingOccurrences(of: "_", with: " ").capitalized
+  case "swimmer", "non_swimmer", "diving", "learner", "paddling", "multi_purpose", "thermal",
+    "outdoor":
+    return Message("basinKind.\(kind)")
+  default:
+    return Message(
+      "basinKind.unknown", ["kind": kind.replacingOccurrences(of: "_", with: " ").capitalized])
   }
 }
 
 /// The `physical_source` caveat, and it is the reason that field is exported at all: a
 /// dimension read out of a sentence is a weaker fact than a published one, and the sheet says
 /// which it is holding.
-func physicalSourceCaveat(_ source: String) -> String? {
-  source == "parsed_prose" ? "Read from the pool's prose, so it may be approximate." : nil
+func physicalSourceCaveat(_ source: String) -> Wording? {
+  source == "parsed_prose" ? .key("basin.parsedProseCaveat") : nil
 }
 
-private func featureRows(_ feature: FeatureDetail, on day: String) -> [DetailRow] {
-  let name = feature.name ?? featureKindLabel(feature.kind)
+private func featureRows(
+  _ feature: FeatureDetail, on day: String, _ localized: Localized
+) -> [DetailRow] {
+  let format = localized.format
+  // A feature's own NAME is the pool's word for it; only the fallback is ours.
+  let name: Wording =
+    feature.name.map { Wording.verbatim($0) } ?? .message(featureKindLabel(feature.kind))
   var rows = [
     DetailRow(
-      id: "feature-\(feature.key)", label: name, value: featureKindLabel(feature.kind),
-      caveat: feature.note)
+      id: "feature-\(feature.key)", label: name,
+      value: .message(featureKindLabel(feature.kind)),
+      caveat: feature.note.map { .verbatim($0) })
   ]
   if let surcharge = feature.surchargeCHF {
     rows.append(
       DetailRow(
-        id: "feature-\(feature.key)-fee", label: "Surcharge",
-        value: "CHF \(String(format: "%.2f", surcharge))"))
+        id: "feature-\(feature.key)-fee", label: .key("feature.fact.surcharge"),
+        value: .verbatim(format.money(chf: surcharge))))
   }
   if let temp = feature.tempC {
     rows.append(
-      DetailRow(id: "feature-\(feature.key)-temp", label: "Temperature", value: "\(temp) °C"))
+      DetailRow(
+        id: "feature-\(feature.key)-temp", label: .key("feature.fact.temperature"),
+        value: .verbatim(format.temperature(celsius: temp))))
   }
   if let resolved = feature.day(day) {
     rows.append(
       DetailRow(
-        id: "feature-\(feature.key)-hours", label: "Hours on this date",
-        value: featureHours(resolved)))
+        id: "feature-\(feature.key)-hours", label: .key("feature.fact.hours"),
+        value: featureHours(resolved, localized)))
   }
   return rows
 }
 
 /// A feature's hours for one date. "Not listed for this date" is deliberately NOT "closed": a
 /// feature with no windows and no stated reason is unscheduled, not shut.
-func featureHours(_ day: FeatureDay) -> String {
+///
+/// The closed arm NESTS one message inside another, so the clause is RENDERED here and
+/// interpolated as a value. Passing the clause's KEY would have printed
+/// "Closed — closureClause.out_of_season" on the sheet, in all five languages: a nested lookup
+/// happens nowhere by itself, and the outer message has no way to ask for one.
+///
+/// THREE places do this, not one, and they are worth knowing together because each needs a
+/// `Localized` at a call site that would otherwise only need a `Format`: here,
+/// `TimeAxis.a11yLabel` (which puts a rendered access name inside `a11y.blockLabel`), and
+/// `LaneHold.spoken` (which puts either a club's name or a rendered "open to the public" inside
+/// `lane.spoken`). All three interpolate a NOUN PHRASE into a frame, which is ordinary i18n;
+/// none of them builds a sentence out of sentence fragments, which is the thing this project
+/// forbids.
+func featureHours(_ day: FeatureDay, _ localized: Localized) -> Wording {
   if !day.windows.isEmpty {
-    return day.windows.map { "\($0.start.hhmm)–\($0.end.hhmm)" }.joined(separator: ", ")
+    // A list of times is a list of VALUES; the separator is punctuation, not grammar.
+    return .verbatim(
+      day.windows.map { "\($0.start.hhmm)–\($0.end.hhmm)" }.joined(separator: ", "))
   }
   if let reason = day.closedReason {
-    return "Closed — \(closedReasonLabel(reason))"
+    return .message(
+      Message("feature.closed", ["reason": localized(closedReasonClause(reason))]))
   }
-  return "Hours not listed for this date"
+  return .key("feature.hoursNotListed")
 }
 
-func closedReasonLabel(_ reason: String) -> String {
+/// The lower-case clause that goes INSIDE `feature.closed`.
+///
+/// A fragment, and worded as one in every catalog — which is exactly why it is the only nesting
+/// this design allows. An unrecognised code rides through the passthrough clause as ITSELF, so
+/// a store built by a newer export states its own reason rather than rendering "Closed — ",
+/// which would be a bare closure with nothing behind it.
+func closedReasonClause(_ reason: String) -> Message {
   switch reason {
-  case "out_of_season": return "outside its season"
-  case "no_sessions": return "no hours published for this date"
-  case "closure": return "the pool states a closure"
-  default: return reason.replacingOccurrences(of: "_", with: " ")
+  case "out_of_season", "no_sessions", "closure": return Message("closureClause.\(reason)")
+  default:
+    return Message(
+      "closureClause.unknown", ["reason": reason.replacingOccurrences(of: "_", with: " ")])
   }
 }
 
-public func featureKindLabel(_ kind: String) -> String {
+public func featureKindLabel(_ kind: String) -> Message {
   switch kind {
-  case "sauna": return "Sauna"
-  case "gastronomy": return "Restaurant or kiosk"
-  case "sunbathing": return "Sunbathing lawn"
-  case "playground": return "Playground"
-  case "slide": return "Water slide"
-  case "wellness": return "Wellness area"
-  case "sport": return "Sports facility"
-  default: return kind.replacingOccurrences(of: "_", with: " ").capitalized
+  case "sauna", "gastronomy", "sunbathing", "playground", "slide", "wellness", "sport":
+    return Message("featureKind.\(kind)")
+  default:
+    return Message(
+      "featureKind.unknown", ["kind": kind.replacingOccurrences(of: "_", with: " ").capitalized])
   }
 }
 
-private func lockerRow(_ locker: LockerDetail) -> DetailRow {
+private func lockerRow(_ locker: LockerDetail, _ format: Format) -> DetailRow {
   DetailRow(
     id: "locker-\(locker.ordinal)",
-    label: lockerCategoryLabel(locker.category),
-    value: feeLabel(amount: locker.feeCHF, deposit: locker.depositCHF, period: locker.period),
+    label: .message(lockerCategoryLabel(locker.category)),
+    value: feeLabel(
+      amount: locker.feeCHF, deposit: locker.depositCHF, period: locker.period, format),
     // The pool's own line, kept beside the parsed fields: the parse is lossy, and where the
     // two disagree the source's words are the fact.
-    caveat: locker.raw)
+    caveat: locker.raw.map { .verbatim($0) })
 }
 
-public func lockerCategoryLabel(_ category: String) -> String {
+public func lockerCategoryLabel(_ category: String) -> Message {
   switch category {
-  case "wardrobe": return "Wardrobe locker"
-  case "valuables": return "Valuables locker"
-  case "cabin": return "Changing cabin"
-  default: return category.replacingOccurrences(of: "_", with: " ").capitalized
+  case "wardrobe", "valuables", "cabin": return Message("lockerKind.\(category)")
+  default:
+    return Message(
+      "lockerKind.unknown",
+      ["kind": category.replacingOccurrences(of: "_", with: " ").capitalized])
   }
 }
 
-private func rentalRow(_ rental: RentalDetail) -> DetailRow {
+private func rentalRow(_ rental: RentalDetail, _ format: Format) -> DetailRow {
   DetailRow(
     id: "rental-\(rental.ordinal)",
-    label: rentalKindLabel(rental.kind),
-    value: rentalFeeLabel(rental),
-    caveat: rental.raw)
+    label: .message(rentalKindLabel(rental.kind)),
+    value: rentalFeeLabel(rental, format),
+    caveat: rental.raw.map { .verbatim($0) })
 }
 
-public func rentalKindLabel(_ kind: String) -> String {
+public func rentalKindLabel(_ kind: String) -> Message {
   switch kind {
-  case "towel": return "Towel"
-  case "locker": return "Locker"
-  case "deck_chair": return "Deck chair"
-  case "swim_aid": return "Swimming aid"
-  default: return kind.replacingOccurrences(of: "_", with: " ").capitalized
+  case "towel", "locker", "deck_chair", "swim_aid": return Message("rentalKind.\(kind)")
+  default:
+    return Message(
+      "rentalKind.unknown", ["kind": kind.replacingOccurrences(of: "_", with: " ").capitalized])
   }
 }
 
 /// The rental fee union, kept CLOSED: a stated-gratis rental and an unstated one are different
 /// facts, and rendering both as "free" would invent a price for the second.
-func rentalFeeLabel(_ rental: RentalDetail) -> String {
+func rentalFeeLabel(_ rental: RentalDetail, _ format: Format) -> Wording {
   switch rental.fee {
-  case "gratis": return "Free"
+  case "gratis": return .key("fee.free")
   case "priced":
-    return feeLabel(amount: rental.feeCHF, deposit: rental.depositCHF, period: rental.period)
-  case "unstated": return "Price not published"
-  default: return "Price not published"
+    return feeLabel(
+      amount: rental.feeCHF, deposit: rental.depositCHF, period: rental.period, format)
+  default: return .key("fee.unstated")
   }
 }
 
-func feeLabel(amount: Double?, deposit: Double?, period: String?) -> String {
-  var parts: [String] = []
-  if let amount { parts.append("CHF \(String(format: "%.2f", amount))") }
-  if let period, !period.isEmpty { parts.append("per \(period)") }
+/// The fee, its period and its deposit — as a MESSAGE PER PART, joined by punctuation.
+///
+/// The parts are a visual list, not a sentence: each is a whole translatable unit and the
+/// comma between them is punctuation. That is the same distinction the web's `insight.*`
+/// clauses make. What it is NOT is a sentence assembled from fragments — none of these three
+/// depends grammatically on another, which is exactly why the join is safe here and was not
+/// safe for `LaneAvailability.summary`'s "— some lanes unreadable".
+func feeLabel(amount: Double?, deposit: Double?, period: String?, _ format: Format) -> Wording {
+  var parts: [Wording] = []
+  if let amount {
+    parts.append(.message(Message("fee.amount", ["amount": format.money(chf: amount)])))
+  }
+  if let period, !period.isEmpty {
+    // The PERIOD is the source's own token ("Tag", "day"), so it rides through as data.
+    parts.append(.message(Message("fee.perPeriod", ["period": period])))
+  }
   if let deposit {
-    parts.append("deposit CHF \(String(format: "%.2f", deposit))")
+    parts.append(.message(Message("fee.deposit", ["amount": format.money(chf: deposit)])))
   }
-  return parts.isEmpty ? "Price not published" : parts.joined(separator: ", ")
+  guard !parts.isEmpty else { return .key("fee.unstated") }
+  return .joined(parts)
 }
 
-private func lanePanelRows(_ panel: LanePanel) -> [DetailRow] {
+private func lanePanelRows(_ panel: LanePanel, _ format: Format) -> [DetailRow] {
   var rows = [
     DetailRow(
-      id: "panel-\(panel.basinID)", label: panel.basinName,
-      value: "\(panel.day.laneCount) lanes",
+      id: "panel-\(panel.basinID)", label: .verbatim(panel.basinName),
+      value: .message(Message("basin.laneCount", count: panel.day.laneCount)),
       // ONE function, one polarity, one sentence — see `LaneDay.incompleteLanesCaveat`. This
       // used to test `confidence == "partial"` while the Gantt tested `!= "complete"`, so the
       // two surfaces disagreed about the same basin for any other token.
-      caveat: panel.day.incompleteLanesCaveat)
+      caveat: panel.day.incompleteLanesCaveat.map { .message($0) })
   ]
   if let best = panel.bestPublic {
     rows.append(
       DetailRow(
-        id: "panel-\(panel.basinID)-best", label: "Most lanes free",
-        value: "\(best.window.start.hhmm)–\(best.window.end.hhmm), \(best.publicLanes) lanes"))
+        id: "panel-\(panel.basinID)-best", label: .key("legend.lane.best"),
+        value: .message(
+          Message(
+            "panel.bestWindow",
+            ["start": best.window.start.hhmm, "end": best.window.end.hhmm],
+            count: best.publicLanes))))
   }
   rows += panel.roster.map { slot in
     DetailRow(
-      id: "panel-\(panel.basinID)-\(slot.id)", label: slot.club,
-      value: "\(slot.window.start.hhmm)–\(slot.window.end.hhmm), "
-        + "lane\(slot.lanes.count == 1 ? "" : "s") \(slot.lanes.map(String.init).joined(separator: ", "))"
-    )
+      id: "panel-\(panel.basinID)-\(slot.id)",
+      // The club's NAME is a proper noun.
+      label: .verbatim(slot.club),
+      value: .message(
+        Message(
+          // NOT a plural entry: the string NAMES lanes without counting them, and
+          // `xcstringstool` refuses a plural variation whose forms do not interpolate the
+          // number. Its own advice is two top-level keys, which is what these are.
+          slot.lanes.count == 1 ? "panel.clubSlot.oneLane" : "panel.clubSlot.manyLanes",
+          [
+            "start": slot.window.start.hhmm, "end": slot.window.end.hhmm,
+            "lanes": slot.lanes.map { format.integer($0) }.joined(separator: ", "),
+          ])))
   }
   return rows
 }
 
-private func provenanceRows(_ detail: FacilityDetail) -> [DetailRow] {
+private func provenanceRows(_ detail: FacilityDetail, _ format: Format) -> [DetailRow] {
   var rows: [DetailRow] = []
   if let source = detail.provenance.source {
-    rows.append(DetailRow(id: "source", label: "Read from", value: source))
+    rows.append(
+      DetailRow(id: "source", label: .key("prov.fact.readFrom"), value: .verbatim(source)))
   }
-  if let validAsOf = detail.provenance.validAsOf {
-    rows.append(DetailRow(id: "valid-as-of", label: "Accurate as of", value: validAsOf))
+  // A machine date again, and the one a swimmer is most likely to weigh: "how old is this?".
+  // Same guard, same reason — the exporter can write an empty stamp, and "Accurate as of"
+  // followed by nothing answers that question with silence rather than with "we do not know".
+  if let validAsOf = detail.provenance.validAsOf, !validAsOf.isEmpty {
+    rows.append(
+      DetailRow(
+        id: "valid-as-of", label: .key("prov.fact.accurateAsOf"),
+        value: .verbatim(format.storeDate(validAsOf))))
   }
   rows.append(
     DetailRow(
-      id: "curated", label: "Curation",
-      value: detail.provenance.curated
-        ? "Hand-checked" : "Read straight from the pool's own page"))
+      id: "curated", label: .key("prov.fact.curation"),
+      value: detail.provenance.curated ? .key("prov.curated.yes") : .key("prov.curated.no")))
   return rows
 }
 

@@ -14,6 +14,7 @@ import SwiftUI
 import SwimZHKit
 
 struct PoolsBrowser: View {
+  @Environment(\.localized) private var localized
   let pools: [PoolRecord]
   let day: String
   let person: Person
@@ -33,10 +34,10 @@ struct PoolsBrowser: View {
       }
     }
     .listStyle(.insetGrouped)
-    .navigationTitle("All pools")
+    .navigationTitle(Text(Message("nav.allPools"), localized))
     .searchable(
       text: $search, placement: .navigationBarDrawer(displayMode: .always),
-      prompt: "Find a pool"
+      prompt: Text(Message("nav.findAPool"), localized)
     )
     .toolbar { kindMenu }
     .overlay { emptyState }
@@ -52,14 +53,18 @@ struct PoolsBrowser: View {
   private var kindMenu: some ToolbarContent {
     ToolbarItem(placement: .topBarTrailing) {
       Menu {
-        Picker("Kind", selection: $kind) {
-          Text("All kinds").tag(String?.none)
+        Picker(selection: $kind) {
+          Text(Message("browser.allKinds"), localized).tag(String?.none)
           ForEach(kinds, id: \.self) { kind in
-            Text(poolKindLabel(kind)).tag(String?.some(kind))
+            Text(poolKindLabel(kind), localized).tag(String?.some(kind))
           }
+        } label: {
+          Text(Message("browser.kind"), localized)
         }
       } label: {
-        Label("Filter by kind", systemImage: "line.3.horizontal.decrease.circle")
+        Label(
+          Message("browser.filterByKind"),
+          systemImage: "line.3.horizontal.decrease.circle", localized)
       }
     }
   }
@@ -67,23 +72,35 @@ struct PoolsBrowser: View {
   @ViewBuilder
   private var emptyState: some View {
     if shown.isEmpty {
-      ContentUnavailableView(
-        "No pools match", systemImage: "magnifyingglass",
-        description: Text("Try a different name, or another kind."))
+      // The label/icon/description triple takes a `LocalizedStringKey` title, so a `Text` has
+      // to go through the ViewBuilder form instead — the title is already localised and must
+      // not be looked up a second time.
+      ContentUnavailableView {
+        Label {
+          Text(Message("combo.noPoolsMatch"), localized)
+        } icon: {
+          Image(systemName: "magnifyingglass")
+        }
+      } description: {
+        Text(Message("browser.noMatch.body"), localized)
+      }
     }
   }
 }
 
 struct PoolBrowserRow: View {
+  @Environment(\.localized) private var localized
   let pool: PoolRecord
 
   var body: some View {
     VStack(alignment: .leading, spacing: 2) {
-      Text(pool.name).font(.headline).fixedSize(horizontal: false, vertical: true)
-      Text(poolKindLabel(pool.kind)).font(.caption).foregroundStyle(.secondary)
+      // A pool's NAME is a proper noun and is never translated.
+      Text(verbatim: pool.name).font(.headline).fixedSize(horizontal: false, vertical: true)
+      Text(poolKindLabel(pool.kind), localized).font(.caption).foregroundStyle(.secondary)
       // The freshness state, in words — never a schedule this screen has not asked for, and
       // never "closed", which is what a blank line would be read as.
-      Text(freshnessLabel(pool.freshness)).font(.caption2).foregroundStyle(.secondary)
+      Text(freshnessLabel(pool.freshness), localized)
+        .font(.caption2).foregroundStyle(.secondary)
     }
     .padding(.vertical, 2)
     .accessibilityElement(children: .combine)

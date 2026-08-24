@@ -115,19 +115,25 @@ public enum FieldCoverage {
   /// The lane quartet and every `FacilityDetailOut` field move into `renderedFields` in S3b,
   /// and the disjointness assertion is what forces the move to be a real edit here.
   public static let deliberatelyOmitted: [String: String] = [
-    // --- what S3b still does NOT render, and why ------------------------------------
+    // --- what S4 still does NOT render, and why -------------------------------------
     //
-    // Everything else moved into `renderedFields` above. These three did not, and each is a
-    // different KIND of not-yet: one waits on the message catalog, one is an identifier no
-    // swimmer wants, and one needs a network this app deliberately has no code for.
+    // Two of these were labelled "S4 OWNS IT". S4 has now landed the message catalog, and
+    // NEITHER became rendered — so the reasons are rewritten to say what is actually true
+    // rather than left pointing at a slice that has been and gone. That is the whole point of
+    // this file having reasons at all: a stale "a later slice will do it" is how an omission
+    // becomes permanent without anyone deciding it should be.
     "OptionOut.reason_params":
-      "S4 OWNS IT: the params (min_age, club) are interpolation VALUES for a message this app "
-      + "does not yet render. The outcome is rendered as a mark via reason_code (uiMark); the "
-      + "sentence they fill in arrives with the message catalog.",
+      "STILL NOT RENDERED after S4, and not for want of a catalog. The phone renders an "
+      + "eligibility OUTCOME as a mark (uiMark, from reason_code) rather than as a sentence, "
+      + "so there is no message for min_age or club to interpolate into. Rendering them needs "
+      + "a per-session eligibility sentence on the row — a UI decision, not a translation one, "
+      + "and one no acceptance criterion in S1-S4 asks for. The web shows the same outcome the "
+      + "same way (`elig.in`/`elig.chk`/`elig.no` are marks too).",
     "StatusOut.detail_code":
-      "S4: it is an i18n KEY, not a sentence. The state itself is rendered (`status` + "
-      + "`closure_code` + the pool's own `detail_params[\"text\"]`); rendering the raw code "
-      + "beside it would show a swimmer an identifier.",
+      "STILL NOT RENDERED after S4: it is an i18n KEY, and now that this app HAS a catalog the "
+      + "distinction is sharper, not softer. The state is rendered from `status` + "
+      + "`closure_code` + the pool's own `detail_params[\"text\"]`, which is what a swimmer can "
+      + "act on; the raw code beside it would be an identifier on screen.",
     "FacilityDetailOut.facility_id":
       "NOT A FACT FOR A SWIMMER: it is the key the sheet is addressed BY, not something the "
       + "sheet says. `facility_name` is the rendered identity. Declaring an id `rendered` "

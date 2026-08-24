@@ -287,4 +287,270 @@ export const de = {
   "mobile.filters": "Filter",
   "mobile.today": "Heute",
   "mobile.lanePlan": "Bahnenplan",
+  // --- Die native iOS-App (native-ios-app S4) ---------------------------------------
+
+  // Tageszustände: vier der fünf sagen aus, dass wir die Zeiten NICHT kennen — keiner
+  // davon darf als "geschlossen" formuliert sein.
+  "state.openUnscheduled": "Offen, Zeiten nicht angegeben",
+  "state.beyondHorizon": "Ausserhalb des veröffentlichten Zeitraums",
+  "state.beyondHorizon.body":
+    "Wir liefern Antworten bis {date}. Das heisst nicht, dass die Bäder geschlossen sind — wir haben diesen Tag schlicht noch nicht aufgelöst.",
+  "state.notStated": "Zustand nicht angegeben",
+  "state.unrecognised": "{status}",
+  "state.closed.outOfSeason": "Geschlossen — ausserhalb der Saison",
+  "state.closed.noSessions": "Geschlossen — keine Zeiten angesetzt",
+  "state.closed.unmapped": "Geschlossen — „{text}“",
+  "state.closed.unclassified": "Geschlossen — Grund nicht zugeordnet",
+  "state.closed.other": "Geschlossen — {code}",
+  "state.closed.unstated": "Geschlossen — Grund nicht angegeben",
+
+  "tier.scheduled": "An diesem Tag offen",
+  "verdict.notOpenToYou": "Nicht für Sie offen",
+  "verdict.hasSessions": "Hat Zeiten",
+  "headline.poolsWithSessions": {
+    one: "{count} Bad mit Zeiten",
+    other: "{count} Bäder mit Zeiten",
+  },
+  "row.moreToday": "+{count} weitere heute",
+  "row.moreThatDay": "+{count} weitere an dem Tag",
+
+  "banner.calendarCoverage.title": "Feiertagskalender unvollständig",
+  "banner.holidayHoursUnverified.title": "Feiertagszeiten unbestätigt",
+  "banner.generic.title": "Bitte beachten",
+  "warning.calendar_coverage":
+    "Für {year} liegen keine Kalenderdaten vor; feiertagsabhängige Zeitpläne können ungenau sein.",
+  "warning.holiday_hours_unverified":
+    "{date} ist ein Feiertag, und diese Bäder veröffentlichen keine Feiertagszeiten; angezeigt sind ihre üblichen Wochentagszeiten, unbestätigt: {pools}",
+  "warning.unknown": "{code}",
+
+  "access.public.desc":
+    "Öffentliches Schwimmen — während dieser Zeiten hat jede und jeder Zutritt.",
+  "access.lane.desc":
+    "Bahnenschwimmen — öffentlich, in Bahnen eingeteilt für Längen und Training.",
+  "access.family.desc":
+    "Familien- und Kinderzeit — öffentlich, auf Familien und Kinder ausgerichtet.",
+  "access.women.desc": "Frauenschwimmen (Frauenbad) — nur für Frauen.",
+  "access.seniors.desc": "Seniorenzeit — reserviert für Gäste ab 60 Jahren.",
+  "access.school.desc":
+    "Für Schulklassen reserviert — nicht öffentlich zugänglich.",
+  "access.club.desc":
+    "Für einen Verein reserviert — nicht öffentlich zugänglich.",
+  "access.adults.desc":
+    "Öffentliches Fenster nur für Erwachsene — reserviert für Gäste ab 18 Jahren (typisch für Abendschwimmen in Schulbädern).",
+  "access.girls.desc":
+    "Nur für Mädchen — das Bad nennt keine Altersgrenze, bitte dort nachfragen.",
+  "access.genderDiverse.desc":
+    "Angebot für trans und nicht-binäre Personen ab 16 Jahren.",
+  "access.accompanied.desc":
+    "Für Kinder nur in Begleitung Erwachsener (für Kinder nur mit Erwachsenen).",
+  // Nie "öffentliches Schwimmen" für eine unbekannte Art — das wäre eine Einladung
+  // statt eines Hinweises zum Nachfragen.
+  "access.unknown": "Angebot — beim Bad nachfragen",
+
+  "poolKind.indoor": "Hallenbad",
+  "poolKind.outdoor": "Freibad",
+  "poolKind.lake": "Seebad",
+  "poolKind.river": "Flussbad",
+  "poolKind.thermal": "Thermalbad",
+  "poolKind.school": "Schulschwimmanlage",
+  "poolKind.paddling": "Planschbecken",
+  "poolKind.unknown": "{kind}",
+
+  // --- Das Bad-Blatt ----------------------------------------------------------------
+  "detail.section.where": "Standort",
+  "detail.section.admission": "Eintritt",
+  "detail.section.season": "Saison",
+  "detail.section.basins": "Becken",
+  "detail.section.features": "Angebote",
+  "detail.section.lockers": "Garderoben",
+  "detail.section.rentals": "Vermietung",
+  "detail.section.lanes": "Belegungspläne",
+  "detail.section.provenance": "Woher diese Angaben stammen",
+
+  "detail.fact.address": "Adresse",
+  "detail.fact.phone": "Telefon",
+  "detail.fact.website": "Website",
+  "detail.fact.about": "Über das Bad",
+  "detail.fact.schedule": "Zeitplan",
+  "detail.fact.entry": "Eintritt",
+  "detail.fact.yourRate": "Ihr Tarif",
+  "detail.fact.pricesRead": "Preise gelesen",
+  "detail.fact.tariffPage": "Tarifseite",
+  "detail.fact.lastAdmission": "Letzter Einlass",
+  "detail.fact.season": "Badesaison",
+
+  "freshness.scraped": "Vom Bad veröffentlicht",
+  "freshness.awaiting": "Noch nicht veröffentlicht",
+  "freshness.noSource": "Kein Zeitplan zum Auslesen",
+  "freshness.unknown": "Unbekannter Zustand: {state}",
+  "freshness.awaiting.caveat":
+    "Dieses Bad hat eine Zeitplanseite, sie wurde aber noch nicht in diese App übernommen.",
+  "freshness.noSource.caveat":
+    "Dieses Bad veröffentlicht keinen eigenen Zeitplan. Das ist nicht dasselbe wie geschlossen.",
+  "freshness.unknown.caveat":
+    "Diese App kennt diesen Zustand nicht; bitte beim Bad nachfragen.",
+
+  "priceCategory.adult": "Erwachsene",
+  "priceCategory.youth": "Jugendliche",
+  "priceCategory.child": "Kinder",
+  "priceCategory.senior": "Senioren",
+  "priceCategory.unknown": "{category}",
+  "price.minAgeCaveat": "Veröffentlicht für Personen ab {minAge} Jahren.",
+  "price.staleCaveat":
+    "Die Preise stammen von der Seite des Bads und können sich ohne Ankündigung ändern.",
+
+  "admission.free": "Gratis",
+  "admission.tariff": "Kostenpflichtig — Tarife unten",
+  // NICHT "gratis": ein nicht angegebener Eintritt ist unbekannt.
+  "admission.unknown": "Nicht angegeben — beim Bad nachfragen",
+  "detail.lastAdmission.value": "{duration} vor Schliessung",
+
+  "season.range": "{from} bis {to}",
+  "season.rangeWithDays": "{startDay} {from} bis {endDay} {to}",
+  "season.fairWeatherCaveat":
+    "Angegeben für schönes Wetter; bei schlechtem Wetter kann das Bad geschlossen bleiben.",
+
+  "basin.fact.size": "Grösse",
+  "basin.fact.lanes": "Bahnen",
+  "basin.fact.water": "Wasser",
+  "basin.fact.diving": "Sprunganlage",
+  "basin.fact.lanePlan": "Belegungsplan",
+  "basin.size.lengthByWidth": "{length} × {width}",
+  "basin.size.length": "{length}",
+  "basin.size.width": "{width} breit",
+  "basin.tempNominalCaveat": "Die Angabe des Bads, keine Messung.",
+  "basin.parsedProseCaveat":
+    "Aus dem Fliesstext des Bads gelesen, daher möglicherweise ungenau.",
+  "basinKind.swimmer": "Schwimmerbecken",
+  "basinKind.non_swimmer": "Nichtschwimmerbecken",
+  "basinKind.diving": "Sprungbecken",
+  "basinKind.learner": "Lehrschwimmbecken",
+  "basinKind.paddling": "Planschbecken",
+  "basinKind.multi_purpose": "Mehrzweckbecken",
+  "basinKind.thermal": "Thermalbecken",
+  "basinKind.outdoor": "Aussenbecken",
+  "basinKind.unknown": "{kind}",
+
+  "feature.fact.surcharge": "Zuschlag",
+  "feature.fact.temperature": "Temperatur",
+  "feature.fact.hours": "Zeiten an diesem Tag",
+  "feature.hoursNotListed": "Zeiten für diesen Tag nicht angegeben",
+  "feature.closed": "Geschlossen — {reason}",
+  // Kleingeschrieben: diese Teilsätze werden INNERHALB von `feature.closed` gelesen.
+  "closureClause.out_of_season": "ausserhalb der Saison",
+  "closureClause.no_sessions": "für diesen Tag keine Zeiten veröffentlicht",
+  "closureClause.closure": "das Bad meldet eine Schliessung",
+  "closureClause.unknown": "{reason}",
+  "featureKind.sauna": "Sauna",
+  "featureKind.gastronomy": "Restaurant oder Kiosk",
+  "featureKind.sunbathing": "Liegewiese",
+  "featureKind.playground": "Spielplatz",
+  "featureKind.slide": "Wasserrutsche",
+  "featureKind.wellness": "Wellnessbereich",
+  "featureKind.sport": "Sportanlage",
+  "featureKind.unknown": "{kind}",
+
+  "lockerKind.wardrobe": "Garderobenkästchen",
+  "lockerKind.valuables": "Wertfach",
+  "lockerKind.cabin": "Umkleidekabine",
+  "lockerKind.unknown": "{kind}",
+  "rentalKind.towel": "Badetuch",
+  "rentalKind.locker": "Kästchen",
+  "rentalKind.deck_chair": "Liegestuhl",
+  "rentalKind.swim_aid": "Schwimmhilfe",
+  "rentalKind.unknown": "{kind}",
+  "fee.free": "Gratis",
+  "fee.unstated": "Preis nicht angegeben",
+  "fee.amount": "{amount}",
+  "fee.perPeriod": "pro {period}",
+  "fee.deposit": "Depot {amount}",
+
+  "panel.bestWindow": {
+    one: "{start}–{end}, {count} Bahn",
+    other: "{start}–{end}, {count} Bahnen",
+  },
+  "panel.clubSlot.oneLane": "{start}–{end}, Bahn {lanes}",
+  "panel.clubSlot.manyLanes": "{start}–{end}, Bahnen {lanes}",
+  "prov.fact.readFrom": "Gelesen von",
+  "prov.fact.accurateAsOf": "Stand",
+  "prov.fact.curation": "Prüfung",
+  "prov.curated.yes": "Von Hand geprüft",
+  "prov.curated.no": "Direkt von der Seite des Bads übernommen",
+
+  // --- Belegungspläne ---------------------------------------------------------------
+  "lane.incompleteCaveat":
+    "Einzelne Bahnen liessen sich aus dem Plan des Bads nicht lesen, daher ist die Angabe unvollständig.",
+  // Null öffentliche Bahnen ist NICHT "0 von 8 offen" — jede Variante ist ein ganzer Satz.
+  "lane.nonePublic": "keine Bahnen öffentlich zugänglich",
+  "lane.nonePublic.partial":
+    "keine Bahnen öffentlich zugänglich — einzelne Bahnen nicht lesbar",
+  "lane.publicOfTotal": {
+    one: "{public} von {count} Bahn öffentlich",
+    other: "{public} von {count} Bahnen öffentlich",
+  },
+  "lane.publicOfTotal.partial": {
+    one: "{public} von {count} Bahn öffentlich — einzelne Bahnen nicht lesbar",
+    other:
+      "{public} von {count} Bahnen öffentlich — einzelne Bahnen nicht lesbar",
+  },
+  "lane.openToPublic": "öffentlich zugänglich",
+  "lane.spoken": "Bahn {lane}, {start} bis {end}, {holder}",
+
+  // --- VoiceOver über dem Bänder-Canvas ---------------------------------------------
+  "a11y.blockLabel": "{start} bis {end}, {access}",
+  "a11y.fact.publicLanes": "Öffentlich zugängliche Bahnen",
+  "a11y.value.ofTotal": "{public} von {total}",
+  "a11y.fact.laneData": "Bahnendaten",
+  "a11y.value.laneDataIncomplete": "unvollständig für dieses Becken",
+  "a11y.fact.lanes": "Bahnen",
+  "a11y.fact.reservedBy": "Reserviert für",
+  "a11y.value.ownerAndOthers": "{owner} und weitere",
+  "a11y.fact.laneSplit": "Bahnenaufteilung",
+  "a11y.value.laneSplitUnpublished": "für dieses Bad nicht veröffentlicht",
+  "a11y.selected": "Ausgewählt",
+
+  // --- Rahmen der App ---------------------------------------------------------------
+  "nav.allPools": "Alle Bäder",
+  "nav.accessTypes": "Was die Angaben bedeuten",
+  "nav.browse": "Stöbern",
+  "nav.findAPool": "Bad finden",
+  "accessTypes.title": "Arten von Angeboten",
+  "accessTypes.footer":
+    "Die Regeln des einzelnen Angebots gelten immer: Was ein Bad für eine bestimmte Stunde veröffentlicht, zeigt diese App — und das sind die Kategorien, in die sie es einordnet.",
+  "browser.noMatch.body": "Anderen Namen oder eine andere Art versuchen.",
+  "browser.filterByKind": "Nach Art filtern",
+  "browser.kind": "Art",
+  "browser.allKinds": "Alle Arten",
+  "gantt.title": "Bahnen, Stunde für Stunde",
+  "error.store.title": "Baddaten nicht lesbar",
+  "error.store.body":
+    "Die mitgelieferten Baddaten liessen sich nicht öffnen, daher gibt es nichts anzuzeigen. Eine Neuinstallation stellt sie wieder her.",
+  "state.none.body.phone":
+    "Grösseren Umkreis, anderen Tag oder weniger Filter versuchen. Das ist nicht dasselbe wie geschlossen.",
+  "meta.dataFrom": "Daten von",
+  "meta.answersThrough": "Antworten bis",
+  "meta.offlineNote":
+    "Funktioniert offline. Alles hier wurde vor der Auslieferung der App aufgelöst.",
+  "action.favourite": "Merken",
+  "action.unfavourite": "Nicht mehr merken",
+  "action.showLanePlan": "Belegungsplan anzeigen",
+  "action.hideLanePlan": "Belegungsplan ausblenden",
+  "action.done": "Fertig",
+  "session.fairWeather.badge": "Nur bei schönem Wetter",
+  "filter.none": "Keine Filter",
+  "filter.section.who": "Wer",
+  "filter.section.where": "Wo",
+  "filter.section.what": "Was",
+  "filter.eligibleOnly": "Nur für mich offen",
+  "filter.eligibleOnly.toggle": "Nur Angebote, die für mich offen sind",
+  "filter.favourites": "Gemerkt",
+  "filter.favouritesOnly.toggle": "Nur Gemerktes",
+  "filter.measureFrom": "Entfernung ab",
+  "filter.within": "Umkreis",
+  "filter.anyDistance": "Beliebig weit",
+  "filter.poolKinds": "Arten von Bädern",
+  "filter.allKinds": "Alle",
+  "place.anywhere": "Überall",
+  "place.searchPrompt": "Orte suchen",
+  "place.hb": "Zürich HB (Hauptbahnhof)",
 } as const satisfies CatalogFor<"de">;

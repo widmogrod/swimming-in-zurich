@@ -207,7 +207,7 @@ struct UILintTests {
     // claimed rendered (see `FieldCoverage.deliberatelyOmitted`).
     let sheet = try #require(try Self.appFiles().first { $0.name == "FacilitySheet.swift" })
     let code = Self.code(sheet.text)
-    #expect(code.contains(".navigationTitle(detail.name)"))
+    #expect(code.contains(".navigationTitle(Text(verbatim: detail.name))"))
     #expect(!code.contains("Text(detail.poolID)"))
   }
 
@@ -267,6 +267,295 @@ struct UILintTests {
         }
       }
     }
+  }
+
+  // MARK: - S4 acceptance 2: nothing user-visible is left in English
+
+  /// Every string literal handed to `Message(...)` in either target, with the file it came
+  /// from. These ARE the catalog keys: the whole app says what it says through them.
+  static func messageKeyLiterals(in files: [(name: String, text: String)]) -> [(String, String)] {
+    var found: [(String, String)] = []
+    for file in files {
+      for match in Self.code(file.text).matches(of: /Message\(\s*"([^"]+)"/) {
+        // An INTERPOLATED key is not a literal and cannot be looked up as one; it is checked by
+        // its prefix in `interpolatedKeysHaveARealPrefix`. Without this filter every
+        // `Message("poolKind.\(kind)")` would be reported as a missing key, and the honest
+        // reading of that much noise is "turn the lint off".
+        guard !match.1.contains("\\(") else { continue }
+        found.append((file.name, String(match.1)))
+      }
+      // `Wording.key("…")` is the same thing said shorter.
+      for match in Self.code(file.text).matches(of: /\.key\(\s*"([^"]+)"/) {
+        guard !match.1.contains("\\(") else { continue }
+        found.append((file.name, String(match.1)))
+      }
+      // ...and an interpolated key (`"poolKind.\(kind)"`) cannot be checked as a literal, so
+      // the PREFIX is checked instead by `interpolatedKeysHaveARealPrefix` below.
+    }
+    return found
+  }
+
+  @Test("every message key the app and the kit name exists in the catalog")
+  func everyMessageKeyResolves() throws {
+    // The half of acceptance 2 that stops criterion 1 being vacuous. Key parity inside the
+    // catalog is worth nothing if the code names keys that are not in it: a missing key renders
+    // as ITSELF, which on screen reads as a design choice rather than as a missing string.
+    let files = try Self.appFiles() + SourceLintTests.swiftFiles()
+    let literals = Self.messageKeyLiterals(in: files)
+    #expect(literals.count > 80, "only \(literals.count) message keys found — is the scan working?")
+    for (file, key) in literals {
+      #expect(Catalog.entries[key] != nil, "\(file) names \(key), which the catalog lacks")
+    }
+    // ...and the app target really is one of the scanned trees, so this cannot pass by reading
+    // the package alone.
+    #expect(literals.contains { $0.0 == "TodayView.swift" })
+  }
+
+  @Test("an interpolated key is built from a prefix the catalog actually has")
+  func interpolatedKeysHaveARealPrefix() throws {
+    // `Message("poolKind.\(kind)")` cannot be checked as a literal, and it is the right shape
+    // for a closed vocabulary — so the PREFIX is checked instead: at least one real key must
+    // begin with it, which catches a renamed family (`poolKind.` → `pool.kind.`) that would
+    // otherwise render every kind as a raw key.
+    let files = try Self.appFiles() + SourceLintTests.swiftFiles()
+    var prefixes: [(String, String)] = []
+    for file in files {
+      for match in Self.code(file.text).matches(of: /Message\(\s*"([A-Za-z.]+)\\\(/) {
+        prefixes.append((file.name, String(match.1)))
+      }
+    }
+    #expect(!prefixes.isEmpty, "no interpolated keys found — the scan is broken")
+    for (file, prefix) in prefixes {
+      #expect(
+        Catalog.entries.keys.contains { $0.hasPrefix(prefix) },
+        "\(file) builds keys under \(prefix), which no catalog key starts with")
+    }
+  }
+
+  @Test("no bare string literal sits in a LocalizedStringKey position")
+  func noLiteralsInLocalizedStringKeyPositions() throws {
+    // In SwiftUI a literal in a `LocalizedStringKey` position IS a key — which is the correct
+    // idiom in general and the wrong one HERE, because SwiftUI resolves it against
+    // `Bundle.main` while this app's catalog lives in the package's bundle. Such a literal
+    // renders as the raw key, silently.
+    //
+    // So the rule is not "no literals" (that would forbid right code elsewhere); it is: any
+    // literal in one of these positions must be a catalog key AND, in this app, there should be
+    // none at all, because everything goes through `Text(Message)`.
+    let positions = [
+      "Text(\"", "Label(\"", ".navigationTitle(\"", ".accessibilityLabel(\"",
+      ".accessibilityValue(\"", "Button(\"", "Section(\"", "Toggle(\"", "Picker(\"",
+      "LabeledContent(\"", "ContentUnavailableView(\"", "prompt: \"",
+    ]
+    for file in try Self.appFiles() {
+      let code = Self.code(file.text)
+      for position in positions {
+        // EVERY occurrence, not the first. Acceptance 2(a) says "every string literal in a
+        // LocalizedStringKey position", and `range(of:)` checks one per token per file — which
+        // is harmlessly equivalent today, because there are zero such literals, and stops being
+        // equivalent the moment one legitimate literal is added above a wrong one.
+        for range in code.ranges(of: position) {
+          // If one is ever added deliberately it must at least BE a key, so the failure names
+          // both facts rather than only the ban.
+          let rest = code[range.upperBound...]
+          let key = String(rest.prefix { $0 != "\"" })
+          #expect(
+            Catalog.entries[key] != nil,
+            "\(file.name) has a bare literal in a LocalizedStringKey position: \(position)\(key)"
+          )
+        }
+      }
+    }
+  }
+
+  /// One allowlisted `Text(verbatim:)` site.
+  struct VerbatimSite: Decodable, Hashable {
+    let file: String
+    let expression: String
+    let reason: String
+  }
+
+  /// Every `Text(verbatim: …)` argument in the app target, paren-matched.
+  ///
+  /// Paren-matched rather than regex-matched because the arguments contain parentheses of their
+  /// own (`localized.format.distance(kilometres: km)`), and a scan that stopped at the first
+  /// `)` would report a truncated expression that no allowlist entry could match — which reads
+  /// as "you forgot to allowlist it" rather than as "the lint is broken".
+  static func verbatimSites(in code: String) -> [String] {
+    // `(verbatim:` rather than `Text(verbatim:`, so the two `self.init(verbatim:)` calls in
+    // `Localization.swift` — the ones that make every OTHER site unnecessary — are covered by
+    // the same rule as the rest. A token that only matched `Text(` would have exempted exactly
+    // the file most worth policing.
+    let token = "(verbatim:"
+    var sites: [String] = []
+    var search = code.startIndex
+    while let start = code.range(of: token, range: search..<code.endIndex) {
+      var depth = 1
+      var cursor = start.upperBound
+      while cursor < code.endIndex, depth > 0 {
+        if code[cursor] == "(" { depth += 1 }
+        if code[cursor] == ")" { depth -= 1 }
+        if depth > 0 { cursor = code.index(after: cursor) }
+      }
+      sites.append(
+        String(code[start.upperBound..<cursor]).trimmingCharacters(in: .whitespacesAndNewlines))
+      search = cursor
+    }
+    return sites
+  }
+
+  @Test("every `Text(verbatim:)` in the app target is allowlisted, with a reason")
+  func verbatimTextIsAllowlisted() throws {
+    // `Text(verbatim:)` says "this string is NOT a key". That is right for a value — a pool's
+    // name, a formatted distance, a string this code localised on the line above — and wrong
+    // for a sentence, and the two are indistinguishable in a diff. So every site is named in
+    // `apps/ios/verbatim-allowlist.json` with the reason it is a value.
+    let allowlist = RepoFixtures.root.appending(path: "apps/ios/verbatim-allowlist.json")
+    struct Allowlist: Decodable { let sites: [VerbatimSite] }
+    let allowed = try JSONDecoder().decode(Allowlist.self, from: Data(contentsOf: allowlist))
+    #expect(allowed.sites.count >= 15, "the allowlist looks truncated")
+    for site in allowed.sites {
+      #expect(site.reason.count > 20, "\(site.file)/\(site.expression) has no real reason")
+    }
+    let permitted = Set(allowed.sites.map { "\($0.file)|\($0.expression)" })
+
+    var seen = 0
+    for file in try Self.appFiles() {
+      for expression in Self.verbatimSites(in: Self.code(file.text)) {
+        seen += 1
+        #expect(
+          permitted.contains("\(file.name)|\(expression)"),
+          "\(file.name): Text(verbatim: \(expression)) is not in verbatim-allowlist.json")
+      }
+    }
+    #expect(seen >= 15, "the scan found \(seen) verbatim sites — it is reading nothing")
+    // ...and every allowlisted site still exists, so the file cannot rot into a list of
+    // exemptions for code that is gone.
+    var live: Set<String> = []
+    for file in try Self.appFiles() {
+      for expression in Self.verbatimSites(in: Self.code(file.text)) {
+        live.insert("\(file.name)|\(expression)")
+      }
+    }
+    #expect(
+      permitted.subtracting(live).isEmpty,
+      "stale allowlist entries: \(permitted.subtracting(live).sorted())")
+  }
+
+  @Test("the verbatim scan really matches whole arguments, parentheses included")
+  func verbatimScanIsNotVacuous() {
+    let sample = """
+      Text(verbatim: pool.name)
+      Text(verbatim: localized.format.distance(kilometres: km))
+      Text("nav.allPools")
+      self.init(verbatim: localized(message))
+      """
+    let sites = UILintTests.verbatimSites(in: sample)
+    #expect(
+      sites == [
+        "pool.name", "localized.format.distance(kilometres: km)", "localized(message)",
+      ])
+  }
+
+  /// Every string LITERAL in `code`, as its contents.
+  ///
+  /// A hand-written scanner rather than a regex, and the reason is a bug this lint had on its
+  /// first run: `/"([^"\n]*)"/ ` happily matches the text BETWEEN two adjacent literals, so
+  /// `Color("A"), systemImage: "B"` was reported as a phrase reading `"), systemImage: "`. A
+  /// scanner that toggles in/out of a string cannot make that mistake. Interpolations are
+  /// skipped whole (`\(…)` can contain braces and quotes of its own), and an escaped quote
+  /// does not close the literal.
+  static func stringLiterals(in code: String) -> [String] {
+    var literals: [String] = []
+    var current = ""
+    var inString = false
+    var index = code.startIndex
+    while index < code.endIndex {
+      let character = code[index]
+      if inString {
+        if character == "\\" {
+          let next = code.index(after: index)
+          if next < code.endIndex, code[next] == "(" {
+            // An interpolation: skip to its matching `)` without leaving the literal.
+            var depth = 0
+            var cursor = next
+            while cursor < code.endIndex {
+              if code[cursor] == "(" { depth += 1 }
+              if code[cursor] == ")" {
+                depth -= 1
+                if depth == 0 { break }
+              }
+              cursor = code.index(after: cursor)
+            }
+            current.append("\u{FFFC}")  // an opaque placeholder: a value, not a word
+            index = cursor < code.endIndex ? code.index(after: cursor) : code.endIndex
+            continue
+          }
+          // Any other escape: consume both characters.
+          current.append(character)
+          if next < code.endIndex { current.append(code[next]) }
+          index = next < code.endIndex ? code.index(after: next) : code.endIndex
+          continue
+        }
+        if character == "\"" {
+          literals.append(current)
+          current = ""
+          inString = false
+        } else if character == "\n" {
+          // An unterminated literal means the scan lost sync; drop it rather than run on.
+          current = ""
+          inString = false
+        } else {
+          current.append(character)
+        }
+      } else if character == "\"" {
+        inString = true
+      }
+      index = code.index(after: index)
+    }
+    return literals
+  }
+
+  @Test("the app target holds no user-visible sentence of its own")
+  func noSentencesInTheApp() throws {
+    // The broadest of the four, and the one that catches a literal nobody thought of: a string
+    // literal in the app target holding two or more WORDS is prose, and prose belongs in the
+    // catalog. Symbol names, asset names and keys have no spaces, so they are out of scope by
+    // construction; the handful that genuinely do are named here rather than pattern-matched,
+    // so adding one is a deliberate edit.
+    let allowed: Set<String> = [
+      "\u{FFFC} \u{FFFC}", ", ", " · ", "· \u{FFFC}",
+      // An `os_log` format string. It goes to the console for whoever has to fix the store,
+      // never to a reader — which is the whole point of S4 moving it off the error screen.
+      "store unreadable: \u{FFFC}",
+    ]
+    for file in try Self.appFiles() {
+      for literal in Self.stringLiterals(in: Self.code(file.text)) {
+        let words = literal.split(separator: " ").filter { $0.contains(where: \.isLetter) }
+        guard words.count >= 2, !allowed.contains(literal) else { continue }
+        Issue.record("\(file.name) holds a phrase: \"\(literal)\" — it belongs in the catalog")
+      }
+    }
+  }
+
+  @Test("the literal scanner really reads literals, and only literals")
+  func literalScannerIsSound() {
+    // The three shapes that broke the regex this replaced, pinned so it cannot come back.
+    let sample = #"""
+      Image(systemName: "heart.fill")
+      Color("MarkAttend"), systemImage: "line.3.horizontal"
+      Text(verbatim: "\(a) – \(b)")
+      let escaped = "say \"hi\""
+      """#
+    let literals = UILintTests.stringLiterals(in: sample)
+    #expect(literals.contains("heart.fill"))
+    #expect(literals.contains("MarkAttend"))
+    #expect(literals.contains("line.3.horizontal"))
+    // ...and NOT the text between two literals, which is what the regex reported as a phrase.
+    #expect(!literals.contains { $0.contains("systemImage") })
+    // An interpolation becomes an opaque placeholder rather than leaking its expression.
+    #expect(literals.contains("\u{FFFC} – \u{FFFC}"))
+    #expect(literals.contains(#"say \"hi\""#))
   }
 
   // MARK: - Acceptance 6: colours

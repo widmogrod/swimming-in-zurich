@@ -5,11 +5,15 @@
 // what the weekday abbreviation is in the reader's locale, and what the legend says when the
 // accessibility layout has collapsed the inline labels. In a `body` none of that is reachable.
 //
-// The formatting deliberately goes through `DateFormatter` with an EXPLICIT locale and the
-// Zurich time zone. The web pinned the same two facts by test and they are easy to get wrong:
-// a device in a Buddhist or Japanese calendar locale would otherwise produce a day number that
-// belongs to no row in the store, and a formatter left on the system zone would name the wrong
-// weekday for anyone reading from another continent.
+// The formatting goes through `Format`, which is the ONE module allowed to hold a format
+// result — with the reader's regional locale and the Zurich time zone, both explicit. Two facts
+// the web pinned by test and that are easy to get wrong: a device in a Buddhist or Japanese
+// calendar locale would otherwise produce a day number that belongs to no row in the store, and
+// a formatter left on the system zone would name the wrong weekday for anyone reading from
+// another continent. A third, added here: the weekday and the day number are read off the
+// formatter's own `DateFieldAttribute` runs (`Format.dayParts`), never split out of a rendered
+// string — Polish alone would defeat that, since it lower-cases its weekday names and takes a
+// genitive month.
 
 import Foundation
 
@@ -17,8 +21,9 @@ import Foundation
 public struct DayChip: Equatable, Sendable, Identifiable {
   /// The store's key (`yyyy-MM-dd`) — also the chip's scroll-position id.
   public let day: String
-  /// The short weekday, or the today word.
-  public let caption: String
+  /// The short weekday (the FORMATTER's words, so verbatim), or the today word (OURS, so a
+  /// message). The two are different kinds of string and `Wording` keeps them apart.
+  public let caption: Wording
   /// The day of the month, without a leading zero.
   public let number: String
   public let isToday: Bool
@@ -29,36 +34,26 @@ public struct DayChip: Equatable, Sendable, Identifiable {
   public var id: String { day }
 }
 
-private func formatter(_ template: String, locale: Locale) -> DateFormatter {
-  let formatter = DateFormatter()
-  formatter.locale = locale
-  formatter.timeZone = ZurichClock.timeZone
-  formatter.setLocalizedDateFormatFromTemplate(template)
-  return formatter
-}
-
 /// The chip for one day.
 ///
 /// A malformed key yields a chip that shows the key itself rather than nothing: the strip is
 /// built from the store's own horizon, so an unparseable day means the store is wrong, and a
 /// blank chip would hide that while a visible one reports it.
-public func dayChip(
-  for day: String,
-  today: String,
-  locale: Locale = .current
-) -> DayChip {
+public func dayChip(for day: String, today: String, format: Format) -> DayChip {
   guard let instant = ZurichClock.instant(day: day, at: TimeOfDay(hour: 12, minute: 0)) else {
-    return DayChip(day: day, caption: day, number: day, isToday: false, accessibilityLabel: day)
+    return DayChip(
+      day: day, caption: .verbatim(day), number: day, isToday: false, accessibilityLabel: day)
   }
   let isToday = day == today
+  let parts = format.dayParts(instant)
   return DayChip(
     day: day,
     // "Today" beats the weekday: it is the one chip a user looks for, and it is the only
     // caption that is not derivable from the number beside it.
-    caption: isToday ? "Today" : formatter("EEE", locale: locale).string(from: instant),
-    number: formatter("d", locale: locale).string(from: instant),
+    caption: isToday ? .key("common.today") : .verbatim(parts.weekday),
+    number: parts.dayOfMonth,
     isToday: isToday,
-    accessibilityLabel: formatter("EEEEdMMMM", locale: locale).string(from: instant)
+    accessibilityLabel: parts.full
   )
 }
 
@@ -67,7 +62,7 @@ public func dayChips(
   from start: String,
   through end: String,
   today: String,
-  locale: Locale = .current
+  format: Format
 ) -> [DayChip] {
-  ZurichClock.days(from: start, through: end).map { dayChip(for: $0, today: today, locale: locale) }
+  ZurichClock.days(from: start, through: end).map { dayChip(for: $0, today: today, format: format) }
 }

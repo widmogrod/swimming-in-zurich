@@ -35,7 +35,7 @@ hooks:  ## Install pre-commit + pre-push git hooks
 # Order is load-bearing here as in the other two: from S2b, `crap_swift.py` reads the
 # coverage `swift test` writes, so tests run before the gate.
 
-.PHONY: ios-export ios-fixtures ios-field-coverage ios-qa
+.PHONY: ios-export ios-fixtures ios-field-coverage ios-locales ios-locales-check ios-qa
 
 IOS_STORE := apps/ios/Sources/SwimZHKit/Resources/ios.sqlite
 IOS_DESTINATION ?= platform=iOS Simulator,name=iPhone 17
@@ -45,6 +45,26 @@ ios-export:  ## Project the LIVE gold store into the bundled iOS store (the rele
 
 ios-fixtures:  ## Regenerate the COMMITTED offline store + geo fixture (no network, deterministic)
 	uv run python scripts/ios_fixtures.py
+
+# The web's message catalogs, projected into the iOS string catalog. NOT a second catalog:
+# `apps/web/static/js/locales/*.ts` is the source of truth for every sentence this product
+# says, and `Localizable.xcstrings` is derived from it exactly as `data/catalog.json` is
+# derived from the WFS. The converter is node because the catalogs are TypeScript modules and
+# it imports the COMPILED `dist/locales/*.js` — so the TS build comes first.
+# Staleness-gated by `tests/scripts/test_locales_to_xcstrings.py`, which skips without `dist/`.
+ios-locales:  ## Regenerate Localizable.xcstrings + Catalog.generated.swift from the web catalogs
+	npm --prefix apps/web/static/js run build
+	node scripts/locales_to_xcstrings.mjs
+
+# The GATE, and the difference from `ios-locales` is the whole point: this one never writes.
+# `ios-qa` used to run the regenerating target and then assert the result matched — which
+# compared generator output against generator output and could not fail. A contributor could
+# edit a sentence in `en.ts`, not regenerate, and ship a phone catalog saying the old thing with
+# every chain green. This builds the TS (so `dist/locales/*.js` exists and the converter's
+# pytest stops skipping) and then CHECKS, so a stale committed catalog fails the chain.
+ios-locales-check:  ## Fail if the committed iOS catalog is stale against the web catalogs
+	npm --prefix apps/web/static/js run build
+	node scripts/locales_to_xcstrings.mjs --check
 
 # The field-coverage contract the phone is measured against. Staleness-gated by
 # `apps/web/tests/test_field_coverage_contract.py`, so this target is a convenience: the gate
@@ -60,13 +80,21 @@ ios-field-coverage:  ## Regenerate field_coverage.json from the pydantic respons
 # target's last build phase — `scripts/ios_budget.py`, so a size regression fails right
 # there rather than needing a step of its own to remember.
 #
+# `ios-locales-check` runs FIRST, and it CHECKS rather than writes. `dist/locales/*.js` is
+# git-ignored, so without the TS build the converter's staleness test skips and acceptance 1 is
+# unasserted; with a REGENERATING step, the check that follows compares generator output against
+# generator output and cannot fail either. Building and then `--check`ing is the only order in
+# which a stale committed catalog is caught: `node scripts/locales_to_xcstrings.mjs --check`
+# diffs the two generated files against what is on disk, i.e. against what is committed.
+#
 # `pytest tests/scripts` runs HERE and not only in the Python chain, because two of the
 # gate's own tests — the CRAP offender path and the coverage join — skip without
 # `apps/ios/.build`, which the ubuntu `qa` job never has. Without this step they would be
 # dead code in CI on every runner. It goes after the CRAP step so the build directory and
 # the coverage data exist, and `--no-cov` because the coverage floor belongs to the Python
 # chain alone and must not be computed from this partial selection.
-ios-qa:  ## Swift chain: format lint -> build -> test+coverage -> CRAP -> gate tests -> simulator test
+ios-qa:  ## Swift chain: locale check -> format lint -> build -> test+coverage -> CRAP -> gate tests -> simulator test
+	$(MAKE) ios-locales-check
 	cd apps/ios && swift format lint --strict --recursive Sources Tests App
 	cd apps/ios && swift build
 	cd apps/ios && swift test --enable-code-coverage

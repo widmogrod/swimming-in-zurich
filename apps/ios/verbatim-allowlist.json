@@ -1,0 +1,113 @@
+{
+  "_comment": [
+    "S4 acceptance 2(b). `Text(verbatim:)` tells SwiftUI 'this string is NOT a key' — which is",
+    "right for a value and wrong for a sentence, and the two look identical in a diff. So every",
+    "site is named here with the reason it is a value, and `UILintTests.verbatimTextIsAllowlisted`",
+    "fails on any site this file does not list.",
+    "",
+    "The rule for adding one: a `Text(verbatim:)` is legitimate ONLY when the string is (a) a",
+    "proper noun or the source's own words, (b) a value a `FormatStyle` produced, or (c) already",
+    "localised on the line above. Anything else is a sentence and belongs in the catalog.",
+    "",
+    "`file` + `expression` must match the argument text exactly, so a NEW site fails the lint",
+    "even in a file that already has one — a per-file exemption would let a sentence slip in",
+    "beside a value."
+  ],
+  "sites": [
+    {
+      "file": "Localization.swift",
+      "expression": "localized(message)",
+      "reason": "(c) the one place a Message becomes a Text; the string was localised on this line"
+    },
+    {
+      "file": "Localization.swift",
+      "expression": "localized(wording)",
+      "reason": "(c) same, for a Wording — ours or the source's, already resolved"
+    },
+    {
+      "file": "DayStrip.swift",
+      "expression": "chip.accessibilityLabel",
+      "reason": "(b) the full date, read off Format.dayParts' own DateFieldAttribute runs"
+    },
+    {
+      "file": "DayStrip.swift",
+      "expression": "chip.number",
+      "reason": "(b) the day of the month, formatted in the reader's calendar and locale"
+    },
+    {
+      "file": "DayStrip.swift",
+      "expression": "\"\"",
+      "reason": "(b) the collapsed accessibility-size caption: an empty string is not a sentence"
+    },
+    {
+      "file": "FacilitySheet.swift",
+      "expression": "detail.name",
+      "reason": "(a) the pool's own name, a proper noun"
+    },
+    {
+      "file": "FacilitySheet.swift",
+      "expression": "rendered",
+      "reason": "(c) the row's value, localised once at the top of the view and reused"
+    },
+    {
+      "file": "FilterBar.swift",
+      "expression": "filters.summaryTags.map { localized($0) }.joined(separator: \" · \")",
+      "reason": "(c) each tag localised BEFORE the join; the middot is punctuation between clauses"
+    },
+    {
+      "file": "FilterBar.swift",
+      "expression": "localized.format.distance(kilometres: km)",
+      "reason": "(b) a Measurement formatted in the reader's regional locale"
+    },
+    {
+      "file": "LaneGanttView.swift",
+      "expression": "hourLabel(value.as(Double.self))",
+      "reason": "(b) an axis tick — HH:MM off the store's own clock values"
+    },
+    {
+      "file": "PoolsBrowser.swift",
+      "expression": "pool.name",
+      "reason": "(a) the pool's own name, a proper noun"
+    },
+    {
+      "file": "PoolRowView.swift",
+      "expression": "accessibilityLabel",
+      "reason": "(c) four clauses each localised, then joined as a visual list by Wording.joined"
+    },
+    {
+      "file": "PoolRowView.swift",
+      "expression": "\"· \\(localized(tail))\"",
+      "reason": "(c) the verdict tail, localised; the middot is punctuation, not grammar"
+    },
+    {
+      "file": "PoolRowView.swift",
+      "expression": "localized.format.distance(kilometres: km)",
+      "reason": "(b) a Measurement formatted in the reader's regional locale"
+    },
+    {
+      "file": "PoolRowView.swift",
+      "expression": "\"\\(option.window.start.hhmm)–\\(option.window.end.hhmm)\"",
+      "reason": "(b) a time range: two store clock values and an en dash"
+    },
+    {
+      "file": "PoolRowView.swift",
+      "expression": "option.basinName",
+      "reason": "(a) the basin's own name, as the pool wrote it"
+    },
+    {
+      "file": "PoolRowView.swift",
+      "expression": "price.display",
+      "reason": "(a) the pool's own dated price line; re-formatting it would restate what they published"
+    },
+    {
+      "file": "RibbonCanvas.swift",
+      "expression": "String(format: \"%02d\", hour)",
+      "reason": "(b) an hour tick on the day tail — a two-digit number, no words"
+    },
+    {
+      "file": "TodayView.swift",
+      "expression": "localized.format.storeDate(key)",
+      "reason": "(b) a `meta` date key formatted for the reader; `stampRow` omits the whole row when the store carries no stamp"
+    }
+  ]
+}

@@ -16,6 +16,8 @@
 		1A00000000000000000002B /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 1A00000000000000000002A /* PrivacyInfo.xcprivacy */; };
 		1A00000000000000000002D /* AppCorrectnessTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A00000000000000000002C /* AppCorrectnessTests.swift */; };
 		1A00000000000000000002F /* MemoryMetricTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A00000000000000000002E /* MemoryMetricTests.swift */; };
+		1A00000000000000000004D /* LocalizationDeviceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A00000000000000000004C /* LocalizationDeviceTests.swift */; };
+		1A00000000000000000004F /* Localization.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A00000000000000000004E /* Localization.swift */; };
 		1A000000000000000000041 /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A000000000000000000040 /* Theme.swift */; };
 		1A000000000000000000043 /* TypeSizeBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A000000000000000000042 /* TypeSizeBridge.swift */; };
 		1A000000000000000000045 /* DayStrip.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A000000000000000000044 /* DayStrip.swift */; };
@@ -50,6 +52,8 @@
 		1A00000000000000000002A /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		1A00000000000000000002C /* AppCorrectnessTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppCorrectnessTests.swift; sourceTree = "<group>"; };
 		1A00000000000000000002E /* MemoryMetricTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemoryMetricTests.swift; sourceTree = "<group>"; };
+		1A00000000000000000004C /* LocalizationDeviceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalizationDeviceTests.swift; sourceTree = "<group>"; };
+		1A00000000000000000004E /* Localization.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Localization.swift; sourceTree = "<group>"; };
 		1A000000000000000000040 /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Theme.swift; sourceTree = "<group>"; };
 		1A000000000000000000042 /* TypeSizeBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TypeSizeBridge.swift; sourceTree = "<group>"; };
 		1A000000000000000000044 /* DayStrip.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DayStrip.swift; sourceTree = "<group>"; };
@@ -109,6 +113,7 @@
 				1A00000000000000000001B /* Assets.xcassets */,
 				1A00000000000000000002A /* PrivacyInfo.xcprivacy */,
 				1A000000000000000000040 /* Theme.swift */,
+				1A00000000000000000004E /* Localization.swift */,
 				1A000000000000000000042 /* TypeSizeBridge.swift */,
 				1A000000000000000000044 /* DayStrip.swift */,
 				1A000000000000000000046 /* FilterBar.swift */,
@@ -129,6 +134,7 @@
 				1A00000000000000000002C /* AppCorrectnessTests.swift */,
 				1A00000000000000000002E /* MemoryMetricTests.swift */,
 				1A00000000000000000004A /* TypeSizeBridgeTests.swift */,
+				1A00000000000000000004C /* LocalizationDeviceTests.swift */,
 			);
 			path = SwimZHTests;
 			sourceTree = "<group>";
@@ -140,6 +146,7 @@
 			isa = PBXNativeTarget;
 			buildConfigurationList = 1A000000000000000000010 /* Build configuration list for PBXNativeTarget "SwimZH" */;
 			buildPhases = (
+				1A00000000000000000003B /* Plural categories */,
 				1A00000000000000000000A /* Sources */,
 				1A00000000000000000000B /* Frameworks */,
 				1A00000000000000000000C /* Resources */,
@@ -200,6 +207,10 @@
 			hasScannedForEncodings = 0;
 			knownRegions = (
 				en,
+				de,
+				fr,
+				it,
+				pl,
 				Base,
 			);
 			mainGroup = 1A000000000000000000002;
@@ -233,6 +244,21 @@
 			shellPath = /bin/sh;
 			shellScript = "# The two size ratchets, applied to the bundle that was just built.\n#\n# It lives HERE, as the app target's last phase, rather than as an extra command in\n# the QA chain, because the artifact it measures only exists inside an xcodebuild\n# build -- and putting it in the chain would be one more step to forget. A regression\n# fails the build, which is the closing `xcodebuild ... test` of the Swift chain.\n#\n# `size -m` is a host tool, so this cannot be an in-simulator test. /usr/bin/python3\n# ships with the Command Line Tools; the script imports only the standard library.\nset -e\nPYTHON=\"$(command -v python3 || echo /usr/bin/python3)\"\nexec \"$PYTHON\" \"$SRCROOT/../../../scripts/ios_budget.py\" \"$TARGET_BUILD_DIR/$WRAPPER_NAME\"\n";
 		};
+		1A00000000000000000003B /* Plural categories */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputPaths = (
+			);
+			name = "Plural categories";
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "# S4 acceptance 3: the compile-time plural guarantee `plurals.ts` gives the web.\n#\n# Xcode has no counterpart. There is no build error and no documented build warning for\n# a .xcstrings plural variation that omits a category: at runtime Foundation falls back\n# to `other`, which in Polish is the DECIMAL form -- so the singular-genitive is printed\n# where the plural-genitive belongs. That is exactly the broken grammar the hand-rolled\n# i18n runtime exists to prevent, and it is invisible to everything Apple ships.\n#\n# So the guarantee is rebuilt here: the script emits `error:` lines, which Xcode surfaces\n# as build errors, and a missing category fails the build -- the same place the\n# TypeScript side fails. It runs BEFORE Sources so a broken catalog is reported first.\n#\n# python3 rather than node: an Xcode build phase is not a login shell and node is not\n# guaranteed on its PATH, whereas /usr/bin/python3 ships with the Command Line Tools.\n# scripts/ios_budget.py (the size ratchet phase) made the same call.\nset -e\nPYTHON=\"$(command -v python3 || echo /usr/bin/python3)\"\nCATALOG=\"$SRCROOT/../Sources/SwimZHKit/Resources/Localizable.xcstrings\"\nexec \"$PYTHON\" \"$SRCROOT/../../../scripts/xcstrings_plural_gate.py\" \"$CATALOG\"\n";
+		};
 /* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXResourcesBuildPhase section */
@@ -256,6 +282,7 @@
 				1A00000000000000000001F /* TodayModel.swift in Sources */,
 				1A00000000000000000001D /* SwimZHApp.swift in Sources */,
 				1A000000000000000000041 /* Theme.swift in Sources */,
+				1A00000000000000000004F /* Localization.swift in Sources */,
 				1A000000000000000000043 /* TypeSizeBridge.swift in Sources */,
 				1A000000000000000000045 /* DayStrip.swift in Sources */,
 				1A000000000000000000047 /* FilterBar.swift in Sources */,
@@ -276,6 +303,7 @@
 				1A00000000000000000002D /* AppCorrectnessTests.swift in Sources */,
 				1A00000000000000000002F /* MemoryMetricTests.swift in Sources */,
 				1A00000000000000000004B /* TypeSizeBridgeTests.swift in Sources */,
+				1A00000000000000000004D /* LocalizationDeviceTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

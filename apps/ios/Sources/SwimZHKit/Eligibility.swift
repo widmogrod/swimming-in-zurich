@@ -338,10 +338,33 @@ private func ageGate(
 
 /// The three badge states. `allowed = false` splits in two here, and the split is the whole
 /// point: `.check` is NEVER merged with `.no`.
-public enum UIMark: String, Equatable, Sendable {
+public enum UIMark: String, CaseIterable, Equatable, Sendable {
   case attend = "in"
   case check = "chk"
   case no
+
+  /// Every badge, for the tests that must hold for all three. `allCases` under its own name
+  /// because `UIMark` is decoded from the export's own tokens and a bare `allCases` reads as
+  /// an implementation detail at the call site.
+  public static var allMarks: [UIMark] { allCases }
+
+  /// What VoiceOver reads for this badge.
+  ///
+  /// It lived in the app target's `Theme.swift` until S4, next to the colour and the SF Symbol
+  /// — and it does not belong with them: a colour and a glyph are presentation, but this is a
+  /// SENTENCE, i.e. a rule, i.e. the one kind of thing the app target may not hold. The three
+  /// keys are the web's own eligibility vocabulary (`elig.in` / `elig.chk` / `elig.no`), so the
+  /// badge cannot come to say something different on the phone than it does in the browser.
+  ///
+  /// `check` is NEVER merged with `no`: "we cannot tell" and "you may not" are different
+  /// answers, and a screen reader is the one place the distinction is easiest to lose.
+  public var voiceOverLabel: Message {
+    switch self {
+    case .attend: return Message("elig.in")
+    case .check: return Message("elig.chk")
+    case .no: return Message("elig.no")
+    }
+  }
 }
 
 /// `allowed = false` outcomes that genuinely EXCLUDE the person — the ✕ mark. Mirrors

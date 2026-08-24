@@ -19,8 +19,20 @@ import Testing
 
 @testable import SwimZHKit
 
+// Since S4 the two SENTENCES this file pins — the row's lane line and the incomplete-plan
+// caveat — are `Message`s rather than English strings, so the assertions render them through a
+// real compiled catalog (`CatalogFixture.english`) and keep asserting the same English. The
+// `partial` variants are SEPARATE keys rather than a suffix appended to a finished sentence,
+// which is why nothing here builds an expected string by concatenation any more.
+
 @Suite("Lane derivations vs the Python domain")
 struct LanePlanTests {
+  /// The English renderer, and the `Format` the lane counts are formatted with. One reader for
+  /// both halves: a count formatted in one locale inside a sentence written in another is the
+  /// mismatch `Localized` carries a `Format` to prevent.
+  static let en = CatalogFixture.english
+  static var format: Format { en.format }
+
   static let fixture: LaneFixture = {
     let url = RepoFixtures.root.appending(
       path: "apps/ios/Tests/SwimZHKitTests/Fixtures/lane_plans.json")
@@ -229,11 +241,15 @@ struct LanePlanTests {
     let before = Self.option(day: day, at: TimeOfDay(hour: 4, minute: 0))
     #expect(before.openAtQueryTime == false, "derived from 04:00, not asserted by hand")
     #expect(before.laneAvailability?.publicLanes == 0, "the field itself stays at query time")
-    #expect(before.laneSummary(isToday: true) == "2 of 4 lanes open — some lanes unreadable")
+    // The SENTENCE, rendered — a key would be a weaker claim, and the number in it is the whole
+    // point of the test.
+    let beforeLine = try #require(before.laneSummary(isToday: true, format: Self.format))
+    #expect(Self.en(beforeLine) == "2 of 4 lanes open — some lanes unreadable")
     // While it IS running, the live split is exactly what a swimmer wants.
     let during = Self.option(day: day, at: TimeOfDay(hour: 10, minute: 0))
     #expect(during.openAtQueryTime, "derived from 10:00, inside 06:00-12:00")
-    #expect(during.laneSummary(isToday: true) == "3 of 4 lanes open — some lanes unreadable")
+    let duringLine = try #require(during.laneSummary(isToday: true, format: Self.format))
+    #expect(Self.en(duringLine) == "3 of 4 lanes open — some lanes unreadable")
   }
 
   @Test("off today the live split is never spoken, however open the session looks")
@@ -248,11 +264,15 @@ struct LanePlanTests {
     let midday = Self.option(day: day, at: TimeOfDay(hour: 11, minute: 0))
     #expect(midday.openAtQueryTime, "the flag is true — and off today that means nothing")
     #expect(midday.laneAvailability?.publicLanes == 3)
-    #expect(midday.laneSummary(isToday: true) == "3 of 4 lanes open — some lanes unreadable")
-    #expect(midday.laneSummary(isToday: false) == "2 of 4 lanes open — some lanes unreadable")
-    // And the off-today answer is the session's OPENING split, not some third number.
+    let live = try #require(midday.laneSummary(isToday: true, format: Self.format))
+    #expect(Self.en(live) == "3 of 4 lanes open — some lanes unreadable")
+    let offToday = try #require(midday.laneSummary(isToday: false, format: Self.format))
+    #expect(Self.en(offToday) == "2 of 4 lanes open — some lanes unreadable")
+    // And the off-today answer is the session's OPENING split, not some third number. Asserted
+    // on the MESSAGE — same key, same params, same count — so it holds in every language and
+    // not merely in the one whose sentences happen to coincide.
     let opening = try #require(midday.laneTimeline?.segments.first?.availability)
-    #expect(midday.laneSummary(isToday: false) == opening.summary)
+    #expect(midday.laneSummary(isToday: false, format: Self.format) == opening.summary(Self.format))
   }
 
   @Test("the printed line and the spoken fact agree on the same off-today row")
@@ -273,10 +293,28 @@ struct LanePlanTests {
     let ribbon = optionRibbon(input)
     #expect(ribbon.variant == "lanes", "the fact under test only exists on this variant")
     let spoken = try #require(
-      a11yFacts(for: ribbon).first { $0.label == "Lanes open to the public" })
+      a11yFacts(for: ribbon, in: Self.en).first { $0.label == Message("a11y.fact.publicLanes") })
     // "2 of 4" — the OPENING split, which is what the printed line says off today too.
-    #expect(spoken.value == "2 of 4")
-    #expect(option.laneSummary(isToday: false)?.hasPrefix(spoken.value) == true)
+    #expect(Self.en(spoken.value) == "2 of 4")
+    let printed = Self.en(try #require(option.laneSummary(isToday: false, format: Self.format)))
+    #expect(printed.hasPrefix(Self.en(spoken.value)))
+    // The agreement is about the NUMBERS, not about English word order: the spoken fact and the
+    // printed line are two sentences and no language has to open one with the other. So in all
+    // five, both must name the same public count and the same total — checked by rendering the
+    // pair of counts through each language's own `Format` and requiring both to appear.
+    for (language, localized) in CatalogFixture.all {
+      let counts = Format(AppLocale(language))
+      let message = try #require(option.laneSummary(isToday: false, format: counts))
+      let line = localized(message)
+      let heard = try #require(
+        a11yFacts(for: ribbon, in: localized)
+          .first { $0.label == Message("a11y.fact.publicLanes") })
+      let fact = localized(heard.value)
+      for number in [counts.integer(2), counts.integer(4)] {
+        #expect(line.contains(number), "\(language): the line dropped \(number)")
+        #expect(fact.contains(number), "\(language): the spoken fact dropped \(number)")
+      }
+    }
   }
 
   @Test("the incomplete-plan caveat is one sentence with one polarity")
@@ -287,7 +325,14 @@ struct LanePlanTests {
     let partial = try Self.fixtureDay()
     #expect(!partial.isComplete)
     let caveat = try #require(partial.incompleteLanesCaveat)
-    #expect(caveat.contains("could not be read"))
+    #expect(Self.en(caveat).contains("could not be read"))
+    // One sentence in EVERY language, and a real one: a key that never reached the catalog
+    // would render as itself and read as a design choice rather than as a hole.
+    for (language, localized) in CatalogFixture.all {
+      let said = localized(caveat)
+      #expect(said != caveat.key, "\(language) has no translation for \(caveat.key)")
+      #expect(!said.isEmpty)
+    }
     // Only a KNOWN-complete plan is presented as complete. An unknown token is caveated, which
     // is the safe direction: a caveat on a full plan is noise, its absence on a broken one is
     // a lie.
@@ -315,10 +360,26 @@ struct LanePlanTests {
     // what the plan actually says.
     let empty = day.availability(at: TimeOfDay(hour: 20, minute: 0))
     #expect(empty.publicLanes == 0)
-    #expect(empty.summary.hasPrefix("no lanes open to the public"))
-    #expect(!empty.summary.contains("0 of"))
-    // An incomplete plan says so, because the count is a floor rather than a number.
-    #expect(day.availability(at: TimeOfDay(hour: 7, minute: 0)).summary.contains("unreadable"))
+    #expect(Self.en(empty.summary(Self.format)).hasPrefix("no lanes open to the public"))
+    #expect(!Self.en(empty.summary(Self.format)).contains("0 of"))
+    // An incomplete plan says so, because the count is a floor rather than a number. It is its
+    // OWN key now, not the base sentence with a clause appended: the clause lands elsewhere in
+    // German and cannot be appended at all in Polish without re-inflecting what precedes it.
+    let sevenAM = day.availability(at: TimeOfDay(hour: 7, minute: 0))
+    #expect(Self.en(sevenAM.summary(Self.format)).contains("unreadable"))
+    #expect(sevenAM.summary(Self.format).key.hasSuffix(".partial"))
+    // The zero rule in EVERY language, because "0 of 4" is a shape a translator can reintroduce
+    // for free — the base and the partial keys both have to stay out of the counting entry.
+    for (language, localized) in CatalogFixture.all {
+      let counts = Format(AppLocale(language))
+      let zero = localized(empty.summary(counts))
+      #expect(!zero.contains(counts.integer(0)), "\(language): \"\(zero)\" counts zero lanes")
+      #expect(zero != empty.summary(counts).key, "\(language) has no translation")
+      // ...and it is NOT the counting sentence: the two keys stay distinct whatever the words.
+      let counted = day.availability(at: TimeOfDay(hour: 10, minute: 0))
+      #expect(counted.publicLanes > 0)
+      #expect(localized(counted.summary(counts)) != zero, "\(language): both split states agree")
+    }
   }
 
   @Test("a basin with no published plan has NO lane line at all")
@@ -332,8 +393,8 @@ struct LanePlanTests {
       lengthM: 25, lanes: nil, window: window, access: .publicSwim, weather: "any",
       eligibility: eligibility(Person(), .publicSwim), openAtQueryTime: true, price: nil,
       distanceKm: nil)
-    #expect(option.laneSummary(isToday: true) == nil)
-    #expect(option.laneSummary(isToday: false) == nil)
+    #expect(option.laneSummary(isToday: true, format: Self.format) == nil)
+    #expect(option.laneSummary(isToday: false, format: Self.format) == nil)
   }
 
   @Test("a malformed row decodes to nil, never to a plan with no reservations")

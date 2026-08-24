@@ -187,7 +187,16 @@ runtime + the `Intl` layer); the catalog itself is still a seed.
   `en → en-GB`, `de → de-CH`, `fr → fr-CH`, `it → it-CH`. Bare `en` means **en-US** and would flip
   every date to month-first. Two counter-intuitive facts pinned by tests: Polish takes a *genitive*
   month (`23 lipca`) and lowercases weekday/month names, so no lookup table can do it; and **de-CH
-  and it-CH use a DOT decimal separator**, unlike de-DE/it-IT — only fr-CH and pl use a comma.
+  and it-CH use a DOT decimal separator**, unlike de-DE/it-IT — in *node's* ICU, fr-CH and pl use
+  a comma.
+- **`fr-CH`'s decimal separator is NOT the same on both clients, and this is measured, not
+  assumed.** node's ICU gives fr-CH a **comma** (`2,5`); Apple's Foundation gives it a **dot**
+  (`2.5`). The web pins the comma (`datefmt.test.ts:85-93`) and iOS pins the dot
+  (`FormatTests.swissDecimalSeparators`, re-checked in the simulator by
+  `LocalizationDeviceTests.separatorsOnDevice`), so a French reader genuinely sees `2,5 km` in the
+  browser and `2.5 km` on the phone. **Do not "fix" either side by hand-formatting** — each is its
+  own platform's CLDR snapshot, and a hand-built separator is the bug both tests exist to prevent.
+  Only `pl` uses a comma on *both*.
 - **Never re-parse a formatted date.** Use `dayParts()` (`Intl.formatToParts`) and compose. The old
   `formatLabel(...).split(' ')` assumed three space-separated tokens and failed silently elsewhere.
 - **Units bypass the catalog**: `Intl.NumberFormat` with `style:'unit'` gets plurals and fractions

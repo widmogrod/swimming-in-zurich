@@ -100,41 +100,48 @@ public func dayState(
   )
 }
 
-/// The English sentence for a state.
+/// What a state SAYS, as a catalog key rather than as English.
 ///
-/// English is temporary and deliberate, exactly as `DayWarning.rendered` is: it makes the
-/// distinctness assertable now, and S4 replaces it with a catalog lookup keyed off the state.
-/// What must survive that replacement is the property the test asserts — no state that is not
-/// `closed` may render a sentence that says the pool is closed.
-public func dayStateLabel(_ state: DayState) -> String {
+/// S2 wrote these as English sentences and said why: it made the distinctness assertable before
+/// there was a catalog. S4 replaced them with `Message`s, and the property the tests assert
+/// survived unchanged — no state that is not `closed` may render a sentence that says the pool
+/// is closed. `stateLabelsAreDayAgnostic` and its closure sibling now police the CATALOG VALUES
+/// in all five languages, which is strictly stronger than policing English: a German
+/// translation that said "geschlossen" on a ghost state would have slipped past an
+/// English-only assertion.
+public func dayStateLabel(_ state: DayState) -> Message {
   switch state {
   case .closed(let reason): return closedLabel(reason)
-  case .awaitingScrape: return "Hours not published yet"
-  case .noSource: return "No schedule source for this pool"
-  case .openUnscheduled: return "Open, but hours are not listed"
-  case .beyondHorizon: return "Beyond the published horizon"
+  case .awaitingScrape: return Message("status.awaiting_scrape")
+  case .noSource: return Message("prov.noSource")
+  case .openUnscheduled: return Message("state.openUnscheduled")
+  case .beyondHorizon: return Message("state.beyondHorizon")
   case .unrecognised(let status):
     // Not "closed", and not a fabricated sentence either: the raw status is the honest
-    // minimum, and it is also the i18n key S4 renders from.
-    return status.isEmpty ? "State not stated" : status
+    // minimum, and it rides through a passthrough key so even that has a translated frame.
+    return status.isEmpty
+      ? Message("state.notStated") : Message("state.unrecognised", ["status": status])
   }
 }
 
-private func closedLabel(_ reason: ClosureReason) -> String {
+private func closedLabel(_ reason: ClosureReason) -> Message {
   switch reason {
-  case .outOfSeason: return "Closed — outside its season"
+  case .outOfSeason: return Message("state.closed.outOfSeason")
   // NOT "Closed today". A `day` row exists for every date in the horizon, and ghost/closed rows
   // are built without reference to which day is today — so "today" here was a temporal claim
   // rendered on every future date the strip can reach. The closure code says "no sessions"; that
   // is what this says, and it is true on whatever day the row belongs to.
-  case .noSessions: return "Closed — no sessions"
+  case .noSessions: return Message("state.closed.noSessions")
   case .unmapped(let text):
     // The pool's own sentence, quoted rather than paraphrased — which is what makes the
-    // `unmapped` arm's promise true instead of merely stated. A row that carries none says so
-    // plainly; it never borrows a classified-sounding reason we do not have.
-    return text.isEmpty ? "Closed — reason not classified" : "Closed — “\(text)”"
-  case .other(let code): return "Closed — \(code)"
-  case .unstated: return "Closed — reason not stated"
+    // `unmapped` arm's promise true instead of merely stated. The QUOTE MARKS belong to the
+    // catalog, because they differ per language (“…” / „…“ / « … »); only the words inside are
+    // the pool's. A row that carries none says so plainly; it never borrows a
+    // classified-sounding reason we do not have.
+    return text.isEmpty
+      ? Message("state.closed.unclassified") : Message("state.closed.unmapped", ["text": text])
+  case .other(let code): return Message("state.closed.other", ["code": code])
+  case .unstated: return Message("state.closed.unstated")
   }
 }
 

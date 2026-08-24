@@ -1238,6 +1238,60 @@ and the reviewer probed it with six independent mutations rather than reading it
 share byte-identical strips (one recorded cassette); the seventh is synthetic, and is the only source
 of `partial == true` anywhere. Also: the plan's Context says 7 lane-plan basins; the store has **6**.
 
+### S4 (2026-08-24) — a gate that regenerated what it was about to check
+
+**The parity gate could not fail, in two independent ways.** All four teeth-bearing tests carried
+`@needs_dist`, `apps/web/static/dist/` is git-ignored, and neither CI job that runs them builds it —
+so in CI they **skipped**. Locally it was worse: `make ios-qa` ran the *writing* target first, so the
+staleness check compared the generator's output against the generator's output. A contributor could
+edit a sentence in `en.ts` — the declared single source of truth — and ship a phone catalog saying
+the old thing with all three chains green.
+
+Verified fixed by mutation, not by reading: changing `tier.scheduled` in `en.ts` without
+regenerating now yields `stale, regenerate with …` and exit 1; restored, `up to date (409 keys)`.
+The writing target is now invoked by **no chain and no CI step**. The gate's rule is worth keeping:
+**a step that regenerates a file before checking whether it is stale makes that check unfalsifiable
+— build, then check.** That is the third gate in this plan that looked enforced and was not.
+
+**Six raw ISO dates reached readers in five languages, found over three rounds.** `2026-08-24` where
+the web renders `24 sierpnia 2026`. Rounds one and two found three, then two more on the facility
+sheet (live on all 21 priced pools). The sixth is the instructive one: `DayWarning`'s `{date}` param,
+missed because the first sweep **sampled** days at offsets 0/45/120 and the store's only
+`holiday_hours_unverified` warning is Christmas Day — three days outside every sample. Both sweeps
+now walk the **whole horizon** in all five languages, and the tests say in-comment why: *a sample is
+a guess about where the bug is.* The counts in the comments were dropped rather than corrected —
+they went stale twice in two rounds.
+
+**The plural guarantee is restored by a build phase, because Xcode cannot provide it.** There is no
+build error and no documented warning for a missing plural category: a missing Polish `many` falls
+back to `other`, the *decimal* form — exactly the broken grammar `plurals.ts` exists to prevent.
+`scripts/xcstrings_plural_gate.py` runs as the app target's **first** phase, walks all 409 keys × 5
+locales, requires category-set **equality** with CLDR, and was proven by deleting Polish `many` and
+watching `** BUILD FAILED **`.
+
+**Four Apple facts that would each have shipped a wrong app.**
+1. `String(localized:)` **never expands a plural** — it returns the raw `%#@value@` token. Only
+   `String(format:)` expands it.
+2. `String(format:locale:)`'s `locale:` drives **plural-rule selection**; the **bundle** drives the
+   language. Setting one without the other renders Polish words with English grammar. (The plan
+   flagged this as unverified and load-bearing; it is now measured.)
+3. **SwiftPM does not compile `.xcstrings`** — `swift build` copies raw JSON and
+   `Bundle.module.localizations` reports only `["en"]`. Xcode does. The package tests compile it with
+   `xcstringstool` themselves.
+4. A `zero` key in a compiled `.stringsdict` is Apple's **literal-zero special case**, not a CLDR
+   category — returned for n=0 in every language. The catalog deliberately does not use it.
+
+**An honest platform divergence, recorded in five places.** Apple's ICU renders fr-CH with a **dot**
+where node's uses a **comma** (measured on both). So a French-Swiss reader sees `2.5 km` on the phone
+and `2,5 km` in the browser. The tests assert each platform's own truth rather than hand-formatting
+around it; `CLAUDE.md`'s i18n section, both file headers and both test suites now say so, with an
+explicit *do not hand-format either side*.
+
+**Three source bugs fixed in passing**, none of them in the acceptance criteria: `Format.length`
+lacked `usage: .asProvided`, so en-GB rendered a 12.5 m basin as **"41 ft"**; `featureHours`
+interpolated a clause **key**, rendering "Closed — closureClause.out_of_season"; and the six raw
+dates above.
+
 ## Accepted drift
 
 Findings the user has knowingly blessed, so `/dev:present` folds them into a
@@ -1267,6 +1321,7 @@ Appended by /dev:implement after each slice — never rewritten. Newest row last
 | 2026-08-24 | S2b | done | metric tests landed in the existing `App/SwimZHTests/`, not the plan's `Tests/MetricTests/` (a SwiftPM target cannot import the app — the plan's path would measure the runner); size ratchet enforced by a Run Script build phase, not a test (the `.app` exists only inside `xcodebuild`); `app_minus_sqlite` ratcheted to **1 MB**, tighter than the plan's 4 MB; `scripts/ios_budget.py` + `tests/scripts/**` required by acc 4 but absent from Touches | size proxy is the **Debug** build, not the release/thinned figure; `escaped_bodies` reports but does not score a closure-valued property (refactor to a `func`, do **not** edit the `escaped == []` assertion); `MemoryMetricTests` restates the 100 MB ceiling (joined by a string-match pytest, not a generated constant); no `XCTMemoryMetric` baseline (baselines do not travel across device configurations) | **yes — `CA92.1` documentation-verified but still not browser-eyeballed before first upload** |
 | 2026-08-24 | S3a | done | `stripLayout` takes a kit-local `TypeSize`, not SwiftUI's `DynamicTypeSize` (the kit may not import SwiftUI — an existing lint forbids it), bridged by rank and pinned case-by-case; a **sixth tier `scheduled`** and a **fifth day state** added so an off-today answer makes no wall-clock claim; `.closed(.noSessions)` reworded from "Closed today"; `TodayView.statusLabel` (shipped in S2) **deleted** rather than repaired; many files beyond Touches, all forced by "logic goes in SwimZHKit" | `app_minus_sqlite` 299,090 → 686,442 B (headroom 3.5× → 1.5×; `budgets.json` untouched as gate configuration — S3b will likely need it raised deliberately); every filter change, search keystroke included, re-queries the store; `Tier.scheduled`'s verdict shows the day's outer span only, so a long midday gap reads as continuous; `renderedFields` proves drift detection, not that a pixel is drawn | **yes — acc 4's visual half and acc 7's appearance check UNVERIFIED (waived human checks); nothing has looked at a screen** |
 | 2026-08-24 | S3b | done | `laneSummary` is a **function taking `isToday`**, not a computed property; `ribbonmodel.ts` (the **production** module, not just its test) gained `NO_SPLIT_LABEL_KEY` + `label_key`; size ratchet raised **1 MB → 2 MB** deliberately (measured 1,339,498 B, still half the plan's 4 MB); files well beyond Touches (`PoolBrowser`, `AccessExplainer`, `FacilityDetail`, 20 colorsets) forced by "every rule lives in SwimZHKit" | `RibbonCanvas.drawLanes` is unreachable against today's export and kept **with a recorded reason** (deleting it would render a `lane_count = 0` basin as "split not published"); `Ribbon.segments` always nil in the shipped app, so its a11y fact is dead in production; `noDomainTokenComparisonsInTheApp` enumerates six tokens **by hand** with no mechanism keeping the list honest; per-basin lane panel still inert for scraped pools (CLAUDE.md's flat-scrape limitation); `LanePlan.swift:471` is a latent off-today instant claim for a zero-length session (no such row exists today) | **yes — acc 9's device budgets and acc 10's notched/light-dark check UNVERIFIED (no physical device; waived)** |
+| 2026-08-24 | S4 | done | five web catalogs gained 198 keys each (409 total) — the web stays the single source for every sentence, iOS included; `DayWarning.message` now takes a `Format`; an absent stamp is **no row**, not a labelled blank; `UIMark.voiceOverLabel` moved into the kit; `panel.clubSlot` split into two non-plural keys (xcstringstool refuses a plural whose forms do not interpolate the number); CI workflow edited (`setup-node` + `npm ci` + the locale check on `ios-qa`); files far beyond Touches | `app_minus_sqlite` **1,908,758 B of the 2 MB limit — 91% used, 188 KB headroom**; S5 will need the deliberate step to 4 MB. `Format.swift:153` uses `Date.AttributedStyle`, deprecated in macOS 15. `ZurichClock.instant` **rolls over** out-of-range components (`2026-13-45` → 14 Feb 2027), so a corrupt store shows a plausible wrong date. `Localized` is `@unchecked Sendable` around a `Bundle`. Polish plural `other` forms are fraction-genitives not reviewed by a native speaker. `noSentencesInTheApp` needs ≥2 words, so a one-word literal plus a hand-written allowlist entry passes both lints | **yes — Polish/German wording unreviewed by native speakers; fr-CH renders differently on phone vs web** |
 
 ## Decisions & divergences
 

@@ -12,9 +12,9 @@
     "limit_bytes": 2097152,
     "plan_ratchet_bytes": 4194304,
     "ceiling_bytes": 31457280,
-    "measured_bytes": 1339498,
+    "measured_bytes": 1908758,
     "how": "sum of every bundled Mach-O's __TEXT segment (size -m) + every non-Mach-O resource, minus ios.sqlite",
-    "why": "RAISED DELIBERATELY to 2 MB at S3b (was 1 MB at S2b), still HALF the plan's 4 MB ratchet and 6.7% of the 30 MB ceiling. S3b measured 1,339,498 B against the 1 MB limit - the canvas renderer, Swift Charts, the detail sheet, the pools browser and the access-types legend all landed at once, and Charts is the single largest contributor. The number is honest growth, not slack: S3a measured 686,442 B, so the app roughly doubled with the visual half of the product. 2 MB keeps ~1.57x headroom, which is the same bite S2b argued for and enough for S4's five catalogs, while leaving the plan's 4 MB as the next deliberate step rather than the default. Do NOT widen this to make a build pass. Still an UNSIGNED PROXY on the Debug configuration, not the thinned download: -exportArchive needs a signing identity CI has not got. Measured context: a stripped hello-world SwiftUI binary is ~71 KB, so the 30 MB ceiling was never in play."
+    "why": "RAISED DELIBERATELY to 2 MB at S3b (was 1 MB at S2b), still HALF the plan's 4 MB ratchet and 6.7% of the 30 MB ceiling. S4 did NOT raise it again: five compiled string catalogs and the localisation layer took the measured figure from 1,339,498 B to 1,908,758 B (__TEXT 1,720,320 + resources 188,438), which is 91% of the 2 MB limit and still under it. The catalogs themselves are ~150 KB of the growth (five .lproj bundles of 409 keys); the rest is the Message/Wording/Format layer and the wider view code that renders it. HEADROOM IS NOW THIN — 188 KB — so S5's downloaded store and live client will very likely need the deliberate step to the plan's 4 MB. Do NOT widen this to make a build pass; take that step on its own, with its own number and reason, as S3b did. Still an UNSIGNED PROXY on the Debug configuration, not the thinned download: -exportArchive needs a signing identity CI has not got. Measured context: a stripped hello-world SwiftUI binary is ~71 KB, so the 30 MB ceiling was never in play."
   },
   "sqlite": {
     "limit_bytes": 8388608,

@@ -32,14 +32,14 @@ public enum Tier: String, CaseIterable, Equatable, Hashable, Sendable {
 
   /// The section heading. Note `unknown` never says "closed": that is the invariant the whole
   /// four-state vocabulary exists to protect.
-  public var title: String {
+  public var title: Message {
     switch self {
-    case .now: return "Swim now"
-    case .soon: return "Later today"
-    case .past: return "Done for today"
-    case .scheduled: return "Open that day"
-    case .unknown: return "Hours not listed"
-    case .closed: return "Closed"
+    case .now: return Message("mobile.tier.now")
+    case .soon: return Message("mobile.tier.soon")
+    case .past: return Message("mobile.verdict.doneForToday")
+    case .scheduled: return Message("tier.scheduled")
+    case .unknown: return Message("mobile.tier.unknown")
+    case .closed: return Message("mobile.tier.closed")
     }
   }
 
@@ -101,10 +101,10 @@ public enum RadiusOption {
 /// A row's headline, split so the view can weight the two halves differently — the same
 /// bold-head / muted-tail shape the web's `verdictFor` produces.
 public struct Verdict: Equatable, Sendable {
-  public let head: String
-  public let tail: String?
+  public let head: Message
+  public let tail: Message?
 
-  public init(head: String, tail: String? = nil) {
+  public init(head: Message, tail: Message? = nil) {
     self.head = head
     self.tail = tail
   }
@@ -135,7 +135,7 @@ public struct PoolRow: Equatable, Sendable, Identifiable {
   /// said "more today" on every day. It is also what S4 will localise: a wrong sentence left in
   /// a `body` would have been carried into five catalogs where no test on either side could
   /// see it.
-  public let moreSessionsLabel: String?
+  public let moreSessionsLabel: Message?
   /// Why there are no sessions; nil when there are. Carries the fifth (horizon) state too.
   public let state: DayState?
   public let isFavourite: Bool
@@ -152,7 +152,7 @@ public struct ListSection: Equatable, Sendable, Identifiable {
   public let rows: [PoolRow]
 
   public var id: String { tier.rawValue }
-  public var title: String { tier.title }
+  public var title: Message { tier.title }
 }
 
 /// The whole screen.
@@ -180,14 +180,17 @@ public struct ListModel: Equatable, Sendable {
   /// It changes tense with the day, because the count does: "3 open to you" is a claim about
   /// this minute and may only be made about today. On any other day the honest statement is how
   /// many pools have sessions at all.
-  public var headline: String {
+  public var headline: Message {
     // The horizon state FIRST. Past `horizon_end` both counts are structurally zero — there are
     // no rows to count — so either sentence would report a false zero ("0 pools with sessions")
     // beside a screen that correctly says we have not resolved this day yet.
     if beyondHorizon { return dayStateLabel(.beyondHorizon) }
+    // Both are PLURAL entries, so the count reaches Foundation as a number and the reader's own
+    // rules pick the form. English needs one/other here and Polish four; hard-coding "pools"
+    // with an interpolated number is precisely the broken grammar `plurals.ts` exists to stop.
     return isToday
-      ? "\(openToYouCount) open to you"
-      : "\(scheduledPoolCount) pools with sessions"
+      ? Message("mobile.openToYou", count: openToYouCount)
+      : Message("headline.poolsWithSessions", count: scheduledPoolCount)
   }
 }
 
@@ -213,14 +216,15 @@ public func listModel(
   favourites: Favourites,
   horizon: StoreMetadata,
   today: String,
-  at time: TimeOfDay
+  at time: TimeOfDay,
+  format: Format
 ) -> ListModel {
   let isToday = answer.day == today
   guard horizon.covers(day: answer.day) else {
     return ListModel(
       day: answer.day,
       sections: [],
-      banners: banners(for: answer),
+      banners: banners(for: answer, format: format),
       openToYouCount: 0,
       scheduledPoolCount: 0,
       isToday: isToday,
@@ -228,11 +232,12 @@ public func listModel(
     )
   }
   let rows = poolRows(
-    answer: answer, filters: filters, favourites: favourites, isToday: isToday, at: time)
+    answer: answer, filters: filters, favourites: favourites, isToday: isToday, at: time,
+    format: format)
   let model = ListModel(
     day: answer.day,
     sections: sections(from: rows),
-    banners: banners(for: answer, poolNames: poolNames(in: answer)),
+    banners: banners(for: answer, poolNames: poolNames(in: answer), format: format),
     openToYouCount: rows.filter(\.openToYou).count,
     scheduledPoolCount: rows.filter { !$0.options.isEmpty }.count,
     isToday: isToday,
@@ -257,10 +262,12 @@ private func poolRows(
   filters: Filters,
   favourites: Favourites,
   isToday: Bool,
-  at time: TimeOfDay
+  at time: TimeOfDay,
+  format: Format
 ) -> [PoolRow] {
   var rows = sessionRows(
-    answer: answer, filters: filters, favourites: favourites, isToday: isToday, at: time)
+    answer: answer, filters: filters, favourites: favourites, isToday: isToday, at: time,
+    format: format)
   rows += ghostRows(answer: answer, filters: filters, favourites: favourites)
   return rows.sorted(by: rowOrder)
 }
@@ -270,7 +277,8 @@ private func sessionRows(
   filters: Filters,
   favourites: Favourites,
   isToday: Bool,
-  at time: TimeOfDay
+  at time: TimeOfDay,
+  format: Format
 ) -> [PoolRow] {
   var byPool: [String: [SwimOption]] = [:]
   for option in answer.options where admits(option, filters) {
@@ -278,7 +286,8 @@ private func sessionRows(
   }
   return byPool.values.compactMap { options in
     sessionRow(
-      options.sorted(by: startOrder), favourites: favourites, isToday: isToday, at: time)
+      options.sorted(by: startOrder), favourites: favourites, isToday: isToday, at: time,
+      format: format)
   }
 }
 
@@ -299,7 +308,8 @@ private func sessionRow(
   _ options: [SwimOption],
   favourites: Favourites,
   isToday: Bool,
-  at time: TimeOfDay
+  at time: TimeOfDay,
+  format: Format
 ) -> PoolRow? {
   guard let first = options.first else { return nil }
   let hidden = max(0, options.count - inlineSessionLimit)
@@ -320,7 +330,7 @@ private func sessionRow(
     options: options,
     inlineOptions: Array(options.prefix(inlineSessionLimit)),
     hiddenSessionCount: hidden,
-    moreSessionsLabel: moreSessionsLabel(hidden: hidden, isToday: isToday),
+    moreSessionsLabel: moreSessionsLabel(hidden: hidden, isToday: isToday, format: format),
     state: nil,
     isFavourite: favourites.contains(first.poolID),
     // "Open to you" is present tense, so it can only ever be true for today.
@@ -335,9 +345,15 @@ private func sessionRow(
 /// four months out said "Opens 06:00 · until 22:00" and, two lines below, "+2 more today".
 /// The wording depends on `isToday`, which is a `ListModel` fact a row does not carry, so it is
 /// decided here rather than branched on in a view.
-func moreSessionsLabel(hidden: Int, isToday: Bool) -> String? {
+///
+/// Deliberately NOT a plural catalog entry: there is no noun in it to inflect, so all four
+/// Polish forms would be identical — which the web's own "Polish never uses `other` as a
+/// fallback" test then reads as a copy-paste. The number goes in as an already-formatted
+/// string, so it still carries the reader's own grouping.
+func moreSessionsLabel(hidden: Int, isToday: Bool, format: Format) -> Message? {
   guard hidden > 0 else { return nil }
-  return isToday ? "+\(hidden) more today" : "+\(hidden) more that day"
+  let params = ["count": format.integer(hidden)]
+  return isToday ? Message("row.moreToday", params) : Message("row.moreThatDay", params)
 }
 
 private func sessionTier(covering: SwimOption?, next: SwimOption?) -> Tier {
@@ -347,18 +363,18 @@ private func sessionTier(covering: SwimOption?, next: SwimOption?) -> Tier {
 
 private func sessionVerdict(covering: SwimOption?, next: SwimOption?) -> Verdict {
   if let covering {
-    let until = "until \(covering.window.end.hhmm)"
+    let until = Message("mobile.verdict.untilTime", ["hhmm": covering.window.end.hhmm])
     // "Open now" is a claim about THIS person: a lane hour reserved for a club is running, but
     // it is not open to them, and saying so is the difference between a useful answer and a
     // wasted trip.
     return covering.mark == .attend
-      ? Verdict(head: "Open now", tail: until)
-      : Verdict(head: "Not open to you", tail: until)
+      ? Verdict(head: Message("mobile.verdict.openNow"), tail: until)
+      : Verdict(head: Message("verdict.notOpenToYou"), tail: until)
   }
   if let next {
-    return Verdict(head: "Opens \(next.window.start.hhmm)")
+    return Verdict(head: Message("mobile.verdict.opensAt", ["hhmm": next.window.start.hhmm]))
   }
-  return Verdict(head: "Done for today")
+  return Verdict(head: Message("mobile.verdict.doneForToday"))
 }
 
 /// The verdict for a day that is not today: the day's hours, and no claim about the present.
@@ -368,8 +384,10 @@ private func sessionVerdict(covering: SwimOption?, next: SwimOption?) -> Verdict
 private func scheduledVerdict(_ options: [SwimOption]) -> Verdict {
   guard let first = options.first,
     let last = options.map(\.window.end).max()
-  else { return Verdict(head: "Has sessions") }
-  return Verdict(head: "Opens \(first.window.start.hhmm)", tail: "until \(last.hhmm)")
+  else { return Verdict(head: Message("verdict.hasSessions")) }
+  return Verdict(
+    head: Message("mobile.verdict.opensAt", ["hhmm": first.window.start.hhmm]),
+    tail: Message("mobile.verdict.untilTime", ["hhmm": last.hhmm]))
 }
 
 private func ghostRows(
@@ -396,7 +414,7 @@ private func ghostRows(
       // Never ✕: nobody was excluded from anything. A pool whose hours we do not know is a
       // "check", and a closed one has no session to be eligible for either.
       mark: .check,
-      verdict: Verdict(head: dayStateLabel(state)),
+      verdict: Verdict(head: dayStateLabel(state)),  // a state's own sentence, never "closed"
       options: [],
       inlineOptions: [],
       hiddenSessionCount: 0,

@@ -30,11 +30,16 @@ public struct BannerModel: Equatable, Sendable, Identifiable {
   /// Stable across a rebuild of the same day, so SwiftUI does not re-animate an unchanged
   /// banner: kind + code + the pool it names.
   public let id: String
-  /// `DayWarning.code` for a warning; the pool id for a notice. This is the i18n key S4 keys
-  /// off, and the reason the model carries the code beside the rendered sentence.
+  /// `DayWarning.code` for a warning; the pool id for a notice.
   public let code: String
-  public let title: String
-  public let text: String
+  /// A warning's title is ours (a catalog message); a notice's is the pool's NAME, which is a
+  /// proper noun and never translated. `Wording` is what makes that difference a type rather
+  /// than a comment.
+  public let title: Wording
+  /// A warning's body is ours. A NOTICE's is the pool's own sentence in the pool's own
+  /// language, passed through untranslated — translating a closure announcement is how a
+  /// client invents a fact.
+  public let text: Wording
   /// The pool a notice speaks for; nil on a warning, which is day-level.
   public let poolName: String?
 
@@ -42,8 +47,8 @@ public struct BannerModel: Equatable, Sendable, Identifiable {
     kind: Kind,
     id: String,
     code: String,
-    title: String,
-    text: String,
+    title: Wording,
+    text: Wording,
     poolName: String?
   ) {
     self.kind = kind
@@ -64,32 +69,34 @@ public struct BannerModel: Equatable, Sendable, Identifiable {
 /// `poolNames` maps pool id to display name. A notice whose pool is not in the map still gets
 /// a banner: its text is the pool's own and is the part that matters; dropping the banner
 /// because a name lookup missed would suppress a closure announcement over a cosmetic gap.
-public func banners(for answer: Answer, poolNames: [String: String] = [:]) -> [BannerModel] {
-  answer.warnings.map(warningBanner)
+public func banners(
+  for answer: Answer, poolNames: [String: String] = [:], format: Format
+) -> [BannerModel] {
+  answer.warnings.map { warningBanner($0, format) }
     + answer.notices.map { notice in
       noticeBanner(notice, poolName: poolNames[notice.poolID])
     }
 }
 
-private func warningBanner(_ warning: DayWarning) -> BannerModel {
+private func warningBanner(_ warning: DayWarning, _ format: Format) -> BannerModel {
   BannerModel(
     kind: .warning,
     id: "warning|\(warning.code)",
     code: warning.code,
-    title: warningTitle(warning.code),
-    text: warning.rendered,
+    title: .message(warningTitle(warning.code)),
+    text: .message(warning.message(format)),
     poolName: nil
   )
 }
 
 /// A short title per known code. An unknown code takes the generic one rather than a sentence
-/// about pools it never named — the same stance `DayWarning.rendered` takes for the same
+/// about pools it never named — the same stance `DayWarning.message` takes for the same
 /// reason: S5 downloads stores a newer export built.
-private func warningTitle(_ code: String) -> String {
+private func warningTitle(_ code: String) -> Message {
   switch code {
-  case DayWarning.calendarCoverage: return "Holiday calendar incomplete"
-  case DayWarning.holidayHoursUnverified: return "Holiday hours unconfirmed"
-  default: return "Please note"
+  case DayWarning.calendarCoverage: return Message("banner.calendarCoverage.title")
+  case DayWarning.holidayHoursUnverified: return Message("banner.holidayHoursUnverified.title")
+  default: return Message("banner.generic.title")
   }
 }
 
@@ -98,9 +105,9 @@ private func noticeBanner(_ notice: DayNotice, poolName: String?) -> BannerModel
     kind: .notice,
     id: "notice|\(notice.poolID)|\(notice.text)",
     code: notice.poolID,
-    title: poolName ?? notice.poolID,
+    title: .verbatim(poolName ?? notice.poolID),
     // The pool's own words, untranslated and unedited.
-    text: notice.text,
+    text: .verbatim(notice.text),
     poolName: poolName
   )
 }

@@ -12,6 +12,18 @@ import Testing
 
 @Suite("The day list model")
 struct ListModelTests {
+  /// The English renderer. Most assertions here are about a SENTENCE a swimmer reads, and
+  /// reading one language keeps them legible; the ones that are about a RULE ("no off-today row
+  /// claims a moment", "only `closed` says closed") run over all five, because the catalog is
+  /// now where those rules are easiest to break.
+  static let en = CatalogFixture.english
+
+  /// The English rendering of an optional message — `try? #require` hands back optionals here,
+  /// and unwrapping each one at the assertion site would drown the sentence being asserted.
+  static func said(_ message: Message?) -> String? { message.map { en($0) } }
+
+  static func said(_ wording: Wording?) -> String? { wording.map { en($0) } }
+
   static let horizon = StoreMetadata(
     schemaVersion: 1,
     builtAt: "2026-08-24T00:00:00+02:00",
@@ -95,7 +107,10 @@ struct ListModelTests {
       favourites: favourites,
       horizon: horizon,
       today: today ?? answer.day,
-      at: time
+      at: time,
+      // Only the VALUES a message interpolates depend on this, and none of the assertions here
+      // is about a number's shape — `Format`'s own regional rules are pinned in its own suite.
+      format: en.format
     )
   }
 
@@ -125,8 +140,8 @@ struct ListModelTests {
     let built = Self.model(Self.answer(options: [Self.option(pool: "over", from: 6, to: 9)]))
     let row = try? #require(built.sections.first?.rows.first)
     #expect(row?.tier == .past)
-    #expect(row?.verdict.head == "Done for today")
-    #expect(Tier.past.title.lowercased().contains("closed") == false)
+    #expect(Self.said(row?.verdict.head) == "Done for today")
+    #expect(Self.en(Tier.past.title).lowercased().contains("closed") == false)
   }
 
   @Test("the ghost states land in `unknown`, a real closure in `closed`")
@@ -162,7 +177,7 @@ struct ListModelTests {
       )
     )
     #expect(built.sections.map(\.tier) == [.now, .closed])
-    #expect(built.sections.map(\.title) == ["Swim now", "Closed"])
+    #expect(built.sections.map { Self.en($0.title) } == ["Swim now", "Closed"])
   }
 
   // MARK: - The wall clock may only speak about today
@@ -190,15 +205,16 @@ struct ListModelTests {
       for row in rows {
         #expect(row.tier == .scheduled, "at \(hour):30 a future day tiered as \(row.tier)")
         #expect(!row.tier.isWallClockClaim)
-        #expect(row.verdict.head != "Open now", "at \(hour):30: \(row.verdict.head)")
-        #expect(row.verdict.head != "Not open to you")
-        #expect(row.verdict.head != "Done for today")
+        let head = Self.en(row.verdict.head)
+        #expect(head != "Open now", "at \(hour):30: \(head)")
+        #expect(head != "Not open to you")
+        #expect(head != "Done for today")
         #expect(!row.openToYou)
       }
       // ...and the headline changes tense with the day, because the count does.
       #expect(built.openToYouCount == 0)
       #expect(built.scheduledPoolCount == 2)
-      #expect(built.headline == "2 pools with sessions")
+      #expect(Self.en(built.headline) == "2 pools with sessions")
     }
   }
 
@@ -209,8 +225,11 @@ struct ListModelTests {
     let built = Self.model(answer, today: "2026-08-24", at: TimeOfDay(hour: 12, minute: 0))
     #expect(built.isToday)
     #expect(built.sections[0].rows[0].tier == .now)
-    #expect(built.sections[0].rows[0].verdict.head == "Open now")
-    #expect(built.headline == "1 open to you")
+    #expect(Self.en(built.sections[0].rows[0].verdict.head) == "Open now")
+    // "…now" is the catalog's own wording for `mobile.openToYou`, which the phone now shares
+    // with the web rather than keeping a second English sentence of its own. The tense is the
+    // point either way: this line may only ever be said about today.
+    #expect(Self.en(built.headline) == "1 open to you now")
   }
 
   @Test("an off-today verdict states the day's own hours")
@@ -224,9 +243,9 @@ struct ListModelTests {
       ],
       day: "2026-12-20"
     )
-    let row = try? #require(Self.model(answer, today: "2026-08-24").sections[0].rows.first)
-    #expect(row?.verdict.head == "Opens 06:00")
-    #expect(row?.verdict.tail == "until 22:00")
+    let row = Self.model(answer, today: "2026-08-24").sections[0].rows.first
+    #expect(Self.said(row?.verdict.head) == "Opens 06:00")
+    #expect(Self.said(row?.verdict.tail ?? nil) == "until 22:00")
   }
 
   @Test("the fixed off-today moment is the web's own constant")
@@ -247,8 +266,8 @@ struct ListModelTests {
     let built = Self.model(Self.answer(options: [club]))
     let row = try? #require(built.sections.first?.rows.first)
     #expect(row?.tier == .now)
-    #expect(row?.verdict.head == "Not open to you")
-    #expect(row?.verdict.tail == "until 13:00")
+    #expect(Self.said(row?.verdict.head) == "Not open to you")
+    #expect(Self.said(row?.verdict.tail ?? nil) == "until 13:00")
     #expect(row?.openToYou == false)
     #expect(built.openToYouCount == 0)
   }
@@ -277,7 +296,7 @@ struct ListModelTests {
     let row = try? #require(built.sections.first?.rows.first)
     // The NEXT one, not the first in the list: the sessions are sorted by start before the
     // verdict is decided, which is what makes "Opens 17:00" the useful sentence.
-    #expect(row?.verdict.head == "Opens 17:00")
+    #expect(Self.said(row?.verdict.head) == "Opens 17:00")
     #expect(row?.options.map { $0.window.start.hhmm } == ["17:00", "19:00"])
   }
 
@@ -406,7 +425,15 @@ struct ListModelTests {
     // The headline states the HORIZON, not a false zero: past `horizon_end` both counts are
     // structurally zero, so "0 pools with sessions" would read as an answer we do not have.
     #expect(built.headline == dayStateLabel(.beyondHorizon))
-    #expect(!built.headline.contains("0"))
+    // In every language, and as "no number at all" rather than "not the character 0": the harm
+    // is a COUNT beside a screen that correctly says we have not resolved this day yet, and a
+    // catalog that reached for the plural headline would produce one in whatever digits it
+    // liked.
+    for (language, localized) in CatalogFixture.all {
+      let said = localized(built.headline)
+      #expect(!said.isEmpty, "\(language)")
+      #expect(said.allSatisfy { !$0.isNumber }, "\(language) headlines a count: \(said)")
+    }
     // Emphatically not a per-pool closure: E2 is about the DATE.
     #expect(built.isEmpty)
   }
@@ -422,7 +449,8 @@ struct ListModelTests {
     filters.age = 34
     filters.eligibleOnly = true
     #expect(
-      filters.summaryTags == ["Zürich HB (main station)", "Female", "Adult", "Open to me only"])
+      filters.summaryTags.map { Self.en($0) }
+        == ["Zürich HB (main station)", "Female", "Adult", "Open to me only"])
   }
 
   @Test("every summary tag the bar can show is reachable")
@@ -430,18 +458,39 @@ struct ListModelTests {
     var filters = Filters(day: "2026-08-24", place: nil)
     filters.favouritesOnly = true
     filters.kinds = ["indoor", "outdoor"]
-    #expect(filters.summaryTags == ["Favourites", "indoor, outdoor"])
+    // One tag per kind, and each is the kind's own SENTENCE. They used to be the export's raw
+    // tokens joined with a comma ("indoor, outdoor") — a domain token on screen, which S4 would
+    // have carried into five catalogs as an untranslated one.
+    #expect(
+      filters.summaryTags.map { Self.en($0) } == ["Favourites", "Indoor pool", "Outdoor pool"])
   }
 
   @Test("the six section titles are distinct, and only `closed` says closed")
   func tierTitlesAreDistinctAndHonest() {
-    let titles = Tier.allCases.map(\.title)
-    #expect(Set(titles).count == titles.count)
     #expect(Tier.allCases == [.now, .soon, .past, .scheduled, .unknown, .closed])
-    for tier in Tier.allCases where tier != .closed {
-      #expect(!tier.title.lowercased().contains("closed"), "\(tier) is headed \(tier.title)")
+    #expect(Self.en(Tier.closed.title) == "Closed")
+    // Both halves hold PER LANGUAGE. Two tiers that collapse to one German heading are
+    // indistinguishable to a German reader however different their English is; and a
+    // translator handed "Hours not listed" out of context can reasonably reach for
+    // "Geschlossen", which is the one word this screen may never say where the source did not.
+    //
+    // The shut-word lists are `DayStateTests`' own: there is one answer per language to "how
+    // does this language say a pool is shut", and a second copy would drift from it.
+    for (language, localized) in CatalogFixture.all {
+      let titles = Tier.allCases.map { localized($0.title) }
+      #expect(Set(titles).count == titles.count, "\(language): two tiers share a heading")
+      #expect(titles.allSatisfy { !$0.isEmpty })
+      let shut = DayStateTests.shutWords[language] ?? []
+      #expect(!shut.isEmpty, "no shut-word list for \(language)")
+      for tier in Tier.allCases where tier != .closed {
+        let said = localized(tier.title)
+        let folded = said.folding(
+          options: [.diacriticInsensitive, .caseInsensitive], locale: nil)
+        for word in shut {
+          #expect(!folded.contains(word), "\(language): \(tier) is headed \"\(said)\"")
+        }
+      }
     }
-    #expect(Tier.closed.title == "Closed")
     // Exactly the three clock tiers make a present-tense claim. If a fourth ever did, the
     // off-today guard in `listModel` would have a hole this assertion closes.
     #expect(Tier.allCases.filter(\.isWallClockClaim) == [.now, .soon, .past])
@@ -455,18 +504,18 @@ struct ListModelTests {
     // `count - 3` — the same number written twice, tested by nothing.
     #expect(inlineSessionLimit == 3)
     let many = (0..<7).map { Self.option(pool: "p", from: 6 + $0, to: 7 + $0) }
-    let row = try? #require(Self.model(Self.answer(options: many)).sections[0].rows.first)
+    let row = Self.model(Self.answer(options: many)).sections[0].rows.first
     #expect(row?.options.count == 7)
     #expect(row?.inlineOptions.count == inlineSessionLimit)
     #expect(row?.hiddenSessionCount == 4)
-    #expect(row?.moreSessionsLabel == "+4 more today")
+    #expect(Self.said(row?.moreSessionsLabel ?? nil) == "+4 more today")
     // The inline ones are the FIRST by start, so the row leads with the day's earliest.
     #expect(row?.inlineOptions.first?.window.start.hhmm == "06:00")
 
     // A short day hides nothing, and the count never goes negative: "+0 more today" would be
     // worse than saying nothing.
     let few = Self.model(Self.answer(options: [Self.option(pool: "q", from: 11, to: 13)]))
-    let short = try? #require(few.sections[0].rows.first)
+    let short = few.sections[0].rows.first
     #expect(short?.hiddenSessionCount == 0)
     #expect(short?.inlineOptions.count == 1)
     #expect(short?.moreSessionsLabel == nil, "\"+0 more\" is worse than saying nothing")
@@ -478,24 +527,43 @@ struct ListModelTests {
     // date four months out said "Opens 06:00 · until 22:00" and, two lines below, "+2 more
     // TODAY". The wording turns on `isToday`, which a row does not carry — so it is decided
     // here, not branched on in a view.
-    #expect(moreSessionsLabel(hidden: 2, isToday: true) == "+2 more today")
-    #expect(moreSessionsLabel(hidden: 2, isToday: false) == "+2 more that day")
-    #expect(moreSessionsLabel(hidden: 0, isToday: true) == nil)
-    #expect(moreSessionsLabel(hidden: 0, isToday: false) == nil)
+    let format = Self.en.format
+    #expect(
+      Self.said(moreSessionsLabel(hidden: 2, isToday: true, format: format)) == "+2 more today")
+    #expect(
+      Self.said(moreSessionsLabel(hidden: 2, isToday: false, format: format)) == "+2 more that day")
+    #expect(moreSessionsLabel(hidden: 0, isToday: true, format: format) == nil)
+    #expect(moreSessionsLabel(hidden: 0, isToday: false, format: format) == nil)
 
     // ...and through the whole model, which is where it actually reached a screen.
     let many = (0..<5).map { Self.option(pool: "p", from: 6 + $0, to: 7 + $0) }
     let future = Self.model(
       Self.answer(options: many, day: "2026-12-20"), today: "2026-08-24")
-    let row = try? #require(future.sections[0].rows.first)
+    let row = future.sections[0].rows.first
     #expect(row?.hiddenSessionCount == 2)
-    #expect(row?.moreSessionsLabel == "+2 more that day")
+    #expect(Self.said(row?.moreSessionsLabel ?? nil) == "+2 more that day")
 
-    // No row anywhere in an off-today model may say "today" or "now".
-    for row in future.sections.flatMap(\.rows) {
-      for said in [row.verdict.head, row.verdict.tail, row.moreSessionsLabel].compactMap({ $0 }) {
-        #expect(!said.lowercased().contains("today"), "off-today row says: \(said)")
-        #expect(!said.lowercased().contains(" now"), "off-today row says: \(said)")
+    // No row anywhere in an off-today model may claim a moment — IN ANY OF THE FIVE LANGUAGES.
+    // The English sentences were written with this rule in mind and the translations were not
+    // written by whoever wrote the rule: "+2 weitere heute" is the natural German for the
+    // more-sessions line and is exactly wrong on a date nobody is standing in.
+    //
+    // The temporal-word lists are `DayStateTests`' own, for the same reason its shut-words are:
+    // one answer per language, in one place.
+    for (language, localized) in CatalogFixture.all {
+      let temporal = DayStateTests.temporalWords[language] ?? []
+      #expect(!temporal.isEmpty, "no temporal-word list for \(language)")
+      for row in future.sections.flatMap(\.rows) {
+        let lines = [row.verdict.head, row.verdict.tail, row.moreSessionsLabel]
+          .compactMap { $0 }
+          .map { localized($0) }
+        for said in lines {
+          let folded = said.folding(
+            options: [.diacriticInsensitive, .caseInsensitive], locale: nil)
+          for word in temporal {
+            #expect(!folded.contains(word), "\(language): off-today row says \"\(said)\"")
+          }
+        }
       }
     }
   }
@@ -538,22 +606,106 @@ struct ListModelTests {
   @Test("age bands carry the same representative ages the web offers")
   func ageBandsMatchTheWeb() {
     #expect(AgeBand.all.map(\.age) == [nil, 8, 16, 34, 70])
-    #expect(AgeBand.band(for: nil).label == "Any age")
-    #expect(AgeBand.band(for: 8).label == "Child")
-    #expect(AgeBand.band(for: 20).label == "Teen")
-    #expect(AgeBand.band(for: 70).label == "Senior")
-    #expect(AgeBand.band(for: 99).label == "Senior")
+    #expect(Self.en(AgeBand.band(for: nil).label) == "Any age")
+    #expect(Self.en(AgeBand.band(for: 8).label) == "Child")
+    #expect(Self.en(AgeBand.band(for: 20).label) == "Teen")
+    #expect(Self.en(AgeBand.band(for: 70).label) == "Senior")
+    #expect(Self.en(AgeBand.band(for: 99).label) == "Senior")
     // Below every band's representative age: still a child, never "unknown".
-    #expect(AgeBand.band(for: 3).label == "Child")
+    #expect(Self.en(AgeBand.band(for: 3).label) == "Child")
   }
 
   @Test("the place presets are the web's, and the typeahead folds diacritics")
   func placesMatchTheWeb() {
     #expect(Places.default.id == "hb")
-    #expect(Places.matching("").count == 3)
+    #expect(Places.matching("", in: Self.en).count == 3)
     // Both Zürich names match the plain-vowel spelling, which is the whole point of folding.
-    #expect(Places.matching("zurich").map(\.id) == ["hb", "zuerichhorn"])
-    #expect(Places.matching("BELLE").map(\.id) == ["bellevue"])
-    #expect(Places.matching("nowhere").isEmpty)
+    #expect(Places.matching("zurich", in: Self.en).map(\.id) == ["hb", "zuerichhorn"])
+    #expect(Places.matching("BELLE", in: Self.en).map(\.id) == ["bellevue"])
+    #expect(Places.matching("nowhere", in: Self.en).isEmpty)
+    // The typeahead matches the RENDERED label, which is why it takes a renderer at all: a
+    // French reader types "gare", a German "Hauptbahnhof", and matching the key or the English
+    // would silently fail for four of the five languages.
+    #expect(Places.matching("gare", in: CatalogFixture.localized(.fr)).map(\.id) == ["hb"])
+    #expect(Places.matching("hauptbahnhof", in: CatalogFixture.localized(.de)).map(\.id) == ["hb"])
+    // ...and every language can still find the two proper nouns, which are never translated.
+    for (language, localized) in CatalogFixture.all {
+      #expect(Places.matching("", in: localized).count == 3, "\(language)")
+      #expect(Places.matching("bellevue", in: localized).map(\.id) == ["bellevue"], "\(language)")
+    }
+  }
+
+  // MARK: - No machine value reaches a reader (the other half of the sheet's sweep)
+
+  @Test("nothing the LIST screen says shows a raw store date, in any language")
+  func theListScreenShowsNoMachineDates() async throws {
+    // The sheet has the same sweep (`FacilityDetailTests.everyStoreDateIsFormatted`), and this
+    // is the rest of the surface: section titles, row verdicts, the "+2 more" line, every
+    // banner, the headline, and the VoiceOver layout over the ribbon canvas — which is the one
+    // a raw value could hide in longest, because nobody looks at it.
+    //
+    // Driven from the COMMITTED STORE rather than from constructed rows, because the values
+    // that turn out to be machine dates are the ones a fixture would not have thought to
+    // include: `meta.gold_valid_as_of` was live on all 57 pools.
+    //
+    // EVERY DAY IN THE HORIZON, not a sample. The first version of this test sampled three
+    // days and passed — and the store's one `holiday_hours_unverified` warning falls on
+    // 2026-12-25, three days past the last sample, carrying `date` as a raw ISO string. A
+    // sample is a guess about where the bug is; a sweep is not. The cost is one indexed read
+    // per day, which is what makes the sweep affordable at all.
+    let store = try Store.bundled()
+    let metadata = try await store.metadata()
+    var checked = 0
+    var banners = 0
+    let days = ZurichClock.days(from: metadata.horizonStart, through: metadata.horizonEnd)
+    for (language, localized) in CatalogFixture.all {
+      for day in days where metadata.covers(day: day) {
+        let answer = try await store.answer(
+          onDay: day, at: TimeOfDay(hour: 12, minute: 0), for: Person(age: 30))
+        let model = listModel(
+          answer: answer, filters: Filters(day: day), favourites: Favourites(),
+          horizon: metadata, today: metadata.horizonStart, at: TimeOfDay(hour: 12, minute: 0),
+          format: localized.format)
+
+        var said: [String] = [localized(model.headline)]
+        for banner in model.banners {
+          banners += 1
+          // A NOTICE is the pool's own sentence and may legitimately quote a date the way the
+          // pool wrote it; only our own warnings are ours to format.
+          guard banner.kind == .warning else { continue }
+          said += [localized(banner.title), localized(banner.text)]
+        }
+        for section in model.sections {
+          said.append(localized(section.title))
+          for row in section.rows {
+            said.append(localized(row.verdict.head))
+            if let tail = row.verdict.tail { said.append(localized(tail)) }
+            if let more = row.moreSessionsLabel { said.append(localized(more)) }
+            for option in row.options {
+              if let lanes = option.laneSummary(isToday: false, format: localized.format) {
+                said.append(localized(lanes))
+              }
+            }
+            for block in a11yBlocks(for: dayRibbon(for: row), width: 300, in: localized) {
+              said.append(localized(block.label))
+              for fact in block.customContent {
+                said += [localized(fact.label), localized(fact.value)]
+              }
+            }
+          }
+        }
+        for text in said {
+          checked += 1
+          if FacilityDetailTests.looksLikeAStoreDate(text) {
+            Issue.record("\(language)/\(day) shows a raw date: \"\(text)\"")
+          }
+        }
+      }
+    }
+    #expect(checked > 2000, "the sweep read \(checked) strings — it is scanning nothing")
+    // ...and it really reached the banner path, which is the one that carries a `{date}` param.
+    // A floor of FIVE, one per language: the store carries exactly one holiday warning and one
+    // calendar-coverage warning, so a sweep that saw fewer has narrowed somewhere.
+    #expect(banners >= 5, "only \(banners) banners in the sweep — the `{date}` param went unread")
   }
 }

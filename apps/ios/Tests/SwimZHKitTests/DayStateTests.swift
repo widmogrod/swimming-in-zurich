@@ -16,6 +16,45 @@ import Testing
 struct DayStateTests {
   static let fourStates = ["closed", "awaiting_scrape", "no_source", "open_unscheduled"]
 
+  /// The English renderer. Most assertions here are about a SENTENCE, and reading one language
+  /// keeps them legible; the ones that are about the RULE ("never says closed", "claims no
+  /// moment") run over all five, because a German translation that said "geschlossen" on a
+  /// ghost state is exactly the regression an English-only check would wave through.
+  static let en = CatalogFixture.english
+
+  /// How each language says a pool is shut. The same stems `parity.test.ts` uses on the web
+  /// for the board divider, for the same reason.
+  static let shutWords: [Language: [String]] = [
+    .en: ["closed", "shut"],
+    .de: ["geschlossen"],
+    .fr: ["ferm"],
+    .it: ["chius"],
+    .pl: ["zamkni", "nieczynn"],
+  ]
+
+  /// Words that would turn a horizon-wide row into a claim about one moment, per language.
+  static let temporalWords: [Language: [String]] = [
+    .en: ["today", "tonight", "right now", " now", "this morning"],
+    .de: ["heute", "jetzt", "heute abend"],
+    .fr: ["aujourd", "maintenant", "ce soir"],
+    .it: ["oggi", "adesso", "stasera"],
+    .pl: ["dzisiaj", "dzis", "teraz", "wieczorem"],
+  ]
+
+  /// Every state a ghost or closed row can carry, on any date in the horizon.
+  static let allStates: [DayState] = [
+    .closed(.outOfSeason),
+    .closed(.noSessions),
+    .closed(.unmapped(text: "Sommerpause")),
+    .closed(.unmapped(text: "")),
+    .closed(.other("revision")),
+    .closed(.unstated),
+    .awaitingScrape,
+    .noSource,
+    .openUnscheduled,
+    .beyondHorizon,
+  ]
+
   @Test("the store's vocabulary maps one-to-one onto the state union")
   func vocabularyMaps() {
     #expect(dayState(status: "closed", closureCode: "no_sessions") == .closed(.noSessions))
@@ -35,36 +74,54 @@ struct DayStateTests {
     #expect(dayState(status: "teleported", closureCode: nil) == .unrecognised("teleported"))
   }
 
-  @Test("NO state that is not `closed` renders as closed")
+  @Test("NO state that is not `closed` renders as closed — IN ANY OF THE FIVE LANGUAGES")
   func ghostStatesAreNeverClosed() {
-    // The assertion is on the WORD, in both cases, because that is what a user reads. A future
-    // edit that worded `no_source` as "Closed — no timetable" would be exactly the regression
-    // this exists to catch, and it would satisfy any structural check.
-    for status in Self.fourStates where status != "closed" {
-      let label = dayStateLabel(dayState(status: status, closureCode: nil)).lowercased()
-      #expect(!label.contains("closed"), "\(status) renders as \(label)")
-      #expect(!label.contains("shut"))
+    // The assertion is on the WORD, because that is what a user reads. An edit that worded
+    // `no_source` as "Closed — no timetable" is exactly the regression this exists to catch,
+    // and it would satisfy any structural check.
+    //
+    // Five languages, not one. The catalog is now where this rule is easiest to break — a
+    // translator handed "Hours not published yet" out of context can reasonably reach for
+    // "Geschlossen" — and no English-only assertion could ever see it.
+    for (language, localized) in CatalogFixture.all {
+      let shut = Self.shutWords[language] ?? []
+      #expect(!shut.isEmpty, "no shut-word list for \(language)")
+      var states: [DayState] = [.beyondHorizon, .unrecognised("teleported")]
+      states += Self.fourStates.filter { $0 != "closed" }
+        .map { dayState(status: $0, closureCode: nil) }
+      for state in states {
+        let label = localized(dayStateLabel(state)).folding(
+          options: [.diacriticInsensitive, .caseInsensitive], locale: nil)
+        for word in shut {
+          #expect(!label.contains(word), "\(language)/\(state) renders as \"\(label)\"")
+        }
+      }
     }
-    let beyond = dayStateLabel(.beyondHorizon).lowercased()
-    #expect(!beyond.contains("closed"))
-    #expect(!dayStateLabel(.unrecognised("teleported")).lowercased().contains("closed"))
   }
 
-  @Test("every state renders a DISTINCT sentence")
+  @Test("every state's sentence exists in all five languages — none falls back to its key")
+  func everyStateIsTranslated() {
+    // The failure this catches is the quiet one: a key the converter never wrote renders as
+    // ITSELF, which on screen reads like a design choice rather than a missing string.
+    for (language, localized) in CatalogFixture.all {
+      for state in Self.allStates + [.unrecognised("teleported")] {
+        let message = dayStateLabel(state)
+        let rendered = localized(message)
+        #expect(rendered != message.key, "\(language) has no translation for \(message.key)")
+        #expect(!rendered.isEmpty)
+      }
+    }
+  }
+
+  @Test("every state renders a DISTINCT sentence, in every language")
   func statesRenderDistinctly() {
-    let labels = [
-      dayStateLabel(.closed(.outOfSeason)),
-      dayStateLabel(.closed(.noSessions)),
-      dayStateLabel(.closed(.unmapped(text: "Sommerpause"))),
-      dayStateLabel(.closed(.unmapped(text: ""))),
-      dayStateLabel(.closed(.unstated)),
-      dayStateLabel(.awaitingScrape),
-      dayStateLabel(.noSource),
-      dayStateLabel(.openUnscheduled),
-      dayStateLabel(.beyondHorizon),
-    ]
-    #expect(Set(labels).count == labels.count, "two states share a sentence: \(labels)")
-    #expect(labels.allSatisfy { !$0.isEmpty })
+    // Distinctness has to hold per LANGUAGE: two states that collapse to one German sentence
+    // are indistinguishable to a German reader however different their English is.
+    for (language, localized) in CatalogFixture.all {
+      let labels = Self.allStates.map { localized(dayStateLabel($0)) }
+      #expect(Set(labels).count == labels.count, "\(language): two states share a sentence")
+      #expect(labels.allSatisfy { !$0.isEmpty })
+    }
   }
 
   @Test("an unmapped closure QUOTES the pool's own words, never a paraphrase")
@@ -73,12 +130,16 @@ struct DayStateTests {
     // in `detail_params["text"]` is the ONLY thing that can be said about it. A label that
     // merely promised "see the pool's own words" without showing them left the row asserting
     // "closed" with nothing behind the claim.
-    let label = dayStateLabel(.closed(.unmapped(text: "Wegen Revision geschlossen")))
-    #expect(label.contains("Wegen Revision geschlossen"))
-    // Verbatim and UNTRANSLATED: the pool wrote it, in its own language.
-    #expect(!label.contains("Revision closure"))
+    // In EVERY language: the pool's sentence is DATA, so it survives translation of the frame
+    // around it. This is the one place a catalog could plausibly swallow the source's words.
+    for (language, localized) in CatalogFixture.all {
+      let label = localized(dayStateLabel(.closed(.unmapped(text: "Wegen Revision geschlossen"))))
+      #expect(label.contains("Wegen Revision geschlossen"), "\(language) dropped the text")
+      #expect(!label.contains("Revision closure"))
+    }
     // A row that carries no text says so plainly rather than borrowing a classified reason.
-    #expect(dayStateLabel(.closed(.unmapped(text: ""))) == "Closed — reason not classified")
+    #expect(
+      Self.en(dayStateLabel(.closed(.unmapped(text: "")))) == "Closed — reason not classified")
   }
 
   @Test("the pool's words reach the label through the STATUS, not just the enum")
@@ -93,7 +154,7 @@ struct DayStateTests {
       goldValidAsOf: "", contentHash: ""
     )
     #expect(
-      dayStateLabel(dayState(status: row, on: "2026-06-01", horizon: meta))
+      Self.en(dayStateLabel(dayState(status: row, on: "2026-06-01", horizon: meta)))
         .contains("Sommerpause")
     )
   }
@@ -104,22 +165,20 @@ struct DayStateTests {
     // exists for every date in the ~400-day horizon — so any temporal word in these labels is
     // rendered on every future date the strip can reach. "Closed today" was exactly that, and
     // the day strip made it reachable on ninety-odd future dates in the committed store.
-    let labels = [
-      dayStateLabel(.closed(.outOfSeason)),
-      dayStateLabel(.closed(.noSessions)),
-      dayStateLabel(.closed(.unmapped(text: "Sommerpause"))),
-      dayStateLabel(.closed(.unmapped(text: ""))),
-      dayStateLabel(.closed(.other("revision"))),
-      dayStateLabel(.closed(.unstated)),
-      dayStateLabel(.awaitingScrape),
-      dayStateLabel(.noSource),
-      dayStateLabel(.openUnscheduled),
-      dayStateLabel(.beyondHorizon),
-    ]
-    for label in labels {
-      let said = label.lowercased()
-      for temporal in ["today", "tonight", "right now", " now", "this morning"] {
-        #expect(!said.contains(temporal), "\"\(label)\" claims \"\(temporal)\"")
+    //
+    // Five languages, and for a sharper reason than the closure check: the English sentences
+    // were written with this rule in mind and the translations were not written by whoever
+    // wrote the rule. "Heute geschlossen" is the natural German for a closure and is exactly
+    // wrong here.
+    for (language, localized) in CatalogFixture.all {
+      let temporal = Self.temporalWords[language] ?? []
+      #expect(!temporal.isEmpty, "no temporal-word list for \(language)")
+      for state in Self.allStates {
+        let said = localized(dayStateLabel(state)).folding(
+          options: [.diacriticInsensitive, .caseInsensitive], locale: nil)
+        for word in temporal {
+          #expect(!said.contains(word), "\(language): \"\(said)\" claims \"\(word)\"")
+        }
       }
     }
   }

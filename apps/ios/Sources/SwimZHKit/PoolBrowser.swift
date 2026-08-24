@@ -33,15 +33,15 @@ public func poolKinds(_ pools: [PoolRecord]) -> [String] {
 ///
 /// A kind this binary has never seen is shown as ITSELF, never folded into "indoor": the store
 /// can be newer than the app, and a mislabelled pool sends somebody to the wrong kind of water.
-public func poolKindLabel(_ kind: String) -> String {
+public func poolKindLabel(_ kind: String) -> Message {
   switch kind {
-  case "indoor": return "Indoor pool"
-  case "outdoor": return "Outdoor pool"
-  case "lake": return "Lake bath"
-  case "river": return "River bath"
-  case "thermal": return "Thermal bath"
-  case "school": return "School pool"
-  case "paddling": return "Paddling pool"
-  default: return kind.replacingOccurrences(of: "_", with: " ").capitalized
+  case "indoor", "outdoor", "lake", "river", "thermal", "school", "paddling":
+    return Message("poolKind.\(kind)")
+  default:
+    // The unknown kind rides through a passthrough message rather than being shown bare, so
+    // the surrounding punctuation is still the catalog's — and so the lint that says every
+    // rendered literal is a catalog key stays true of this path too.
+    return Message(
+      "poolKind.unknown", ["kind": kind.replacingOccurrences(of: "_", with: " ").capitalized])
   }
 }

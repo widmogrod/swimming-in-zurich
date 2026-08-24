@@ -16,6 +16,11 @@ import Testing
 
 @Suite("Warning and notice banners")
 struct BannerTests {
+  /// The English renderer, for the assertions that are about a SENTENCE. The two rules that
+  /// must hold whatever the reader's language — a warning code always has a sentence, and a
+  /// pool's own notice is passed through UNTRANSLATED — loop over all five instead.
+  static let en = CatalogFixture.english
+
   /// One day of the horizon that carries a warning with `code`, and its answer.
   static func firstDay(matching predicate: (Answer) -> Bool) async throws -> Answer? {
     let store = try Store.bundled()
@@ -38,14 +43,22 @@ struct BannerTests {
       await Self.firstDay { $0.warnings.contains { $0.code == code } },
       "no day in the horizon carries \(code) — the store or the export changed"
     )
-    let banner = try #require(banners(for: answer).first { $0.code == code })
+    let banner = try #require(
+      banners(for: answer, format: Self.en.format).first { $0.code == code })
     #expect(banner.kind == .warning)
-    #expect(!banner.title.isEmpty)
+    #expect(!Self.en(banner.title).isEmpty)
     // The sentence, not the bare code: a banner that showed `calendar_coverage` to a swimmer
-    // would be a leaked identifier, and the rendered text is what S4 replaces with a catalog
-    // lookup keyed off exactly this `code`.
-    #expect(banner.text != code)
-    #expect(banner.text.count > code.count)
+    // would be a leaked identifier. S4 made that a catalog lookup keyed off exactly this
+    // `code`, so the check runs in all five languages — a code the converter never wrote a
+    // sentence for renders as ITSELF, which is the leaked identifier again, in four languages
+    // where no English assertion could see it.
+    for (language, localized) in CatalogFixture.all {
+      let title = localized(banner.title)
+      let text = localized(banner.text)
+      #expect(!title.isEmpty, "\(language)")
+      #expect(text != code, "\(language) has no sentence for \(code)")
+      #expect(text.count > code.count, "\(language): \(text)")
+    }
     #expect(banner.poolName == nil, "a warning is day-level, not about one pool")
   }
 
@@ -58,21 +71,26 @@ struct BannerTests {
     let notice = try #require(answer.notices.first)
     let names = [notice.poolID: "Hallenbad Oerlikon"]
     let banner = try #require(
-      banners(for: answer, poolNames: names).first { $0.kind == .notice })
+      banners(for: answer, poolNames: names, format: Self.en.format).first { $0.kind == .notice })
     // Verbatim, and untranslated: the pool wrote it, in its own language. Paraphrasing a
-    // closure announcement is how a client invents a fact.
-    #expect(banner.text == notice.text)
-    #expect(banner.title == "Hallenbad Oerlikon")
+    // closure announcement is how a client invents a fact — so this is asserted in EVERY
+    // language, which is the only way the claim "untranslated" can actually be checked.
+    // A pool's NAME is a proper noun and is untranslated for the same reason.
+    for (language, localized) in CatalogFixture.all {
+      #expect(localized(banner.text) == notice.text, "\(language) altered the pool's own words")
+      #expect(localized(banner.title) == "Hallenbad Oerlikon", "\(language)")
+    }
     #expect(banner.poolName == "Hallenbad Oerlikon")
   }
 
   @Test("a notice whose pool name is unknown still shows — the text is the point")
   func noticeSurvivesAMissingName() async throws {
     let answer = try #require(await Self.firstDay { !$0.notices.isEmpty })
-    let banner = try #require(banners(for: answer).first { $0.kind == .notice })
-    #expect(banner.text == answer.notices[0].text)
+    let banner = try #require(
+      banners(for: answer, format: Self.en.format).first { $0.kind == .notice })
+    #expect(Self.en(banner.text) == answer.notices[0].text)
     #expect(banner.poolName == nil)
-    #expect(banner.title == answer.notices[0].poolID)
+    #expect(Self.en(banner.title) == answer.notices[0].poolID)
   }
 
   @Test("warnings lead, notices follow, and every banner id is unique")
@@ -90,7 +108,7 @@ struct BannerTests {
         DayWarning(code: DayWarning.holidayHoursUnverified, params: ["date": "x", "pools": "y"]),
       ]
     )
-    let built = banners(for: answer)
+    let built = banners(for: answer, format: Self.en.format)
     #expect(built.map(\.kind) == [.warning, .warning, .notice, .notice])
     #expect(Set(built.map(\.id)).count == built.count)
   }
@@ -104,8 +122,15 @@ struct BannerTests {
       day: "2026-08-23", options: [], statuses: [], notices: [],
       warnings: [DayWarning(code: "solar_flare", params: [:])]
     )
-    let banner = try #require(banners(for: answer).first)
-    #expect(banner.text == "solar_flare")
-    #expect(banner.title == "Please note")
+    let banner = try #require(banners(for: answer, format: Self.en.format).first)
+    #expect(Self.en(banner.title) == "Please note")
+    // In every language: the code rides through the passthrough key unchanged, and NO language
+    // borrows the holiday sentence's claim about pools it never named. `warning.unknown` is
+    // "%@" in all five today, and a translator who "improved" it into prose would be inventing
+    // exactly the fact this arm exists to refuse.
+    for (language, localized) in CatalogFixture.all {
+      #expect(localized(banner.text) == "solar_flare", "\(language)")
+      #expect(!localized(banner.title).isEmpty, "\(language)")
+    }
   }
 }

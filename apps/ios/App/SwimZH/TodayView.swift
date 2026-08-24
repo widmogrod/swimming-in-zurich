@@ -15,13 +15,17 @@
 //  * NO `.refreshable`: the store is bundle-only until S5, so a pull-to-refresh would be a
 //    lie — it would spin and change nothing.
 //
-// Strings are English literals for now. S4 fills `Localizable.xcstrings` in the PACKAGE, and
-// the lint it brings catches anything left behind here.
+// Every sentence on this screen is a `Message` from the package, rendered by the one
+// `Localized` in the environment (see `Localization.swift`). There is not a single
+// user-visible literal left here, and the two that look like one (`metadata.goldValidAsOf`,
+// `metadata.horizonEnd`) are the store's own date KEYS put through `Format.storeDate` — they
+// were shipped raw at first, which read as `2026-08-24` in all five languages.
 
 import SwiftUI
 import SwimZHKit
 
 struct TodayView: View {
+  @Environment(\.localized) private var localized
   @State private var model = TodayModel()
   /// The zoom transition's namespace. BOTH halves are required and neither works alone: the row
   /// carries `matchedTransitionSource(id:in:)`, the destination carries
@@ -31,11 +35,11 @@ struct TodayView: View {
   var body: some View {
     NavigationStack {
       content
-        .navigationTitle("Swim in Zürich")
+        .navigationTitle(Text(Message("app.title"), localized))
         .searchable(
           text: $model.filters.search,
           placement: .navigationBarDrawer(displayMode: .always),
-          prompt: "Find a pool"
+          prompt: Text(Message("nav.findAPool"), localized)
         )
         .toolbar { browseMenu }
         .navigationDestination(for: String.self) { poolID in
@@ -60,15 +64,15 @@ struct TodayView: View {
             pools: model.pools, day: model.filters.day, person: model.filters.person,
             load: { await model.facility($0) })
         } label: {
-          Label("All pools", systemImage: "list.bullet")
+          Label(Message("nav.allPools"), systemImage: "list.bullet", localized)
         }
         NavigationLink {
           AccessTypesView()
         } label: {
-          Label("What the labels mean", systemImage: "questionmark.circle")
+          Label(Message("nav.accessTypes"), systemImage: "questionmark.circle", localized)
         }
       } label: {
-        Label("Browse", systemImage: "ellipsis.circle")
+        Label(Message("nav.browse"), systemImage: "ellipsis.circle", localized)
       }
     }
   }
@@ -78,10 +82,24 @@ struct TodayView: View {
     switch model.state {
     case .loading:
       ProgressView()
-    case .failed(let message):
-      ContentUnavailableView(
-        "Cannot read the pool data", systemImage: "xmark.icloud", description: Text(message)
-      )
+    case .failed(let diagnostic):
+      // The DIAGNOSTIC is not shown. It is a `StoreError`'s own English detail — an SQL table
+      // name and a row id — which is a developer's sentence, not a reader's, and S3b shipped
+      // it straight into a `ContentUnavailableView`. The reader gets a sentence that says what
+      // happened and what to do; the diagnostic goes to the log, where it is useful.
+      // The ViewBuilder form, not `init(_:systemImage:description:)`: that one takes a
+      // `LocalizedStringKey` title, and this title has already been localised — handing it
+      // back to SwiftUI would be a second lookup of a finished sentence.
+      ContentUnavailableView {
+        Label {
+          Text(Message("error.store.title"), localized)
+        } icon: {
+          Image(systemName: "xmark.icloud")
+        }
+      } description: {
+        Text(Message("error.store.body"), localized)
+      }
+      .onAppear { model.log(diagnostic) }
       // The launch is over even though there is no data: leaving the extended measurement open
       // would never end it, and every failed launch would silently poison the field numbers
       // rather than showing up as a slow one.
@@ -112,12 +130,15 @@ struct TodayView: View {
     } else if list.isEmpty {
       // "Nothing matched" is NOT "everything is closed", and the wording says so: an empty
       // result is about the filters, and the remedy is in the user's hands.
-      ContentUnavailableView(
-        "No pools match", systemImage: "line.3.horizontal.decrease.circle",
-        description: Text(
-          "Try a wider area, another day, or fewer filters. This is not the "
-            + "same as everything being closed.")
-      )
+      ContentUnavailableView {
+        Label {
+          Text(Message("combo.noPoolsMatch"), localized)
+        } icon: {
+          Image(systemName: "line.3.horizontal.decrease.circle")
+        }
+      } description: {
+        Text(Message("state.none.body.phone"), localized)
+      }
     } else {
       answerList(list, metadata)
     }
@@ -126,12 +147,18 @@ struct TodayView: View {
   /// The fifth day state, and it is the WHOLE SCREEN's state rather than any pool's: past the
   /// horizon there are no rows at all, so nothing here may read as a closure.
   private func beyondHorizon(_ metadata: StoreMetadata) -> some View {
-    ContentUnavailableView(
-      "Beyond the published horizon", systemImage: "calendar.badge.exclamationmark",
-      description: Text(
-        "We publish answers through \(metadata.horizonEnd). This is not the "
-          + "same as the pools being closed — we simply have not resolved this day yet.")
-    )
+    ContentUnavailableView {
+      Label {
+        Text(Message("state.beyondHorizon"), localized)
+      } icon: {
+        Image(systemName: "calendar.badge.exclamationmark")
+      }
+    } description: {
+      Text(
+        Message(
+          "state.beyondHorizon.body", ["date": localized.format.storeDate(metadata.horizonEnd)]),
+        localized)
+    }
   }
 
   private func answerList(_ list: ListModel, _ metadata: StoreMetadata) -> some View {
@@ -155,7 +182,7 @@ struct TodayView: View {
             )
           }
         } header: {
-          Label(section.title, systemImage: section.tier.symbol)
+          Label(section.title, systemImage: section.tier.symbol, localized)
         }
       }
       provenance(metadata)
@@ -176,10 +203,27 @@ struct TodayView: View {
 
   private func provenance(_ metadata: StoreMetadata) -> some View {
     Section {
-      LabeledContent("Data from", value: metadata.goldValidAsOf)
-      LabeledContent("Answers through", value: metadata.horizonEnd)
+      // The VALUES are the store's own date KEYS (`2026-08-24`), so they go through
+      // `Format.storeDate` before a reader sees them — the same fact the browser renders as
+      // "24 August 2026". Shipping the key itself was a five-language regression hiding inside
+      // a `Text(verbatim:)` that looked, correctly, like a value.
+      // Each row is shown only when the store actually carries the stamp: the exporter writes
+      // `gold_valid_as_of or ""`, and "Data from" followed by nothing is a blank where a fact
+      // should be. An absent stamp means no row, not an empty one.
+      stampRow(metadata.goldValidAsOf, label: "meta.dataFrom")
+      stampRow(metadata.horizonEnd, label: "meta.answersThrough")
     } footer: {
-      Text("Works offline. Everything here was resolved before the app shipped.")
+      Text(Message("meta.offlineNote"), localized)
+    }
+  }
+
+  /// One dated row from `meta`, or nothing at all when the store carries no stamp.
+  @ViewBuilder
+  private func stampRow(_ key: String, label: String) -> some View {
+    if !key.isEmpty {
+      LabeledContent(
+        content: { Text(verbatim: localized.format.storeDate(key)) },
+        label: { Text(Message(label), localized) })
     }
   }
 

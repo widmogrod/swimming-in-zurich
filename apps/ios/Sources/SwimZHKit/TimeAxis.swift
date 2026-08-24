@@ -157,10 +157,15 @@ extension DayState {
   /// The state as a status ribbon's input. `detail` carries the pool's own words when it has
   /// any, which is what keeps an unmapped closure from rendering as a bare "closed".
   func ribbonInput(facility: String) -> RibbonStatusInput {
-    RibbonStatusInput(
+    let label = dayStateLabel(self)
+    return RibbonStatusInput(
       facility: facility,
       status: isClosureClaim ? "closed" : "unknown",
-      detail: dayStateLabel(self)
+      // No prose on the app's path: the KEY and its params travel instead, so the canvas and
+      // VoiceOver both say the state's sentence in the reader's language.
+      detail: nil,
+      detailParams: label.params,
+      labelKey: label.key
     )
   }
 }
@@ -215,8 +220,11 @@ extension RibbonPublicWindow {
 
 /// One secondary fact, read by VoiceOver on request rather than in the main label.
 public struct A11yFact: Equatable, Sendable {
-  public let label: String
-  public let value: String
+  /// The fact's name is always ours.
+  public let label: Message
+  /// Its value may be ours ("incomplete for this basin") or the source's (a club's name), so
+  /// it is a `Wording` and the two can never be confused for one another.
+  public let value: Wording
 }
 
 /// One VoiceOver element standing in for one painted block.
@@ -228,7 +236,7 @@ public struct A11yBlock: Equatable, Sendable, Identifiable {
   public let id: String
   public let x: Double
   public let width: Double
-  public let label: String
+  public let label: Message
   public let customContent: [A11yFact]
 }
 
@@ -239,7 +247,9 @@ public struct A11yBlock: Equatable, Sendable, Identifiable {
 /// and the strip spans the whole horizon, so a sentence containing "today" or "now" would be
 /// read out on ninety-odd future dates. That bug has already been found twice in this app (see
 /// the plan's S3a notes); `a11yLabelsAreDayAgnostic` pins it here.
-public func a11yBlocks(for day: DayRibbon, width: Double) -> [A11yBlock] {
+public func a11yBlocks(
+  for day: DayRibbon, width: Double, in localized: Localized
+) -> [A11yBlock] {
   let axis = TimeAxis(width: width)
   return day.ribbons.enumerated().map { index, ribbon in
     let span = ribbon.window
@@ -249,78 +259,104 @@ public func a11yBlocks(for day: DayRibbon, width: Double) -> [A11yBlock] {
       // element spans the whole plot: there is no narrower thing for it to point at.
       x: span.map { axis.x(of: $0.start) } ?? 0,
       width: span.map { axis.width(of: $0) } ?? axis.width,
-      label: a11yLabel(for: ribbon),
-      customContent: a11yFacts(for: ribbon)
+      label: a11yLabel(for: ribbon, in: localized),
+      customContent: a11yFacts(for: ribbon, in: localized)
     )
   }
 }
 
 /// The block's spoken headline: when, and what kind of session.
-func a11yLabel(for ribbon: Ribbon) -> String {
+func a11yLabel(for ribbon: Ribbon, in localized: Localized) -> Message {
   guard let window = ribbon.window else {
-    // A status ribbon already carries the state's own sentence, which `dayStateLabel` wrote
-    // and `stateLabelsAreDayAgnostic` polices.
-    return ribbon.detail ?? "Hours not listed"
+    // A status ribbon says the STATE's own sentence, which `dayStateLabel` wrote and
+    // `stateLabelsAreDayAgnostic` polices. It used to read `ribbon.detail` — the export's own
+    // prose, which CLAUDE.md records as English in one branch and curated German in the other,
+    // i.e. the one string on this screen no catalog could ever reach. A ribbon decoded straight
+    // off a `/swim` payload carries no key, and says so rather than guessing a state.
+    guard let key = ribbon.labelKey else { return Message("state.notStated") }
+    return Message(key, ribbon.detailParams ?? [:])
   }
-  let hours = "\(window.start.hhmm) to \(window.end.hhmm)"
-  return "\(hours), \(accessDescription(ribbon.access))"
+  return Message(
+    "a11y.blockLabel",
+    [
+      "start": window.start.hhmm,
+      "end": window.end.hhmm,
+      "access": localized(accessDescription(ribbon.access)),
+    ])
 }
 
 /// The secondary facts. `.accessibilityCustomContent` reads these on request, which is what
 /// keeps the headline short enough to scan by ear while nothing is dropped.
-func a11yFacts(for ribbon: Ribbon) -> [A11yFact] {
+func a11yFacts(for ribbon: Ribbon, in localized: Localized) -> [A11yFact] {
+  let format = localized.format
   var facts: [A11yFact] = []
   if let basin = ribbon.basin, !basin.isEmpty {
-    facts.append(A11yFact(label: "Basin", value: basin))
+    // The basin's NAME is the pool's own ("Hauptbecken"), so it stays verbatim.
+    facts.append(A11yFact(label: Message("detail.fact.basin"), value: .verbatim(basin)))
   }
   if let segments = ribbon.segments, let first = segments.first {
     facts.append(
       A11yFact(
-        label: "Lanes open to the public",
-        value: "\(first.publicLanes) of \(first.laneCount)"))
+        label: Message("a11y.fact.publicLanes"),
+        value: .message(
+          Message(
+            "a11y.value.ofTotal",
+            [
+              "public": format.integer(first.publicLanes),
+              "total": format.integer(first.laneCount),
+            ]))))
     if first.partial == true {
-      facts.append(A11yFact(label: "Lane data", value: "incomplete for this basin"))
+      facts.append(
+        A11yFact(
+          label: Message("a11y.fact.laneData"),
+          value: .key("a11y.value.laneDataIncomplete")))
     }
   }
   if let stack = ribbon.strips {
-    facts.append(A11yFact(label: "Lanes", value: "\(stack.count)"))
+    facts.append(
+      A11yFact(label: Message("a11y.fact.lanes"), value: .verbatim(format.integer(stack.count))))
     let owners = stack.flatMap { $0.segments.compactMap(\.owner) }
     if let owner = owners.first {
+      // One owner is a proper noun and passes through; "and others" is ours, so the two-owner
+      // case is a message with the name as its parameter rather than an English suffix.
       facts.append(
         A11yFact(
-          label: "Reserved by",
-          value: Set(owners).count > 1 ? "\(owner) and others" : owner))
+          label: Message("a11y.fact.reservedBy"),
+          value: Set(owners).count > 1
+            ? .message(Message("a11y.value.ownerAndOthers", ["owner": owner]))
+            : .verbatim(owner)))
     }
   }
   if let best = ribbon.bestPublic {
     facts.append(
       A11yFact(
-        label: "Most lanes free",
-        value: "\(best.start) to \(best.end), \(best.publicLanes) lanes"))
+        label: Message("legend.lane.best"),
+        value: .message(
+          Message(
+            "panel.bestWindow",
+            ["start": best.start, "end": best.end],
+            count: best.publicLanes))))
   }
   if ribbon.variant == "unpublished" {
-    facts.append(A11yFact(label: "Lane split", value: "not published for this pool"))
+    facts.append(
+      A11yFact(
+        label: Message("a11y.fact.laneSplit"),
+        value: .key("a11y.value.laneSplitUnpublished")))
   }
   return facts
 }
 
 /// A spoken name for an access class. Never "open" for an arm this binary does not know: an
 /// unheard-of class is a reason to say "check with the pool", exactly as `eligibility` does.
-func accessDescription(_ access: String?) -> String {
-  switch access {
-  case "PublicSwim": return "Public swimming"
-  case "LaneSwim": return "Lane swimming"
-  case "FamilyTime": return "Family time"
-  case "WomenOnly": return "Women only"
-  case "SeniorsOnly": return "Seniors only"
-  case "AdultsOnly": return "Adults only"
-  case "SchoolReserved": return "Reserved for schools"
-  case "ClubReserved": return "Reserved for a club"
-  case "GirlsOnly": return "Girls only"
-  case "GenderDiverse": return "Gender-diverse session"
-  case "AccompaniedChildren": return "Accompanied children"
-  default: return "Session — check with the pool"
+///
+/// The SAME keys the legend screen uses, rather than a second spoken vocabulary: two wordings
+/// for one session type is how a screen reader and a legend come to disagree about who may
+/// enter, and nothing would have caught it.
+func accessDescription(_ access: String?) -> Message {
+  guard let explanation = accessExplanation(for: access ?? "") else {
+    return Message("access.unknown")
   }
+  return explanation.label
 }
 
 // MARK: - Hit testing
@@ -333,8 +369,10 @@ func accessDescription(_ access: String?) -> String {
 /// order because that is the block on top, which is what the finger is actually touching. Two
 /// blocks with the same span are genuinely indistinguishable by x alone — two basins with
 /// identical hours — so the rule picks the one drawn last rather than pretending otherwise.
-public func block(at position: Double, in day: DayRibbon, width: Double) -> A11yBlock? {
-  let blocks = a11yBlocks(for: day, width: width)
+public func block(
+  at position: Double, in day: DayRibbon, width: Double, localized: Localized
+) -> A11yBlock? {
+  let blocks = a11yBlocks(for: day, width: width, in: localized)
   var best: A11yBlock?
   for candidate in blocks
   where candidate.x <= position && position < candidate.x + candidate.width {

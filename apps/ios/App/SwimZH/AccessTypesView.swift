@@ -13,6 +13,8 @@ import SwiftUI
 import SwimZHKit
 
 struct AccessTypesView: View {
+  @Environment(\.localized) private var localized
+
   var body: some View {
     List {
       Section {
@@ -20,26 +22,25 @@ struct AccessTypesView: View {
           AccessTypeRow(explanation: explanation)
         }
       } footer: {
-        Text(
-          "A session's own rules always win: what a pool publishes for a particular hour is "
-            + "what this app shows, and these are the categories it sorts them into.")
+        Text(Message("accessTypes.footer"), localized)
       }
     }
     .listStyle(.insetGrouped)
-    .navigationTitle("Session types")
+    .navigationTitle(Text(Message("accessTypes.title"), localized))
     .navigationBarTitleDisplayMode(.inline)
   }
 }
 
 struct AccessTypeRow: View {
+  @Environment(\.localized) private var localized
   let explanation: AccessExplanation
 
   var body: some View {
     HStack(alignment: .top, spacing: 10) {
       swatch
       VStack(alignment: .leading, spacing: 2) {
-        Text(explanation.label).font(.subheadline.weight(.semibold))
-        Text(explanation.description)
+        Text(explanation.label, localized).font(.subheadline.weight(.semibold))
+        Text(explanation.description, localized)
           .font(.footnote)
           .foregroundStyle(.secondary)
           .fixedSize(horizontal: false, vertical: true)

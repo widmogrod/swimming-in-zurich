@@ -207,4 +207,21 @@ struct EligibilityContractTests {
     #expect(
       AccessParams.decode(json: #"{"min_age":18,"note":""}"#) == AccessParams(minAge: 18, note: ""))
   }
+
+  @Test("the badge's spoken label is the web's own eligibility vocabulary, in all five")
+  func voiceOverLabelsUseTheSharedVocabulary() {
+    // `UIMark.voiceOverLabel` lived in the app target's `Theme.swift` until S4, beside the
+    // colour and the SF Symbol — where nothing scored it and nothing could translate it. It is
+    // a SENTENCE, so it moved here, and the three keys are the ones the browser's own
+    // eligibility pills use: the two clients cannot come to say different things about who may
+    // enter the same session.
+    #expect(UIMark.attend.voiceOverLabel == Message("elig.in"))
+    #expect(UIMark.check.voiceOverLabel == Message("elig.chk"))
+    #expect(UIMark.no.voiceOverLabel == Message("elig.no"))
+    for (language, localized) in CatalogFixture.all {
+      let spoken = UIMark.allMarks.map { localized($0.voiceOverLabel) }
+      #expect(Set(spoken).count == 3, "\(language) collapses two marks into one sentence")
+      #expect(spoken.allSatisfy { !$0.isEmpty && !$0.contains(".") }, "\(language): \(spoken)")
+    }
+  }
 }

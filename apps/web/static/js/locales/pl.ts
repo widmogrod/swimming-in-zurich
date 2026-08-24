@@ -315,4 +315,275 @@ export const pl = {
   "mobile.filters": "Filtry",
   "mobile.today": "Dzisiaj",
   "mobile.lanePlan": "Plan torów",
+  // --- Natywna aplikacja iOS (native-ios-app S4) -----------------------------------
+  "state.openUnscheduled": "Otwarte, ale godziny nieopublikowane",
+  "state.beyondHorizon": "Poza opublikowanym horyzontem",
+  "state.beyondHorizon.body":
+    "Publikujemy odpowiedzi do {date}. To nie oznacza, że baseny są zamknięte — po prostu nie opracowaliśmy jeszcze tego dnia.",
+  "state.notStated": "Stan niepodany",
+  "state.unrecognised": "{status}",
+  "state.closed.outOfSeason": "Zamknięte — poza sezonem",
+  "state.closed.noSessions": "Zamknięte — brak zajęć",
+  "state.closed.unmapped": "Zamknięte — „{text}”",
+  "state.closed.unclassified": "Zamknięte — powód niesklasyfikowany",
+  "state.closed.other": "Zamknięte — {code}",
+  "state.closed.unstated": "Zamknięte — powód niepodany",
+
+  "tier.scheduled": "Otwarte tego dnia",
+  "verdict.notOpenToYou": "Nie dla Ciebie",
+  "verdict.hasSessions": "Ma zajęcia",
+  "headline.poolsWithSessions": {
+    one: "{count} basen z zajęciami",
+    few: "{count} baseny z zajęciami",
+    many: "{count} basenów z zajęciami",
+    other: "{count} basenu z zajęciami",
+  },
+  "row.moreToday": "+{count} więcej dzisiaj",
+  "row.moreThatDay": "+{count} więcej tego dnia",
+
+  "banner.calendarCoverage.title": "Niepełny kalendarz świąt",
+  "banner.holidayHoursUnverified.title": "Godziny świąteczne niepotwierdzone",
+  "banner.generic.title": "Uwaga",
+  "warning.calendar_coverage":
+    "Brak danych kalendarza na {year}; harmonogramy zależne od świąt mogą być niedokładne.",
+  "warning.holiday_hours_unverified":
+    "{date} to dzień świąteczny, a te baseny nie publikują swoich godzin świątecznych; pokazane godziny to ich zwykłe godziny dnia powszedniego i są niepotwierdzone: {pools}",
+  "warning.unknown": "{code}",
+
+  "access.public.desc":
+    "Otwarte pływanie publiczne — w tych godzinach może wejść każdy.",
+  "access.lane.desc":
+    "Pływanie na torach (Bahnenschwimmen) — publiczne, z podziałem na tory do pływania i treningu.",
+  "access.family.desc":
+    "Zajęcia dla rodzin i dzieci — publiczne, pomyślane z myślą o rodzinach.",
+  "access.women.desc":
+    "Zajęcia tylko dla kobiet (Frauenbad / Frauenschwimmen) — zarezerwowane dla kobiet.",
+  "access.seniors.desc":
+    "Zajęcia dla seniorów — zarezerwowane dla gości od 60. roku życia.",
+  "access.school.desc":
+    "Zarezerwowane dla klas szkolnych — niedostępne publicznie.",
+  "access.club.desc":
+    "Zarezerwowane dla klubu lub stowarzyszenia — niedostępne publicznie.",
+  "access.adults.desc":
+    "Publiczne okno tylko dla dorosłych — zarezerwowane dla gości od 18. roku życia (typowe dla wieczornego pływania w basenach szkolnych).",
+  "access.girls.desc":
+    "Zajęcia tylko dla dziewcząt (für Mädchen) — basen nie podaje granicy wieku, więc potwierdź w obiekcie.",
+  "access.genderDiverse.desc":
+    "Zajęcia dla osób transpłciowych i niebinarnych od 16. roku życia.",
+  "access.accompanied.desc":
+    "Dla dzieci wyłącznie pod opieką osoby dorosłej (für Kinder nur mit Erwachsenen).",
+  // Nigdy „pływanie publiczne” dla nieznanego rodzaju zajęć — to powód, by zapytać.
+  "access.unknown": "Zajęcia — zapytaj w basenie",
+
+  "poolKind.indoor": "Basen kryty",
+  "poolKind.outdoor": "Basen odkryty",
+  "poolKind.lake": "Kąpielisko jeziorne",
+  "poolKind.river": "Kąpielisko rzeczne",
+  "poolKind.thermal": "Basen termalny",
+  "poolKind.school": "Basen szkolny",
+  "poolKind.paddling": "Brodzik",
+  "poolKind.unknown": "{kind}",
+
+  "detail.section.where": "Gdzie",
+  "detail.section.admission": "Wstęp",
+  "detail.section.season": "Sezon",
+  "detail.section.basins": "Niecki",
+  "detail.section.features": "Udogodnienia",
+  "detail.section.lockers": "Szafki",
+  "detail.section.rentals": "Wypożyczalnia",
+  "detail.section.lanes": "Plany torów",
+  "detail.section.provenance": "Skąd pochodzą te dane",
+
+  "detail.fact.address": "Adres",
+  "detail.fact.phone": "Telefon",
+  "detail.fact.website": "Strona",
+  "detail.fact.about": "O obiekcie",
+  "detail.fact.schedule": "Harmonogram",
+  "detail.fact.entry": "Wstęp",
+  "detail.fact.yourRate": "Twoja stawka",
+  "detail.fact.pricesRead": "Ceny odczytano",
+  "detail.fact.tariffPage": "Cennik",
+  "detail.fact.lastAdmission": "Ostatnie wejście",
+  "detail.fact.season": "Sezon otwarcia",
+
+  "freshness.scraped": "Opublikowane przez basen",
+  "freshness.awaiting": "Jeszcze nieopublikowane",
+  "freshness.noSource": "Brak harmonogramu do odczytania",
+  "freshness.unknown": "Nierozpoznany stan: {state}",
+  "freshness.awaiting.caveat":
+    "Ten basen ma stronę z harmonogramem, ale nie została ona jeszcze wczytana do tej aplikacji.",
+  "freshness.noSource.caveat":
+    "Ten basen nie publikuje własnego harmonogramu. To nie to samo co zamknięty.",
+  "freshness.unknown.caveat":
+    "Ta aplikacja nie rozpoznaje tego stanu; zapytaj w basenie.",
+
+  "priceCategory.adult": "Dorośli",
+  "priceCategory.youth": "Młodzież",
+  "priceCategory.child": "Dzieci",
+  "priceCategory.senior": "Seniorzy",
+  "priceCategory.unknown": "{category}",
+  "price.minAgeCaveat": "Opublikowane dla wieku od {minAge} lat.",
+  "price.staleCaveat":
+    "Ceny pochodzą ze strony samego basenu i mogą się zmienić bez uprzedzenia.",
+
+  "admission.free": "Bezpłatny",
+  "admission.tariff": "Płatny — zobacz cennik poniżej",
+  // NIE „bezpłatny”: niepodany wstęp jest po prostu nieznany.
+  "admission.unknown": "Nieopublikowany — zapytaj w basenie",
+  "detail.lastAdmission.value": "{duration} przed zamknięciem",
+
+  "season.range": "{from}–{to}",
+  "season.rangeWithDays": "{startDay} {from} – {endDay} {to}",
+  "season.fairWeatherCaveat":
+    "Opublikowane dla ładnej pogody; przy złej pogodzie basen może nie otworzyć.",
+
+  "basin.fact.size": "Wymiary",
+  "basin.fact.lanes": "Tory",
+  "basin.fact.water": "Woda",
+  "basin.fact.diving": "Skoki",
+  "basin.fact.lanePlan": "Plan torów",
+  "basin.size.lengthByWidth": "{length} × {width}",
+  "basin.size.length": "{length}",
+  "basin.size.width": "szerokość {width}",
+  "basin.tempNominalCaveat": "Temperatura podana przez basen, nie pomiar.",
+  "basin.parsedProseCaveat":
+    "Odczytane z opisu na stronie basenu, więc może być przybliżone.",
+  "basinKind.swimmer": "Basen pływacki",
+  "basinKind.non_swimmer": "Basen dla nieumiejących pływać",
+  "basinKind.diving": "Basen do skoków",
+  "basinKind.learner": "Basen do nauki pływania",
+  "basinKind.paddling": "Brodzik",
+  "basinKind.multi_purpose": "Basen wielofunkcyjny",
+  "basinKind.thermal": "Basen termalny",
+  "basinKind.outdoor": "Basen odkryty",
+  "basinKind.unknown": "{kind}",
+
+  "feature.fact.surcharge": "Dopłata",
+  "feature.fact.temperature": "Temperatura",
+  "feature.fact.hours": "Godziny tego dnia",
+  "feature.hoursNotListed": "Godziny nieopublikowane na ten dzień",
+  "feature.closed": "Zamknięte — {reason}",
+  // Człony pisane małą literą — czytane WEWNĄTRZ `feature.closed`.
+  "closureClause.out_of_season": "poza sezonem",
+  "closureClause.no_sessions": "brak godzin opublikowanych na ten dzień",
+  "closureClause.closure": "basen zgłasza zamknięcie",
+  "closureClause.unknown": "{reason}",
+  "featureKind.sauna": "Sauna",
+  "featureKind.gastronomy": "Restauracja lub kiosk",
+  "featureKind.sunbathing": "Trawnik do opalania",
+  "featureKind.playground": "Plac zabaw",
+  "featureKind.slide": "Zjeżdżalnia wodna",
+  "featureKind.wellness": "Strefa wellness",
+  "featureKind.sport": "Obiekt sportowy",
+  "featureKind.unknown": "{kind}",
+
+  "lockerKind.wardrobe": "Szafka na ubrania",
+  "lockerKind.valuables": "Skrytka na kosztowności",
+  "lockerKind.cabin": "Kabina do przebierania",
+  "lockerKind.unknown": "{kind}",
+  "rentalKind.towel": "Ręcznik",
+  "rentalKind.locker": "Szafka",
+  "rentalKind.deck_chair": "Leżak",
+  "rentalKind.swim_aid": "Sprzęt do pływania",
+  "rentalKind.unknown": "{kind}",
+  "fee.free": "Bezpłatne",
+  "fee.unstated": "Cena nieopublikowana",
+  "fee.amount": "{amount}",
+  "fee.perPeriod": "za {period}",
+  "fee.deposit": "kaucja {amount}",
+
+  "panel.bestWindow": {
+    one: "{start}–{end}, {count} tor",
+    few: "{start}–{end}, {count} tory",
+    many: "{start}–{end}, {count} torów",
+    other: "{start}–{end}, {count} toru",
+  },
+  // Formę wybiera liczba torów wypisanych w {lanes}; forma ułamkowa nie wystąpi tu
+  // w praktyce, ale musi być odrębna.
+  "panel.clubSlot.oneLane": "{start}–{end}, tor {lanes}",
+  "panel.clubSlot.manyLanes": "{start}–{end}, tory {lanes}",
+  "prov.fact.readFrom": "Odczytane ze",
+  "prov.fact.accurateAsOf": "Aktualne na",
+  "prov.fact.curation": "Opracowanie",
+  "prov.curated.yes": "Sprawdzone ręcznie",
+  "prov.curated.no": "Odczytane wprost ze strony basenu",
+
+  // --- Plany torów -----------------------------------------------------------------
+  "lane.incompleteCaveat":
+    "Nie wszystkie tory udało się odczytać z planu basenu, więc dane są niepełne.",
+  "lane.nonePublic": "brak torów otwartych dla publiczności",
+  "lane.nonePublic.partial":
+    "brak torów otwartych dla publiczności — niektórych torów nie odczytano",
+  "lane.publicOfTotal": {
+    one: "otwarty {public} z {count} toru",
+    few: "otwarte {public} z {count} torów",
+    many: "otwartych {public} z {count} torów",
+    other: "otwarte {public} z {count} toru",
+  },
+  "lane.publicOfTotal.partial": {
+    one: "otwarty {public} z {count} toru — niektórych torów nie odczytano",
+    few: "otwarte {public} z {count} torów — niektórych torów nie odczytano",
+    many: "otwartych {public} z {count} torów — niektórych torów nie odczytano",
+    other: "otwarte {public} z {count} toru — niektórych torów nie odczytano",
+  },
+  "lane.openToPublic": "otwarty dla publiczności",
+  "lane.spoken": "Tor {lane}, {start} do {end}, {holder}",
+
+  // --- VoiceOver nad wstęgą ---------------------------------------------------------
+  "a11y.blockLabel": "{start} do {end}, {access}",
+  "a11y.fact.publicLanes": "Tory otwarte dla publiczności",
+  "a11y.value.ofTotal": "{public} z {total}",
+  "a11y.fact.laneData": "Dane o torach",
+  "a11y.value.laneDataIncomplete": "niepełne dla tej niecki",
+  "a11y.fact.lanes": "Tory",
+  "a11y.fact.reservedBy": "Zarezerwowane przez",
+  "a11y.value.ownerAndOthers": "{owner} i inni",
+  "a11y.fact.laneSplit": "Podział torów",
+  "a11y.value.laneSplitUnpublished": "nieopublikowany dla tego basenu",
+  "a11y.selected": "Wybrane",
+
+  // --- Elementy interfejsu telefonu -------------------------------------------------
+  "nav.allPools": "Wszystkie baseny",
+  "nav.accessTypes": "Co oznaczają etykiety",
+  "nav.browse": "Przeglądaj",
+  "nav.findAPool": "Znajdź basen",
+  "accessTypes.title": "Rodzaje zajęć",
+  "accessTypes.footer":
+    "Zawsze decydują zasady samych zajęć: aplikacja pokazuje to, co basen publikuje na daną godzinę, a to są kategorie, do których je przypisuje.",
+  "browser.noMatch.body": "Spróbuj innej nazwy albo innego rodzaju.",
+  "browser.filterByKind": "Filtruj według rodzaju",
+  "browser.kind": "Rodzaj",
+  "browser.allKinds": "Wszystkie rodzaje",
+  "gantt.title": "Tory, godzina po godzinie",
+  "error.store.title": "Nie można odczytać danych o basenach",
+  "error.store.body":
+    "Nie udało się otworzyć dołączonych danych o basenach, więc nie ma czego pokazać. Ponowna instalacja aplikacji je przywróci.",
+  "state.none.body.phone":
+    "Spróbuj większego obszaru, innego dnia albo mniejszej liczby filtrów. To nie to samo co zamknięte.",
+  "meta.dataFrom": "Dane z",
+  "meta.answersThrough": "Odpowiedzi do",
+  "meta.offlineNote":
+    "Działa offline. Wszystko tutaj opracowano przed wydaniem aplikacji.",
+  "action.favourite": "Dodaj do ulubionych",
+  "action.unfavourite": "Usuń z ulubionych",
+  "action.showLanePlan": "Pokaż plan torów",
+  "action.hideLanePlan": "Ukryj plan torów",
+  "action.done": "Gotowe",
+  "session.fairWeather.badge": "Tylko przy ładnej pogodzie",
+  "filter.none": "Bez filtrów",
+  "filter.section.who": "Kto",
+  "filter.section.where": "Gdzie",
+  "filter.section.what": "Co",
+  "filter.eligibleOnly": "Tylko otwarte dla mnie",
+  "filter.eligibleOnly.toggle": "Tylko zajęcia otwarte dla mnie",
+  "filter.favourites": "Ulubione",
+  "filter.favouritesOnly.toggle": "Tylko moje ulubione",
+  "filter.measureFrom": "Mierz od",
+  "filter.within": "W promieniu",
+  "filter.anyDistance": "Dowolna odległość",
+  "filter.poolKinds": "Rodzaje basenów",
+  "filter.allKinds": "Wszystkie",
+  "place.anywhere": "Wszędzie",
+  "place.searchPrompt": "Szukaj miejsc",
+  "place.hb": "Zurych HB (dworzec główny)",
 } as const satisfies CatalogFor<"pl">;

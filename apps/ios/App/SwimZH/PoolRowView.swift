@@ -13,6 +13,7 @@ import SwiftUI
 import SwimZHKit
 
 struct PoolRowView: View {
+  @Environment(\.localized) private var localized
   let row: PoolRow
   let isFavourite: Bool
   /// Whether the answer is for the day the user is standing in. It reaches the canvas, which
@@ -39,10 +40,12 @@ struct PoolRowView: View {
     }
     .padding(.vertical, 2)
     .accessibilityElement(children: .combine)
-    .accessibilityLabel(accessibilityLabel)
+    .accessibilityLabel(Text(verbatim: accessibilityLabel))
     .swipeActions(edge: .leading) {
-      Button(isFavourite ? "Unfavourite" : "Favourite", systemImage: favouriteSymbol) {
-        onToggleFavourite()
+      Button(action: onToggleFavourite) {
+        Label(
+          Message(isFavourite ? "action.unfavourite" : "action.favourite"),
+          systemImage: favouriteSymbol, localized)
       }
       .tint(row.tier.accent)
     }
@@ -70,7 +73,7 @@ struct PoolRowView: View {
       favouriteMark
       Image(systemName: row.mark.symbol)
         .foregroundStyle(row.mark.accent)
-        .accessibilityLabel(row.mark.voiceOverLabel)
+        .accessibilityLabel(Text(row.mark.voiceOverLabel, localized))
       laneToggle
     }
   }
@@ -87,7 +90,8 @@ struct PoolRowView: View {
       }
       .buttonStyle(.plain)
       .contentShape(Rectangle())
-      .accessibilityLabel(isExpanded ? "Hide the lane plan" : "Show the lane plan")
+      .accessibilityLabel(
+        Text(Message(isExpanded ? "action.hideLanePlan" : "action.showLanePlan"), localized))
     }
   }
 
@@ -96,7 +100,9 @@ struct PoolRowView: View {
   /// Built from `dayRibbon(for:)` in the package, so the phone paints the same encoding the
   /// desktop board does from the same facts.
   private var tail: some View {
-    RibbonCanvas(day: dayRibbon(for: row), isToday: isToday, selection: $selectedBlock)
+    RibbonCanvas(
+      day: dayRibbon(for: row), isToday: isToday, selection: $selectedBlock,
+      localized: localized)
   }
 
   /// The expanded lane chart — ONE at a time, never 57 in the list.
@@ -130,13 +136,13 @@ struct PoolRowView: View {
       Image(systemName: "heart.fill")
         .font(.caption)
         .foregroundStyle(row.tier.accent)
-        .accessibilityLabel("Favourite")
+        .accessibilityLabel(Text(Message("action.favourite"), localized))
     }
   }
 
   private var verdict: some View {
     HStack(spacing: 4) {
-      Text(row.verdict.head).font(.subheadline.weight(.semibold))
+      Text(row.verdict.head, localized).font(.subheadline.weight(.semibold))
       verdictTail
       Spacer(minLength: 0)
       distance
@@ -146,7 +152,10 @@ struct PoolRowView: View {
   @ViewBuilder
   private var verdictTail: some View {
     if let tail = row.verdict.tail {
-      Text("· \(tail)").font(.subheadline).foregroundStyle(.secondary)
+      // The middot is PUNCTUATION between two whole clauses, not grammar joining two
+      // fragments — the same distinction the web's `insight.*` clause list makes. Each half is
+      // a translatable unit that stands on its own, which is why the separator can live here.
+      Text(verbatim: "· \(localized(tail))").font(.subheadline).foregroundStyle(.secondary)
     }
   }
 
@@ -155,13 +164,13 @@ struct PoolRowView: View {
     if let km = row.distanceKm {
       // `Measurement` formatting, not a hand-built string: it gets the unit, the separator and
       // the fraction right per locale, which the web pinned by test after getting it wrong.
-      Text(
-        Measurement(value: km, unit: UnitLength.kilometers),
-        format: .measurement(width: .abbreviated)
-      )
-      .font(.caption)
-      .foregroundStyle(.secondary)
-      .monospacedDigit()
+      // `Format`, not an inline `.measurement` style: the unit, the separator and the
+      // fraction are the READER's regional locale's, and this view has no business knowing
+      // that de-CH uses a dot where fr-CH uses a comma.
+      Text(verbatim: localized.format.distance(kilometres: km))
+        .font(.caption)
+        .foregroundStyle(.secondary)
+        .monospacedDigit()
     }
   }
 
@@ -171,7 +180,7 @@ struct PoolRowView: View {
   private var sessions: some View {
     VStack(alignment: .leading, spacing: 2) {
       ForEach(row.inlineOptions) { option in
-        SessionLine(option: option, isToday: isToday)
+        SessionLine(option: option, isToday: isToday, localized: localized)
       }
       moreSessions
     }
@@ -183,17 +192,23 @@ struct PoolRowView: View {
   @ViewBuilder
   private var moreSessions: some View {
     if let label = row.moreSessionsLabel {
-      Text(label)
+      Text(label, localized)
         .font(.caption)
         .foregroundStyle(.secondary)
     }
   }
 
+  /// The row's spoken headline: four independent clauses read as a list.
+  ///
+  /// A list, NOT a sentence. Each part stands on its own — a name, a verdict, its tail, an
+  /// eligibility mark — and the comma between them is punctuation, so no language has to accept
+  /// English word order. Every part is localised BEFORE it is joined; joining first and
+  /// translating after is the mistake this shape exists to make impossible.
   private var accessibilityLabel: String {
-    var parts = [row.poolName, row.verdict.head]
-    if let tail = row.verdict.tail { parts.append(tail) }
-    parts.append(row.mark.voiceOverLabel)
-    return parts.joined(separator: ", ")
+    var parts: [Wording] = [.verbatim(row.poolName), .message(row.verdict.head)]
+    if let tail = row.verdict.tail { parts.append(.message(tail)) }
+    parts.append(.message(row.mark.voiceOverLabel))
+    return localized(.joined(parts))
   }
 }
 
@@ -204,13 +219,17 @@ struct SessionLine: View {
   /// depends on it, because off today the store is asked at a fixed midday moment and nothing
   /// read from that moment may be spoken as a fact about now (invariant E1).
   let isToday: Bool
+  let localized: Localized
 
   var body: some View {
     HStack(spacing: 6) {
-      Text("\(option.window.start.hhmm)–\(option.window.end.hhmm)")
+      // A time RANGE, built from two store values and an en dash. Both halves are `HH:MM` as
+      // the store wrote them, and the dash is punctuation.
+      Text(verbatim: "\(option.window.start.hhmm)–\(option.window.end.hhmm)")
         .font(.caption)
         .monospacedDigit()
-      Text(option.basinName)
+      // The basin's own name, as the pool wrote it.
+      Text(verbatim: option.basinName)
         .font(.caption)
         .foregroundStyle(.secondary)
         .lineLimit(1)
@@ -221,7 +240,7 @@ struct SessionLine: View {
       Image(systemName: option.mark.symbol)
         .font(.caption2)
         .foregroundStyle(option.mark.accent)
-        .accessibilityLabel(option.mark.voiceOverLabel)
+        .accessibilityLabel(Text(option.mark.voiceOverLabel, localized))
     }
   }
 
@@ -235,8 +254,8 @@ struct SessionLine: View {
   /// wall clock to read it from.
   @ViewBuilder
   private var lanes: some View {
-    if let summary = option.laneSummary(isToday: isToday) {
-      Text(summary)
+    if let summary = option.laneSummary(isToday: isToday, format: localized.format) {
+      Text(summary, localized)
         .font(.caption2)
         .foregroundStyle(.secondary)
         .lineLimit(1)
@@ -255,20 +274,23 @@ struct SessionLine: View {
       Image(systemName: "sun.max")
         .font(.caption2)
         .foregroundStyle(.secondary)
-        .accessibilityLabel("Fair weather only")
+        .accessibilityLabel(Text(Message("session.fairWeather.badge"), localized))
     }
   }
 
   @ViewBuilder
   private var price: some View {
     if let price = option.price {
-      Text(price.display).font(.caption2).foregroundStyle(.secondary)
+      // The pool's OWN price line, quoted rather than rebuilt: it is a dated fact off their
+      // page, and re-formatting it would silently restate what they published.
+      Text(verbatim: price.display).font(.caption2).foregroundStyle(.secondary)
     }
   }
 }
 
 /// A day-level caveat, or a pool's own words.
 struct BannerView: View {
+  @Environment(\.localized) private var localized
   let banner: BannerModel
 
   var body: some View {
@@ -277,8 +299,10 @@ struct BannerView: View {
         .foregroundStyle(banner.kind.accent)
         .accessibilityHidden(true)
       VStack(alignment: .leading, spacing: 2) {
-        Text(banner.title).font(.subheadline.weight(.semibold))
-        Text(banner.text).font(.footnote).foregroundStyle(.secondary)
+        // A WARNING's two halves are ours; a NOTICE's are the pool's name and the pool's
+        // own sentence. `Wording` is what keeps the renderer from translating either.
+        Text(banner.title, localized).font(.subheadline.weight(.semibold))
+        Text(banner.text, localized).font(.footnote).foregroundStyle(.secondary)
       }
     }
     .accessibilityElement(children: .combine)

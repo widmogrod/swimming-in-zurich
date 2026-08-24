@@ -28,13 +28,15 @@ struct GanttBar: Identifiable {
   let start: Double
   let end: Double
   let isPublic: Bool
-  /// What VoiceOver reads for this mark — composed in `SwimZHKit` (`LaneHold.spoken(lane:)`),
-  /// where `a11yLabelsAreDayAgnostic` polices it. The panel is reachable from any date in
-  /// the horizon, so a sentence saying "today" would be read out on ninety-odd of them.
-  let spoken: String
+  /// What VoiceOver reads for this mark — composed in `SwimZHKit`
+  /// (`LaneHold.spoken(lane:in:)`), where `a11yLabelsAreDayAgnostic` polices it in all five
+  /// languages. The panel is reachable from any date in the horizon, so a sentence saying
+  /// "today" would be read out on ninety-odd of them.
+  let spoken: Message
 }
 
 struct LaneGanttView: View {
+  @Environment(\.localized) private var localized
   let panel: LanePanel
 
   var body: some View {
@@ -47,7 +49,7 @@ struct LaneGanttView: View {
   }
 
   private var header: some View {
-    Text("Lanes, hour by hour")
+    Text(Message("gantt.title"), localized)
       .font(.caption.weight(.semibold))
       .foregroundStyle(.secondary)
   }
@@ -63,7 +65,7 @@ struct LaneGanttView: View {
       .foregroundStyle(bar.isPublic ? Color("LanePublic") : Color("LaneReserved"))
       .cornerRadius(2)
       // Charts' free per-mark accessibility — the reason this one view is a chart at all.
-      .accessibilityLabel(bar.spoken)
+      .accessibilityLabel(Text(bar.spoken, localized))
     }
     .chartXScale(domain: Double(dayTailStartHour * 60)...Double(dayTailEndHour * 60))
     .chartXAxis { xAxis }
@@ -100,11 +102,11 @@ struct LaneGanttView: View {
       strip.holds.map { hold in
         GanttBar(
           id: "\(strip.lane)|\(hold.window.start.hhmm)|\(hold.window.end.hhmm)",
-          lane: "Lane \(strip.lane)",
+          lane: localized(Message("gantt.lane", ["lane": localized.format.integer(strip.lane)])),
           start: Double(hold.window.start.minutesSinceMidnight),
           end: Double(hold.window.end.minutesSinceMidnight),
           isPublic: hold.isPublic,
-          spoken: hold.spoken(lane: strip.lane))
+          spoken: hold.spoken(lane: strip.lane, in: localized))
       }
     }
   }
@@ -118,7 +120,7 @@ struct LaneGanttView: View {
   @ViewBuilder
   private var caveat: some View {
     if let sentence = panel.day.incompleteLanesCaveat {
-      Text(sentence)
+      Text(sentence, localized)
         .font(.caption2)
         .foregroundStyle(.secondary)
     }

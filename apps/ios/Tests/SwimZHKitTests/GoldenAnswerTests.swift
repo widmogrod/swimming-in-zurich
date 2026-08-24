@@ -24,6 +24,12 @@ import Testing
 
 @Suite("Golden answers")
 struct GoldenAnswerTests {
+  /// The English renderer. The golden fixture is Python's ENGLISH prose, so the warning
+  /// comparisons render `DayWarning.message` through the English catalog and keep comparing to
+  /// it byte for byte — `render_warning` is now the TEST's oracle rather than a second
+  /// implementation living in Swift.
+  static let en = CatalogFixture.english
+
   /// Read fresh per test: `[String: Any]` is not `Sendable`, and a static cache of it is a
   /// concurrency error rather than an optimisation worth having.
   static func cases() throws -> [[String: Any]] {
@@ -157,9 +163,14 @@ struct GoldenAnswerTests {
       statusesChecked += expectedStatuses.count
 
       // --- warnings (a whole-query fact, so not filtered by pool)
-      let expectedWarnings = (testCase["warnings"] as? [String] ?? []).sorted()
+      //
+      // Compared against the golden with its ONE machine date formatted — see
+      // `withFormattedDates`. Everything else is still byte-for-byte.
+      let expectedWarnings = (testCase["warnings"] as? [String] ?? [])
+        .map(Self.withFormattedDates).sorted()
       #expect(
-        answer.warnings.map(\.rendered).sorted() == expectedWarnings, "warnings for \(context)")
+        answer.warnings.map { Self.en($0.message(Self.en.format)) }.sorted() == expectedWarnings,
+        "warnings for \(context)")
       warningsChecked += expectedWarnings.count
 
       // Every pool-day is answered by EITHER sessions or a status, never both and never
@@ -177,23 +188,90 @@ struct GoldenAnswerTests {
     #expect(warningsChecked > 0)
   }
 
-  @Test("the two warning codes render exactly as find_swim_options renders them")
+  /// A golden warning, with its machine date rendered the way the CLIENT renders it.
+  ///
+  /// THE ONE DELIBERATE DIVERGENCE from `etl/ios_export.render_warning`, and it is worth being
+  /// precise about rather than hiding behind a looser comparison. Python interpolates
+  /// `params["date"]` as `date.isoformat()` — `2026-12-25` — because it is writing a machine
+  /// record. The client is writing to a reader, and a reader gets `25 December 2026` (and
+  /// `25 grudnia 2026` in Polish), which is what the browser has always shown for the same
+  /// fact. So the golden's date is formatted here and EVERY OTHER CHARACTER is still compared
+  /// byte for byte: the wording, the punctuation, the pool list, the order.
+  static func withFormattedDates(_ golden: String) -> String {
+    var out = golden
+    // A plain scan rather than `replacing(_:with:)`: the closure form of that method takes a
+    // `Collection`, not a `Regex`, and the two overloads read identically at the call site.
+    while let range = out.firstRange(of: /\b\d{4}-\d{2}-\d{2}\b/) {
+      out.replaceSubrange(range, with: Self.en.format.storeDate(String(out[range])))
+    }
+    return out
+  }
+
+  @Test("the two warning codes render as find_swim_options renders them, dates aside")
   func warningRendering() {
+    // Still the Python sentence, word for word — S4 moved the renderer into the catalog, not
+    // the standard. The ENGLISH catalog entry is the thing under test here; the other four are
+    // held to their own rule below.
     let coverage = DayWarning(code: DayWarning.calendarCoverage, params: ["year": "2027"])
     #expect(
-      coverage.rendered
+      Self.en(coverage.message(Self.en.format))
         == "calendar data not available for 2027; holiday-dependent schedules may be inaccurate"
     )
+    // A YEAR is not formatted: four digits are four digits in every locale here, and putting a
+    // year through a date formatter would invent a day and a month for it.
+    #expect(Self.en(coverage.message(Self.en.format)).contains("2027"))
+
     let holiday = DayWarning(
       code: DayWarning.holidayHoursUnverified,
       params: ["date": "2026-12-25", "pools": "Hallenbad City"]
     )
+    // The DATE is formatted, and this is the assertion that says so out loud.
     #expect(
-      holiday.rendered == """
-        2026-12-25 is a public holiday and these pools do not publish their holiday hours; \
-        the times shown are their usual weekday hours and are unconfirmed: Hallenbad City
+      Self.en(holiday.message(Self.en.format)) == """
+        25 December 2026 is a public holiday and these pools do not publish their holiday \
+        hours; the times shown are their usual weekday hours and are unconfirmed: \
+        Hallenbad City
         """
     )
+    // ...and it is the golden's own sentence, with only that field moved.
+    #expect(
+      Self.en(holiday.message(Self.en.format))
+        == Self.withFormattedDates(
+          """
+          2026-12-25 is a public holiday and these pools do not publish their holiday hours; \
+          the times shown are their usual weekday hours and are unconfirmed: Hallenbad City
+          """)
+    )
+    // Every language formats it its own way, and none of them leaks the ISO form.
+    for (language, localized) in CatalogFixture.all {
+      let said = localized(holiday.message(localized.format))
+      #expect(!said.contains("2026-12-25"), "\(language) leaks the machine date: \(said)")
+      #expect(said.contains("2026"), "\(language) lost the year: \(said)")
+    }
+  }
+
+  @Test("both warnings carry the query's own values into every language")
+  func warningParamsSurviveTranslation() {
+    // The golden fixture is Python's English and is silent about the other four, so what they
+    // can be held to is this: the year, the date and the pool NAMES are DATA, and a catalog
+    // that dropped a positional specifier would quietly render a warning about no year and no
+    // pools — a caveat that qualifies nothing, which is worse than no caveat at all.
+    let coverage = DayWarning(code: DayWarning.calendarCoverage, params: ["year": "2027"])
+    let holiday = DayWarning(
+      code: DayWarning.holidayHoursUnverified,
+      params: ["date": "2026-12-25", "pools": "Hallenbad City"]
+    )
+    for (language, localized) in CatalogFixture.all {
+      #expect(
+        localized(coverage.message(localized.format)).contains("2027"),
+        "\(language) dropped the year")
+      let said = localized(holiday.message(localized.format))
+      // The date SURVIVES, formatted for this reader — it must not vanish, and it must not
+      // arrive as the machine form. "2026" is the part every locale shares.
+      #expect(said.contains("2026"), "\(language) dropped the date")
+      #expect(!said.contains("2026-12-25"), "\(language) leaks the machine date: \(said)")
+      #expect(said.contains("Hallenbad City"), "\(language) dropped the pool names")
+    }
   }
 
   @Test("an unrecognised warning code renders as itself, never as the holiday sentence")
@@ -203,12 +281,22 @@ struct GoldenAnswerTests {
     // produced " is a public holiday and these pools do not publish their holiday hours;
     // ... : " — a fabricated claim about pools it never named.
     let unknown = DayWarning(code: "some_future_advisory", params: ["year": "2028"])
-    #expect(unknown.rendered == "some_future_advisory")
-    #expect(!unknown.rendered.contains("public holiday"))
+    let holiday = DayWarning(code: DayWarning.holidayHoursUnverified, params: [:])
+    // In EVERY language, because the passthrough is now a catalog entry (`warning.unknown`,
+    // "%@" in all five) and a translator who "improved" it into prose would be inventing
+    // exactly the fact this arm exists to refuse — in four languages English cannot see.
+    for (language, localized) in CatalogFixture.all {
+      #expect(localized(unknown.message(localized.format)) == "some_future_advisory", "\(language)")
+      // ...and it never borrows the holiday sentence. Compared as a WHOLE sentence rather than
+      // by an English phrase, so the claim can be made about all five.
+      #expect(
+        localized(unknown.message(localized.format))
+          != localized(holiday.message(localized.format)), "\(language)")
+    }
+    #expect(!Self.en(unknown.message(Self.en.format)).contains("public holiday"))
     // An EMPTY params map on a known code still renders that code's sentence — the shape is
     // decided by the code, not by which params happen to be present.
-    let holiday = DayWarning(code: DayWarning.holidayHoursUnverified, params: [:])
-    #expect(holiday.rendered.contains("public holiday"))
+    #expect(Self.en(holiday.message(Self.en.format)).contains("public holiday"))
   }
 
   @Test("a pool's own notice is carried through, in the pool's own words")

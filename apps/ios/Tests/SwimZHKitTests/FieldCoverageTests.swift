@@ -13,6 +13,12 @@ import Testing
 
 @Suite("Field coverage against the web response models")
 struct FieldCoverageTests {
+  /// The English renderer, and the `Format` the rule layer now needs to turn a value into
+  /// words. The evidence assertions below are about which ROW or FACT exists, so one language
+  /// is the right resolution for them — a field that reaches a swimmer's eye reaches it in all
+  /// five or in none, and `AccessExplainerTests` is where the catalog's coverage is policed.
+  static let en = CatalogFixture.english
+
   static func generatedFields() throws -> Set<String> {
     let object = try RepoFixtures.json(at: RepoFixtures.fieldCoverage)
     let fields = try #require(object["fields"] as? [String])
@@ -170,8 +176,10 @@ struct FieldCoverageTests {
     // feature AND a lane plan, so a one-pool check would have to drop three fields to pass.
     for pool in try await store.pools() {
       guard let detail = try await store.facility(poolID: pool.id, on: day) else { continue }
-      for section in detailSections(detail, on: day, for: Person(age: 30)) {
-        titles.insert(section.title)
+      for section in detailSections(
+        detail, on: day, for: Person(age: 30), in: Self.en)
+      {
+        titles.insert(Self.en(section.title))
         rowCount += section.rows.count
         ids.formUnion(section.rows.map(\.id))
       }
@@ -207,23 +215,25 @@ struct FieldCoverageTests {
       for option in answer.options where option.laneDayView != nil {
         checked += 1
         let ribbon = optionRibbon(option.ribbonInput)
+        let format = Self.en.format
         // lane_availability → the session line's own sentence, on today while it is running.
-        #expect(option.laneSummary(isToday: true) != nil)
+        #expect(option.laneSummary(isToday: true, format: format) != nil)
         // lane_timeline → the SAME line's off-today answer, which is its first segment's
         // split. (Its other consumer, the ribbon's thickness, is the `lanes` variant, which
         // no store row reaches — see `RibbonCanvas.drawLanes`.)
         let opening = try #require(option.laneTimeline?.segments.first?.availability)
-        #expect(option.laneSummary(isToday: false) == opening.summary)
+        #expect(option.laneSummary(isToday: false, format: format) == opening.summary(format))
         // lane_day_view → the stack's sub-rows.
         #expect(ribbon.variant == "lanestack", "\(option.poolID)")
         #expect((ribbon.strips?.count ?? 0) > 0)
-        // lane_best_public → the "Most lanes free" spoken fact. Asserted by ITS OWN label:
+        // lane_best_public → the "Most public lanes free" spoken fact. Asserted by ITS OWN
+        // label (`legend.lane.best`, rendered in English):
         // this used to assert `facts.contains("Lanes")`, which is the lane-stack fact and
         // would have passed unchanged with `lane_best_public` dropped entirely.
-        let facts = a11yFacts(for: ribbon).map(\.label)
+        let facts = a11yFacts(for: ribbon, in: Self.en).map { Self.en($0.label) }
         #expect(facts.contains("Lanes"))
         if option.laneBestPublic != nil {
-          #expect(facts.contains("Most lanes free"), "\(option.poolID)")
+          #expect(facts.contains("Most public lanes free"), "\(option.poolID)")
           bestPublicChecked += 1
         }
       }

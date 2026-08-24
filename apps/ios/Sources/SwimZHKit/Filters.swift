@@ -17,11 +17,11 @@ import Foundation
 /// nobody entered.
 public struct AgeBand: Equatable, Hashable, Sendable, Identifiable {
   public let id: String
-  public let label: String
+  public let label: Message
   /// nil = "any age": every age-gated session answers "check", never a guess.
   public let age: Int?
 
-  public init(id: String, label: String, age: Int?) {
+  public init(id: String, label: Message, age: Int?) {
     self.id = id
     self.label = label
     self.age = age
@@ -30,11 +30,11 @@ public struct AgeBand: Equatable, Hashable, Sendable, Identifiable {
   /// The same five bands and the same representative ages the web toolbar offers
   /// (`DEFAULT_AGE_CHIPS`), so the two clients cannot answer differently for "Adult".
   public static let all: [AgeBand] = [
-    AgeBand(id: "any", label: "Any age", age: nil),
-    AgeBand(id: "child", label: "Child", age: 8),
-    AgeBand(id: "teen", label: "Teen", age: 16),
-    AgeBand(id: "adult", label: "Adult", age: 34),
-    AgeBand(id: "senior", label: "Senior", age: 70),
+    AgeBand(id: "any", label: Message("toolbar.age.any"), age: nil),
+    AgeBand(id: "child", label: Message("toolbar.age.child"), age: 8),
+    AgeBand(id: "teen", label: Message("toolbar.age.teen"), age: 16),
+    AgeBand(id: "adult", label: Message("toolbar.age.adult"), age: 34),
+    AgeBand(id: "senior", label: Message("toolbar.age.senior"), age: 70),
   ]
 
   /// The band an age falls in, for restoring a saved filter. An age outside every band's
@@ -49,10 +49,12 @@ public struct AgeBand: Equatable, Hashable, Sendable, Identifiable {
 /// A named point to measure distance from.
 public struct Place: Equatable, Hashable, Sendable, Identifiable {
   public let id: String
-  public let label: String
+  /// Two of the three presets are bare proper nouns and stay verbatim; the station carries a
+  /// parenthetical gloss ("main station") that IS prose and so is a message.
+  public let label: Wording
   public let point: GeoPoint
 
-  public init(id: String, label: String, point: GeoPoint) {
+  public init(id: String, label: Wording, point: GeoPoint) {
     self.id = id
     self.label = label
     self.point = point
@@ -71,9 +73,10 @@ public struct Place: Equatable, Hashable, Sendable, Identifiable {
 /// more `Place` from a `CLLocationManager`, and nothing else here changes.
 public enum Places {
   public static let presets: [Place] = [
-    Place(id: "hb", label: "Zürich HB (main station)", point: GeoPoint(lat: 47.3779, lon: 8.5403)),
-    Place(id: "bellevue", label: "Bellevue", point: GeoPoint(lat: 47.3671, lon: 8.5451)),
-    Place(id: "zuerichhorn", label: "Zürichhorn", point: GeoPoint(lat: 47.3606, lon: 8.551)),
+    Place(id: "hb", label: .key("place.hb"), point: GeoPoint(lat: 47.3779, lon: 8.5403)),
+    Place(id: "bellevue", label: .verbatim("Bellevue"), point: GeoPoint(lat: 47.3671, lon: 8.5451)),
+    Place(
+      id: "zuerichhorn", label: .verbatim("Zürichhorn"), point: GeoPoint(lat: 47.3606, lon: 8.551)),
   ]
 
   /// The default origin, matching the web's `PLACE_PRESETS[0]`.
@@ -84,8 +87,12 @@ public enum Places {
   /// Diacritic folding is not a nicety here: the presets are Zürich place names and a phone
   /// keyboard makes "Zurich" far likelier than "Zürich". An empty query lists everything,
   /// which is what a combobox opening on focus needs.
-  public static func matching(_ query: String) -> [Place] {
-    presets.filter { $0.label.matchesSearch(query) }
+  ///
+  /// It matches against the RENDERED label, which is why it needs a `Localized` at all: a
+  /// French reader searching "gare" should find the station, and matching the key or the
+  /// English would silently fail for four of the five languages.
+  public static func matching(_ query: String, in localized: Localized) -> [Place] {
+    presets.filter { localized($0.label).matchesSearch(query) }
   }
 }
 
@@ -156,14 +163,18 @@ public struct Filters: Equatable, Sendable {
 
   /// The short captions the filter bar shows when it is collapsed. Only non-default values
   /// appear — a summary that always says "Any age" teaches nothing.
-  public var summaryTags: [String] {
-    var tags: [String] = []
+  public var summaryTags: [Wording] {
+    var tags: [Wording] = []
     if let place { tags.append(place.label) }
-    if let gender { tags.append(gender.rawValue.capitalized) }
-    if age != nil { tags.append(AgeBand.band(for: age).label) }
-    if eligibleOnly { tags.append("Open to me only") }
-    if favouritesOnly { tags.append("Favourites") }
-    if !kinds.isEmpty { tags.append(kinds.sorted().joined(separator: ", ")) }
+    if let gender { tags.append(.key("toolbar.gender.\(gender.rawValue)")) }
+    if age != nil { tags.append(.message(AgeBand.band(for: age).label)) }
+    if eligibleOnly { tags.append(.key("filter.eligibleOnly")) }
+    if favouritesOnly { tags.append(.key("filter.favourites")) }
+    // Kind tokens go through `poolKindLabel` rather than being joined raw. They used to be
+    // pasted in as the export's own words ("no_source"-shaped tokens like `school`), which was
+    // a domain token on screen — and would have become an UNTRANSLATED domain token on screen
+    // the moment the rest of this bar was localised.
+    tags += kinds.sorted().map { .message(poolKindLabel($0)) }
     return tags
   }
 }
