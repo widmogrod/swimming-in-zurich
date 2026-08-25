@@ -106,4 +106,40 @@ struct StripLayoutTests {
       #expect(layout.chipWidth > 0)
     }
   }
+
+  // MARK: - Hiding the strip while the list is read
+
+  @Test("near the top the strip always shows, and deep in the list it never does")
+  func theTwoThresholds() {
+    let height = stripLayout(for: .large, width: 400).stripHeight
+    for showing in [true, false] {
+      #expect(stripShouldShow(scrolled: 0, stripHeight: height, showing: showing))
+      #expect(
+        stripShouldShow(scrolled: stripShowsWithin - 1, stripHeight: height, showing: showing))
+      #expect(
+        !stripShouldShow(
+          scrolled: stripHidesBeyond(stripHeight: height) + 1, stripHeight: height,
+          showing: showing))
+      #expect(!stripShouldShow(scrolled: 5000, stripHeight: height, showing: showing))
+    }
+  }
+
+  @Test("between them nothing changes, so the strip cannot flap")
+  func theBandHolds() {
+    let height = stripLayout(for: .large, width: 400).stripHeight
+    for scrolled in [stripShowsWithin, stripHidesBeyond(stripHeight: height)] {
+      #expect(stripShouldShow(scrolled: scrolled, stripHeight: height, showing: true))
+      #expect(!stripShouldShow(scrolled: scrolled, stripHeight: height, showing: false))
+    }
+  }
+
+  @Test("the band clears the strip at EVERY text size", arguments: TypeSize.allCases)
+  func theBandClearsTheInset(size: TypeSize) {
+    // The number that makes the feedback loop impossible, stated rather than assumed. A fixed
+    // band was written first and this test rejected it: at an accessibility size the strip is
+    // three times as tall, so the jump hiding it causes was wider than the band meant to absorb
+    // it — the loop would have come back exactly where the layout is already under most strain.
+    let height = stripLayout(for: size, width: 400).stripHeight
+    #expect(stripHidesBeyond(stripHeight: height) - stripShowsWithin > height)
+  }
 }

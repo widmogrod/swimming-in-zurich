@@ -127,6 +127,15 @@ public struct Filters: Equatable, Sendable {
   public var radiusKm: Double?
   public var favouritesOnly: Bool
 
+  /// Whether the list is showing less than everything. The DAY is not a narrowing — every
+  /// answer is about some day, so counting it would make the control read as "on" always and
+  /// tell a reader nothing. Search is not one either: while you are typing, the field itself
+  /// is the visible evidence.
+  public var isNarrowed: Bool {
+    gender != nil || age != nil || eligibleOnly || !kinds.isEmpty || place != nil
+      || radiusKm != nil || favouritesOnly
+  }
+
   public init(
     day: String,
     gender: Gender? = nil,

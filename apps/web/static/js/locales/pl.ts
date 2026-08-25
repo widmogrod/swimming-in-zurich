@@ -543,6 +543,11 @@ export const pl = {
   "a11y.selected": "Wybrane",
 
   // --- Elementy interfejsu telefonu -------------------------------------------------
+  "nav.map": "Mapa",
+  "nav.list": "Lista",
+  "action.directions": "Trasa",
+  "action.call": "Zadzwoń",
+  "action.openInMaps": "Otwórz w Mapach",
   "nav.allPools": "Wszystkie baseny",
   "nav.accessTypes": "Co oznaczają etykiety",
   "nav.browse": "Przeglądaj",

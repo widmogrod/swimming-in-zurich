@@ -8,6 +8,25 @@
 // no `if`/`switch` appears directly inside the row `ForEach`'s element.
 //
 // No `.glassEffect()` here either: rows are the content layer, and glass cannot sample glass.
+//
+// WHAT THE HIG REVIEW CHANGED HERE, and why each one was a real defect rather than a taste:
+//
+//  * THE ROW WAS ONE ACCESSIBILITY ELEMENT. `.accessibilityElement(children: .combine)` merged
+//    the whole subtree into a single label — which swallowed the navigation link, the lane
+//    disclosure, and every one of the ribbon's hand-built `a11yBlocks`. The app paid for canvas
+//    accessibility explicitly (see `RibbonCanvas`) and then hid it. It is `.contain` now: the
+//    row is a container whose children stay reachable, and the SUMMARY sentence moved onto the
+//    link, so one swipe still reads name, verdict and mark in one go.
+//  * ONLY THE NAME NAVIGATED. Everything else in the row was dead to a tap, while the all-pools
+//    browser made the whole row a link for the same destination. The title, the verdict and the
+//    sessions are one link now, full width.
+//  * THE LANE DISCLOSURE WAS AN 11-POINT CHEVRON. A bare `.caption` glyph is a control you can
+//    see and cannot reliably hit; the HIG asks for 44. It is a labelled row of its own now,
+//    under the ribbon, using the two catalog sentences that already existed for it — and being
+//    outside the link is what lets both be tapped without fighting.
+//  * TAPPING THE RIBBON DID NOTHING. The spatial hit test resolved a block and stored its id in
+//    a `@State` nothing rendered. The block's own sentence is shown now, which is what the hit
+//    test was always for.
 
 import SwiftUI
 import SwimZHKit
@@ -25,73 +44,130 @@ struct PoolRowView: View {
   let onToggleFavourite: () -> Void
   let onToggleExpanded: () -> Void
 
-  @State private var selectedBlock: String?
+  /// The block the reader last tapped on the ribbon, or none.
+  ///
+  /// It holds the BLOCK, not its id: the id alone was what made this state unrenderable, and
+  /// therefore what made the tap dead. `block(at:)` already returns the whole thing, sentence
+  /// included, from the same axis the ribbon was painted with.
+  @State private var selectedBlock: A11yBlock?
 
   var body: some View {
     // ONE container. See the header. Everything the row can grow into — its day tail and its
     // expanded lane chart — lives inside this `VStack`, so the `ForEach` element that produced
     // it always resolves to exactly one view.
-    VStack(alignment: .leading, spacing: 6) {
-      header
-      verdict
-      sessions
+    VStack(alignment: .leading, spacing: Design.Space.snug) {
+      link
       tail
+      blockCaption
+      laneDisclosure
       expanded
     }
-    .padding(.vertical, 2)
-    .accessibilityElement(children: .combine)
-    .accessibilityLabel(Text(verbatim: accessibilityLabel))
+    .padding(.vertical, Design.Space.hair)
+    // `.contain`, NEVER `.combine`. See the header: combining swallowed the link, the
+    // disclosure and every ribbon block, which is the whole of this row's accessibility.
+    .accessibilityElement(children: .contain)
     .swipeActions(edge: .leading) {
       Button(action: onToggleFavourite) {
         Label(
           Message(isFavourite ? "action.unfavourite" : "action.favourite"),
           systemImage: favouriteSymbol, localized)
       }
-      .tint(row.tier.accent)
+      // The app's own tint, not the row's TIER colour. A swipe action that changes colour from
+      // row to row reads as a different action, and tier colour means something else here.
+      .tint(.accentColor)
     }
   }
 
-  private var favouriteSymbol: String { isFavourite ? "heart.slash" : "heart" }
+  private var favouriteSymbol: String { isFavourite ? Icon.unfavourite : Icon.favourite }
+
+  /// The row's answer, and the link to the whole story.
+  ///
+  /// Full width, so a tap anywhere on the text navigates — the same target the all-pools
+  /// browser has always had for the same destination. NO disclosure chevron of our own: `List`
+  /// draws one for this link even though it shares the row with the ribbon below it, and a
+  /// hand-drawn second one sat beside the system's in the simulator.
+  private var link: some View {
+    NavigationLink(value: Route.pool(row.poolID)) {
+      VStack(alignment: .leading, spacing: Design.Space.snug) {
+        header
+        verdict
+        sessions
+      }
+      .frame(maxWidth: .infinity, alignment: .leading)
+      .contentShape(Rectangle())
+    }
+    .buttonStyle(.plain)
+    .matchedTransitionSource(id: row.poolID, in: namespace)
+    // The four clauses, on the ONE element that both reads them and navigates.
+    .accessibilityLabel(Text(verbatim: accessibilityLabel))
+    // The swipe action, said out loud. VoiceOver surfaces swipe actions on a plain row; this
+    // row is a container, so the action is named here rather than hoped for.
+    .accessibilityAction(
+      named: Text(Message(isFavourite ? "action.unfavourite" : "action.favourite"), localized),
+      onToggleFavourite
+    )
+    // For `SwimZHUITests`, which drives the app instead of reading it. Not the English label:
+    // a test that queried a sentence would pass in one language and fail in four.
+    .accessibilityIdentifier("poolRow")
+  }
 
   private var header: some View {
-    HStack(alignment: .firstTextBaseline, spacing: 8) {
+    HStack(alignment: .firstTextBaseline, spacing: Design.Space.row) {
       Image(systemName: row.tier.symbol)
         .foregroundStyle(row.tier.accent)
         .accessibilityHidden(true)
-      // The name opens the facility sheet. `matchedTransitionSource` is HALF of the zoom
-      // transition — the destination carries the other half — and neither works alone.
-      NavigationLink(value: row.poolID) {
-        Text(row.poolName)
-          .font(.headline)
-          // A pool name is NEVER truncated: it is the one thing a row exists to say, and at an
-          // accessibility size it is allowed to take as many lines as it needs.
-          .fixedSize(horizontal: false, vertical: true)
-      }
-      .buttonStyle(.plain)
-      .matchedTransitionSource(id: row.poolID, in: namespace)
-      Spacer(minLength: 4)
+      Text(row.poolName)
+        .font(.rowTitle)
+        // A pool name is NEVER truncated: it is the one thing a row exists to say, and at an
+        // accessibility size it is allowed to take as many lines as it needs.
+        .fixedSize(horizontal: false, vertical: true)
+      Spacer(minLength: Design.Space.tight)
       favouriteMark
       Image(systemName: row.mark.symbol)
         .foregroundStyle(row.mark.accent)
         .accessibilityLabel(Text(row.mark.voiceOverLabel, localized))
-      laneToggle
     }
   }
 
   /// The disclosure for the per-lane chart, shown ONLY where there is a parsed lane plan to
-  /// show. A chevron that expands into nothing is worse than no chevron.
+  /// show. A control that expands into nothing is worse than no control.
+  ///
+  /// A labelled row rather than the 11-point chevron it replaces: it says what it will do, in
+  /// the reader's language, at a size the HIG's 44 points actually covers. Outside the link, so
+  /// the two targets never fight.
   @ViewBuilder
-  private var laneToggle: some View {
+  private var laneDisclosure: some View {
     if !panels.isEmpty {
       Button(action: onToggleExpanded) {
-        Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
-          .font(.caption)
-          .foregroundStyle(.secondary)
+        Label(
+          Message(isExpanded ? "action.hideLanePlan" : "action.showLanePlan"),
+          systemImage: isExpanded ? Icon.collapse : Icon.expand, localized
+        )
+        .font(.rowFact)
+        .foregroundStyle(.secondary)
+        .frame(minHeight: Design.hitTarget, alignment: .leading)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .contentShape(Rectangle())
       }
-      .buttonStyle(.plain)
-      .contentShape(Rectangle())
-      .accessibilityLabel(
-        Text(Message(isExpanded ? "action.hideLanePlan" : "action.showLanePlan"), localized))
+      // `.borderless`, so the List routes the tap here instead of to the row's link.
+      .buttonStyle(.borderless)
+      .accessibilityIdentifier("laneDisclosure")
+    }
+  }
+
+  /// The sentence for the ribbon block the reader tapped.
+  ///
+  /// It is the block's OWN label — the same `Message` VoiceOver reads for it — so the tap and
+  /// the screen reader answer with one sentence rather than two.
+  @ViewBuilder
+  private var blockCaption: some View {
+    if let block = selectedBlock {
+      Text(block.label, localized)
+        .font(.rowFact)
+        .foregroundStyle(.secondary)
+        .fixedSize(horizontal: false, vertical: true)
+        .accessibilityHidden(true)
+        .accessibilityIdentifier("blockCaption")
     }
   }
 
@@ -133,16 +209,18 @@ struct PoolRowView: View {
   @ViewBuilder
   private var favouriteMark: some View {
     if isFavourite {
-      Image(systemName: "heart.fill")
-        .font(.caption)
-        .foregroundStyle(row.tier.accent)
+      Image(systemName: Icon.favouriteMark)
+        .font(.rowFact)
+        // The app's TINT, not the row's tier colour: a heart is not a time of day, and tier
+        // colour is the vocabulary that says when a session runs.
+        .foregroundStyle(.tint)
         .accessibilityLabel(Text(Message("action.favourite"), localized))
     }
   }
 
   private var verdict: some View {
-    HStack(spacing: 4) {
-      Text(row.verdict.head, localized).font(.subheadline.weight(.semibold))
+    HStack(spacing: Design.Space.tight) {
+      Text(row.verdict.head, localized).font(.rowVerdict)
       verdictTail
       Spacer(minLength: 0)
       distance
@@ -155,7 +233,7 @@ struct PoolRowView: View {
       // The middot is PUNCTUATION between two whole clauses, not grammar joining two
       // fragments — the same distinction the web's `insight.*` clause list makes. Each half is
       // a translatable unit that stands on its own, which is why the separator can live here.
-      Text(verbatim: "· \(localized(tail))").font(.subheadline).foregroundStyle(.secondary)
+      Text(verbatim: "· \(localized(tail))").font(.rowVerdictTail).foregroundStyle(.secondary)
     }
   }
 
@@ -168,7 +246,7 @@ struct PoolRowView: View {
       // fraction are the READER's regional locale's, and this view has no business knowing
       // that de-CH uses a dot where fr-CH uses a comma.
       Text(verbatim: localized.format.distance(kilometres: km))
-        .font(.caption)
+        .font(.rowFact)
         .foregroundStyle(.secondary)
         .monospacedDigit()
     }
@@ -178,7 +256,7 @@ struct PoolRowView: View {
   /// `listModel` (`inlineSessionLimit`), not here: a threshold that governs what a swimmer
   /// sees is a rule, and a rule in a view body is one the CRAP gate never scores.
   private var sessions: some View {
-    VStack(alignment: .leading, spacing: 2) {
+    VStack(alignment: .leading, spacing: Design.Space.hair) {
       ForEach(row.inlineOptions) { option in
         SessionLine(option: option, isToday: isToday, localized: localized)
       }
@@ -193,7 +271,7 @@ struct PoolRowView: View {
   private var moreSessions: some View {
     if let label = row.moreSessionsLabel {
       Text(label, localized)
-        .font(.caption)
+        .font(.rowNote)
         .foregroundStyle(.secondary)
     }
   }
@@ -213,6 +291,24 @@ struct PoolRowView: View {
 }
 
 /// One session inside a row.
+///
+/// TWO LINES, NOT FIVE THINGS ON ONE, and a screenshot is what settled it. The single-row form
+/// put the window, the basin, the lane split, the price and two badges in one `HStack`, and on a
+/// real iPhone the widest row read:
+///
+///     06:00–  Schwimmer…  5 of 6 lanes…  Erwachsene (ab
+///     22:00                              20 J.) Fr. 8.00
+///
+/// — a time broken across two lines, a basin truncated, a lane summary truncated and a price
+/// wrapped mid-parenthesis. Every one of those is a fact the row was spending space to say and
+/// then not saying. The fix is not smaller type (the ramp already had it at its smallest) and
+/// not `minimumScaleFactor` (which makes a row of five sizes): it is to stop asking one line to
+/// hold two ranks.
+///
+/// So line one is WHEN AND WHERE — the window, the basin, and whether you may attend. Line two
+/// is WHAT IT COSTS AND WHAT IS LEFT — the lane split, the price, the fair-weather badge — and
+/// it is absent entirely when the source published none of them. Nothing truncates, because
+/// nothing is competing.
 struct SessionLine: View {
   let option: SwimOption
   /// Whether this answer is for the day the user is standing in. The lane line's wording
@@ -222,26 +318,52 @@ struct SessionLine: View {
   let localized: Localized
 
   var body: some View {
-    HStack(spacing: 6) {
+    VStack(alignment: .leading, spacing: Design.Space.hair) {
+      whenAndWhere
+      support
+    }
+  }
+
+  private var whenAndWhere: some View {
+    HStack(spacing: Design.Space.snug) {
       // A time RANGE, built from two store values and an en dash. Both halves are `HH:MM` as
-      // the store wrote them, and the dash is punctuation.
+      // the store wrote them, and the dash is punctuation. `fixedSize` because a broken time is
+      // not a time — everything else on the line yields before this does.
       Text(verbatim: "\(option.window.start.hhmm)–\(option.window.end.hhmm)")
-        .font(.caption)
+        .font(.rowFact)
         .monospacedDigit()
+        .fixedSize()
       // The basin's own name, as the pool wrote it.
       Text(verbatim: option.basinName)
-        .font(.caption)
+        .font(.rowFact)
         .foregroundStyle(.secondary)
         .lineLimit(1)
       Spacer(minLength: 0)
-      lanes
-      fairWeather
-      price
       Image(systemName: option.mark.symbol)
-        .font(.caption2)
+        .font(.rowNote)
         .foregroundStyle(option.mark.accent)
         .accessibilityLabel(Text(option.mark.voiceOverLabel, localized))
     }
+  }
+
+  /// The supporting half, or nothing at all. `@ViewBuilder` rather than an always-present row
+  /// with three optional children: an empty `HStack` still costs its spacing, and a two-point
+  /// gap under every session was visible as a ragged rhythm down the card.
+  @ViewBuilder
+  private var support: some View {
+    if hasSupport {
+      HStack(spacing: Design.Space.snug) {
+        lanes
+        price
+        fairWeather
+        Spacer(minLength: 0)
+      }
+    }
+  }
+
+  private var hasSupport: Bool {
+    option.laneSummary(isToday: isToday, format: localized.format) != nil || option.price != nil
+      || option.isFairWeatherOnly
   }
 
   /// "5 of 8 lanes open" — `OptionOut.lane_availability`, rendered.
@@ -256,9 +378,8 @@ struct SessionLine: View {
   private var lanes: some View {
     if let summary = option.laneSummary(isToday: isToday, format: localized.format) {
       Text(summary, localized)
-        .font(.caption2)
+        .font(.rowNote)
         .foregroundStyle(.secondary)
-        .lineLimit(1)
     }
   }
 
@@ -271,8 +392,8 @@ struct SessionLine: View {
   @ViewBuilder
   private var fairWeather: some View {
     if option.isFairWeatherOnly {
-      Image(systemName: "sun.max")
-        .font(.caption2)
+      Image(systemName: Icon.fairWeather)
+        .font(.rowNote)
         .foregroundStyle(.secondary)
         .accessibilityLabel(Text(Message("session.fairWeather.badge"), localized))
     }
@@ -283,7 +404,7 @@ struct SessionLine: View {
     if let price = option.price {
       // The pool's OWN price line, quoted rather than rebuilt: it is a dated fact off their
       // page, and re-formatting it would silently restate what they published.
-      Text(verbatim: price.display).font(.caption2).foregroundStyle(.secondary)
+      Text(verbatim: price.display).font(.rowNote).foregroundStyle(.secondary)
     }
   }
 }
@@ -294,15 +415,15 @@ struct BannerView: View {
   let banner: BannerModel
 
   var body: some View {
-    HStack(alignment: .top, spacing: 8) {
+    HStack(alignment: .top, spacing: Design.Space.row) {
       Image(systemName: banner.kind.symbol)
         .foregroundStyle(banner.kind.accent)
         .accessibilityHidden(true)
-      VStack(alignment: .leading, spacing: 2) {
+      VStack(alignment: .leading, spacing: Design.Space.hair) {
         // A WARNING's two halves are ours; a NOTICE's are the pool's name and the pool's
         // own sentence. `Wording` is what keeps the renderer from translating either.
-        Text(banner.title, localized).font(.subheadline.weight(.semibold))
-        Text(banner.text, localized).font(.footnote).foregroundStyle(.secondary)
+        Text(banner.title, localized).font(.noticeTitle)
+        Text(banner.text, localized).font(.noticeBody).foregroundStyle(.secondary)
       }
     }
     .accessibilityElement(children: .combine)

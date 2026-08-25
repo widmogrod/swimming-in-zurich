@@ -498,6 +498,11 @@ export const it = {
   "a11y.selected": "Selezionato",
 
   // --- Interfaccia del telefono ------------------------------------------------------
+  "nav.map": "Mappa",
+  "nav.list": "Elenco",
+  "action.directions": "Indicazioni",
+  "action.call": "Chiama",
+  "action.openInMaps": "Apri in Mappe",
   "nav.allPools": "Tutte le piscine",
   "nav.accessTypes": "Cosa significano le etichette",
   "nav.browse": "Sfoglia",

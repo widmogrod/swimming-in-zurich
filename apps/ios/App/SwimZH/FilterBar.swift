@@ -1,11 +1,11 @@
 // FilterBar.swift — the floating filter bar and the sheet behind it.
 //
-// The bar is attached with `safeAreaBar(edge:)`, NOT `safeAreaInset` and NOT `overlay`. That is
-// the one modifier that extends the scroll edge effect under the bar, so the list visibly
-// passes beneath it instead of being clipped by a rectangle floating over it. It is also the
-// only place in the app that may apply `.glassEffect()` — a source lint enforces that, because
-// the HIG says not to put Liquid Glass in the content layer and glass cannot sample glass, so
-// a second glass surface renders inconsistently against this one.
+// NOBODY HERE PAINTS GLASS, and the comment that used to say this file was the one place
+// allowed to describes an app that no longer exists. The filter control is a toolbar item, so
+// the SYSTEM draws its bar, its Liquid Glass and its scroll edge effect. That is the whole
+// lesson of the iOS 26 guidance: you do not apply the material, you use the chrome that already
+// has it. The lint is now a flat ban — a `.glassEffect(` anywhere in the app target means
+// something is being hand-built again.
 //
 // The bar itself is a summary plus a button; the controls live in a sheet. That mirrors the
 // web, where the phone's sticky summary row IS the disclosure for the drawer — a filter bar
@@ -15,63 +15,38 @@
 import SwiftUI
 import SwimZHKit
 
-struct FilterBar: View {
-  @Environment(\.localized) private var localized
+/// The filter control, as ONE toolbar item.
+///
+/// It used to be a full-width capsule in a `safeAreaBar` of its own, carrying the headline
+/// sentence on a second line. That made it two rows tall and unable to share a bar with
+/// anything — so when iOS 26 drew its search field at the bottom (which is where iPhone
+/// search now lives), the two stacked, and the rows underneath were hidden behind both.
+///
+/// As a toolbar item it shares the system's bar, and its glass, with the search field. The
+/// headline moved into the list, where a fact belongs.
+struct FilterButton: View {
   @Binding var filters: Filters
   let kinds: [String]
-  /// The model's OWN headline. Not a count the bar formats: the sentence changes tense with
-  /// the day ("3 open to you" is a present-tense claim and may only be made about today) AND
-  /// its plural form is the reader's language's business, which is precisely why it arrives as
-  /// a `Message` carrying a count rather than as a finished string.
-  let headline: Message
+
+  @Environment(\.localized) private var localized
   @State private var showingFilters = false
 
   var body: some View {
     Button {
       showingFilters = true
     } label: {
-      HStack(spacing: 8) {
-        Image(systemName: "line.3.horizontal.decrease.circle")
-        summary
-        Spacer(minLength: 0)
-        Image(systemName: "chevron.up").font(.footnote)
+      Label {
+        Text(Message("mobile.filters"), localized)
+      } icon: {
+        Image(systemName: filters.isNarrowed ? Icon.filterActive : Icon.filter)
       }
-      .padding(.horizontal, 16)
-      .padding(.vertical, 10)
-      .contentShape(Rectangle())
     }
-    .buttonStyle(.plain)
-    // The ONE glass surface in the app. See the header.
-    .glassEffect(in: .capsule)
-    .padding(.horizontal)
-    .accessibilityLabel(Text(Message("mobile.filters"), localized))
+    // The value, not the label, is what changes — so a reader who has narrowed the list hears
+    // WHAT it is narrowed to, rather than the word "Filters" twice.
     .accessibilityValue(Text(.joined(filters.summaryTags), localized))
+    .accessibilityIdentifier("filterButton")
     .sheet(isPresented: $showingFilters) {
       FilterSheet(filters: $filters, kinds: kinds)
-    }
-  }
-
-  @ViewBuilder
-  private var summary: some View {
-    VStack(alignment: .leading, spacing: 1) {
-      Text(headline, localized)
-        .font(.subheadline.weight(.semibold))
-      // Each tag is a whole unit and the middot is punctuation between them, so every tag is
-      // localised BEFORE the join — a joined string handed to the catalog would be one opaque
-      // sentence in English word order.
-      summaryTags
-        .font(.caption)
-        .foregroundStyle(.secondary)
-        .lineLimit(1)
-    }
-  }
-
-  @ViewBuilder
-  private var summaryTags: some View {
-    if filters.summaryTags.isEmpty {
-      Text(Message("filter.none"), localized)
-    } else {
-      Text(verbatim: filters.summaryTags.map { localized($0) }.joined(separator: " · "))
     }
   }
 }
@@ -143,7 +118,10 @@ struct FilterSheet: View {
     } label: {
       Text(Message("toolbar.gender"), localized)
     }
-    .pickerStyle(.segmented)
+    // The Form's DEFAULT style, like the two pickers under it. Segmented put four labels in a
+    // fixed width in five languages: German and French truncated at ordinary text sizes and
+    // were unreadable at accessibility ones, and it was the only control in the sheet that did
+    // not look like the rest.
   }
 
   private var agePicker: some View {
@@ -232,7 +210,7 @@ struct FilterSheet: View {
     @ViewBuilder
     private func checkmark(_ candidate: Place) -> some View {
       if candidate == place {
-        Image(systemName: "checkmark")
+        Image(systemName: Icon.selected)
           .accessibilityLabel(Text(Message("a11y.selected"), localized))
       }
     }
@@ -249,6 +227,9 @@ struct FilterSheet: View {
       }
       .environment(\.editMode, .constant(.active))
       .navigationTitle(Text(Message("filter.poolKinds"), localized))
+      // Inline, like every other title in the app. This one screen was still opening with a
+      // large one, which is a different header height on the third push of the same flow.
+      .navigationBarTitleDisplayMode(.inline)
     } label: {
       LabeledContent {
         selectedKinds

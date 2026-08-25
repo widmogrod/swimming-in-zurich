@@ -51,6 +51,7 @@ final class TodayModel {
   private(set) var state: State = .loading
   private(set) var chips: [DayChip] = []
   private(set) var kinds: [String] = []
+
   private(set) var today: String = ""
   /// The whole roster, for the all-pools browser. 57 small value types — the pool cache the
   /// store actor already holds, handed over once rather than re-read per screen.
@@ -95,6 +96,35 @@ final class TodayModel {
   static let favouritesKey = "swimzh.favourites"
 
   func isFavourite(_ poolID: String) -> Bool { favourites.contains(poolID) }
+
+  /// Where every pool in the roster is, keyed by id.
+  ///
+  /// The ROSTER's coordinates, because that is the only place they live: neither a `PoolRow`
+  /// nor a `FacilityDetail` carries a point. Built on demand from `pools`, which is already in
+  /// memory and is 57 entries.
+  var geoByPool: [String: GeoPoint] {
+    var byPool: [String: GeoPoint] = [:]
+    for pool in pools {
+      guard let geo = pool.geo else { continue }
+      byPool[pool.id] = geo
+    }
+    return byPool
+  }
+
+  /// This pool's row inside the answer on screen, or nil when the answer does not contain it —
+  /// which is the ordinary case from the all-pools browser. The search is `SwimZHKit.findRow`,
+  /// so a rule the pool screen depends on is one a test drives.
+  func row(_ poolID: String) -> PoolRow? {
+    guard case .ready(let list, _) = state else { return nil }
+    return findRow(list.sections, poolID: poolID)
+  }
+
+  /// Whether the answer on screen is for the day the user is standing in. Read off the model
+  /// rather than recomputed, so the pool screen and the row it was pushed from cannot disagree.
+  var isToday: Bool {
+    guard case .ready(let list, _) = state else { return false }
+    return list.isToday
+  }
 
   func isExpanded(_ poolID: String) -> Bool { expandedPoolID == poolID }
 

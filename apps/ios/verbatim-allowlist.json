@@ -51,11 +51,6 @@
     },
     {
       "file": "FilterBar.swift",
-      "expression": "filters.summaryTags.map { localized($0) }.joined(separator: \" · \")",
-      "reason": "(c) each tag localised BEFORE the join; the middot is punctuation between clauses"
-    },
-    {
-      "file": "FilterBar.swift",
       "expression": "localized.format.distance(kilometres: km)",
       "reason": "(b) a Measurement formatted in the reader's regional locale"
     },
@@ -108,6 +103,36 @@
       "file": "TodayView.swift",
       "expression": "localized.format.storeDate(key)",
       "reason": "(b) a `meta` date key formatted for the reader; `stampRow` omits the whole row when the store carries no stamp"
+    },
+    {
+      "file": "PoolMapView.swift",
+      "expression": "pin.name",
+      "reason": "(a) the pool's own name, on its map pin and on the card the pin raises"
+    },
+    {
+      "file": "PoolMapView.swift",
+      "expression": "\"· \\(localized(tail))\"",
+      "reason": "(c) the verdict's second clause, localised on this line; the middot is punctuation between two whole clauses"
+    },
+    {
+      "file": "PoolMapView.swift",
+      "expression": "localized.format.distance(kilometres: km)",
+      "reason": "(b) a Measurement rendered by Format in the reader's regional locale"
+    },
+    {
+      "file": "PoolHeader.swift",
+      "expression": "detail.name",
+      "reason": "(a) the pool's own name — a proper noun, and the reason facility_id stays unrendered"
+    },
+    {
+      "file": "PoolHeader.swift",
+      "expression": "\"· \\(localized(.message(row.verdict.head)))\"",
+      "reason": "(c) the row's verdict, localised on this line; the middot is punctuation"
+    },
+    {
+      "file": "PoolHeader.swift",
+      "expression": "localized.format.distance(kilometres: km)",
+      "reason": "(b) a Measurement rendered by Format in the reader's regional locale"
     }
   ]
 }

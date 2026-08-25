@@ -89,9 +89,12 @@ extension Catalog {
     "access.women.desc": Entry(parameters: [], isPlural: false),
     "accessTypes.footer": Entry(parameters: [], isPlural: false),
     "accessTypes.title": Entry(parameters: [], isPlural: false),
+    "action.call": Entry(parameters: [], isPlural: false),
+    "action.directions": Entry(parameters: [], isPlural: false),
     "action.done": Entry(parameters: [], isPlural: false),
     "action.favourite": Entry(parameters: [], isPlural: false),
     "action.hideLanePlan": Entry(parameters: [], isPlural: false),
+    "action.openInMaps": Entry(parameters: [], isPlural: false),
     "action.showLanePlan": Entry(parameters: [], isPlural: false),
     "action.unfavourite": Entry(parameters: [], isPlural: false),
     "admission.free": Entry(parameters: [], isPlural: false),
@@ -526,6 +529,8 @@ extension Catalog {
     "nav.allPools": Entry(parameters: [], isPlural: false),
     "nav.browse": Entry(parameters: [], isPlural: false),
     "nav.findAPool": Entry(parameters: [], isPlural: false),
+    "nav.list": Entry(parameters: [], isPlural: false),
+    "nav.map": Entry(parameters: [], isPlural: false),
     "panel.bestWindow": Entry(
       parameters: [
         Parameter(name: "start", kind: .text),

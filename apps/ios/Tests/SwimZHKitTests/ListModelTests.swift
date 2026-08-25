@@ -465,6 +465,40 @@ struct ListModelTests {
       filters.summaryTags.map { Self.en($0) } == ["Favourites", "Indoor pool", "Outdoor pool"])
   }
 
+  @Test("the filter button fills for every control that narrows, and for nothing else")
+  func isNarrowedCoversEveryControl() {
+    // The filled glyph is the ONLY evidence a reader has that the list is showing less than
+    // everything — the controls themselves are behind a sheet. So each branch is named here:
+    // an untested predicate would have failed open (always filled) or shut (never), and both
+    // read as "this control does nothing".
+    let none = Filters(day: "2026-08-24", place: nil)
+    #expect(!none.isNarrowed)
+
+    for narrow in [
+      { (f: inout Filters) in f.gender = .female },
+      { (f: inout Filters) in f.age = 34 },
+      { (f: inout Filters) in f.eligibleOnly = true },
+      { (f: inout Filters) in f.kinds = ["indoor"] },
+      { (f: inout Filters) in f.place = Places.default },
+      { (f: inout Filters) in f.radiusKm = 2 },
+      { (f: inout Filters) in f.favouritesOnly = true },
+    ] {
+      var filters = none
+      narrow(&filters)
+      #expect(filters.isNarrowed)
+    }
+
+    // ...and the two that are deliberately NOT narrowings. Every answer is about some day, so
+    // counting the day would leave the control filled forever; and while you are typing, the
+    // search field on screen is its own evidence.
+    var dated = none
+    dated.day = "2026-12-24"
+    #expect(!dated.isNarrowed)
+    var searched = none
+    searched.search = "letzi"
+    #expect(!searched.isNarrowed)
+  }
+
   @Test("the six section titles are distinct, and only `closed` says closed")
   func tierTitlesAreDistinctAndHonest() {
     #expect(Tier.allCases == [.now, .soon, .past, .scheduled, .unknown, .closed])

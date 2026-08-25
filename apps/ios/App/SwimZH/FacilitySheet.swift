@@ -25,9 +25,28 @@ struct FacilitySheet: View {
   /// The instant the live reading's age is stated as of. Threaded in rather than read here, so
   /// the sheet and its loader cannot disagree about what "now" is — and so a test can state it.
   let asOf: Date
+  /// The answer's row for this pool, or nil when the screen was reached from the all-pools
+  /// browser. See `PoolHeader`.
+  let row: PoolRow?
+  /// Where the pool is, from the roster. The detail payload carries an address but no
+  /// coordinates, so this is threaded in rather than looked up here.
+  let point: GeoPoint?
+  let isToday: Bool
 
   var body: some View {
     List {
+      // THE SCREEN NO LONGER OPENS ON A TABLE. See `PoolHeader` for what replaced it and why
+      // every row below it survived the change.
+      Section {
+        PoolHeader(detail: detail, row: row, point: point, isToday: isToday)
+          .listRowInsets(
+            .init(
+              top: Design.Space.row, leading: Design.Space.gutter,
+              bottom: Design.Space.row, trailing: Design.Space.gutter)
+          )
+          .listRowBackground(Color.clear)
+          .listRowSeparator(.hidden)
+      }
       ForEach(sections) { section in
         Section {
           ForEach(section.rows) { row in
@@ -41,6 +60,7 @@ struct FacilitySheet: View {
       }
     }
     .listStyle(.insetGrouped)
+    .listSectionSpacing(.compact)
     // The sheet's rendered identity is the pool's NAME, never its id — which is why
     // `FacilityDetailOut.facility_id` stays deliberately omitted from `renderedFields`.
     .navigationTitle(Text(verbatim: detail.name))
@@ -59,7 +79,7 @@ struct DetailRowView: View {
   let row: DetailRow
 
   var body: some View {
-    VStack(alignment: .leading, spacing: 2) {
+    VStack(alignment: .leading, spacing: Design.Space.hair) {
       value
       caveat
     }
@@ -110,7 +130,7 @@ struct DetailRowView: View {
   private var caveat: some View {
     if let caveat = row.caveat {
       Text(caveat, localized)
-        .font(.caption2)
+        .font(.rowNote)
         .foregroundStyle(.secondary)
         .fixedSize(horizontal: false, vertical: true)
     }

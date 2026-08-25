@@ -502,6 +502,11 @@ export const fr = {
   "a11y.selected": "Sélectionné",
 
   // --- Interface du téléphone -------------------------------------------------------
+  "nav.map": "Carte",
+  "nav.list": "Liste",
+  "action.directions": "Itinéraire",
+  "action.call": "Appeler",
+  "action.openInMaps": "Ouvrir dans Plans",
   "nav.allPools": "Toutes les piscines",
   "nav.accessTypes": "Ce que signifient les libellés",
   "nav.browse": "Parcourir",

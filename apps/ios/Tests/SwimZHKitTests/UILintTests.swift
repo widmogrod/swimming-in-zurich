@@ -24,6 +24,14 @@
 // It lives in the PACKAGE's suite even though it polices the APP, because the app target's own
 // tests need a simulator while these are text on disk: `swift test` runs them on every push,
 // including on a runner with no simulator at all.
+//
+// AND THE LIMIT OF ALL OF IT: everything here reads SOURCE. A lint proves a modifier is present,
+// never what pressing it does. `.searchToolbarBehavior(.minimize)` was present, asserted below,
+// and commented in two files as putting search in the bottom bar — while the field collapsed
+// into the navigation bar and opening it took that bar away. Every check here was green; a
+// reader found it in one tap. `App/SwimZHUITests/BehaviourTests.swift` is the answer to that
+// class of defect, and the two suites are complements: this one is decidable and instant, that
+// one is the only thing that can say what the app DOES.
 
 import Foundation
 import Testing
@@ -644,18 +652,189 @@ struct UILintTests {
     )
   }
 
-  @Test("`.glassEffect()` appears only in the filter bar")
-  func glassOnlyInTheFilterBar() throws {
+  // MARK: - The design system: one decision, one place
+
+  /// The file that IS the design system. Every token lives there, so it is the one file the
+  /// bans below cannot apply to.
+  static let tokenFile = "Theme.swift"
+
+  /// The system font names. A `.font(.caption)` at a call site is a decision about RANK taken
+  /// five files away from the other four that had to agree with it — which is how "a price" and
+  /// "a distance" shipped as two different sizes in the same row.
+  static let bannedFontForms = [
+    ".font(.caption)", ".font(.caption2)", ".font(.footnote)", ".font(.headline)",
+    ".font(.subheadline", ".font(.title", ".font(.body)", ".font(.callout)",
+    ".font(.largeTitle)", ".font(.system(",
+  ]
+
+  @Test("every font in the app comes from the type ramp, not from a system name")
+  func fontsComeFromTheRamp() throws {
+    // `.font(.rowFact)` and friends are declared in `Theme.swift`; nothing else may name a size.
+    // `.font(.system(size:))` is the worst of them and had one live site: the ribbon's hour
+    // labels, the only text in the app a reader with large type could not enlarge.
+    for file in try Self.appFiles() where file.name != Self.tokenFile {
+      let code = Self.code(file.text)
+      for form in Self.bannedFontForms {
+        #expect(
+          !code.contains(form),
+          "\(file.name) names a system font (\(form)) — ask the ramp in \(Self.tokenFile)")
+      }
+    }
+  }
+
+  @Test("every SF Symbol the app names is named in the icon list")
+  func glyphsComeFromTheIconList() throws {
+    // One glyph, one meaning. `questionmark.circle` was the tier for "we cannot tell", the mark
+    // for "check with the pool" AND the menu item for the colour legend; the two lists of pools
+    // showed the same "nothing matched" sentence under two different pictures. Neither is
+    // visible from any one file, which is exactly why the list has to be somewhere.
+    for file in try Self.appFiles() where file.name != Self.tokenFile {
+      let code = Self.code(file.text)
+      for form in ["systemName: \"", "systemImage: \""] {
+        #expect(
+          !code.contains(form),
+          "\(file.name) names an SF Symbol inline — add it to `Icon` in \(Self.tokenFile)")
+      }
+    }
+  }
+
+  @Test("every corner radius comes from the scale")
+  func radiiComeFromTheScale() throws {
+    // 12, 3 and 2, in three files, with no rule between them. `RibbonCanvas` is exempt: its
+    // radii are GEOMETRY — half the height of the band being drawn — not a style choice.
+    for file in try Self.appFiles()
+    where file.name != Self.tokenFile && file.name != "RibbonCanvas.swift" {
+      let code = Self.code(file.text)
+      for match in code.matches(of: /cornerRadius[:(] ?([0-9]+)/) {
+        Issue.record("\(file.name) uses a raw corner radius (\(match.1)) — use `Design.Radius`")
+      }
+    }
+  }
+
+  // MARK: - One screen, one idiom
+
+  @Test("no screen pins its search field open")
+  func noScreenPinsItsSearchField() throws {
+    // `.always` is not a placement, it is a pin: the field never yields a row however far you
+    // scroll. `chromeYieldsToContent` has banned it on the find screen since S3b — and the
+    // all-pools browser was doing it anyway, so the app searched two different ways depending
+    // on which list you were looking at. The ban is app-wide now.
+    for file in try Self.appFiles() {
+      #expect(
+        !Self.code(file.text).contains("displayMode: .always"),
+        "\(file.name) pins its search field open")
+    }
+  }
+
+  @Test("both lists of pools reach search and filters the same way")
+  func theTwoListsShareOneIdiom() throws {
+    // They push the same destination and answer the same question about the same roster. One
+    // pinned its search field and hung its filter off a top-bar MENU while the other reached
+    // search from the bar and opened a filter SHEET — wearing the same glyph for both.
+    for name in ["TodayView.swift", "PoolsBrowser.swift"] {
+      let file = try #require(try Self.appFiles().first { $0.name == name })
+      let code = Self.code(file.text)
+      #expect(code.contains(".searchToolbarBehavior(.minimize)"), "\(name): search is resident")
+      #expect(
+        code.contains("ToolbarItem(placement: .bottomBar)"),
+        "\(name): the filter control is not in the system's bottom bar")
+      // AND THE SEARCH FIELD IS ACTUALLY DOWN THERE WITH IT. `.minimize` says the field is
+      // collapsed, not where: without this item it collapses into the NAVIGATION bar, next to
+      // the browse menu, and opening search takes that bar over so the menu disappears. Every
+      // comment in both files claimed the two shared one bar while they did not — which is
+      // exactly the class of claim a lint has to carry, because prose cannot be run.
+      #expect(
+        code.contains("DefaultToolbarItem(kind: .search, placement: .bottomBar)"),
+        "\(name): search collapses into the top bar, not the bar the filter is in")
+    }
+  }
+
+  @Test("every screen's title is inline")
+  func titlesAreInline() throws {
+    // A large title on one screen of a flow and an inline one on the next is a header that
+    // changes height as you push. The browser opened large; the kind picker, three pushes into
+    // the filter sheet, still did.
+    for file in try Self.appFiles() {
+      let code = Self.code(file.text)
+      let titles = code.ranges(of: ".navigationTitle(").count
+      guard titles > 0 else { continue }
+      #expect(
+        code.ranges(of: ".navigationBarTitleDisplayMode(.inline)").count >= titles,
+        "\(file.name) has \(titles) titles and fewer inline modes")
+    }
+  }
+
+  // MARK: - Accessibility: a control nothing can reach
+
+  /// The app's view declarations, one chunk each. `.combine` is a property of ONE view, so a
+  /// file-level scan would report the pool row's banner (which combines correctly) for the pool
+  /// row's own defect.
+  static func structChunks(in code: String) -> [String] {
+    code.components(separatedBy: "\nstruct ")
+  }
+
+  @Test("no view combines away a control or a canvas's own accessibility")
+  func controlsStayReachableToVoiceOver() throws {
+    // THE DEFECT THIS EXISTS FOR. `PoolRowView` combined its children into one element, which
+    // swallowed the navigation link, the favourite, the lane disclosure and every one of the
+    // ribbon's hand-built `a11yBlocks` — the app paid for canvas accessibility explicitly and
+    // then hid all of it behind one label. Combining is right for a row that is only text
+    // (a banner, a legend entry); it is wrong the moment the view builds something to press.
+    for file in try Self.appFiles() {
+      for chunk in Self.structChunks(in: Self.code(file.text))
+      where chunk.contains(".accessibilityElement(children: .combine)") {
+        for offender in ["NavigationLink(", ".accessibilityChildren"] {
+          #expect(
+            !chunk.contains(offender),
+            "\(file.name): a view combines its children AND builds \(offender) — use `.contain`")
+        }
+        #expect(
+          chunk.ranges(of: "Button(").count <= 1,
+          "\(file.name): a view combines its children and builds two or more buttons")
+      }
+    }
+  }
+
+  @Test("the pool row is a container, and its lane control is big enough to hit")
+  func thePoolRowIsAContainer() throws {
+    let row = try #require(try Self.appFiles().first { $0.name == "PoolRowView.swift" })
+    let code = Self.code(row.text)
+    #expect(code.contains(".accessibilityElement(children: .contain)"))
+    // The lane disclosure was a `.caption` chevron — about 11 points, which is a control you
+    // can see and cannot reliably hit. The HIG asks for 44 and the token says so once.
+    #expect(
+      code.contains("minHeight: Design.hitTarget"),
+      "the lane disclosure no longer states a minimum hit target")
+    // ...and the whole row navigates, rather than the pool's name alone.
+    #expect(code.contains(".frame(maxWidth: .infinity, alignment: .leading)"))
+  }
+
+  @Test("the ribbon's hit test resolves to something the row can render")
+  func theRibbonTapIsNotDead() throws {
+    // It stored the block's ID in a `@State` nothing read, so the gesture ran, resolved a block
+    // through the axis, and changed nothing on screen for two slices.
+    let row = try #require(try Self.appFiles().first { $0.name == "PoolRowView.swift" })
+    let code = Self.code(row.text)
+    #expect(code.contains("@State private var selectedBlock: A11yBlock?"))
+    #expect(
+      code.contains("Text(block.label, localized)"),
+      "the tapped block's own sentence is not rendered — the tap is dead again")
+  }
+
+  @Test("`.glassEffect()` is applied nowhere; the system paints the bar")
+  func nothingPaintsItsOwnGlass() throws {
     // The HIG: "Don't use Liquid Glass in the content layer", and "glass can not sample other
     // glass" — so a second glass surface renders inconsistently against the first. The filter
     // bar is the app's one bar, and it is the only place this may appear.
+    // Stronger than it used to be. This once permitted ONE hand-painted glass surface — the
+    // custom filter bar — and banned the rest. That bar is gone: the filter control is a
+    // toolbar item, so the SYSTEM paints its glass, in its own bar, with the scroll edge
+    // effect that comes with it. The app now paints none at all, which is the whole lesson of
+    // the iOS 26 guidance: you do not apply the material, you use the chrome that already has
+    // it. A `.glassEffect(` reappearing here means something is being hand-built again.
     for file in try Self.appFiles() where Self.code(file.text).contains(".glassEffect(") {
-      let site = "\(file.name) applies .glassEffect() outside the filter bar"
-      #expect(file.name == "FilterBar.swift", "\(site) — glass cannot sample glass")
+      Issue.record("\(file.name) paints its own glass; the system paints the toolbar's")
     }
-    let bar = try #require(try Self.appFiles().first { $0.name == "FilterBar.swift" })
-    // ...and it really is applied there, so the lint above cannot pass because glass vanished.
-    #expect(Self.code(bar.text).contains(".glassEffect("))
   }
 
   @Test("the filter bar is attached with safeAreaBar, never safeAreaInset or an overlay")
@@ -668,15 +847,79 @@ struct UILintTests {
     #expect(!code.contains(".safeAreaInset("))
   }
 
-  @Test("search is INLINE WITH CONTENT, because it filters rather than navigates")
-  func searchIsInlineWithContent() throws {
+  @Test("nothing pins the chrome open, and both bars hang off the SCROLLING view")
+  func chromeYieldsToContent() throws {
     let view = try #require(try Self.appFiles().first { $0.name == "TodayView.swift" })
     let code = Self.code(view.text)
     #expect(code.contains(".searchable("))
-    // The HIG blesses the inline placement for FILTERING, which is all this search does — it
-    // never pushes a result screen. `.navigationBarDrawer(displayMode: .always)` is that
-    // placement: the field sits below the title, in the scrolling content.
-    #expect(code.contains(".navigationBarDrawer(displayMode: .always)"))
+
+    // This lint used to REQUIRE `.navigationBarDrawer(displayMode: .always)`, on the reading
+    // that it was the HIG's blessed inline-for-filtering placement. `.always` is not a
+    // placement — it is a pin, and it is why the field never yielded a row no matter how far
+    // you scrolled. The HIG's point is about WHERE search sits, not about keeping it open.
+    #expect(
+      !code.contains("displayMode: .always"),
+      "`.always` pins the search field open; the default yields it on scroll")
+    // Search is REACHED, not resident. `.searchToolbarBehavior(.minimize)` did that, but on a
+    // screen that already owns a bottom bar it added a SECOND stacked bottom surface. The
+    // property that matters is that the field is presented on demand and the control lives in
+    // the bar the thumb is already near — so the lint checks that, not a modifier name.
+    #expect(
+      code.contains(".searchToolbarBehavior(.minimize)"),
+      "the search field is reached from the toolbar, never resident in a row of its own")
+    // ONE bottom bar, and it is the system's. Two custom attempts stacked a second surface
+    // under the field iOS 26 already draws at the bottom; the filter control is a toolbar
+    // item now, so it shares that bar and the system insets the list for both.
+    #expect(
+      code.contains("ToolbarItem(placement: .bottomBar)"),
+      "the filter control shares the system's bottom bar with the search field")
+    #expect(
+      !code.contains(".safeAreaBar(edge: .bottom)"),
+      "a bar of our own at the bottom stacks under the system's search field")
+
+    // NO TITLE AT ALL on this screen. It used to spell the day out while the strip underneath
+    // drew the same fact — one thing said twice, costing a row of a phone screen for the copy
+    // you cannot tap. The strip is the one that stays.
+    #expect(
+      !code.contains(".navigationTitle("),
+      "the find screen is naming the day again, above a strip that already says it")
+    #expect(!code.contains("Message(\"app.title\")"))
+    // NO NAVIGATION BAR EITHER. Once the title went, the bar was a full row of chrome holding
+    // one overflow button — the same height the title cost, saying nothing. The controls moved
+    // to the bottom bar and the bar went with them.
+    #expect(
+      code.contains(".toolbarVisibility(.hidden, for: .navigationBar)"),
+      "the find screen has a navigation bar again — that is ~50 points of the list")
+    // ...and nothing is behind an ellipsis. Two destinations, neither of them a rarely-wanted
+    // variant of anything, were costing two taps each and a bar to hang the menu on.
+    #expect(
+      !code.contains("Icon.browse"),
+      "the overflow menu is back; both of its items are one-tap controls now")
+    // ...and the strip yields to the content rather than sitting there for the whole scroll.
+    // Whether it shows is the KIT's rule; a threshold in a `body` is one nothing measures.
+    #expect(
+      code.contains("stripShouldShow(") && code.contains(".onScrollGeometryChange("),
+      "the day strip no longer yields to the list")
+    // NEVER from inside the scroll callback: that runs on every frame of a drag, and starting
+    // an animation there is what stopped the app ever reporting itself idle.
+    #expect(
+      !code.contains("withAnimation"),
+      "an animation is being started from the scroll callback again")
+
+    // The defect this lint exists to prevent from returning. A `VStack` between the
+    // navigation bar and the `List` leaves the bar with no scroll view to respond to: the
+    // title never collapses and neither bar receives the scroll edge effect, which IS the
+    // Liquid Glass. Both bars must attach to the scrolling view itself.
+    #expect(
+      !code.contains("VStack(spacing: 0) {"),
+      "a stack between the bar and the List is what broke the title collapse and the glass")
+    // The day strip is ours and rides the scroll view. The bottom bar is the SYSTEM's, shared
+    // with the search field — a `safeAreaBar` of our own down there stacked a second surface
+    // under the field iOS 26 already draws, and hid the rows behind both.
+    #expect(code.contains(".safeAreaBar(edge: .top)"))
+    #expect(
+      !code.contains(".safeAreaBar(edge: .bottom)"),
+      "the bottom bar belongs to the system, and it already has the search field in it")
   }
 
   @Test("the iOS 26 day-strip adoptions are actually in the strip")

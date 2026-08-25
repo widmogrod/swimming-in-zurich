@@ -27,7 +27,10 @@ struct RibbonCanvas: View {
   /// the present, so it is drawn ONLY on today — the same rule that stops the list from saying
   /// "Open now" about a date four months out.
   let isToday: Bool
-  let selection: Binding<String?>
+  /// The block the reader last tapped, held by the ROW. It carries the whole block rather than
+  /// its id, because the point of the hit test is the block's own sentence — an id is a thing
+  /// nothing can render, which is what made this tap dead for two slices.
+  let selection: Binding<A11yBlock?>
   /// Passed IN rather than read from the environment: the canvas's VoiceOver layout is built
   /// by `a11yBlocks`, which needs the renderer, and a row already holds one.
   let localized: Localized
@@ -35,9 +38,13 @@ struct RibbonCanvas: View {
   @Environment(\.scenePhase) private var scenePhase
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
   @ScaledMetric(relativeTo: .caption) private var height = 46
+  /// The hour labels' row. It SCALES: these were `.system(size: 9)`, the one fixed-size type in
+  /// the app, so the only text a reader with large type could not enlarge was the axis that
+  /// says what the picture means.
+  @ScaledMetric(relativeTo: .caption2) private var labelHeight = 12
 
   var body: some View {
-    VStack(alignment: .leading, spacing: 2) {
+    VStack(alignment: .leading, spacing: Design.Space.hair) {
       hourLabels
       plot
     }
@@ -51,14 +58,15 @@ struct RibbonCanvas: View {
     GeometryReader { proxy in
       ForEach(dayTailLabelHours, id: \.self) { hour in
         Text(verbatim: String(format: "%02d", hour))
-          .font(.system(size: 9))
+          .font(.rowNote)
           .monospacedDigit()
+          .minimumScaleFactor(0.8)
           .foregroundStyle(.secondary)
           .position(
             x: tickFraction(hour: hour) * proxy.size.width, y: proxy.size.height / 2)
       }
     }
-    .frame(height: 10)
+    .frame(height: labelHeight)
     .accessibilityHidden(true)
   }
 
@@ -74,10 +82,11 @@ struct RibbonCanvas: View {
       // renderer drew with — the third consumer of the one mapping.
       .gesture(
         SpatialTapGesture().onEnded { tap in
-          selection.wrappedValue =
-            block(
-              at: tap.location.x, in: day, width: proxy.size.width, localized: localized
-            )?.id
+          let tapped = block(
+            at: tap.location.x, in: day, width: proxy.size.width, localized: localized)
+          // Tapping the SAME block again puts the caption away. A selection with no way back
+          // is a row that grows once and never shrinks.
+          selection.wrappedValue = tapped?.id == selection.wrappedValue?.id ? nil : tapped
         }
       )
       .accessibilityChildren {
@@ -94,6 +103,7 @@ struct RibbonCanvas: View {
       }
     }
     .frame(height: height)
+    .accessibilityIdentifier("ribbon")
   }
 
   /// The STATIC half: everything that changes only when the answer does.

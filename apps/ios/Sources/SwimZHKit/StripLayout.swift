@@ -115,3 +115,39 @@ public func stripLayout(for size: TypeSize, width: Double) -> StripLayout {
     labelsCollapsed: size.isAccessibilitySize
   )
 }
+
+// MARK: - Hiding the strip while the list is read
+
+/// The list is near enough to the top that the strip belongs on screen.
+public let stripShowsWithin: Double = 40
+
+/// Clear air between the two thresholds, on top of the strip's own height.
+public let stripBandMargin: Double = 60
+
+/// How deep the list must be before the rows have earned the strip's height.
+///
+/// It is stated in terms of the strip's OWN height because that is what makes the band safe —
+/// see `stripShouldShow`. At an accessibility text size the strip is three times as tall, so a
+/// fixed number that cleared it at the default size would stop clearing it exactly where the
+/// layout is already under the most strain.
+public func stripHidesBeyond(stripHeight: Double) -> Double {
+  stripShowsWithin + stripHeight + stripBandMargin
+}
+
+/// Whether the day strip should be showing, at `scrolled` points down the list.
+///
+/// TWO THRESHOLDS, NOT ONE, AND THE GAP BETWEEN THEM IS THE WHOLE DESIGN. Hiding the strip
+/// shrinks the scroll view's top inset by the strip's own height, which moves the scroll
+/// position by that much all on its own. A single threshold — or a pair closer together than the
+/// strip is tall — therefore re-triggers itself: hide, jump, show, jump, forever. The first
+/// version of this was a DIRECTION rule (hide going down, show going up) and it did exactly
+/// that: `BehaviourTests` reported swipes that took eighty seconds and an app that never
+/// finished animating.
+///
+/// `scrolled` is measured from the TOP OF THE CONTENT (`contentOffset.y + contentInsets.top`),
+/// which is the same number before and after an inset change, for the same reason.
+public func stripShouldShow(scrolled: Double, stripHeight: Double, showing: Bool) -> Bool {
+  if scrolled < stripShowsWithin { return true }
+  if scrolled > stripHidesBeyond(stripHeight: stripHeight) { return false }
+  return showing
+}

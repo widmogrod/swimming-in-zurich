@@ -620,6 +620,11 @@ export const en = {
   "a11y.selected": "Selected",
 
   // --- Phone chrome -----------------------------------------------------------------
+  "nav.map": "Map",
+  "nav.list": "List",
+  "action.directions": "Directions",
+  "action.call": "Call",
+  "action.openInMaps": "Open in Maps",
   "nav.allPools": "All pools",
   "nav.accessTypes": "What the labels mean",
   "nav.browse": "Browse",

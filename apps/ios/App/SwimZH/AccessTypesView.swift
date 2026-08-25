@@ -36,27 +36,27 @@ struct AccessTypeRow: View {
   let explanation: AccessExplanation
 
   var body: some View {
-    HStack(alignment: .top, spacing: 10) {
+    HStack(alignment: .top, spacing: Design.Space.row) {
       swatch
-      VStack(alignment: .leading, spacing: 2) {
-        Text(explanation.label, localized).font(.subheadline.weight(.semibold))
+      VStack(alignment: .leading, spacing: Design.Space.hair) {
+        Text(explanation.label, localized).font(.noticeTitle)
         Text(explanation.description, localized)
-          .font(.footnote)
+          .font(.noticeBody)
           .foregroundStyle(.secondary)
           .fixedSize(horizontal: false, vertical: true)
       }
     }
-    .padding(.vertical, 2)
+    .padding(.vertical, Design.Space.hair)
     .accessibilityElement(children: .combine)
   }
 
   /// The ribbon's own colour for this family — the legend's whole purpose. Hidden from
   /// VoiceOver: the label beside it already says what it means, and "teal rectangle" does not.
   private var swatch: some View {
-    RoundedRectangle(cornerRadius: 3)
+    RoundedRectangle(cornerRadius: Design.Radius.swatch)
       .fill(familyColor(accessFamily(explanation.className)))
       .frame(width: 14, height: 14)
-      .padding(.top, 3)
+      .padding(.top, Design.Space.hair)
       .accessibilityHidden(true)
   }
 }

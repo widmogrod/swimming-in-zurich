@@ -40,17 +40,20 @@ struct LaneGanttView: View {
   let panel: LanePanel
 
   var body: some View {
-    VStack(alignment: .leading, spacing: 6) {
+    VStack(alignment: .leading, spacing: Design.Space.snug) {
       header
       chart
       caveat
     }
-    .padding(.top, 4)
+    .padding(.top, Design.Space.tight)
+    // For `SwimZHUITests`: the disclosure must EXPAND rather than navigate, and this is the
+    // only thing on screen that proves it expanded.
+    .accessibilityIdentifier("laneChart")
   }
 
   private var header: some View {
     Text(Message("gantt.title"), localized)
-      .font(.caption.weight(.semibold))
+      .font(.panelTitle)
       .foregroundStyle(.secondary)
   }
 
@@ -63,7 +66,7 @@ struct LaneGanttView: View {
         height: .fixed(10)
       )
       .foregroundStyle(bar.isPublic ? Color("LanePublic") : Color("LaneReserved"))
-      .cornerRadius(2)
+      .cornerRadius(Design.Radius.mark)
       // Charts' free per-mark accessibility — the reason this one view is a chart at all.
       .accessibilityLabel(Text(bar.spoken, localized))
     }
@@ -79,7 +82,7 @@ struct LaneGanttView: View {
       AxisGridLine()
       AxisValueLabel {
         Text(verbatim: hourLabel(value.as(Double.self)))
-          .font(.caption2)
+          .font(.rowNote)
           .monospacedDigit()
       }
     }
@@ -87,7 +90,7 @@ struct LaneGanttView: View {
 
   private var yAxis: some AxisContent {
     AxisMarks(preset: .aligned, position: .leading) { _ in
-      AxisValueLabel().font(.caption2)
+      AxisValueLabel().font(.rowNote)
     }
   }
 
@@ -121,7 +124,7 @@ struct LaneGanttView: View {
   private var caveat: some View {
     if let sentence = panel.day.incompleteLanesCaveat {
       Text(sentence, localized)
-        .font(.caption2)
+        .font(.rowNote)
         .foregroundStyle(.secondary)
     }
   }

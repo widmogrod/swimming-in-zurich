@@ -31,13 +31,14 @@ struct DayStrip: View {
   private var height: Double { stripLayout(for: typeSize, width: 0).stripHeight }
 
   var body: some View {
-    VStack(alignment: .leading, spacing: 4) {
+    VStack(alignment: .leading, spacing: Design.Space.tight) {
       legend
       GeometryReader { proxy in
         strip(stripLayout(for: typeSize, width: proxy.size.width))
       }
       .frame(height: height)
     }
+    .accessibilityIdentifier("dayStrip")
     .sensoryFeedback(.selection, trigger: selection)
     .onChange(of: selection) { _, day in
       position.scrollTo(id: day, anchor: .center)
@@ -53,14 +54,14 @@ struct DayStrip: View {
       // The formatter's own words for the date — read off its `DateFieldAttribute` runs by
       // `Format.dayParts`, never split out of a rendered string.
       Text(verbatim: chip.accessibilityLabel)
-        .font(.subheadline.weight(.semibold))
+        .font(.stripLegend)
         .padding(.horizontal)
     }
   }
 
   private func strip(_ layout: StripLayout) -> some View {
     ScrollView(.horizontal) {
-      LazyHStack(spacing: 8) {
+      LazyHStack(spacing: Design.Space.row) {
         ForEach(chips) { chip in
           chipButton(chip, layout: layout)
         }
@@ -89,21 +90,21 @@ struct DayStrip: View {
   }
 
   private func chipLabel(_ chip: DayChip, layout: StripLayout) -> some View {
-    VStack(spacing: 2) {
+    VStack(spacing: Design.Space.hair) {
       // At an accessibility size the caption is dropped rather than shrunk: the legend above
       // carries it, and squeezing three glyphs into a chip is the failure this rule exists to
       // avoid.
       captionText(chip, layout: layout)
-        .font(.caption2)
+        .font(.chipCaption)
         .foregroundStyle(.secondary)
         .lineLimit(1)
       Text(verbatim: chip.number)
-        .font(.headline)
+        .font(.chipNumber)
         .lineLimit(1)
         .minimumScaleFactor(0.8)
     }
     .frame(width: layout.chipWidth, height: layout.stripHeight)
-    .background(chipBackground(chip), in: .rect(cornerRadius: 12))
+    .background(chipBackground(chip), in: .rect(cornerRadius: Design.Radius.control))
     .overlay(chipBorder(chip))
     .overlay(alignment: .bottom) { todayMarker(chip) }
   }
@@ -126,7 +127,9 @@ struct DayStrip: View {
   /// contrast is the system's problem in both appearances. A saturated fill would force a
   /// hardcoded light-on-dark label colour, which is the literal the lint bans.
   private func chipBackground(_ chip: DayChip) -> Color {
-    chip.day == selection ? Color("ChipSelected").opacity(0.22) : Color("TierPast").opacity(0.12)
+    chip.day == selection
+      ? ChipColor.selected.opacity(ChipColor.selectedFill)
+      : ChipColor.idle.opacity(ChipColor.idleFill)
   }
 
   /// Selection is carried by a border as well as a tint — a second channel, for a reader who
@@ -134,7 +137,8 @@ struct DayStrip: View {
   @ViewBuilder
   private func chipBorder(_ chip: DayChip) -> some View {
     if chip.day == selection {
-      RoundedRectangle(cornerRadius: 12).strokeBorder(Color("ChipSelected"), lineWidth: 2)
+      RoundedRectangle(cornerRadius: Design.Radius.control)
+        .strokeBorder(ChipColor.selected, lineWidth: 2)
     }
   }
 
@@ -145,9 +149,9 @@ struct DayStrip: View {
   private func todayMarker(_ chip: DayChip) -> some View {
     if chip.isToday {
       Capsule()
-        .fill(Color("ChipToday"))
+        .fill(ChipColor.today)
         .frame(width: 18, height: 3)
-        .padding(.bottom, 4)
+        .padding(.bottom, Design.Space.tight)
     }
   }
 }

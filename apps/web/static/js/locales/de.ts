@@ -510,6 +510,11 @@ export const de = {
   "a11y.selected": "Ausgewählt",
 
   // --- Rahmen der App ---------------------------------------------------------------
+  "nav.map": "Karte",
+  "nav.list": "Liste",
+  "action.directions": "Route",
+  "action.call": "Anrufen",
+  "action.openInMaps": "In Karten öffnen",
   "nav.allPools": "Alle Bäder",
   "nav.accessTypes": "Was die Angaben bedeuten",
   "nav.browse": "Stöbern",
