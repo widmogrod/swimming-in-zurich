@@ -277,8 +277,8 @@ export const de = {
   "mobile.lanesUntil": "{public} von {total} Bahnen öffentlich bis {hhmm}",
 
   "mobile.openToYou": {
-    one: "{count} jetzt für dich offen",
-    other: "{count} jetzt für dich offen",
+    one: "{count} Bad jetzt für dich offen",
+    other: "{count} Bäder jetzt für dich offen",
   },
   "mobile.openToYouOn": {
     one: "{count} offen für dich am {day}",
@@ -307,6 +307,9 @@ export const de = {
   "tier.scheduled": "An diesem Tag offen",
   "verdict.notOpenToYou": "Nicht für Sie offen",
   "verdict.hasSessions": "Hat Zeiten",
+  "headline.noneNowNextAt":
+    "Jetzt nichts für dich offen — als Nächstes um {hhmm}",
+  "headline.noneLeftToday": "Heute nichts mehr für dich offen",
   "headline.poolsWithSessions": {
     one: "{count} Bad mit Zeiten",
     other: "{count} Bäder mit Zeiten",

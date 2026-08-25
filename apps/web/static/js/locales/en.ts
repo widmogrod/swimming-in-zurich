@@ -340,8 +340,8 @@ export const en = {
   "mobile.lanesUntil": "{public} of {total} lanes public until {hhmm}",
 
   "mobile.openToYou": {
-    one: "{count} open to you now",
-    other: "{count} open to you now",
+    one: "{count} pool open to you now",
+    other: "{count} pools open to you now",
   },
   "mobile.openToYouOn": {
     one: "{count} open to you on {day}",
@@ -385,6 +385,8 @@ export const en = {
   "tier.scheduled": "Open that day",
   "verdict.notOpenToYou": "Not open to you",
   "verdict.hasSessions": "Has sessions",
+  "headline.noneNowNextAt": "Nothing open to you now — next at {hhmm}",
+  "headline.noneLeftToday": "Nothing more open to you today",
   "headline.poolsWithSessions": {
     one: "{count} pool with sessions",
     other: "{count} pools with sessions",

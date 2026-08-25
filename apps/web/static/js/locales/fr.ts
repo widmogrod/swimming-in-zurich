@@ -263,9 +263,9 @@ export const fr = {
   "mobile.lanesUntil": "{public} couloirs sur {total} publics jusqu’à {hhmm}",
 
   "mobile.openToYou": {
-    one: "{count} ouvert pour vous maintenant",
-    many: "{count} ouverts pour vous maintenant",
-    other: "{count} ouverts pour vous maintenant",
+    one: "{count} piscine ouverte pour vous maintenant",
+    many: "{count} piscines ouvertes pour vous maintenant",
+    other: "{count} piscines ouvertes pour vous maintenant",
   },
   "mobile.openToYouOn": {
     one: "{count} ouvert pour vous {day}",
@@ -293,6 +293,9 @@ export const fr = {
   "tier.scheduled": "Ouvert ce jour-là",
   "verdict.notOpenToYou": "Pas pour vous",
   "verdict.hasSessions": "Des séances existent",
+  "headline.noneNowNextAt":
+    "Rien d'ouvert pour vous maintenant — prochaine à {hhmm}",
+  "headline.noneLeftToday": "Plus rien d'ouvert pour vous aujourd'hui",
   "headline.poolsWithSessions": {
     one: "{count} piscine avec des séances",
     many: "{count} piscines avec des séances",

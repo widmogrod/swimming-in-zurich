@@ -68,6 +68,9 @@ struct PoolMapView: View {
     .mapStyle(.standard(pointsOfInterest: .excluding([.marina])))
     .onAppear(perform: frame)
     .onChange(of: selectedID) { _, id in select(id) }
+    // A pin is a selection, like a day chip and like the mode switch — same feedback, because
+    // it is the same kind of act.
+    .sensoryFeedback(.selection, trigger: selectedID)
   }
 
   /// The card for the selected pin, and nothing at all when none is. A card that was always

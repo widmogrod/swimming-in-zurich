@@ -230,6 +230,10 @@ struct TodayView: View {
       // produced two stacked surfaces and left rows hidden behind them — the system insets
       // the scroll view for its own toolbar, and cannot for ours.
       .animation(.smooth(duration: 0.28), value: mode)
+      // The same feedback the day strip gives for the same kind of act: a selection moved. The
+      // strip has had it since S3b; the mode switch is the second control on this screen that
+      // changes what you are looking at without going anywhere.
+      .sensoryFeedback(.selection, trigger: mode)
       .toolbar {
         // THE SEARCH FIELD, PLACED. `.searchToolbarBehavior(.minimize)` says the field is
         // collapsed; it does not say WHERE, and the answer was the NAVIGATION bar — the field
@@ -345,6 +349,11 @@ struct TodayView: View {
       // that bar two lines tall and left it unable to share a row with anything.
       Text(list.headline, localized)
         .font(.screenHeadline)
+        // The count ROLLS rather than cutting when the day changes. `.numericText()` is the one
+        // content transition that understands digits, and this is the only line in the app
+        // whose leading token is one. It costs nothing on the branches with no number in them.
+        .contentTransition(.numericText())
+        .animation(.snappy(duration: 0.3), value: list.day)
         .listRowSeparator(.hidden)
         .listRowBackground(Color.clear)
         .listRowInsets(

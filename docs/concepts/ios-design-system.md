@@ -241,3 +241,56 @@ smaller type (the ramp was already at its smallest) and not `minimumScaleFactor`
 row of five sizes). It was to stop asking one line to hold two ranks: **when and where** on the
 first, **what it costs and what is left** on the second, and no second line at all when the
 source published none of it.
+
+## The headline never leads with a zero
+
+The largest sentence on the screen read **"0 open to you now"** — true, grammatically headless,
+and the least useful true thing it could have said, printed above a list whose very first row
+read "Opens 06:00".
+
+Two defects, one line:
+
+* **No noun.** All five catalogs said `{count} open to you now`. Open *what*? Fixed with the
+  plural entries the runtime already supports (`1 pool` / `2 pools`, `1 Bad` / `2 Bäder`, and
+  Polish's four forms), which is what `plurals.ts` exists for.
+* **The zero.** A count of none is not a quantity worth stating. `ListModel.headline` now
+  branches: a count when there is one, **"Nothing open to you now — next at 06:00"** when there
+  is not, and **"Nothing more open to you today"** when the day is done.
+
+`nextOpenToYou` is carried on the **row**, not derived once for the screen, and that is not
+tidiness: the favourites-only filter narrows the rows after the clock has been put away, and a
+headline pointing at a pool the reader has just asked not to see would be worse than the zero it
+replaced. It is also `mark == .attend`, not merely "the next session" — the sentence says *to
+you*, so the eligibility has to agree with the words. Nil off today, like every other
+present-tense claim in the model (E1).
+
+## The lane stack was an unreadable brick
+
+Six lanes across a 46-point band is six 6.1-point rows. The first version drew each as a
+square-cornered rectangle one point shorter than its slot, and painted reserved at 0.75 against
+public at 0.9. On a real iPhone that composited into a solid teal block: the gaps were a
+hairline, the corners were square so nothing separated one bar from the next, and the two states
+were a few per cent of opacity apart. The busiest pool in the city — the one row most worth
+glancing at — was the one row that said nothing.
+
+The web's `drawDayTail` has the same encoding, so this is a rendering choice rather than a port
+bug, and the golden fixture constrains the model and not the paint. Four changes:
+
+* `laneGap` takes a **third** of each slot rather than a point, so the stack reads as bars.
+* Every bar is **rounded to half its own height**, so it is a capsule at any lane count.
+* **Reserved is much fainter** (0.3 against 0.95), because the question the row answers is "can I
+  swim" — reserved is the answer's background, not half of a two-tone chart.
+* A faint **track** runs the session's whole width under the lanes. Without it, a stack with
+  holes in it and a stack that stops early are the same picture.
+
+## Delight, where it is a fact about the act
+
+`.sensoryFeedback` on the four controls that change what you are looking at without going
+anywhere: the day chip (since S3b), the favourite heart (`.impact(weight: .light)` — nothing
+succeeded, a switch moved), the list/map picker and a map pin (both `.selection`, because they
+are the same kind of act). Declarative, no UIKit import, and it obeys the reader's own haptics
+setting without any of these files having to ask.
+
+`.contentTransition(.numericText())` on the headline, so the count rolls rather than cuts when
+the day changes. It is the only line in the app whose leading token is a digit, and it costs
+nothing on the branches that have no number in them.

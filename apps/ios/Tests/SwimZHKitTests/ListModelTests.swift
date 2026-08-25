@@ -226,10 +226,56 @@ struct ListModelTests {
     #expect(built.isToday)
     #expect(built.sections[0].rows[0].tier == .now)
     #expect(Self.en(built.sections[0].rows[0].verdict.head) == "Open now")
-    // "…now" is the catalog's own wording for `mobile.openToYou`, which the phone now shares
-    // with the web rather than keeping a second English sentence of its own. The tense is the
-    // point either way: this line may only ever be said about today.
-    #expect(Self.en(built.headline) == "1 open to you now")
+    // "…now" is the catalog's own wording for `mobile.openToYou`, which the phone shares with
+    // the web rather than keeping a second English sentence of its own. The tense is the point
+    // either way: this line may only ever be said about today. The NOUN arrived with the
+    // zero-branch work below — every locale said "{count} open to you now", a headline with no
+    // head, in all five languages.
+    #expect(Self.en(built.headline) == "1 pool open to you now")
+  }
+
+  // MARK: - The headline never leads with a zero
+
+  @Test("nothing open right now points at the next opening instead of counting none")
+  func zeroBecomesTheNextOpening() {
+    // The screen used to open on "0 open to you now" — true, headless, and the least useful
+    // true thing it could say, printed at the largest size on the page above a list whose very
+    // first row read "Opens 09:00".
+    let answer = Self.answer(options: [Self.option(pool: "p", from: 9, to: 13)], day: "2026-08-24")
+    let built = Self.model(answer, today: "2026-08-24", at: TimeOfDay(hour: 7, minute: 0))
+    #expect(built.openToYouCount == 0)
+    #expect(built.nextOpenToYou == "09:00")
+    #expect(Self.en(built.headline) == "Nothing open to you now — next at 09:00")
+  }
+
+  @Test("the next opening is the EARLIEST across the whole answer, not the first row's")
+  func theNextOpeningIsTheEarliest() {
+    let answer = Self.answer(
+      options: [
+        Self.option(pool: "late", from: 14, to: 18),
+        Self.option(pool: "early", from: 10, to: 12),
+      ],
+      day: "2026-08-24")
+    let built = Self.model(answer, today: "2026-08-24", at: TimeOfDay(hour: 8, minute: 0))
+    #expect(built.nextOpenToYou == "10:00")
+  }
+
+  @Test("a day with nothing left says so rather than reporting a zero")
+  func nothingLeftToday() {
+    let answer = Self.answer(options: [Self.option(pool: "p", from: 9, to: 13)], day: "2026-08-24")
+    let built = Self.model(answer, today: "2026-08-24", at: TimeOfDay(hour: 21, minute: 0))
+    #expect(built.nextOpenToYou == nil)
+    #expect(Self.en(built.headline) == "Nothing more open to you today")
+  }
+
+  @Test("off today there is no `next`, because there is no clock to be next to")
+  func noNextOffToday() {
+    // The same invariant `openToYouCount` obeys (E1): off today the store is asked at a fixed
+    // midday moment, and nothing read from it may be spoken as a fact about now.
+    let answer = Self.answer(options: [Self.option(pool: "p", from: 9, to: 13)], day: "2026-12-20")
+    let built = Self.model(answer, today: "2026-08-24", at: TimeOfDay(hour: 7, minute: 0))
+    #expect(built.nextOpenToYou == nil)
+    #expect(Self.en(built.headline) == "1 pool with sessions")
   }
 
   @Test("an off-today verdict states the day's own hours")

@@ -301,10 +301,10 @@ export const pl = {
   "mobile.lanesUntil": "{public} z {total} torów publicznych do {hhmm}",
 
   "mobile.openToYou": {
-    one: "{count} otwarty teraz dla ciebie",
-    few: "{count} otwarte teraz dla ciebie",
-    many: "{count} otwartych teraz dla ciebie",
-    other: "{count} otwartego teraz dla ciebie",
+    one: "{count} basen otwarty teraz dla ciebie",
+    few: "{count} baseny otwarte teraz dla ciebie",
+    many: "{count} basenów otwartych teraz dla ciebie",
+    other: "{count} basena otwartego teraz dla ciebie",
   },
   "mobile.openToYouOn": {
     one: "{count} otwarty dla ciebie w {day}",
@@ -332,6 +332,9 @@ export const pl = {
   "tier.scheduled": "Otwarte tego dnia",
   "verdict.notOpenToYou": "Nie dla Ciebie",
   "verdict.hasSessions": "Ma zajęcia",
+  "headline.noneNowNextAt":
+    "Teraz nic dla ciebie otwartego — następny o {hhmm}",
+  "headline.noneLeftToday": "Dziś nic więcej dla ciebie otwartego",
   "headline.poolsWithSessions": {
     one: "{count} basen z zajęciami",
     few: "{count} baseny z zajęciami",

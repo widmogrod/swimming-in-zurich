@@ -139,6 +139,13 @@ public struct PoolRow: Equatable, Sendable, Identifiable {
   /// Why there are no sessions; nil when there are. Carries the fifth (horizon) state too.
   public let state: DayState?
   public let isFavourite: Bool
+  /// This pool's next session TODAY that the reader may attend, as `HH:MM`, or nil.
+  ///
+  /// Held on the ROW rather than derived once for the screen, because the favourites-only
+  /// filter narrows the rows after the clock has been put away — and a headline that pointed at
+  /// a pool the reader has just asked not to see would be worse than the zero it replaced.
+  /// Always nil off today: "next" is a present-tense claim (invariant E1).
+  public let nextOpenToYou: String?
   /// Whether a session is running now AND this person may attend it — what "open to you"
   /// counts, and what the row's accent keys off.
   public let openToYou: Bool
@@ -166,6 +173,11 @@ public struct ListModel: Equatable, Sendable {
   public let openToYouCount: Int
   /// Distinct pools with any session on this day — the off-today headline's number.
   public let scheduledPoolCount: Int
+  /// The next session TODAY that this person may attend, as `HH:MM`, or nil when there is
+  /// none left. Always nil off today, for the same reason `openToYouCount` is always zero
+  /// there: "next" is a claim about the present, and the store is asked at a fixed midday
+  /// moment on any other date.
+  public let nextOpenToYou: String?
   /// Whether this answer is for the day the user is standing in. False turns off every
   /// wall-clock claim in the model, which is the whole of finding B1.
   public let isToday: Bool
@@ -175,22 +187,31 @@ public struct ListModel: Equatable, Sendable {
 
   public var isEmpty: Bool { sections.isEmpty }
 
-  /// The one line the filter bar shows above its summary.
+  /// The one line above the list — the largest sentence on the screen.
   ///
-  /// It changes tense with the day, because the count does: "3 open to you" is a claim about
-  /// this minute and may only be made about today. On any other day the honest statement is how
-  /// many pools have sessions at all.
+  /// It changes tense with the day, because the count does: "3 pools open to you now" is a claim
+  /// about this minute and may only be made about today. On any other day the honest statement
+  /// is how many pools have sessions at all.
+  ///
+  /// IT NEVER LEADS WITH A ZERO, and that is the interesting branch. The screen used to open on
+  /// "0 open to you now" — true, grammatically headless, and the least useful true thing it
+  /// could have said, printed at the largest size on the page above a list whose very first row
+  /// read "Opens 06:00". A count of none is not a quantity worth stating; what the reader wants
+  /// at that moment is WHEN, which the answer already knows. So zero becomes the next opening,
+  /// and a day with nothing left says exactly that instead of counting it.
   public var headline: Message {
     // The horizon state FIRST. Past `horizon_end` both counts are structurally zero — there are
     // no rows to count — so either sentence would report a false zero ("0 pools with sessions")
     // beside a screen that correctly says we have not resolved this day yet.
     if beyondHorizon { return dayStateLabel(.beyondHorizon) }
-    // Both are PLURAL entries, so the count reaches Foundation as a number and the reader's own
-    // rules pick the form. English needs one/other here and Polish four; hard-coding "pools"
-    // with an interpolated number is precisely the broken grammar `plurals.ts` exists to stop.
-    return isToday
-      ? Message("mobile.openToYou", count: openToYouCount)
-      : Message("headline.poolsWithSessions", count: scheduledPoolCount)
+    // Off today there is no clock to read, so the count is of the DAY rather than of now.
+    guard isToday else { return Message("headline.poolsWithSessions", count: scheduledPoolCount) }
+    // A PLURAL entry, so the count reaches Foundation as a number and the reader's own rules
+    // pick the form. English needs one/other here and Polish four; hard-coding "pools" with an
+    // interpolated number is precisely the broken grammar `plurals.ts` exists to stop.
+    if openToYouCount > 0 { return Message("mobile.openToYou", count: openToYouCount) }
+    if let next = nextOpenToYou { return Message("headline.noneNowNextAt", ["hhmm": next]) }
+    return Message("headline.noneLeftToday")
   }
 }
 
@@ -227,6 +248,7 @@ public func listModel(
       banners: banners(for: answer, format: format),
       openToYouCount: 0,
       scheduledPoolCount: 0,
+      nextOpenToYou: nil,
       isToday: isToday,
       beyondHorizon: true
     )
@@ -240,6 +262,7 @@ public func listModel(
     banners: banners(for: answer, poolNames: poolNames(in: answer), format: format),
     openToYouCount: rows.filter(\.openToYou).count,
     scheduledPoolCount: rows.filter { !$0.options.isEmpty }.count,
+    nextOpenToYou: earliestOpening(rows),
     isToday: isToday,
     beyondHorizon: false
   )
@@ -317,6 +340,12 @@ private func sessionRow(
   // `covering` and `next` would be answers to a question nobody asked.
   let covering = isToday ? options.first(where: { $0.window.contains(time) }) : nil
   let next = isToday ? options.first(where: { time < $0.window.start }) : nil
+  // NOT `next`: that one is the next session of any kind, which is what the verdict states.
+  // The headline says "open to YOU", so the eligibility mark has to agree with the sentence.
+  let nextYours =
+    isToday
+    ? options.first(where: { time < $0.window.start && $0.mark == .attend })
+    : nil
   return PoolRow(
     poolID: first.poolID,
     poolName: first.poolName,
@@ -333,9 +362,19 @@ private func sessionRow(
     moreSessionsLabel: moreSessionsLabel(hidden: hidden, isToday: isToday, format: format),
     state: nil,
     isFavourite: favourites.contains(first.poolID),
+    nextOpenToYou: nextYours?.window.start.hhmm,
     // "Open to you" is present tense, so it can only ever be true for today.
     openToYou: isToday && covering?.mark == .attend
   )
+}
+
+/// The earliest `HH:MM` any of these rows next opens to the reader, or nil.
+///
+/// A string `min()` is correct here and is not a shortcut: `HH:MM` is zero-padded and
+/// fixed-width, so its lexical order IS its chronological order, and every value came from
+/// `TimeOfDay.hhmm` rather than from a source's prose.
+func earliestOpening(_ rows: [PoolRow]) -> String? {
+  rows.compactMap(\.nextOpenToYou).min()
 }
 
 /// "+2 more today" — but ONLY on today.
@@ -421,6 +460,9 @@ private func ghostRows(
       moreSessionsLabel: nil,
       state: state,
       isFavourite: favourites.contains(status.poolID),
+      // A ghost has no sessions at all, so it has no next one either — and a closed pool
+      // certainly does not open to you later today.
+      nextOpenToYou: nil,
       openToYou: false
     )
   }
@@ -472,6 +514,9 @@ extension ListModel {
       openToYouCount: sections.flatMap(\.rows).filter { $0.isFavourite && $0.openToYou }.count,
       scheduledPoolCount: sections.flatMap(\.rows)
         .filter { $0.isFavourite && !$0.options.isEmpty }.count,
+      // NARROWED WITH THE ROWS. "Next at 09:00" beside a favourites-only list showing nothing
+      // would be pointing at a pool the reader has just asked not to see.
+      nextOpenToYou: earliestOpening(sections.flatMap(\.rows).filter(\.isFavourite)),
       isToday: isToday,
       beyondHorizon: beyondHorizon
     )

@@ -8023,6 +8023,76 @@
         }
       }
     },
+    "headline.noneLeftToday": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Heute nichts mehr für dich offen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nothing more open to you today"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Plus rien d'ouvert pour vous aujourd'hui"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Oggi niente più aperto per te"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dziś nic więcej dla ciebie otwartego"
+          }
+        }
+      }
+    },
+    "headline.noneNowNextAt": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Jetzt nichts für dich offen — als Nächstes um %1$@"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nothing open to you now — next at %1$@"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rien d'ouvert pour vous maintenant — prochaine à %1$@"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ora niente aperto per te — la prossima alle %1$@"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Teraz nic dla ciebie otwartego — następny o %1$@"
+          }
+        }
+      }
+    },
     "headline.poolsWithSessions": {
       "extractionState": "manual",
       "localizations": {
@@ -10377,13 +10447,13 @@
               "one": {
                 "stringUnit": {
                   "state": "translated",
-                  "value": "%1$lld jetzt für dich offen"
+                  "value": "%1$lld Bad jetzt für dich offen"
                 }
               },
               "other": {
                 "stringUnit": {
                   "state": "translated",
-                  "value": "%1$lld jetzt für dich offen"
+                  "value": "%1$lld Bäder jetzt für dich offen"
                 }
               }
             }
@@ -10395,13 +10465,13 @@
               "one": {
                 "stringUnit": {
                   "state": "translated",
-                  "value": "%1$lld open to you now"
+                  "value": "%1$lld pool open to you now"
                 }
               },
               "other": {
                 "stringUnit": {
                   "state": "translated",
-                  "value": "%1$lld open to you now"
+                  "value": "%1$lld pools open to you now"
                 }
               }
             }
@@ -10413,19 +10483,19 @@
               "many": {
                 "stringUnit": {
                   "state": "translated",
-                  "value": "%1$lld ouverts pour vous maintenant"
+                  "value": "%1$lld piscines ouvertes pour vous maintenant"
                 }
               },
               "one": {
                 "stringUnit": {
                   "state": "translated",
-                  "value": "%1$lld ouvert pour vous maintenant"
+                  "value": "%1$lld piscine ouverte pour vous maintenant"
                 }
               },
               "other": {
                 "stringUnit": {
                   "state": "translated",
-                  "value": "%1$lld ouverts pour vous maintenant"
+                  "value": "%1$lld piscines ouvertes pour vous maintenant"
                 }
               }
             }
@@ -10437,19 +10507,19 @@
               "many": {
                 "stringUnit": {
                   "state": "translated",
-                  "value": "%1$lld aperti per te adesso"
+                  "value": "%1$lld piscine aperte per te adesso"
                 }
               },
               "one": {
                 "stringUnit": {
                   "state": "translated",
-                  "value": "%1$lld aperto per te adesso"
+                  "value": "%1$lld piscina aperta per te adesso"
                 }
               },
               "other": {
                 "stringUnit": {
                   "state": "translated",
-                  "value": "%1$lld aperti per te adesso"
+                  "value": "%1$lld piscine aperte per te adesso"
                 }
               }
             }
@@ -10461,25 +10531,25 @@
               "few": {
                 "stringUnit": {
                   "state": "translated",
-                  "value": "%1$lld otwarte teraz dla ciebie"
+                  "value": "%1$lld baseny otwarte teraz dla ciebie"
                 }
               },
               "many": {
                 "stringUnit": {
                   "state": "translated",
-                  "value": "%1$lld otwartych teraz dla ciebie"
+                  "value": "%1$lld basenów otwartych teraz dla ciebie"
                 }
               },
               "one": {
                 "stringUnit": {
                   "state": "translated",
-                  "value": "%1$lld otwarty teraz dla ciebie"
+                  "value": "%1$lld basen otwarty teraz dla ciebie"
                 }
               },
               "other": {
                 "stringUnit": {
                   "state": "translated",
-                  "value": "%1$lld otwartego teraz dla ciebie"
+                  "value": "%1$lld basena otwartego teraz dla ciebie"
                 }
               }
             }

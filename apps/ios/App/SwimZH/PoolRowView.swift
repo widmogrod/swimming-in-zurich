@@ -76,6 +76,11 @@ struct PoolRowView: View {
       // row to row reads as a different action, and tier colour means something else here.
       .tint(.accentColor)
     }
+    // A HEART IS A PHYSICAL ACT. `.sensoryFeedback` rather than a `UIImpactFeedbackGenerator`:
+    // it is declarative, it costs no UIKit import in a SwiftUI target, and it obeys the
+    // reader's own haptics setting without this file having to ask. `.impact` and not
+    // `.success` — nothing succeeded, a switch moved.
+    .sensoryFeedback(.impact(weight: .light), trigger: isFavourite)
   }
 
   private var favouriteSymbol: String { isFavourite ? Icon.unfavourite : Icon.favourite }

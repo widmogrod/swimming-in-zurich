@@ -67,7 +67,7 @@ struct TimeAxisTests {
       verdict: Verdict(head: Message("mobile.verdict.opensAt", ["hhmm": "06:00"])),
       options: options, inlineOptions: options,
       hiddenSessionCount: 0, moreSessionsLabel: nil, state: state, isFavourite: false,
-      openToYou: false)
+      nextOpenToYou: nil, openToYou: false)
   }
 
   // MARK: - Acceptance 6: one mapping

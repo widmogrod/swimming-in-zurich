@@ -261,9 +261,9 @@ export const it = {
   "mobile.lanesUntil": "{public} corsie su {total} pubbliche fino alle {hhmm}",
 
   "mobile.openToYou": {
-    one: "{count} aperto per te adesso",
-    many: "{count} aperti per te adesso",
-    other: "{count} aperti per te adesso",
+    one: "{count} piscina aperta per te adesso",
+    many: "{count} piscine aperte per te adesso",
+    other: "{count} piscine aperte per te adesso",
   },
   "mobile.openToYouOn": {
     one: "{count} aperti per te {day}",
@@ -291,6 +291,9 @@ export const it = {
   "tier.scheduled": "Aperto quel giorno",
   "verdict.notOpenToYou": "Non aperto per te",
   "verdict.hasSessions": "Con sessioni",
+  "headline.noneNowNextAt":
+    "Ora niente aperto per te — la prossima alle {hhmm}",
+  "headline.noneLeftToday": "Oggi niente più aperto per te",
   "headline.poolsWithSessions": {
     one: "{count} piscina con sessioni",
     many: "{count} piscine con sessioni",

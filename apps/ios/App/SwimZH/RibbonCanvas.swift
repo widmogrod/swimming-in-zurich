@@ -21,6 +21,13 @@
 import SwiftUI
 import SwimZHKit
 
+/// How much of each lane's slot is GAP rather than bar.
+///
+/// Geometry, not style — which is why it lives beside the canvas that uses it rather than in
+/// `Design.Space`, the same exemption the ribbon's radii already have. A third is what turns
+/// six lanes in a 46-point band from a solid block into six bars; see `drawStack`.
+let laneGap: Double = 0.34
+
 struct RibbonCanvas: View {
   let day: DayRibbon
   /// Whether this row is showing the day the user is standing in. The cursor is a claim about
@@ -171,6 +178,22 @@ struct RibbonCanvas: View {
   }
 
   /// The lane stack: one sub-row per lane, public against reserved.
+  ///
+  /// WHY IT WAS AN UNREADABLE BRICK, and what the four changes here are. Six lanes across a
+  /// 46-point band is six 6.1-point rows; the first version drew each one as a square-cornered
+  /// rectangle 1 point shorter than its slot and painted reserved at 0.75 against public at
+  /// 0.9. On the widest iPhone that composited into a solid teal block: the gaps were a
+  /// hairline, the corners were square so nothing separated one bar from the next, and the two
+  /// states were a few per cent of opacity apart. The busiest pool in the city — the one row
+  /// most worth glancing at — was the one row that said nothing.
+  ///
+  ///  * `laneGap` takes a THIRD of each slot rather than a point, so the stack reads as bars.
+  ///  * Every bar is rounded to half its own height, so it is a capsule at any lane count.
+  ///  * RESERVED is drawn much fainter than public, because the question the row answers is
+  ///    "can I swim", and reserved is the answer's background, not half of a two-tone chart.
+  ///  * A faint TRACK runs the session's whole width under the lanes, so a gap in a lane reads
+  ///    as an empty lane rather than as the end of the day. Without it a stack with holes and
+  ///    a stack that stops early are the same picture.
   private func drawStack(
     _ ribbon: Ribbon,
     in context: inout GraphicsContext,
@@ -179,20 +202,43 @@ struct RibbonCanvas: View {
   ) {
     let lanes = ribbon.strips ?? []
     guard !lanes.isEmpty else { return }
-    let band = size.height * 0.8 / Double(lanes.count)
-    let top = size.height * 0.1
+    let slot = size.height * 0.84 / Double(lanes.count)
+    let bar = max(1.5, slot * (1 - laneGap))
+    let top = size.height * 0.08
+    drawStackTrack(ribbon, in: &context, axis: axis, top: top, height: size.height * 0.84)
     for (index, lane) in lanes.enumerated() {
       for hold in lane.segments {
         guard let window = hold.window else { continue }
-        context.opacity = hold.isPublic ? 0.9 : 0.75
+        context.opacity = hold.isPublic ? 0.95 : 0.3
         context.fill(
           Path(
-            CGRect(
-              x: axis.x(of: window.start), y: top + Double(index) * band,
-              width: axis.width(of: window), height: max(1, band - 1))),
-          with: .color(hold.isPublic ? Color("LanePublic") : Color("LaneReserved")))
+            roundedRect: CGRect(
+              x: axis.x(of: window.start), y: top + Double(index) * slot + (slot - bar) / 2,
+              width: axis.width(of: window), height: bar),
+            cornerRadius: bar / 2),
+          with: .color(hold.isPublic ? Color("LanePublic") : Color("LaneReserved"))
+        )
       }
     }
+    context.opacity = 1
+  }
+
+  /// The session's own extent, under the lanes. See `drawStack`.
+  private func drawStackTrack(
+    _ ribbon: Ribbon,
+    in context: inout GraphicsContext,
+    axis: TimeAxis,
+    top: Double,
+    height: Double
+  ) {
+    guard let window = ribbon.window else { return }
+    context.opacity = 0.16
+    context.fill(
+      Path(
+        roundedRect: CGRect(
+          x: axis.x(of: window.start), y: top, width: axis.width(of: window), height: height),
+        cornerRadius: Design.Radius.swatch),
+      with: .color(Color("RibbonSheath")))
     context.opacity = 1
   }
 

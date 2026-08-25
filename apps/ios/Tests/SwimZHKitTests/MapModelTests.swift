@@ -19,7 +19,7 @@ struct MapModelTests {
       tier: tier, mark: .attend,
       verdict: Verdict(head: Message("mobile.verdict.openNow")),
       options: [], inlineOptions: [], hiddenSessionCount: 0, moreSessionsLabel: nil,
-      state: nil, isFavourite: favourite, openToYou: true)
+      state: nil, isFavourite: favourite, nextOpenToYou: nil, openToYou: true)
   }
 
   static func sections(_ rows: [PoolRow]) -> [ListSection] { [ListSection(tier: .now, rows: rows)] }
