@@ -145,6 +145,16 @@ export const fr = {
   "sources.chipAria": "{name} — ouvre {host} dans un nouvel onglet",
   "combo.noMatches": "Aucun résultat",
   "combo.noPoolsMatch": "Aucune piscine correspondante",
+  "place.locating": "Recherche de votre position…",
+  "place.refused.denied":
+    "SwimZH ne voit pas votre position. Vous pouvez l'autoriser dans Réglages.",
+  "place.refused.restricted":
+    "Cet appareil n'autorise pas la localisation pour les apps.",
+  "place.refused.unavailable":
+    "Aucune position pour le moment. Les distances partent du lieu ci-dessus.",
+  "action.openSettings": "Ouvrir Réglages",
+  "ios.location.purpose":
+    "SwimZH utilise votre position pour mesurer la distance de chaque piscine et vous situer sur la carte. Elle reste sur votre téléphone.",
   "place.useMyLocation": "Utiliser ma position",
   "place.myLocation": "Ma position",
   "date.selectedDay": "Jour sélectionné",

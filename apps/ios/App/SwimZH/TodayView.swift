@@ -117,6 +117,10 @@ struct TodayView: View {
     }
     .task {
       await model.load()
+      // A fix for a reader who already chose one, and never a prompt — see
+      // `TodayModel.locateIfChosenBefore`. After the answer, for the same reason the store
+      // refresh is: the app's promise is an answer the moment it opens.
+      await model.locateIfChosenBefore()
       // AFTER the screen has answered. The refresh is a background nicety; making the first
       // answer wait on a network round trip would trade the app's whole premise — an answer
       // with no network — for a store that is at most seven days fresher.
@@ -125,6 +129,7 @@ struct TodayView: View {
     .onChange(of: scenePhase) { _, phase in
       guard phase == .active else { return }
       Task { await model.refreshStore() }
+      Task { await model.refreshLocation() }
     }
   }
 
@@ -273,7 +278,10 @@ struct TodayView: View {
         ToolbarSpacer(.flexible, placement: .bottomBar)
         ToolbarItem(placement: .bottomBar) { allPoolsButton }
         ToolbarItem(placement: .bottomBar) {
-          FilterButton(filters: $model.filters, kinds: model.kinds)
+          FilterButton(
+            filters: $model.filters, kinds: model.kinds, location: model.location,
+            onUseMyLocation: { await model.useMyLocation() },
+            onUseNamedPlace: { model.useNamedPlace($0) })
         }
       }
   }

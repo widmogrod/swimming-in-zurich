@@ -26,12 +26,29 @@ final class BehaviourTests: XCTestCase {
   override func setUp() async throws {
     continueAfterFailure = false
     app = XCUIApplication()
+    // EVERY TEST STARTS FROM THE STATION, and this is not tidiness — it is a defect two tests
+    // found. `LocationSource.preferred` is persisted precisely so the reader's choice survives
+    // a launch, which means it also survives from one test to the NEXT: once
+    // `testMyLocationChangesWhatNearestMeans` had opted in, every later launch located itself
+    // and re-sorted the list. That broke the lane-plan test (a different pool was first, and it
+    // publishes no lane plan) and then the location test itself, whose "before" was already
+    // measured from the phone so nothing could change.
+    //
+    // `UserDefaults`' argument domain wins on READ and is not written back, so this gives a
+    // clean start WITHOUT a test hook in production code — and without blocking the one test
+    // that then opts in through the UI, since that sets the value in memory.
+    app.launchArguments += ["-\(locationPreferenceKey)", "NO"]
     app.launch()
     // The store is bundled, but the first answer is still a query: wait for a row rather than
     // racing it, or every test here fails on a fast machine for the wrong reason.
     XCTAssertTrue(
       find("poolRow").waitForExistence(timeout: 30), "the list never showed a pool row")
   }
+
+  /// The defaults key `LocationSource` persists the reader's choice under. Spelled out here
+  /// rather than imported: the UI test target links no app code, so this is the one place the
+  /// two have to agree by hand, and `LocationSourceKeyTests` in the package asserts they do.
+  private let locationPreferenceKey = "swimzh.useMyLocation"
 
   /// One element by identifier, whatever SwiftUI decided to call its type.
   ///
@@ -238,11 +255,6 @@ final class BehaviourTests: XCTestCase {
   func testTheBrowserOpensAPoolToo() {
     openAllPools()
     let row = find("browserRow")
-    if !row.waitForExistence(timeout: 10) {
-      print(
-        "DBG navbars=\(app.navigationBars.count) titles=\(app.navigationBars.allElementsBoundByIndex.map(\.identifier)) cells=\(app.cells.count) rows=\(all("poolRow").count) link=\(find("allPoolsLink").exists)"
-      )
-    }
     XCTAssertTrue(row.waitForExistence(timeout: 10), "the browser listed nothing")
     row.tap()
     XCTAssertTrue(
@@ -370,6 +382,78 @@ final class BehaviourTests: XCTestCase {
     // pressable and is 20 points across is the defect this app has already shipped once.
     XCTAssertGreaterThanOrEqual(directions.frame.height, 44, "the action is too small to hit")
     XCTAssertGreaterThanOrEqual(directions.frame.width, 44, "the action is too small to hit")
+  }
+
+  // MARK: - The phone's own position
+
+  func testMyLocationChangesWhatNearestMeans() {
+    // WHAT THIS ACTUALLY PROVES. Every distance in this app was measured from Zürich
+    // Hauptbahnhof, because `Places.default` is the station and there was no other origin — so
+    // "nearest first" meant nearest to the station, on a device that knows exactly where it is.
+    //
+    // THE WORLD IS SET UP FROM OUTSIDE, by `make ios-qa`:
+    //
+    //     xcrun simctl privacy booted grant location ch.swimzh.SwimZH
+    //     xcrun simctl location booted set 47.3450,8.5340
+    //
+    // — permission granted, and the device placed at Wollishofen, about four kilometres south
+    // of the station. It has to be outside because an XCUITest runs ON the simulator and cannot
+    // shell out (`Process` is macOS-only), and because the permission alert belongs to
+    // SpringBoard rather than to this app: tapping it is slow, famously flaky, and tests
+    // whether iOS can draw its own dialog rather than what this app does with the answer.
+    //
+    // The position matters as much as the permission. Four kilometres is far enough that the
+    // two orderings genuinely differ, so a run that changed nothing would prove nothing.
+    //
+    // THE REFUSAL PATH IS NOT DRIVEN HERE, deliberately rather than by omission. Its invariant —
+    // that no state but a real fix may install a place — is `SwimZHKit.devicePlace`, and
+    // `LocatedTests.nothingElseInstallsAPlace` walks EVERY state including all three refusals.
+    // Reproducing that through a simulator would be the same assertion through a slower lens.
+    // What only a driven app can show is the wiring, which is this: a real fix reaches
+    // `filters.place` and the list re-sorts.
+    let before = firstRowDistance()
+    XCTAssertNotNil(before, "no row shows a distance — is a place selected at all?")
+
+    find("filterButton").tap()
+    let measureFrom = find("measureFrom")
+    XCTAssertTrue(measureFrom.waitForExistence(timeout: 5), "the filter sheet has no place row")
+    measureFrom.tap()
+    let row = find("useMyLocation")
+    XCTAssertTrue(row.waitForExistence(timeout: 5), "the place list offers no way to use it")
+    row.tap()
+    // The row deliberately does NOT dismiss the sheet — a fix takes a moment and can fail, and
+    // the sheet is where the explanation would live. So the test closes it, as a reader would.
+    XCTAssertTrue(
+      waitFor { self.find("useMyLocation").isEnabled }, "the row never came out of `.locating`")
+    // Back out of the place list, then out of the sheet.
+    app.navigationBars.buttons.firstMatch.tap()
+    app.navigationBars.buttons.firstMatch.tap()
+
+    // The distances must have MOVED. Not to a particular number: the fixture store's pools and
+    // the simulated position are both free to change, and a test pinned to "0.8 km" would fail
+    // for a reason that has nothing to do with whether the phone's position is being used.
+    XCTAssertTrue(
+      waitFor { self.firstRowDistance() != before },
+      "the list is still measured from Zürich HB — the phone's position is not being used")
+  }
+
+  /// Poll a condition until it holds. XCUITest's own `expectation(for:evaluatedWith:)` needs a
+  /// KVO-observable object, and what is being waited for here is a rendered string.
+  private func waitFor(_ condition: () -> Bool, seconds: Double = 15) -> Bool {
+    let deadline = Date().addingTimeInterval(seconds)
+    while Date() < deadline {
+      if condition() { return true }
+      Thread.sleep(forTimeInterval: 0.3)
+    }
+    return condition()
+  }
+
+  /// The first row's distance, as its rendered text. Read off the ROW rather than off an
+  /// identifier of its own, because what is being asserted is what a reader can see.
+  private func firstRowDistance() -> String? {
+    let row = find("poolRow")
+    guard row.waitForExistence(timeout: 15) else { return nil }
+    return row.staticTexts.allElementsBoundByIndex.map(\.label).first { $0.contains("km") }
   }
 
   // MARK: - Helpers

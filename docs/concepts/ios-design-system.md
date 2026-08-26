@@ -383,3 +383,82 @@ back. It checks both halves instead: the hero renders the name, and the bar's co
 conditional. Either alone leaves a screen that can be looking at a pool without ever naming it.
 `BehaviourTests.testThePoolScreenSaysItsNameOnceAtATime` proves it by driving the app, and was
 verified to fail when the unconditional title is restored.
+
+## The phone knows where it is, and now the app asks
+
+> "it does not use gps from the phone on map or as a way to sort closest"
+
+Every distance was measured from **Zürich Hauptbahnhof**, because `Places.default` is the station
+and there was no other origin. "Nearest first" meant nearest to the station, on a device that
+knows exactly where it is. `Filters.swift` carried the reason:
+
+> Core Location would be the slice's only new framework dependency and the plan rules out MapKit
+> precisely to keep the offline property.
+
+**That premise is gone.** The map mode links MapKit, so Core Location is no longer the only new
+framework — and the offline property was never actually at stake: GNSS is a *receiver*, and a fix
+needs no network at all. What remained was a stale comment and a phone app measuring from a
+railway station.
+
+### The invariant, which is the app's oldest one in new clothes
+
+A pool whose schedule we do not have must never render as "closed". A **position** we do not have
+must never render as a **distance**. Quietly measuring from the station while the reader believes
+they are being measured from their phone is the same class of lie — an unknown presented as a
+fact — and the more dangerous one, because a wrong distance still looks like a distance.
+
+So `SwimZHKit.devicePlace` returns nil for **every** state but `.fixed`. `.locating` is the
+tempting exception (the reader has just asked, and a spinner wants somewhere to live) and is
+exactly the one that would install a position the app has not got. Leaving the previous place is
+not a compromise: it is still correctly *labelled*, so nothing on screen is false while the fix
+is on its way.
+
+### Ported from the web, with one deliberate divergence
+
+`components/placetypeahead.ts` solved this first, emitting `source: 'geolocation' | 'preset' |
+'fallback'` with a `reason`, commented "so the UI never implies a precision it does not have".
+`PlaceSource` is that shape. The divergence: the web responds to a refusal by moving the reader
+to a preset; this does not. On the web there may be no place selected at all, so a fallback is
+the difference between an answer and a dead end — this app always has one, so silently swapping
+the reader's chosen place would be a surprise where "that did not work, and here is why" is an
+explanation.
+
+`LocationRefusal` has **three** cases because the remedy differs and a reader told the wrong one
+is sent somewhere that cannot help: `denied` is fixed in Settings by this reader, `restricted`
+cannot be fixed by them at all, and `unavailable` is not about permission — this app's Settings
+page would show nothing wrong. Only `denied` gets an "Open Settings" button.
+
+### What is persisted, and what is never
+
+The **preference** (one Bool) is persisted, because a choice remade on every launch is a choice
+most people make once and stop using. The **position** is never written anywhere — not to the
+store, not to defaults, not to a log. `shouldLocateOnLaunch` requires both `preferred` *and*
+already-authorised, so a launch can restore the choice and can never raise a permission dialog
+in front of someone who has not asked for one.
+
+### Five languages, including the system's own dialog
+
+iOS renders a purpose string in the **system's** language, so `INFOPLIST_KEY_NSLocation…` alone
+would ask a German reader in English. `locales_to_xcstrings.mjs` now emits a third output —
+`App/SwimZH/InfoPlist.xcstrings` — from the same web catalogs as every other sentence. Both
+halves are needed and they are written in different places: the xcstrings **overrides** a value
+per language, it does not **declare** one, so without the build setting iOS treats the permission
+as undeclared and the prompt never appears. `test_the_base_infoplist_key_matches_the_english_
+catalog` is what stops the two drifting.
+
+### Three things the driven app taught
+
+* **`LabeledContent` inside a `Button` label eats the identifier.** `BehaviourTests` could not
+  find the "Use my location" row while a `strings` check proved the identifier was in the shipped
+  binary. A plain `HStack` fixed it. Every other row here keeps `LabeledContent` — they are Form
+  rows, which is what it is for.
+* **A persisted preference leaks between tests.** Once the location test had opted in, every
+  later launch located itself and re-sorted the list — which broke the lane-plan test (a
+  different pool sorted first, and it publishes no lane plan) and then the location test itself,
+  whose "before" was already measured from the phone. Fixed with `UserDefaults`' argument domain,
+  which wins on read and is not written back: a clean start with no test hook in production code.
+* **An XCUITest cannot shell out** (`Process` is macOS-only), and the permission alert belongs to
+  SpringBoard. So the world is set from outside by `make ios-sim-world`. The coordinates are
+  load-bearing: Wollishofen is ~4 km south of the station, so the two orderings genuinely differ
+  and a run that changed nothing would prove nothing. The **refusal** path is not driven — its
+  invariant is `devicePlace`, and `LocatedTests` walks every state including all three refusals.

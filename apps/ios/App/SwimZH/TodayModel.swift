@@ -95,6 +95,34 @@ final class TodayModel {
   /// lets the privacy manifest declare UserDefaults with reason `CA92.1` and nothing else.
   static let favouritesKey = "swimzh.favourites"
 
+  /// The phone's own position, and whether the reader wants to be measured from it.
+  ///
+  /// Owned by the model rather than by a view, because the DECISION it feeds — what
+  /// `filters.place` becomes — is the model's, and because a fix taken on the find screen must
+  /// still be the origin when the map draws its distances.
+  let location = LocationSource()
+
+  /// Measure from the phone.
+  ///
+  /// The whole state machine, in the order that keeps the screen honest. `preferred` is set
+  /// FIRST so the choice survives a launch even if this particular fix fails; the place is
+  /// installed LAST and only if `devicePlace` returns one — every refusal, and the wait itself,
+  /// leaves `filters.place` exactly where it was. That is what stops the app measuring from
+  /// Hauptbahnhof while the reader believes it is measuring from their phone.
+  func useMyLocation() async {
+    location.preferred = true
+    await location.locate()
+    guard let place = devicePlace(location.state) else { return }
+    filters.place = place
+  }
+
+  /// Go back to a named place. It stops the preference too, or the next launch would silently
+  /// take a fix for a reader who has just said they want the station.
+  func useNamedPlace(_ place: Place?) {
+    location.stopUsing()
+    filters.place = place
+  }
+
   func isFavourite(_ poolID: String) -> Bool { favourites.contains(poolID) }
 
   /// Where every pool in the roster is, keyed by id.
@@ -159,6 +187,24 @@ final class TodayModel {
   /// has no water temperature" — a different and false statement.
   func liveTemperature(poiid: String?) async -> LiveTemp {
     await live.temperature(poiid: poiid)
+  }
+
+  /// A fix at launch, for a reader who already chose one — and NEVER a permission prompt. The
+  /// rule is `SwimZHKit.shouldLocateOnLaunch`; both halves matter and its doc says why.
+  func locateIfChosenBefore() async {
+    guard
+      shouldLocateOnLaunch(
+        preferred: location.preferred, alreadyAuthorised: location.isAuthorised)
+    else { return }
+    await useMyLocation()
+  }
+
+  /// Coming back to the foreground is when a position taken before a tram ride is most likely
+  /// to be wrong. It refreshes only a fix we already have — see `LocationSource.refreshIfUsing`.
+  func refreshLocation() async {
+    await location.refreshIfUsing()
+    guard let place = devicePlace(location.state) else { return }
+    filters.place = place
   }
 
   func load(now: Date = Date()) async {

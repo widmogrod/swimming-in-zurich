@@ -177,3 +177,50 @@ def test_a_literal_percent_is_escaped() -> None:
         "console.log(toFormat('50% of lanes', [], false));"
     )
     assert _node("--input-type=module", "-e", script).strip() == "50%% of lanes"
+
+
+def test_infoplist_purpose_strings_are_generated_in_every_language() -> None:
+    """The permission purpose string ships localised, not in English for everyone.
+
+    iOS renders a purpose string in the SYSTEM's language, so the build setting that declares
+    it can only ever be one language. `InfoPlist.xcstrings` is what makes the other four real,
+    and it is generated from the same web catalogs as every other sentence — a hand-edited one
+    would be the second catalog this whole bridge exists to prevent.
+    """
+    path = REPO_ROOT / "apps/ios/App/SwimZH/InfoPlist.xcstrings"
+    if not path.exists():
+        pytest.skip("InfoPlist.xcstrings not generated; run `make ios-locales`")
+    document = json.loads(path.read_text(encoding="utf-8"))
+    entry = document["strings"]["NSLocationWhenInUseUsageDescription"]
+    assert set(entry["localizations"]) == {"en", "de", "fr", "it", "pl"}
+    for language, unit in entry["localizations"].items():
+        value = unit["stringUnit"]["value"]
+        assert value.strip(), f"{language} has an empty purpose string"
+        # A purpose string is one plain sentence: iOS has nowhere to put an argument in it,
+        # and a stray placeholder would be shown to the reader verbatim.
+        assert "{" not in value, f"{language} purpose string carries a placeholder"
+
+
+def test_the_base_infoplist_key_matches_the_english_catalog() -> None:
+    """The Info.plist build setting and the catalog cannot drift apart.
+
+    Both are needed and they are written in different places. `InfoPlist.xcstrings` OVERRIDES a
+    value per language; it does not DECLARE one, so without the key in Info.plist itself iOS
+    treats the permission as undeclared and the prompt never appears at all. The build setting
+    is therefore the English original, and this is what stops someone editing `en.ts` and
+    shipping a phone that asks in the old words.
+    """
+    path = REPO_ROOT / "apps/ios/App/SwimZH/InfoPlist.xcstrings"
+    if not path.exists():
+        pytest.skip("InfoPlist.xcstrings not generated; run `make ios-locales`")
+    english = json.loads(path.read_text(encoding="utf-8"))["strings"][
+        "NSLocationWhenInUseUsageDescription"
+    ]["localizations"]["en"]["stringUnit"]["value"]
+    project = (REPO_ROOT / "apps/ios/App/SwimZH.xcodeproj/project.pbxproj").read_text(
+        encoding="utf-8"
+    )
+    setting = f'INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "{english}";'
+    assert setting in project, (
+        "the Info.plist purpose string differs from the English catalog — "
+        f"expected the build setting to read:\n  {setting}"
+    )

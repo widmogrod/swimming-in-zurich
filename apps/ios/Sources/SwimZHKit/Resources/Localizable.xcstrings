@@ -1471,6 +1471,41 @@
         }
       }
     },
+    "action.openSettings": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Einstellungen öffnen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open Settings"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ouvrir Réglages"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Apri Impostazioni"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Otwórz Ustawienia"
+          }
+        }
+      }
+    },
     "action.showLanePlan": {
       "extractionState": "manual",
       "localizations": {
@@ -9115,6 +9150,41 @@
         }
       }
     },
+    "ios.location.purpose": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "SwimZH nutzt deinen Standort, um die Entfernung zu jedem Bad zu messen und dich auf der Karte zu zeigen. Er bleibt auf deinem Gerät."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "SwimZH uses your location to measure how far each pool is and to show you on the map. It stays on your phone."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "SwimZH utilise votre position pour mesurer la distance de chaque piscine et vous situer sur la carte. Elle reste sur votre téléphone."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "SwimZH usa la tua posizione per misurare quanto dista ogni piscina e per mostrarti sulla mappa. Resta sul tuo telefono."
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "SwimZH używa Twojej lokalizacji, aby zmierzyć odległość do każdego basenu i pokazać Cię na mapie. Zostaje ona na Twoim telefonie."
+          }
+        }
+      }
+    },
     "lane.incompleteCaveat": {
       "extractionState": "manual",
       "localizations": {
@@ -11859,6 +11929,41 @@
         }
       }
     },
+    "place.locating": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Standort wird gesucht…"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Finding where you are…"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Recherche de votre position…"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sto cercando dove sei…"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Szukam Twojej lokalizacji…"
+          }
+        }
+      }
+    },
     "place.myLocation": {
       "extractionState": "manual",
       "localizations": {
@@ -11890,6 +11995,111 @@
           "stringUnit": {
             "state": "translated",
             "value": "Moja lokalizacja"
+          }
+        }
+      }
+    },
+    "place.refused.denied": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "SwimZH sieht deinen Standort nicht. In den Einstellungen kannst du ihn erlauben."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "SwimZH cannot see your location. You can allow it in Settings."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "SwimZH ne voit pas votre position. Vous pouvez l'autoriser dans Réglages."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "SwimZH non vede la tua posizione. Puoi consentirla in Impostazioni."
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "SwimZH nie widzi Twojej lokalizacji. Możesz ją włączyć w Ustawieniach."
+          }
+        }
+      }
+    },
+    "place.refused.restricted": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dieses Gerät erlaubt Apps keinen Standortzugriff."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This device does not allow location for apps."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cet appareil n'autorise pas la localisation pour les apps."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Questo dispositivo non consente la posizione alle app."
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "To urządzenie nie zezwala aplikacjom na dostęp do lokalizacji."
+          }
+        }
+      }
+    },
+    "place.refused.unavailable": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zurzeit kein Standort verfügbar. Distanzen gelten ab dem Ort oben."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No position available right now. Distances are from the place above."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aucune position pour le moment. Les distances partent du lieu ci-dessus."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nessuna posizione al momento. Le distanze partono dal luogo qui sopra."
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Brak lokalizacji w tej chwili. Odległości liczone są od miejsca powyżej."
           }
         }
       }

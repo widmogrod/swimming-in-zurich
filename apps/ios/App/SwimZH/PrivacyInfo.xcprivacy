@@ -10,6 +10,19 @@
     the build if URLSession, Network, NWConnection, CFSocket or CFStream appears in either
     target. Everything it answers comes from the SQLite store in this bundle.
   * NSPrivacyCollectedDataTypes empty — nothing leaves the device, because nothing can.
+    THE PHONE'S POSITION IS THE ONE THAT HAD TO BE RE-ASKED rather than assumed, since the
+    app now reads it (`LocationSource`). Apple's "collect" means transmitting off device, and
+    a fix here is turned into a `Place` in memory and never written anywhere — not to the
+    store, not to UserDefaults, not to a log. What IS persisted is a single Bool saying the
+    reader prefers their own position, which is a preference and not a position, and which
+    the UserDefaults declaration below already covers. So this array stays empty, and it stays
+    empty on purpose rather than by oversight.
+
+    Location is also NOT a required-reason API: `NSPrivacyAccessedAPITypes` lists four
+    categories (file timestamp, system boot time, disk space, active keyboard) plus User
+    Defaults, and Core Location is in none of them. It needs a purpose string, which is a
+    different mechanism — `NSLocationWhenInUseUsageDescription`, generated into the bundle in
+    all five languages from the web catalogs by `scripts/locales_to_xcstrings.mjs`.
   * NSPrivacyAccessedAPITypes declares NSPrivacyAccessedAPICategoryUserDefaults with reason
     CA92.1. S3a's local-only favourites are one string in UserDefaults.standard, and shipping
     without the declaration is an ITMS-91055 upload rejection — a failure that only appears

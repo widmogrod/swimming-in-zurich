@@ -83,6 +83,10 @@ struct PoolMapView: View {
 
   private var map: some View {
     Map(position: $camera, selection: $selectedID) {
+      // WHERE THE READER IS. Present unconditionally and drawn only when there is permission:
+      // MapKit renders nothing at all without it, so there is no state here to branch on and no
+      // way for the dot to appear over a position the app has not been given.
+      UserAnnotation()
       // ONE view per element — the same laziness rule the list rows keep, for the same reason.
       ForEach(clusters) { cluster in
         Annotation(cluster.lead.name, coordinate: coordinate(cluster.point)) {
@@ -98,6 +102,10 @@ struct PoolMapView: View {
       }
     }
     .mapStyle(.standard(pointsOfInterest: .excluding([.marina])))
+    // The system's own control, not one of ours. It knows the three states a locate button has
+    // (off, following, following-with-heading), it prompts for permission when it needs to, and
+    // it is the button every other map on the phone puts in that corner.
+    .mapControls { MapUserLocationButton() }
     .onAppear(perform: frame)
     // The camera as an INPUT. See the header: what overlaps is a fact about zoom, so the
     // grouping cannot be computed once. `.onEnd`, so it settles when the finger lifts.

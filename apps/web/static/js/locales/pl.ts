@@ -175,6 +175,16 @@ export const pl = {
 
   "combo.noMatches": "Brak wyników",
   "combo.noPoolsMatch": "Brak pasujących basenów",
+  "place.locating": "Szukam Twojej lokalizacji…",
+  "place.refused.denied":
+    "SwimZH nie widzi Twojej lokalizacji. Możesz ją włączyć w Ustawieniach.",
+  "place.refused.restricted":
+    "To urządzenie nie zezwala aplikacjom na dostęp do lokalizacji.",
+  "place.refused.unavailable":
+    "Brak lokalizacji w tej chwili. Odległości liczone są od miejsca powyżej.",
+  "action.openSettings": "Otwórz Ustawienia",
+  "ios.location.purpose":
+    "SwimZH używa Twojej lokalizacji, aby zmierzyć odległość do każdego basenu i pokazać Cię na mapie. Zostaje ona na Twoim telefonie.",
   "place.useMyLocation": "Użyj mojej lokalizacji",
   "place.myLocation": "Moja lokalizacja",
 

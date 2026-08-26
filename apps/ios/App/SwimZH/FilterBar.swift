@@ -27,6 +27,15 @@ import SwimZHKit
 struct FilterButton: View {
   @Binding var filters: Filters
   let kinds: [String]
+  /// The phone's own position. Threaded down rather than reached for, so this file has no
+  /// opinion about Core Location and the sheet can be previewed without one.
+  let location: LocationSource
+  /// Measure from the phone. `async` because it is a device that takes a moment to answer, and
+  /// the row has to be able to say so while it does.
+  let onUseMyLocation: () async -> Void
+  /// Measure from a named place, or from nowhere. Separate from a plain binding because
+  /// choosing a preset must ALSO stop the device preference — see `TodayModel.useNamedPlace`.
+  let onUseNamedPlace: (Place?) -> Void
 
   @Environment(\.localized) private var localized
   @State private var showingFilters = false
@@ -46,7 +55,9 @@ struct FilterButton: View {
     .accessibilityValue(Text(.joined(filters.summaryTags), localized))
     .accessibilityIdentifier("filterButton")
     .sheet(isPresented: $showingFilters) {
-      FilterSheet(filters: $filters, kinds: kinds)
+      FilterSheet(
+        filters: $filters, kinds: kinds, location: location,
+        onUseMyLocation: onUseMyLocation, onUseNamedPlace: onUseNamedPlace)
     }
   }
 }
@@ -58,6 +69,9 @@ struct FilterSheet: View {
   @Environment(\.localized) private var localized
   @Binding var filters: Filters
   let kinds: [String]
+  let location: LocationSource
+  let onUseMyLocation: () async -> Void
+  let onUseNamedPlace: (Place?) -> Void
   @Environment(\.dismiss) private var dismiss
 
   var body: some View {
@@ -136,7 +150,9 @@ struct FilterSheet: View {
 
   private var placePicker: some View {
     NavigationLink {
-      PlaceTypeahead(place: $filters.place)
+      PlaceTypeahead(
+        place: filters.place, location: location, onUseMyLocation: onUseMyLocation,
+        onUseNamedPlace: onUseNamedPlace)
     } label: {
       LabeledContent {
         Text(filters.place?.label ?? .key("place.anywhere"), localized)
@@ -144,6 +160,7 @@ struct FilterSheet: View {
         Text(Message("filter.measureFrom"), localized)
       }
     }
+    .accessibilityIdentifier("measureFrom")
   }
 
   private var radiusPicker: some View {
@@ -171,14 +188,27 @@ struct FilterSheet: View {
   /// and can never be confused with a very large radius.
   struct PlaceTypeahead: View {
     @Environment(\.localized) private var localized
-    @Binding var place: Place?
+    /// The chosen place, READ ONLY. It used to be a `Binding` written straight from this view,
+    /// which is exactly the shape that cannot express "the reader asked for their position and
+    /// we have not got one yet": a binding must be assigned something, and the only honest
+    /// something at that moment is nothing at all. Both ways of choosing are closures now, and
+    /// the device one installs a place only if `devicePlace` yields one.
+    let place: Place?
+    let location: LocationSource
+    let onUseMyLocation: () async -> Void
+    let onUseNamedPlace: (Place?) -> Void
     @State private var query = ""
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
       List {
+        Section {
+          myLocationRow
+        } footer: {
+          locationFooter
+        }
         Button {
-          place = nil
+          onUseNamedPlace(nil)
           dismiss()
         } label: {
           Text(Message("place.anywhere"), localized)
@@ -194,9 +224,72 @@ struct FilterSheet: View {
       .navigationBarTitleDisplayMode(.inline)
     }
 
+    /// Measure from the phone.
+    ///
+    /// It does NOT dismiss on tap, and that is the difference between this row and every other
+    /// one here. A preset answers instantly, so leaving is the right next thing; a fix takes a
+    /// moment and can fail, and a sheet that closed on the tap would leave the reader looking at
+    /// a list still measured from the station with nothing anywhere to say why.
+    private var myLocationRow: some View {
+      Button {
+        Task { await onUseMyLocation() }
+      } label: {
+        // An `HStack`, not the `LabeledContent` every other row here uses, and that was
+        // measured. `LabeledContent` is built for a Form ROW; inside a `Button`'s label it
+        // reshapes the element enough that an `.accessibilityIdentifier` on the button never
+        // reaches the accessibility tree — `BehaviourTests` could not find this row at all
+        // while a `strings` check proved the identifier was in the shipped binary.
+        HStack {
+          Text(Message("place.useMyLocation"), localized)
+          Spacer(minLength: Design.Space.tight)
+          locationTrailing
+        }
+        .contentShape(Rectangle())
+      }
+      .accessibilityIdentifier("useMyLocation")
+      .disabled(location.state == .locating)
+    }
+
+    @ViewBuilder
+    private var locationTrailing: some View {
+      if location.state == .locating {
+        ProgressView()
+      } else if place?.source == .device {
+        Image(systemName: Icon.selected)
+          .accessibilityLabel(Text(Message("a11y.selected"), localized))
+      }
+    }
+
+    /// Why it did not work, and — only where Settings can actually fix it — a way there.
+    ///
+    /// The three refusals are three sentences and three remedies (`LocationRefusal`), so an
+    /// "Open Settings" button under `restricted` would send someone to a switch they are not
+    /// allowed to move, and under `unavailable` to a page showing nothing wrong.
+    @ViewBuilder
+    private var locationFooter: some View {
+      if let note = locationNote(location.state) {
+        VStack(alignment: .leading, spacing: Design.Space.snug) {
+          Text(note, localized)
+          settingsButton
+        }
+        .accessibilityIdentifier("locationNote")
+      }
+    }
+
+    @ViewBuilder
+    private var settingsButton: some View {
+      if settingsCanFix(location.state), let url = URL(string: UIApplication.openSettingsURLString)
+      {
+        Link(destination: url) {
+          Text(Message("action.openSettings"), localized)
+        }
+        .accessibilityIdentifier("openSettings")
+      }
+    }
+
     private func placeRow(_ candidate: Place) -> some View {
       Button {
-        place = candidate
+        onUseNamedPlace(candidate)
         dismiss()
       } label: {
         LabeledContent {

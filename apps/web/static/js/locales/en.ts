@@ -198,6 +198,15 @@ export const en = {
   // --- Combobox / PlaceTypeahead ----------------------------------------------------
   "combo.noMatches": "No matches",
   "combo.noPoolsMatch": "No pools match",
+  "place.locating": "Finding where you are…",
+  "place.refused.denied":
+    "SwimZH cannot see your location. You can allow it in Settings.",
+  "place.refused.restricted": "This device does not allow location for apps.",
+  "place.refused.unavailable":
+    "No position available right now. Distances are from the place above.",
+  "action.openSettings": "Open Settings",
+  "ios.location.purpose":
+    "SwimZH uses your location to measure how far each pool is and to show you on the map. It stays on your phone.",
   "place.useMyLocation": "Use my location",
   "place.myLocation": "My location",
 

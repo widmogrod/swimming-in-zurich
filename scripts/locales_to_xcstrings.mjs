@@ -51,6 +51,28 @@ const SWIFT_TABLE = resolve(
   REPO,
   "apps/ios/Sources/SwimZHKit/Catalog.generated.swift",
 );
+// THE THIRD OUTPUT, and it goes to the APP target rather than the package. iOS reads
+// permission purpose strings out of the app bundle's `InfoPlist.xcstrings` before any of
+// our code runs, so they cannot live in `SwimZHKit`'s resources with every other sentence.
+const INFOPLIST_XCSTRINGS = resolve(
+  REPO,
+  "apps/ios/App/SwimZH/InfoPlist.xcstrings",
+);
+
+/** Web catalog key -> the Info.plist key iOS shows it under.
+ *
+ *  A purpose string is a SENTENCE this product says, so it is authored in the web catalogs
+ *  with every other one — the same rule that puts `state.none.body.phone` there despite the
+ *  web never rendering it. What is different is only WHERE it has to be installed, which is
+ *  what this table is.
+ *
+ *  It matters that these are localised at all: iOS renders a purpose string in the SYSTEM's
+ *  language, so a build setting (`INFOPLIST_KEY_NSLocation…`) can only ever be one language,
+ *  and a German reader would be asked for their location in English by an app that speaks
+ *  German everywhere else. */
+const INFOPLIST_KEYS = {
+  "ios.location.purpose": "NSLocationWhenInUseUsageDescription",
+};
 
 /** The plural-selecting placeholder. Exactly one per entry, by construction. */
 const COUNT = "count";
@@ -259,6 +281,32 @@ function readOrNull(path) {
   }
 }
 
+/** The app bundle's `InfoPlist.xcstrings`: the permission purpose strings, keyed by the
+ *  Info.plist name iOS looks them up under.
+ *
+ *  Deliberately flat — no plurals and no placeholders. A purpose string is one sentence shown
+ *  once in a system dialog, and neither iOS nor this generator has anywhere to put an argument
+ *  in it, so the plural and positional machinery the main catalog needs would be dead weight
+ *  here and a second place for it to go wrong. */
+function buildInfoPlist(catalogs) {
+  const strings = {};
+  for (const [catalogKey, plistKey] of Object.entries(INFOPLIST_KEYS)) {
+    const localizations = {};
+    for (const [language, entries] of Object.entries(catalogs)) {
+      const value = entries[catalogKey];
+      if (typeof value !== "string") {
+        throw new Error(
+          `${catalogKey} is missing from ${language}.ts, or is a plural entry — ` +
+            "an Info.plist purpose string must be one plain sentence per language",
+        );
+      }
+      localizations[language] = { stringUnit: { state: "translated", value } };
+    }
+    strings[plistKey] = { extractionState: "manual", localizations };
+  }
+  return { sourceLanguage: SOURCE_LANGUAGE, strings, version: "1.0" };
+}
+
 async function main() {
   const check = process.argv.includes("--check");
   const catalogs = await loadCatalogs();
@@ -271,10 +319,12 @@ async function main() {
   );
   const json = `${JSON.stringify(document, null, 2)}\n`;
   const swift = buildSwiftTable(document, orders);
+  const infoPlist = `${JSON.stringify(buildInfoPlist(catalogs), null, 2)}\n`;
 
   const stale = [];
   if (readOrNull(XCSTRINGS) !== json) stale.push(XCSTRINGS);
   if (readOrNull(SWIFT_TABLE) !== swift) stale.push(SWIFT_TABLE);
+  if (readOrNull(INFOPLIST_XCSTRINGS) !== infoPlist) stale.push(INFOPLIST_XCSTRINGS);
 
   if (check) {
     if (stale.length) {
@@ -288,6 +338,7 @@ async function main() {
   }
   writeFileSync(XCSTRINGS, json);
   writeFileSync(SWIFT_TABLE, swift);
+  writeFileSync(INFOPLIST_XCSTRINGS, infoPlist);
   console.log(
     `wrote ${Object.keys(document.strings).length} keys x 5 locales to ${XCSTRINGS}`,
   );

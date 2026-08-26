@@ -14,6 +14,7 @@
 		1A000000000000000000021 /* BundledStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A00000000000000000001C /* BundledStoreTests.swift */; };
 		1A000000000000000000024 /* SwimZHKit in Frameworks */ = {isa = PBXBuildFile; productRef = 1A000000000000000000023 /* SwimZHKit */; };
 		1A00000000000000000002B /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 1A00000000000000000002A /* PrivacyInfo.xcprivacy */; };
+		1A000000000000000000077 /* InfoPlist.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = 1A000000000000000000076 /* InfoPlist.xcstrings */; };
 		1A00000000000000000002D /* AppCorrectnessTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A00000000000000000002C /* AppCorrectnessTests.swift */; };
 		1A00000000000000000002F /* MemoryMetricTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A00000000000000000002E /* MemoryMetricTests.swift */; };
 		1A000000000000000000041 /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A000000000000000000040 /* Theme.swift */; };
@@ -21,6 +22,7 @@
 		1A000000000000000000045 /* DayStrip.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A000000000000000000044 /* DayStrip.swift */; };
 		1A000000000000000000047 /* FilterBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A000000000000000000046 /* FilterBar.swift */; };
 		1A000000000000000000049 /* PoolRowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A000000000000000000048 /* PoolRowView.swift */; };
+		1A000000000000000000075 /* LocationSource.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A000000000000000000074 /* LocationSource.swift */; };
 		1A000000000000000000073 /* PoolHeader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A000000000000000000072 /* PoolHeader.swift */; };
 		1A000000000000000000071 /* PoolMapView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A000000000000000000070 /* PoolMapView.swift */; };
 		1A00000000000000000004B /* TypeSizeBridgeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A00000000000000000004A /* TypeSizeBridgeTests.swift */; };
@@ -62,6 +64,7 @@
 		1A00000000000000000001B /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		1A00000000000000000001C /* BundledStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BundledStoreTests.swift; sourceTree = "<group>"; };
 		1A00000000000000000002A /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		1A000000000000000000076 /* InfoPlist.xcstrings */ = {isa = PBXFileReference; lastKnownFileType = text.json.xcstrings; path = InfoPlist.xcstrings; sourceTree = "<group>"; };
 		1A00000000000000000002C /* AppCorrectnessTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppCorrectnessTests.swift; sourceTree = "<group>"; };
 		1A00000000000000000002E /* MemoryMetricTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemoryMetricTests.swift; sourceTree = "<group>"; };
 		1A000000000000000000040 /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Theme.swift; sourceTree = "<group>"; };
@@ -69,6 +72,7 @@
 		1A000000000000000000044 /* DayStrip.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DayStrip.swift; sourceTree = "<group>"; };
 		1A000000000000000000046 /* FilterBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FilterBar.swift; sourceTree = "<group>"; };
 		1A000000000000000000048 /* PoolRowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PoolRowView.swift; sourceTree = "<group>"; };
+		1A000000000000000000074 /* LocationSource.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocationSource.swift; sourceTree = "<group>"; };
 		1A000000000000000000072 /* PoolHeader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PoolHeader.swift; sourceTree = "<group>"; };
 		1A000000000000000000070 /* PoolMapView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PoolMapView.swift; sourceTree = "<group>"; };
 		1A00000000000000000004A /* TypeSizeBridgeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TypeSizeBridgeTests.swift; sourceTree = "<group>"; };
@@ -135,12 +139,14 @@
 				1A00000000000000000001A /* TodayModel.swift */,
 				1A00000000000000000001B /* Assets.xcassets */,
 				1A00000000000000000002A /* PrivacyInfo.xcprivacy */,
+				1A000000000000000000076 /* InfoPlist.xcstrings */,
 				1A000000000000000000040 /* Theme.swift */,
 				1A00000000000000000004E /* Localization.swift */,
 				1A000000000000000000042 /* TypeSizeBridge.swift */,
 				1A000000000000000000044 /* DayStrip.swift */,
 				1A000000000000000000046 /* FilterBar.swift */,
 				1A000000000000000000048 /* PoolRowView.swift */,
+				1A000000000000000000074 /* LocationSource.swift */,
 				1A000000000000000000072 /* PoolHeader.swift */,
 				1A000000000000000000070 /* PoolMapView.swift */,
 				1A000000000000000000050 /* RibbonCanvas.swift */,
@@ -293,6 +299,7 @@
 			files = (
 				1A000000000000000000020 /* Assets.xcassets in Resources */,
 				1A00000000000000000002B /* PrivacyInfo.xcprivacy in Resources */,
+				1A000000000000000000077 /* InfoPlist.xcstrings in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -345,6 +352,7 @@
 				1A000000000000000000045 /* DayStrip.swift in Sources */,
 				1A000000000000000000047 /* FilterBar.swift in Sources */,
 				1A000000000000000000049 /* PoolRowView.swift in Sources */,
+				1A000000000000000000075 /* LocationSource.swift in Sources */,
 				1A000000000000000000073 /* PoolHeader.swift in Sources */,
 				1A000000000000000000071 /* PoolMapView.swift in Sources */,
 				1A000000000000000000051 /* RibbonCanvas.swift in Sources */,
@@ -444,6 +452,7 @@
 				DEVELOPMENT_TEAM = A5A644VYCS;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "SwimZH uses your location to measure how far each pool is and to show you on the map. It stays on your phone.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
@@ -467,6 +476,7 @@
 				DEVELOPMENT_TEAM = A5A644VYCS;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "SwimZH uses your location to measure how far each pool is and to show you on the map. It stays on your phone.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";

@@ -109,6 +109,7 @@ ios-qa:  ## Swift chain: locale check -> format lint -> build -> test+coverage -
 	cd apps/ios && swift test --enable-code-coverage
 	uv run python scripts/crap_swift.py
 	uv run pytest tests/scripts --no-cov
+	$(MAKE) ios-sim-world
 	cd apps/ios && xcodebuild -project App/SwimZH.xcodeproj -scheme SwimZH \
 		-destination '$(IOS_DESTINATION)' test
 	@echo "iOS QA: all green"
@@ -129,6 +130,21 @@ ios-qa:  ## Swift chain: locale check -> format lint -> build -> test+coverage -
 # fixture for one that moves with the wall clock. `make ios-export` is the command that does
 # that deliberately.
 IOS_STORE_URL ?=
+
+.PHONY: ios-sim-world
+# The world `BehaviourTests.testMyLocationChangesWhatNearestMeans` needs, granted from OUTSIDE
+# the app. An XCUITest runs ON the simulator, so it cannot shell out (`Process` is macOS-only),
+# and the permission alert belongs to SpringBoard rather than to this app — tapping it is slow,
+# famously flaky, and tests whether iOS can draw its own dialog rather than what this app does
+# with the answer.
+#
+# WOLLISHOFEN, and the coordinates are load-bearing: it is about four kilometres south of Zürich
+# HB, which is what `Places.default` measures from. A position near the station would leave both
+# orderings identical and the test would pass while proving nothing. `- ` prefixes because a
+# device that is not booted must not fail the whole chain.
+ios-sim-world:  ## Grant location + place the booted simulator, for the behaviour tests
+	-xcrun simctl privacy booted grant location ch.swimzh.SwimZH
+	-xcrun simctl location booted set 47.3450,8.5340
 
 .PHONY: ios-release
 

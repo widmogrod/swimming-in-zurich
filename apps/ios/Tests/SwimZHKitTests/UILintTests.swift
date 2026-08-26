@@ -743,6 +743,25 @@ struct UILintTests {
     #expect(seen.count >= 10, "the icon list looks empty: \(seen)")
   }
 
+  @Test("the UI test target and the app agree on the location defaults key")
+  func locationPreferenceKeyMatches() throws {
+    // The UI test target links NO app code — it drives the app from outside — so the defaults
+    // key it uses to give each test a clean start is spelled out by hand in both files. A
+    // rename on one side alone would not fail to build; it would silently stop isolating the
+    // tests, and the symptom is a lane-plan test failing because a different pool sorted first.
+    let source = try #require(try Self.appFiles().first { $0.name == "LocationSource.swift" })
+    let key = try #require(
+      Self.code(source.text).firstMatch(of: /preferredKey = "([a-zA-Z0-9._]+)"/)?.1)
+    let tests = try String(
+      contentsOf: SourceLintTests.sources
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
+        .appending(path: "App/SwimZHUITests/BehaviourTests.swift"), encoding: .utf8)
+    #expect(
+      tests.contains("locationPreferenceKey = \"\(key)\""),
+      "BehaviourTests isolates on a different key than LocationSource persists to")
+  }
+
   @Test("every corner radius comes from the scale")
   func radiiComeFromTheScale() throws {
     // 12, 3 and 2, in three files, with no rule between them. `RibbonCanvas` is exempt: its

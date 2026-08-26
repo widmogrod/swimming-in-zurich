@@ -150,6 +150,16 @@ export const de = {
 
   "combo.noMatches": "Keine Treffer",
   "combo.noPoolsMatch": "Keine Bäder gefunden",
+  "place.locating": "Standort wird gesucht…",
+  "place.refused.denied":
+    "SwimZH sieht deinen Standort nicht. In den Einstellungen kannst du ihn erlauben.",
+  "place.refused.restricted":
+    "Dieses Gerät erlaubt Apps keinen Standortzugriff.",
+  "place.refused.unavailable":
+    "Zurzeit kein Standort verfügbar. Distanzen gelten ab dem Ort oben.",
+  "action.openSettings": "Einstellungen öffnen",
+  "ios.location.purpose":
+    "SwimZH nutzt deinen Standort, um die Entfernung zu jedem Bad zu messen und dich auf der Karte zu zeigen. Er bleibt auf deinem Gerät.",
   "place.useMyLocation": "Meinen Standort verwenden",
   "place.myLocation": "Mein Standort",
 

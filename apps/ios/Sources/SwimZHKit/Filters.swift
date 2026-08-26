@@ -53,11 +53,16 @@ public struct Place: Equatable, Hashable, Sendable, Identifiable {
   /// parenthetical gloss ("main station") that IS prose and so is a message.
   public let label: Wording
   public let point: GeoPoint
+  /// How these coordinates were arrived at. See `PlaceSource` in `Located.swift` — it travels
+  /// WITH the point rather than beside it, so a label and a position that disagree about where
+  /// they came from cannot be constructed.
+  public let source: PlaceSource
 
-  public init(id: String, label: Wording, point: GeoPoint) {
+  public init(id: String, label: Wording, point: GeoPoint, source: PlaceSource = .preset) {
     self.id = id
     self.label = label
     self.point = point
+    self.source = source
   }
 }
 
@@ -67,10 +72,11 @@ public struct Place: Equatable, Hashable, Sendable, Identifiable {
 /// construction (no networking code exists in either target, asserted by a lint), so a geocoder
 /// is not available to it. These are the web's own three presets.
 ///
-/// There is deliberately NO device location in S3a. Core Location would be the slice's only new
-/// framework dependency and the plan rules out MapKit precisely to keep the offline property, so
-/// "use my location" is left unbuilt rather than half-built. If it is added later it becomes one
-/// more `Place` from a `CLLocationManager`, and nothing else here changes.
+/// THE DEVICE'S OWN POSITION IS NOT ONE OF THESE, and it is not absent either — see
+/// `Located.swift`. This note used to say device location was left unbuilt because Core Location
+/// would be the app's only new framework and the plan ruled out MapKit to keep it offline. The
+/// map mode links MapKit now, so that premise is gone; the seam this note predicted turned out
+/// to be the right one, and `Places.me(at:)` is exactly the "one more `Place`" it described.
 public enum Places {
   public static let presets: [Place] = [
     Place(id: "hb", label: .key("place.hb"), point: GeoPoint(lat: 47.3779, lon: 8.5403)),
