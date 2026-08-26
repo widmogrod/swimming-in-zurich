@@ -9,6 +9,17 @@
 // The one thing this file decides is which rows are ACTIONABLE: a phone number dials, a website
 // opens. Both are `Link`/`Button` rather than plain text because a tappable number beside an
 // address is what a swimmer standing outside a locked door actually needs.
+//
+// THE NAME IS SAID ONCE. The screen opened with it in the navigation bar AND at `heroTitle`
+// underneath, six points apart — the same word twice, which is the plainest kind of careless.
+// Deleting either copy would have been wrong: the hero is what makes the push continuous with
+// the row you tapped, and a bar with no title on a pushed screen leaves a bare chevron with
+// nothing to say what you are looking at once the hero has scrolled away.
+//
+// So the bar waits. It is empty while the hero's name is on screen and takes the name over the
+// moment it is not — which is exactly what a `.large` navigation title does for free, and what
+// a hand-built hero has to be told to do. The decision is `SwimZHKit.poolTitleShows`; the
+// height it needs is measured here, because it depends on the reader's text size.
 
 import SwiftUI
 import SwimZHKit
@@ -32,6 +43,22 @@ struct FacilitySheet: View {
   /// coordinates, so this is threaded in rather than looked up here.
   let point: GeoPoint?
   let isToday: Bool
+
+  /// Whether the bar is stating the name yet. See the header.
+  @State private var showsTitle = false
+
+  /// How tall the hero's name is at the reader's text size. `@ScaledMetric` rather than a
+  /// constant for the same reason the day strip's height is one: at an accessibility size this
+  /// line is more than twice as tall, and a fixed threshold would hand the name to the bar
+  /// while it was still plainly on screen.
+  @ScaledMetric(relativeTo: .title) private var nameHeight = 41
+
+  /// How far down the content the hero's name ends: the map, the gap under it, the name itself,
+  /// and the section's own top inset. Composed from the parts rather than written as one number
+  /// so that changing the map's height cannot silently desynchronise the handover.
+  private var nameBottom: Double {
+    Design.Space.row + heroMapHeight + Design.Space.gutter + nameHeight
+  }
 
   var body: some View {
     List {
@@ -62,9 +89,28 @@ struct FacilitySheet: View {
     .listStyle(.insetGrouped)
     .listSectionSpacing(.compact)
     // The sheet's rendered identity is the pool's NAME, never its id — which is why
-    // `FacilityDetailOut.facility_id` stays deliberately omitted from `renderedFields`.
-    .navigationTitle(Text(verbatim: detail.name))
+    // `FacilityDetailOut.facility_id` stays deliberately omitted from `renderedFields`. It is
+    // rendered twice over: at `heroTitle` in `PoolHeader`, and here once that has scrolled off.
+    .navigationTitle(showsTitle ? Text(verbatim: detail.name) : Text(verbatim: ""))
     .navigationBarTitleDisplayMode(.inline)
+    // Measured from the top of the CONTENT, the same quantity the find screen's day strip
+    // watches — and unlike that one this needs no correction for a moving inset, because
+    // filling in a title changes no layout.
+    .onScrollGeometryChange(for: Double.self) { geometry in
+      geometry.contentOffset.y + geometry.contentInsets.top
+    } action: { _, scrolled in
+      title(scrolledTo: scrolled)
+    }
+    .animation(.easeInOut(duration: 0.2), value: showsTitle)
+  }
+
+  /// Read the scroll, ask the kit, record the answer. It does NOT call `withAnimation`: this
+  /// runs on every frame of a drag, and the animation is declared against the value instead —
+  /// the lesson the day strip's first version cost.
+  private func title(scrolledTo scrolled: Double) {
+    let shows = poolTitleShows(scrolled: scrolled, nameBottom: nameBottom, showing: showsTitle)
+    guard shows != showsTitle else { return }
+    showsTitle = shows
   }
 
   private var sections: [DetailSection] {

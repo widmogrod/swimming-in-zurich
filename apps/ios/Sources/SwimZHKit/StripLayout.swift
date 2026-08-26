@@ -151,3 +151,32 @@ public func stripShouldShow(scrolled: Double, stripHeight: Double, showing: Bool
   if scrolled > stripHidesBeyond(stripHeight: stripHeight) { return false }
   return showing
 }
+
+// MARK: - When the pool screen's bar states the name
+
+/// Clear air on either side of the moment the navigation bar takes over the name.
+///
+/// SMALLER THAN THE DAY STRIP'S BAND, and for a reason worth writing down: the strip's band has
+/// to be wider than the strip itself, because hiding it shrinks the scroll view's inset by its
+/// own height and moves the offset in exactly the direction that would re-show it. That is a
+/// feedback loop, and the band is what breaks it. A title has no such loop — the bar is already
+/// there, and filling it in changes no layout at all — so this band is only about a finger
+/// resting on the boundary, and twenty-four points is plenty for that.
+public let poolTitleBand: Double = 24
+
+/// Whether the pool screen's navigation bar should state the pool's name.
+///
+/// The screen opens on the name at `Font.heroTitle`, which is the largest thing on it. Putting
+/// the same name in the bar at the same time is the same word twice, six points apart — so the
+/// bar stays empty until its own copy is the ONLY one, which is the standard iOS behaviour a
+/// large title gets for free and a hand-built hero does not.
+///
+/// `nameBottom` is how far down the content the hero's name ends, measured by the caller rather
+/// than assumed here: it depends on the map above it and on the reader's text size, and a fixed
+/// number would hand the name over too early at an accessibility size — exactly where the
+/// duplication is most cramped.
+public func poolTitleShows(scrolled: Double, nameBottom: Double, showing: Bool) -> Bool {
+  if scrolled > nameBottom { return true }
+  if scrolled < nameBottom - poolTitleBand { return false }
+  return showing
+}

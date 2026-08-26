@@ -143,6 +143,11 @@
       "file": "PoolMapView.swift",
       "expression": "cluster.lead.name",
       "reason": "(a) the pool's own name, on a single pin and on the card it raises"
+    },
+    {
+      "file": "FacilitySheet.swift",
+      "expression": "\"\"",
+      "reason": "(b) the empty title the bar wears while the hero still owns the name; an empty string is not a sentence"
     }
   ]
 }

@@ -335,6 +335,33 @@ final class BehaviourTests: XCTestCase {
       "the pool screen offers no way to get to the pool")
   }
 
+  func testThePoolScreenSaysItsNameOnceAtATime() {
+    // The screen opened with the pool's name in the navigation bar AND at `heroTitle` six
+    // points under it — the same word twice. Neither copy could simply be deleted: the hero is
+    // what makes the push continuous with the row you tapped, and an empty bar on a scrolled
+    // screen leaves a chevron with nothing to say what you are looking at.
+    find("poolRow").tap()
+    XCTAssertTrue(find("heroMap").waitForExistence(timeout: 10), "the pool screen never opened")
+
+    let bar = app.navigationBars.firstMatch
+    XCTAssertTrue(bar.waitForExistence(timeout: 5), "the pool screen has no navigation bar")
+    // Queried by STATIC TEXT rather than by the bar's identifier: a `NavigationStack` names the
+    // bar after its title, so `bar.identifier` reports the name even in the frame where nothing
+    // is drawn. What the reader can actually see is the label.
+    XCTAssertEqual(
+      bar.staticTexts.count, 0,
+      "the bar is stating the name while the hero is still showing it — that is twice")
+
+    // ...and it must take the name over once the hero has gone, or the screen names no pool.
+    app.swipeUp()
+    app.swipeUp()
+    let named = expectation(
+      for: NSPredicate(format: "count > 0"), evaluatedWith: bar.staticTexts)
+    XCTAssertEqual(
+      XCTWaiter().wait(for: [named], timeout: 8), .completed,
+      "scrolling past the hero left the bar empty — nothing on screen names the pool")
+  }
+
   func testThePoolScreenActionsAreRealControls() {
     find("poolRow").tap()
     let directions = find("directionsButton")

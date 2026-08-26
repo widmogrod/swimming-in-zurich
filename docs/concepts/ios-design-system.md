@@ -353,3 +353,33 @@ recurring in the file built to prevent it. Keeping the names in one place makes 
 visible to a reader of that file, and it still took a screenshot to notice. `glyphsAreDistinct`
 now fails the build on it (verified by reintroducing the collision), allowing only the
 state-pair suffixes like `filter`/`filterActive`.
+
+## The name is said once at a time
+
+The pool screen opened with the name in the navigation bar **and** at `heroTitle` six points
+under it — the same word twice, which is the plainest kind of careless.
+
+Neither copy could simply be deleted. The hero is what makes the push continuous with the row
+you tapped; a bar with no title on a pushed screen leaves a bare chevron with nothing to say
+what you are looking at once the hero has scrolled away.
+
+So the bar waits. `SwimZHKit.poolTitleShows` hands the name over the moment the hero's copy
+leaves the screen — which is exactly what a `.large` navigation title does for free and what a
+hand-built hero has to be told to do.
+
+* **`nameBottom` is measured, not assumed.** It is composed from the map's height, the gap under
+  it, a `@ScaledMetric` name line and the section inset, so changing the map cannot silently
+  desynchronise the handover — and at an accessibility size, where the name is more than twice
+  as tall, a fixed threshold would put it in the bar while it was still plainly on screen.
+* **The band is 24 points, much narrower than the day strip's.** Worth writing down because the
+  reason is structural: the strip's band must exceed the strip's own height, since hiding it
+  shrinks the scroll inset and moves the offset in the direction that would re-show it — a
+  feedback loop. Revealing a title changes no layout, so this band only has to survive a finger
+  resting on the boundary.
+
+`UILintTests.detailSheetRendersTheName` used to pin an unconditional
+`.navigationTitle(Text(verbatim: detail.name))` — which would now be demanding the duplication
+back. It checks both halves instead: the hero renders the name, and the bar's copy is
+conditional. Either alone leaves a screen that can be looking at a pool without ever naming it.
+`BehaviourTests.testThePoolScreenSaysItsNameOnceAtATime` proves it by driving the app, and was
+verified to fail when the unconditional title is restored.

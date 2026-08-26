@@ -210,13 +210,32 @@ struct UILintTests {
 
   @Test("the detail sheet renders the pool's NAME, which is why its id stays omitted")
   func detailSheetRendersTheName() throws {
-    // `FacilityDetailOut.facility_name` has no `DetailRow` of its own — it is the sheet's
-    // title — so this lint is its evidence, and the reason `facility_id` is deliberately NOT
+    // `FacilityDetailOut.facility_name` has no `DetailRow` of its own — it is the screen's own
+    // heading — so this lint is its evidence, and the reason `facility_id` is deliberately NOT
     // claimed rendered (see `FieldCoverage.deliberatelyOmitted`).
+    //
+    // IT USED TO PIN THE NAVIGATION TITLE, and that stopped being the whole truth: the name is
+    // rendered at `heroTitle` in `PoolHeader` and the bar states it only once that has scrolled
+    // away, so a lint demanding an unconditional `.navigationTitle(Text(verbatim: detail.name))`
+    // would now be demanding the duplication back. Both halves are checked instead — the hero
+    // is where the reader meets the name, the bar is what keeps it after that — because either
+    // one alone leaves a screen that can be looking at a pool without ever naming it.
     let sheet = try #require(try Self.appFiles().first { $0.name == "FacilitySheet.swift" })
     let code = Self.code(sheet.text)
-    #expect(code.contains(".navigationTitle(Text(verbatim: detail.name))"))
+    #expect(
+      code.contains("showsTitle ? Text(verbatim: detail.name)"),
+      "the bar never takes the name over, so a scrolled screen names no pool")
     #expect(!code.contains("Text(detail.poolID)"))
+
+    let header = try #require(try Self.appFiles().first { $0.name == "PoolHeader.swift" })
+    let hero = Self.code(header.text)
+    #expect(
+      hero.contains("Text(verbatim: detail.name)"), "the pool screen no longer opens on a name")
+    // ...and the bar's copy is CONDITIONAL. Without this the two could quietly both be
+    // unconditional again, which is the defect the pair exists to prevent rather than describe.
+    #expect(
+      code.contains("poolTitleShows("),
+      "the bar states the name unconditionally again — that is the same word twice")
   }
 
   @Test("the sheet asks for a live reading, and hands it to the rule that words it")
