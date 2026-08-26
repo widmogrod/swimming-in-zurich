@@ -146,6 +146,31 @@ struct TodayView: View {
     .accessibilityIdentifier("viewMode")
   }
 
+  /// The whole roster, one tap away.
+  ///
+  /// IT HAS MOVED TWICE, and the second move was a mistake this session's own tests measured.
+  /// It began as an overflow-menu item (two taps, and a navigation bar kept alive to hang the
+  /// menu on), became a bottom-bar button, and was then pushed into the END OF THE LIST to make
+  /// room for the list/map picker. That last one read as tidy — the roster is reference, like
+  /// the colour legend beside it — and was wrong for a reason a screenshot cannot show: the
+  /// list is fifty-seven pools long, so "one tap" had become twenty-five swipes and a tap.
+  ///
+  /// What measured it was `BehaviourTests`. Two tests that merely needed to REACH this control
+  /// spent about a minute each scrolling to it, and both became load-dependent — passing alone,
+  /// failing inside a full suite run, because a row still decelerating is a row a tap misses. A
+  /// test that has to work that hard to reach a control is describing the reader's problem.
+  ///
+  /// The bar had room all along: search sits at the leading edge and the picker in the middle,
+  /// so this joins the filter in the trailing group — which is where it was before the picker
+  /// arrived. The colour legend STAYS in the list, because a note about what the colours mean
+  /// genuinely belongs where the colours are.
+  private var allPoolsButton: some View {
+    NavigationLink(value: Route.allPools) {
+      Label(Message("nav.allPools"), systemImage: Icon.allPools, localized)
+    }
+    .accessibilityIdentifier("allPoolsLink")
+  }
+
   /// Every destination this stack has, in one place. A `switch` over VIEWS, not over sentences
   /// — `noStateToStringInTheApp` bans the second, and this is the first.
   @ViewBuilder
@@ -246,6 +271,7 @@ struct TodayView: View {
         ToolbarSpacer(.flexible, placement: .bottomBar)
         ToolbarItem(placement: .bottomBar) { modePicker }
         ToolbarSpacer(.flexible, placement: .bottomBar)
+        ToolbarItem(placement: .bottomBar) { allPoolsButton }
         ToolbarItem(placement: .bottomBar) {
           FilterButton(filters: $model.filters, kinds: model.kinds)
         }
@@ -417,17 +443,9 @@ struct TodayView: View {
       // The ribbon's colour key, reachable from the screen the ribbons are on. It was two taps
       // deep inside an overflow menu — a legend nobody finds is a legend that is not there,
       // and without it the day tail's colours cannot be read at all.
-      // THE WHOLE ROSTER, and the colour key, together at the end of the answer.
-      //
-      // "All pools" was a bottom-bar button until the map arrived and the bar ran out of room
-      // for a fourth control. It belongs here rather than under an ellipsis: this screen
-      // answers "where can I swim on this day", the map answers the same question spatially,
-      // and the roster is the reference behind both — which is the same kind of thing the
-      // legend is, in the same place, one tap away.
-      NavigationLink(value: Route.allPools) {
-        Label(Message("nav.allPools"), systemImage: Icon.allPools, localized)
-      }
-      .accessibilityIdentifier("allPoolsLink")
+      // The colour key, at the end of the answer — where the colours are. Its neighbour here
+      // used to be the all-pools link; see `allPoolsButton` for why that one went back to the
+      // bar and this one did not.
       NavigationLink(value: Route.legend) {
         Label(Message("nav.accessTypes"), systemImage: Icon.legend, localized)
       }

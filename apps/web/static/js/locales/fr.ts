@@ -505,6 +505,11 @@ export const fr = {
   "a11y.selected": "Sélectionné",
 
   // --- Interface du téléphone -------------------------------------------------------
+  "map.poolsHere": {
+    one: "{count} piscine ici",
+    many: "{count} piscines ici",
+    other: "{count} piscines ici",
+  },
   "nav.map": "Carte",
   "nav.list": "Liste",
   "action.directions": "Itinéraire",

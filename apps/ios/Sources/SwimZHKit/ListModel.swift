@@ -43,6 +43,24 @@ public enum Tier: String, CaseIterable, Equatable, Hashable, Sendable {
     }
   }
 
+  /// How interesting this tier is, best first — the list's own section order as a number.
+  ///
+  /// A SWITCH rather than `allCases.firstIndex(of:)`, and the difference is the compiler: a
+  /// seventh case added to the enum makes this fail to build, where the index form would
+  /// silently rank it wherever it happened to be declared. `rankMatchesTheSectionOrder` pins
+  /// the two together, so the map cannot start disagreeing with the list about which pool is
+  /// the more interesting of two.
+  public var rank: Int {
+    switch self {
+    case .now: return 0
+    case .soon: return 1
+    case .past: return 2
+    case .scheduled: return 3
+    case .unknown: return 4
+    case .closed: return 5
+    }
+  }
+
   /// Whether this tier is a claim about the CURRENT moment. The three that are may only ever
   /// appear on today's answer; `listModel` enforces that, and a test drives it.
   public var isWallClockClaim: Bool {

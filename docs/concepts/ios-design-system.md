@@ -294,3 +294,62 @@ setting without any of these files having to ask.
 `.contentTransition(.numericText())` on the headline, so the count rolls rather than cuts when
 the day changes. It is the only line in the app whose leading token is a digit, and it costs
 nothing on the branches that have no number in them.
+
+## Fifty-seven pins were one brown mass
+
+The map's first version drew every answered pool as its own annotation. Framed on Zürich that
+put roughly forty of them inside the middle third of the screen, overlapping into something you
+could neither read nor reliably tap.
+
+`MKMapView` has `clusteringIdentifier` for exactly this and SwiftUI's `Map` does not expose it —
+which turned out better, because grouping is a **rule**: it lives in `SwimZHKit.clusterPins`
+where a test drives it, and doing it ourselves is what lets a group be anchored and coloured by
+the most interesting pool in it rather than by an arbitrary member.
+
+* **Greedy, not a grid.** A grid snaps each pin to a cell, which is O(n) and has the one bad
+  property that matters here: two pools ten metres apart either side of a boundary stay drawn on
+  top of each other — the exact case the function exists for. Greedy has no boundary, and at 57
+  pools the O(n²) is ~3,000 distance checks run once per gesture.
+* **Best pin first, and it leads.** The first pin to claim a patch of screen is the most
+  interesting one there, so the badge sits at *its* coordinates and wears *its* tier colour. A
+  centroid would have been the obvious anchor and is wrong: expanding then makes every member
+  jump somewhere new, where anchoring on the lead means the badge simply becomes the pin that
+  was already under it.
+* **The camera is an input.** What overlaps depends entirely on zoom, so `onMapCameraChange`
+  feeds `metresPerPoint` back in. `.onEnd`, not `.continuous` — one recompute per gesture, and a
+  badge whose count flickered mid-pinch would be worse than the wait.
+* **Spacing is 44 points, not 34.** A group badge is 34 across, so 34 put two badges exactly rim
+  to rim — visible in a screenshot as pairs of touching circles down the west of the city.
+* **Tapping a group zooms into it**, via `clusterFrame`, whose floor is a city block rather than
+  the whole-answer 1.5 km. Reusing `pinFrame` would have thrown a reader who tapped to get
+  closer *out* to a 1.5 km view.
+
+`pinProminence` fades the three tiers you cannot swim in today (`past`, `closed`, `unknown`).
+Muting `unknown` beside `closed` is safe because prominence is not the channel that distinction
+travels on — the two keep different glyphs, colours and words — and `scheduled` is deliberately
+never muted, or every future date would render as a grey map.
+
+## Two tests measured a navigation mistake
+
+"All pools" moved into the end of the list in the map commit, to free bottom-bar room for the
+list/map picker. It read as tidy — the roster is reference, like the colour legend beside it —
+and it was wrong for a reason no screenshot shows: the list is 57 pools long, so *one tap* had
+become *twenty-five swipes and a tap*.
+
+What measured it was `BehaviourTests`. Two tests that merely needed to **reach** the control
+spent ~55 s each scrolling, and both became load-dependent — passing alone, failing inside a
+full suite run, because a row still decelerating is a row a tap misses. Chasing that with a
+settle-and-tap helper fixed one test and moved the flake to the other, which was the signal: a
+test working that hard to reach a control is describing the reader's problem.
+
+The bar had room all along — search at the leading edge, picker in the middle — so the button
+rejoined the filter in the trailing group. The two tests dropped to ~12 s each and the suite from
+288 s to 223 s. The colour legend stayed in the list, because a note about what the colours mean
+genuinely belongs where the colours are.
+
+**And it shipped one glyph twice.** Back in the bar, `Icon.allPools` and the picker's
+`Icon.list` were both `list.bullet`, four inches apart — the founding defect of the `Icon` list,
+recurring in the file built to prevent it. Keeping the names in one place makes a collision
+visible to a reader of that file, and it still took a screenshot to notice. `glyphsAreDistinct`
+now fails the build on it (verified by reintroducing the collision), allowing only the
+state-pair suffixes like `filter`/`filterActive`.

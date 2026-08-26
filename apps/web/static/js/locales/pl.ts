@@ -546,6 +546,12 @@ export const pl = {
   "a11y.selected": "Wybrane",
 
   // --- Elementy interfejsu telefonu -------------------------------------------------
+  "map.poolsHere": {
+    one: "{count} basen tutaj",
+    few: "{count} baseny tutaj",
+    many: "{count} basenów tutaj",
+    other: "{count} basena tutaj",
+  },
   "nav.map": "Mapa",
   "nav.list": "Lista",
   "action.directions": "Trasa",

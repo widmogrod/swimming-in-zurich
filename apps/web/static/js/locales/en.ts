@@ -622,6 +622,10 @@ export const en = {
   "a11y.selected": "Selected",
 
   // --- Phone chrome -----------------------------------------------------------------
+  "map.poolsHere": {
+    one: "{count} pool here",
+    other: "{count} pools here",
+  },
   "nav.map": "Map",
   "nav.list": "List",
   "action.directions": "Directions",

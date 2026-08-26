@@ -513,6 +513,10 @@ export const de = {
   "a11y.selected": "Ausgewählt",
 
   // --- Rahmen der App ---------------------------------------------------------------
+  "map.poolsHere": {
+    one: "{count} Bad hier",
+    other: "{count} Bäder hier",
+  },
   "nav.map": "Karte",
   "nav.list": "Liste",
   "action.directions": "Route",

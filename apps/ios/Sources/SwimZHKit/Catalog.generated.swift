@@ -488,6 +488,10 @@ extension Catalog {
       ], isPlural: false),
     "lockerKind.valuables": Entry(parameters: [], isPlural: false),
     "lockerKind.wardrobe": Entry(parameters: [], isPlural: false),
+    "map.poolsHere": Entry(
+      parameters: [
+        Parameter(name: "count", kind: .integer)
+      ], isPlural: true),
     "meta.answersThrough": Entry(parameters: [], isPlural: false),
     "meta.dataFrom": Entry(parameters: [], isPlural: false),
     "meta.offlineNote": Entry(parameters: [], isPlural: false),

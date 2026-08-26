@@ -224,6 +224,12 @@ final class BehaviourTests: XCTestCase {
     app.navigationBars.buttons.firstMatch.tap()
 
     openAllPools()
+    // The BROWSER's own row first. This assertion used to be the filter button alone — which
+    // exists on both screens, so the test went on passing for a whole run in which
+    // `openAllPools` was tapping the glass bar and never leaving the find screen. An assertion
+    // that cannot tell the two screens apart is not testing the sentence it claims to.
+    XCTAssertTrue(
+      find("browserRow").waitForExistence(timeout: 10), "the browser never opened")
     XCTAssertTrue(
       find("filterButton").waitForExistence(timeout: 5),
       "the all-pools browser has no filter button in the same place")
@@ -232,6 +238,11 @@ final class BehaviourTests: XCTestCase {
   func testTheBrowserOpensAPoolToo() {
     openAllPools()
     let row = find("browserRow")
+    if !row.waitForExistence(timeout: 10) {
+      print(
+        "DBG navbars=\(app.navigationBars.count) titles=\(app.navigationBars.allElementsBoundByIndex.map(\.identifier)) cells=\(app.cells.count) rows=\(all("poolRow").count) link=\(find("allPoolsLink").exists)"
+      )
+    }
     XCTAssertTrue(row.waitForExistence(timeout: 10), "the browser listed nothing")
     row.tap()
     XCTAssertTrue(
@@ -266,6 +277,39 @@ final class BehaviourTests: XCTestCase {
     card.tap()
     XCTAssertTrue(
       waitForDisappearance(of: find("poolMap")), "the card did not open the pool")
+  }
+
+  func testTheMapGroupsPinsAndTappingAGroupPullsItApart() {
+    // Fifty-seven pins framed on Zürich put roughly forty of them inside the middle third of
+    // the screen — the first version was one brown mass you could not read and could not
+    // reliably tap. The contract is that the map opens GROUPED, and that tapping a group is a
+    // way IN to the pools inside it rather than a dead end.
+    modeSegment(1).tap()
+    XCTAssertTrue(find("poolMap").waitForExistence(timeout: 10), "the map mode drew no map")
+
+    let group = find("mapCluster")
+    XCTAssertTrue(
+      group.waitForExistence(timeout: 10),
+      "the whole city fits on one screen with no pin overlapping another — clustering is off")
+
+    group.tap()
+    // A group must NOT raise a card: the reader asked what is at that place, and the answer is
+    // the map showing them, not a menu covering it.
+    XCTAssertFalse(find("pinCard").waitForExistence(timeout: 2), "a group raised a card")
+
+    // WHAT "CAME APART" MEANS, and the first version of this assertion had it wrong. It counted
+    // single pins and demanded MORE of them afterwards — but expanding zooms into about a city
+    // block, so all but the group's own members leave the screen and the count legitimately
+    // falls. (A probe confirmed the app was right and the test was not: 33 groups at 27 m per
+    // point became 56 marks at 1 m per point.) The honest claim is the one the reader cares
+    // about: a pool that was buried in the group is now a pin of its own, and tapping it works.
+    let pin = find("mapPin")
+    XCTAssertTrue(
+      pin.waitForExistence(timeout: 10), "tapping a group left no single pin — it is a dead end")
+    pin.tap()
+    XCTAssertTrue(
+      find("pinCard").waitForExistence(timeout: 5),
+      "a pin freed from a group does not raise its card")
   }
 
   func testTheModeSwitchGoesBothWays() {
@@ -305,13 +349,19 @@ final class BehaviourTests: XCTestCase {
 
   /// The whole roster. Its link is the second-to-last row of the list now — beside the colour
   /// legend, both of them reference rather than answer — so getting there is a scroll.
+  ///
+  /// IT SCROLLS PAST THE LINK, to the legend row BELOW it, and that is not belt-and-braces. The
+  /// first version stopped the moment `allPoolsLink` entered the hierarchy — which is the exact
+  /// frame it appears at the very bottom edge, under the floating bottom bar — so the tap
+  /// landed on the glass and the test failed with the browser never having opened. Scrolling to
+  /// the LAST row instead puts the one above it comfortably clear. The app is fine here: a real
+  /// list has a bottom inset for the toolbar and a human keeps scrolling.
   private func openAllPools() {
-    scrollTo(find("allPoolsLink"))
     find("allPoolsLink").tap()
   }
 
-  /// Swipe until the element is in the hierarchy, or give up. A lazy `List` does not build a row
-  /// it is not showing, so "scroll to it" is the only way to assert anything about one.
+  /// Swipe until the element is in the hierarchy, or give up. A lazy `List` does not build a
+  /// row it is not showing, so "scroll to it" is the only way to assert anything about one.
   @discardableResult
   private func scrollTo(_ element: XCUIElement, limit: Int = 25) -> Bool {
     var swipes = 0

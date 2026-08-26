@@ -12,7 +12,7 @@ import Testing
 @Suite("The map's rules")
 struct MapModelTests {
   static func row(
-    _ poolID: String, lat: Double? = nil, tier: Tier = .now, favourite: Bool = false
+    _ poolID: String, tier: Tier = .now, favourite: Bool = false
   ) -> PoolRow {
     PoolRow(
       poolID: poolID, poolName: "Pool \(poolID)", poolKind: "indoor", distanceKm: 1.5,
@@ -57,15 +57,16 @@ struct MapModelTests {
     #expect(set.missing == 0)
   }
 
-  @Test("the drawing order is the answer's, reversed — the best pool ends up on top")
-  func drawingOrderPutsTheBestPoolOnTop() {
-    // MapKit draws later annotations over earlier ones, and Zürich has pools a hundred metres
-    // apart on the same shore. The list's order is a ranking; reversing it means the pool the
-    // ranking put first is the one that is not hidden.
+  @Test("the pins arrive in the answer's own order — the stacking is the clusterer's job")
+  func pinsKeepTheAnswerOrder() {
+    // This USED to return them reversed, so MapKit's last-drawn-on-top rule favoured the best
+    // pool. That reversal moved into `clusterPins`, which is the function that actually knows
+    // which pins ended up on top of each other; leaving it here as well would have been two
+    // places deciding one thing, and the second one wins.
     let set = poolPins(
       Self.sections([Self.row("first"), Self.row("second"), Self.row("third")]),
       geo: ["first": Self.zurich, "second": Self.zurich, "third": Self.zurich])
-    #expect(set.pins.map(\.poolID) == ["third", "second", "first"])
+    #expect(set.pins.map(\.poolID) == ["first", "second", "third"])
   }
 
   // MARK: - Framing
@@ -137,5 +138,180 @@ struct MapModelTests {
     // finding.
     #expect(findRow(Self.sections([Self.row("a")]), poolID: "zzz") == nil)
     #expect(findRow([], poolID: "a") == nil)
+  }
+}
+
+@Suite("Clustering, and what recedes")
+struct PinClusterTests {
+  static let zurich = GeoPoint(lat: 47.3769, lon: 8.5417)
+
+  /// A point `metres` due east of Zürich centre. East rather than north because the longitude
+  /// scaling by `cos(lat)` is the half a wrong implementation gets wrong.
+  static func east(_ metres: Double) -> GeoPoint {
+    let degrees = metres / (111_320 * cos(zurich.lat * .pi / 180))
+    return GeoPoint(lat: zurich.lat, lon: zurich.lon + degrees)
+  }
+
+  static func pin(_ id: String, _ point: GeoPoint, tier: Tier = .now) -> PoolPin {
+    PoolPin(
+      poolID: id, name: id, point: point, tier: tier, mark: .attend, isFavourite: false,
+      verdict: Verdict(head: Message("mobile.verdict.openNow")), distanceKm: nil)
+  }
+
+  // MARK: - The grouping itself
+
+  @Test("pins that would overlap on screen become one badge")
+  func nearPinsGroup() {
+    // 44 points of spacing at 10 m per point is a 440 m radius, so 200 m apart is an overlap.
+    let pins = [Self.pin("a", Self.zurich), Self.pin("b", Self.east(200))]
+    let clusters = clusterPins(pins, metresPerPoint: 10)
+    #expect(clusters.count == 1)
+    #expect(clusters[0].count == 2)
+    #expect(!clusters[0].isSingle)
+  }
+
+  @Test("pins far enough apart stay their own pins")
+  func farPinsStaySeparate() {
+    let pins = [Self.pin("a", Self.zurich), Self.pin("b", Self.east(700))]
+    let clusters = clusterPins(pins, metresPerPoint: 10)
+    #expect(clusters.count == 2)
+    #expect(clusters.filter(\.isSingle).count == 2)
+  }
+
+  @Test("zooming in pulls a cluster apart — the same pins, a smaller metres-per-point")
+  func zoomingInSeparatesThem() {
+    // The whole point of taking the camera as a parameter: nothing about the pins changed.
+    let pins = [Self.pin("a", Self.zurich), Self.pin("b", Self.east(200))]
+    #expect(clusterPins(pins, metresPerPoint: 10).count == 1)
+    #expect(clusterPins(pins, metresPerPoint: 1).count == 2)
+  }
+
+  @Test("every pin lands in exactly one cluster, whatever the zoom")
+  func nothingIsLostOrDuplicated() {
+    // The property that matters most and the one an off-by-one in the greedy loop would break:
+    // a map that quietly dropped a pool would be the `PinSet.missing` bug in a new place.
+    let pins = (0..<20).map { Self.pin("p\($0)", Self.east(Double($0) * 90)) }
+    for metresPerPoint in [0.5, 2.0, 10.0, 50.0, 400.0] {
+      let clustered = clusterPins(pins, metresPerPoint: metresPerPoint)
+      let ids = clustered.flatMap { $0.pins.map(\.poolID) }
+      #expect(Set(ids).count == pins.count, "at \(metresPerPoint) m/pt")
+      #expect(ids.count == pins.count, "a pin was duplicated at \(metresPerPoint) m/pt")
+    }
+  }
+
+  @Test("no camera yet means no clustering — a map with no zoom cannot say what overlaps")
+  func noCameraMeansEveryPinStandsAlone() {
+    let pins = [Self.pin("a", Self.zurich), Self.pin("b", Self.zurich)]
+    #expect(clusterPins(pins, metresPerPoint: 0).count == 2)
+    #expect(clusterPins(pins, metresPerPoint: -1).count == 2)
+  }
+
+  @Test("no pins, no clusters — and no empty cluster either")
+  func emptyIsEmpty() {
+    #expect(clusterPins([], metresPerPoint: 10).isEmpty)
+  }
+
+  // MARK: - Which pin leads, and where the badge sits
+
+  @Test("the best pool in a group anchors and colours it, whatever order it arrived in")
+  func theBestPinLeads() {
+    // A cluster of four where one is open now: the badge must be the open one's colour and sit
+    // at the open one's coordinates. Handed to the clusterer WORST first, so an implementation
+    // that simply took `pins[0]` would fail.
+    let open = Self.pin("open", Self.east(120), tier: .now)
+    let pins = [
+      Self.pin("shut", Self.zurich, tier: .closed),
+      Self.pin("ghost", Self.east(40), tier: .unknown),
+      open,
+    ]
+    let clusters = clusterPins(pins, metresPerPoint: 10)
+    #expect(clusters.count == 1)
+    #expect(clusters[0].lead.poolID == "open")
+    #expect(clusters[0].point == open.point)
+    #expect(clusters[0].id == "open")
+  }
+
+  @Test("a cluster's pins come out best first")
+  func clusterPinsAreRanked() {
+    let clusters = clusterPins(
+      [
+        Self.pin("c", Self.east(60), tier: .closed),
+        Self.pin("a", Self.zurich, tier: .now),
+        Self.pin("b", Self.east(30), tier: .soon),
+      ], metresPerPoint: 10)
+    #expect(clusters[0].pins.map(\.poolID) == ["a", "b", "c"])
+  }
+
+  @Test("the most interesting cluster is emitted LAST, so MapKit draws it on top")
+  func drawingOrderPutsTheBestClusterOnTop() {
+    let clusters = clusterPins(
+      [
+        Self.pin("open", Self.zurich, tier: .now),
+        Self.pin("shut", Self.east(4_000), tier: .closed),
+      ], metresPerPoint: 1)
+    #expect(clusters.map(\.lead.poolID) == ["shut", "open"])
+  }
+
+  @Test("two pools in the same tier cluster the same way twice — the order is total")
+  func theOrderIsTotal() {
+    // `sorted(by:)` is not documented as stable, so without the id tie-break two same-tier
+    // pools could swap, the cluster's `id` would change, and SwiftUI would rebuild the
+    // annotation on a camera change that moved nothing.
+    let pins = [Self.pin("b", Self.east(50)), Self.pin("a", Self.zurich)]
+    let once = clusterPins(pins, metresPerPoint: 10)
+    let twice = clusterPins(pins.reversed(), metresPerPoint: 10)
+    #expect(once.map(\.id) == twice.map(\.id))
+    #expect(once[0].lead.poolID == "a")
+  }
+
+  // MARK: - Expanding one
+
+  @Test("tapping a cluster zooms IN on it, never out")
+  func expandingZoomsIn() {
+    // The bug this exists to prevent: `pinFrame`'s 1.5 km floor is right for the whole city and
+    // catastrophic for one cluster, whose pins are a few dozen metres apart by construction. A
+    // reader who taps to get closer must not be thrown out to a 1.5 km view.
+    let cluster = PinCluster(pins: [
+      Self.pin("a", Self.zurich), Self.pin("b", Self.east(80)),
+    ])
+    let framed = try! #require(clusterFrame(cluster))
+    #expect(framed.wideMetres == expandedClusterSpanMetres)
+    #expect(framed.wideMetres < minimumMapSpanMetres)
+  }
+
+  @Test("a cluster wide enough to need it is framed on its own extent, not on the floor")
+  func aWideClusterKeepsItsExtent() {
+    let cluster = PinCluster(pins: [
+      Self.pin("a", Self.zurich), Self.pin("b", Self.east(900)),
+    ])
+    let framed = try! #require(clusterFrame(cluster))
+    #expect(framed.wideMetres > expandedClusterSpanMetres)
+  }
+
+  // MARK: - What recedes
+
+  @Test("only the three you cannot swim in today recede")
+  func prominenceMutesTheUnswimmable() {
+    #expect(pinProminence(.now) == .full)
+    #expect(pinProminence(.soon) == .full)
+    #expect(pinProminence(.past) == .muted)
+    #expect(pinProminence(.unknown) == .muted)
+    #expect(pinProminence(.closed) == .muted)
+  }
+
+  @Test("`scheduled` is never muted, or every future date would be a grey map")
+  func scheduledStaysFull() {
+    // The case that would have made the whole rule useless: off today EVERY pool is
+    // `scheduled`, so muting it fades the entire map on every date but one.
+    #expect(pinProminence(.scheduled) == .full)
+  }
+
+  @Test("the tier rank agrees with the order the list puts its sections in")
+  func rankMatchesTheSectionOrder() {
+    // `Tier.rank` is a switch so a new case fails to build rather than ranking itself silently.
+    // This is the other half: the numbers it returns must be the enum's own declaration order,
+    // which is what `sections(from:)` walks — so the map and the list cannot start disagreeing
+    // about which of two pools is the more interesting.
+    #expect(Tier.allCases.map(\.rank) == Array(0..<Tier.allCases.count))
   }
 }

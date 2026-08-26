@@ -698,6 +698,32 @@ struct UILintTests {
     }
   }
 
+  @Test("no two icons in the list are the same glyph")
+  func glyphsAreDistinct() throws {
+    // The `Icon` list exists so that one glyph standing for two ideas is VISIBLE — that was its
+    // founding defect (`questionmark.circle` was a tier, a mark and a menu item). Keeping the
+    // names in one file makes the collision visible to a reader of that file; it took a
+    // screenshot to notice the next one, because `allPools` and the mode picker's `list` were
+    // both `list.bullet` and ended up four inches apart in the same bottom bar.
+    //
+    // Two entries MAY share a glyph when they are the same idea in two states — `filter` and
+    // `filterActive` differ only by `.fill`, and `favourite`/`favouriteMark` likewise — so the
+    // comparison is on the base name with the state suffix removed.
+    let theme = try #require(try Self.appFiles().first { $0.name == Self.tokenFile })
+    var seen: [String: String] = [:]
+    for match in Self.code(theme.text).matches(
+      of: /static let ([A-Za-z0-9_]+) = "([a-z0-9.]+)"/)
+    {
+      let (name, glyph) = (String(match.1), String(match.2))
+      let base = glyph.hasSuffix(".fill") ? String(glyph.dropLast(5)) : glyph
+      if let owner = seen[base], !name.hasPrefix(owner), !owner.hasPrefix(name) {
+        Issue.record("`\(name)` and `\(owner)` are both `\(base)` — one glyph, two meanings")
+      }
+      seen[base] = name
+    }
+    #expect(seen.count >= 10, "the icon list looks empty: \(seen)")
+  }
+
   @Test("every corner radius comes from the scale")
   func radiiComeFromTheScale() throws {
     // 12, 3 and 2, in three files, with no rule between them. `RibbonCanvas` is exempt: its

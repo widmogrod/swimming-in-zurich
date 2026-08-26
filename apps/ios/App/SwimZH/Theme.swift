@@ -113,7 +113,14 @@ enum Icon {
   /// two different pictures for one sentence was the plainest inconsistency in the app.
   static let noMatch = "magnifyingglass"
   static let browse = "ellipsis.circle"
-  static let allPools = "list.bullet"
+  /// THE WHOLE ROSTER, and it must not be `list.bullet`. That is the mode picker's "list"
+  /// segment, and when this button rejoined the bottom bar the two sat four inches apart
+  /// wearing the same picture — a reader looking at that bar saw one icon twice and had no way
+  /// to tell which one showed the pools for today and which one showed all of them. `Icon`
+  /// exists to make that visible, and `glyphsAreDistinct` now makes it fail a build.
+  ///
+  /// A grid rather than another list: the roster is every pool at once, not a ranked answer.
+  static let allPools = "square.grid.2x2"
   /// The colour legend — an explanation, not a question.
   static let legend = "info.circle"
   static let favourite = "heart"
