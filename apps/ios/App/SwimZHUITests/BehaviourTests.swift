@@ -212,10 +212,15 @@ final class BehaviourTests: XCTestCase {
     app.swipeUp()
     app.swipeUp()
     XCTAssertTrue(waitForDisappearance(of: find("dayStrip")), "the strip never yielded")
-    let hidden = find("dayStrip")
-    for _ in 0..<3 {
-      XCTAssertFalse(hidden.exists, "the strip came back on its own while the list sat still")
-    }
+    // SAMPLED OVER TIME, not three times in the same instant. The first version of this ran
+    // three back-to-back `exists` checks with nothing between them, which read the same moment
+    // three times and could not have seen the thing the test is named for: a feedback loop
+    // between the strip's height and the scroll inset reappears over hundreds of milliseconds,
+    // not microseconds. `waitForExistence` inverts cleanly — it polls for two seconds and
+    // returning true is the failure.
+    XCTAssertFalse(
+      find("dayStrip").waitForExistence(timeout: 2),
+      "the strip came back on its own while the list sat still")
   }
 
   func testTheFindScreenSpendsNoRowOnChrome() {
@@ -458,15 +463,15 @@ final class BehaviourTests: XCTestCase {
 
   // MARK: - Helpers
 
-  /// The whole roster. Its link is the second-to-last row of the list now — beside the colour
-  /// legend, both of them reference rather than answer — so getting there is a scroll.
+  /// The whole roster, in one tap from the bottom bar.
   ///
-  /// IT SCROLLS PAST THE LINK, to the legend row BELOW it, and that is not belt-and-braces. The
-  /// first version stopped the moment `allPoolsLink` entered the hierarchy — which is the exact
-  /// frame it appears at the very bottom edge, under the floating bottom bar — so the tap
-  /// landed on the glass and the test failed with the browser never having opened. Scrolling to
-  /// the LAST row instead puts the one above it comfortably clear. The app is fine here: a real
-  /// list has a bottom inset for the toolbar and a human keeps scrolling.
+  /// IT USED TO SCROLL, and the reason it no longer does is worth keeping. When the link lived
+  /// at the end of the fifty-seven-row list, this helper had to swipe to the row BELOW it —
+  /// stopping the moment `allPoolsLink` merely entered the hierarchy left it at the very bottom
+  /// edge, under the floating bar, so the tap landed on glass and the browser never opened.
+  /// That helper took about fifty-five seconds per test and was load-dependent, which is what
+  /// measured the real defect: the control was twenty-five swipes from the reader too. It went
+  /// back to the toolbar, and this went back to a tap.
   private func openAllPools() {
     find("allPoolsLink").tap()
   }
