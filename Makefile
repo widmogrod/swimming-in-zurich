@@ -141,10 +141,17 @@ IOS_STORE_URL ?=
 # WOLLISHOFEN, and the coordinates are load-bearing: it is about four kilometres south of Zürich
 # HB, which is what `Places.default` measures from. A position near the station would leave both
 # orderings identical and the test would pass while proving nothing. `- ` prefixes because a
-# device that is not booted must not fail the whole chain.
-ios-sim-world:  ## Grant location + place the booted simulator, for the behaviour tests
-	-xcrun simctl privacy booted grant location ch.swimzh.SwimZH
-	-xcrun simctl location booted set 47.3450,8.5340
+# device that is not booted must not fail the whole chain — but the GRANT itself is not
+# tolerated: if it silently failed, `testMyLocationChangesWhatNearestMeans` would exercise the
+# refusal path while claiming to prove the fix path, which is a green gate proving the opposite
+# of what it says. Only the boot lines are optional, because a device already booted makes
+# `simctl boot` exit non-zero and that is the normal local case.
+IOS_SIM ?= iPhone 17
+ios-sim-world:  ## Boot the simulator, grant location and place it, for the behaviour tests
+	-xcrun simctl boot "$(IOS_SIM)"
+	-xcrun simctl bootstatus "$(IOS_SIM)"
+	xcrun simctl privacy booted grant location ch.swimzh.SwimZH
+	xcrun simctl location booted set 47.3450,8.5340
 
 .PHONY: ios-release
 

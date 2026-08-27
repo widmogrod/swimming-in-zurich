@@ -455,6 +455,7 @@
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "SwimZH uses your location to measure how far each pool is and to show you on the map. It stays on your phone.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_FILE = SwimZH/Info.plist;
+				SWIFT_EMIT_LOC_STRINGS = NO;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				MARKETING_VERSION = 0.1;
@@ -480,6 +481,7 @@
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "SwimZH uses your location to measure how far each pool is and to show you on the map. It stays on your phone.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_FILE = SwimZH/Info.plist;
+				SWIFT_EMIT_LOC_STRINGS = NO;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				MARKETING_VERSION = 0.1;

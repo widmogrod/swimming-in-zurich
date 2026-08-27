@@ -142,6 +142,20 @@ jobs:
       - name: Gate self-tests (crap_swift + ios_budget)
         run: uv run pytest tests/scripts --no-cov
 
+      # The simulator's WORLD, and it must be set before the tests rather than inside them.
+      # `BehaviourTests.testMyLocationChangesWhatNearestMeans` proves that the phone's own
+      # position is what "nearest first" now means, and an XCUITest cannot arrange that itself:
+      # it runs ON the simulator, so `Process` (macOS-only) is unavailable, and the permission
+      # alert belongs to SpringBoard rather than to the app.
+      #
+      # WITHOUT THIS STEP THAT TEST STILL PASSES LOCALLY AND STILL FAILS HERE, which is the
+      # worse half: the Makefile's `ios-qa` runs it, so a contributor would see green and CI
+      # red. The coordinates are load-bearing — Wollishofen is ~4 km from Zürich HB, which is
+      # what `Places.default` measures from, so a nearer point would leave both orderings
+      # identical and the test would pass while proving nothing.
+      - name: Boot the simulator and grant it a location
+        run: make ios-sim-world
+
       # The app target cannot be imported by `swift test`, so the compile check and the
       # app-hosted tests need a simulator. `-project` is required: with none, xcodebuild
       # searches the cwd, which holds Package.swift and no .xcodeproj.
