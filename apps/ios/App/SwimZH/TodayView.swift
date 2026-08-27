@@ -203,7 +203,21 @@ struct TodayView: View {
   private var content: some View {
     switch model.state {
     case .loading:
+      // THE SAME COLOUR THE LAUNCH SCREEN IS, and this is a flicker rather than a nicety.
+      // Launch runs through three surfaces — the launch screen, this, then the list — and
+      // until now they were three different colours: the launch screen was BLANK WHITE (an
+      // empty `UILaunchScreen` dict, so white even on a phone in dark mode), this view took
+      // the default `systemBackground`, and the list draws on `systemGroupedBackground`. On a
+      // dark phone that is a white flash between two dark screens.
+      //
+      // Measured, because the fix is worth less than it looks if the timing is wrong: from
+      // `App.init()` to the list being on screen is 0.19 s, of which this state holds about
+      // 0.05. What the reader actually waits through is the 1.3 s BEFORE any of our code runs
+      // — dyld, the Swift runtime, SwiftUI — and the launch screen owns all of it. So the one
+      // thing worth doing is making that screen look like the app rather than like nothing.
       ProgressView()
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Color("LaunchBackground"))
     case .failed(let diagnostic):
       // The DIAGNOSTIC is not shown. It is a `StoreError`'s own English detail — an SQL table
       // name and a row id — which is a developer's sentence, not a reader's, and S3b shipped

@@ -462,3 +462,49 @@ catalog` is what stops the two drifting.
   load-bearing: Wollishofen is ~4 km south of the station, so the two orderings genuinely differ
   and a run that changed nothing would prove nothing. The **refusal** path is not driven — its
   invariant is `devicePlace`, and `LocatedTests` walks every state including all three refusals.
+
+## Launch: measured before it was optimised
+
+> "app takes a lot of time to start"
+
+**Measured first, in three ways, because the first two numbers were both misleading.**
+
+| what | time |
+|---|---|
+| `app.launch()` → first row, under XCUITest | 4.9 s |
+| process fork → `App.init()` (`preMain`, read from the kernel) | **1.30 s** |
+| `App.init()` → list on screen (our code) | **0.19 s** |
+| **felt launch, no debugger, no harness** | **≈ 1.5 s** |
+
+Three things that took measuring rather than reasoning:
+
+* **XCUITest costs ~2.6 s of the 4.9.** Its accessibility bridge both delays the launch and
+  slows the running app: the same in-app phases read 0.56 s under XCUITest and 0.19 s without
+  it. Any launch number taken through the harness is roughly 3× the truth — and is, as it
+  happens, a decent proxy for launching under Xcode's debugger, which is how this was noticed.
+* **Debug and Release are identical** (1.30 s vs 1.31 s preMain). The build configuration is not
+  the answer, which is the first thing anyone would guess.
+* **Our own code is 0.19 s and has nothing worth cutting**: store open 0.05 s, metadata 0.00 s,
+  the 57-pool roster 0.01 s, the whole day's answer 0.01 s. The phase breakdown was obtained by
+  writing marks to a file in the app container — `print` from the app does not reach the log,
+  and an accessibility probe would have needed the harness that distorts the measurement.
+
+So **87% of launch is before a single line of ours runs** — dyld, the Swift runtime, SwiftUI.
+Nine system frameworks, all in the shared cache, nothing embedded. There is no honest lever
+there.
+
+**What there was a lever on is what the reader looks at during it.** `UILaunchScreen` was an
+empty dict, which is a *blank white screen* — shown for the whole 1.3 s, in both appearances. On
+a phone in dark mode that is a full-screen white flash between the home screen and a dark app.
+It is now `LaunchBackground`: #F2F2F7 light, #000000 dark, the same colour the list draws on, so
+launch looks like the app arriving rather than a blank page. The `.loading` state was painting
+`systemBackground` (white) between two grouped-background screens, and matches now too — three
+surfaces, one colour.
+
+**The trap, and why it is linted.** The obvious fix looks like a build setting,
+`INFOPLIST_KEY_UILaunchScreen_UIColorName`. There is no such setting: Xcode's `INFOPLIST_KEY_*`
+bridge covers only flat keys, so `_Generation` is real and the nested colour is not. It builds
+with no warning and is silently dropped — the first attempt did exactly that, and only a
+screenshot plus a pixel read caught it. The colour lives in a base `Info.plist` merged under the
+generated keys, and `launchScreenHasABackground` pins all three parts: the plist key, the
+`INFOPLIST_FILE` wiring, and the asset it names.

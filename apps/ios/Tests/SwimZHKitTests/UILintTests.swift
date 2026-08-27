@@ -762,6 +762,44 @@ struct UILintTests {
       "BehaviourTests isolates on a different key than LocationSource persists to")
   }
 
+  @Test("the launch screen is the app's own colour, not a blank white page")
+  func launchScreenHasABackground() throws {
+    // AN EMPTY `UILaunchScreen` DICT IS A WHITE SCREEN, and it is shown for the whole of
+    // pre-main — measured at ~1.3 s, which is 87% of this app's launch. On a phone in dark mode
+    // that is a full-screen white flash between the home screen and a dark app.
+    //
+    // The reason this needs a lint rather than a comment: the obvious fix looks like a build
+    // setting, `INFOPLIST_KEY_UILaunchScreen_UIColorName`, and there is no such setting. Xcode's
+    // `INFOPLIST_KEY_*` bridge covers only FLAT keys — `_Generation` is real, the nested colour
+    // is not — so the setting builds without a warning and is silently dropped. It took a
+    // screenshot and a pixel read to notice. Both halves are pinned here: the base plist that
+    // carries the key, and the asset it names.
+    let app = SourceLintTests.sources.deletingLastPathComponent().deletingLastPathComponent()
+      .appending(path: "App/SwimZH")
+    let plist = try String(contentsOf: app.appending(path: "Info.plist"), encoding: .utf8)
+    #expect(plist.contains("UILaunchScreen"), "the launch screen declares no background")
+    #expect(
+      plist.contains("<string>LaunchBackground</string>"),
+      "the launch screen names no colour — it will be blank white in both appearances")
+
+    let project = try String(
+      contentsOf: SourceLintTests.sources.deletingLastPathComponent()
+        .deletingLastPathComponent()
+        .appending(path: "App/SwimZH.xcodeproj/project.pbxproj"), encoding: .utf8)
+    #expect(
+      project.contains("INFOPLIST_FILE = SwimZH/Info.plist;"),
+      "the base plist is not wired up, so its launch screen key never reaches the bundle")
+    #expect(
+      !project.contains("INFOPLIST_KEY_UILaunchScreen_UIColorName"),
+      "that build setting does not exist and is silently ignored — the key belongs in the plist")
+
+    let colours = try FileManager.default.contentsOfDirectory(
+      atPath: app.appending(path: "Assets.xcassets").path)
+    #expect(
+      colours.contains("LaunchBackground.colorset"),
+      "the launch screen names a colour the asset catalog does not have")
+  }
+
   @Test("every corner radius comes from the scale")
   func radiiComeFromTheScale() throws {
     // 12, 3 and 2, in three files, with no rule between them. `RibbonCanvas` is exempt: its
