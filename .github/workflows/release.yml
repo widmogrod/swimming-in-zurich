@@ -69,6 +69,12 @@ jobs:
           path: dist/ios
           retention-days: 7
 
+      # The App Store listing must name a reachable privacy policy, and Pages is already
+      # publishing from this directory — so the page ships beside the store rather than
+      # needing a second host. `docs/pages/` is the whole published site apart from the store.
+      - name: Add the static pages beside the store
+        run: cp -R docs/pages/. dist/ios/
+
       - name: Upload the store for Pages
         uses: actions/upload-pages-artifact@v3
         with:
