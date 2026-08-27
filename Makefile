@@ -181,9 +181,25 @@ IOS_STORE_URL ?=
 #
 # `IOS_SIM` is declared once, up with `IOS_DESTINATION` — which is derived from it, so this
 # target and `xcodebuild` cannot be pointed at two different simulators.
-ios-sim-world:  ## Boot the simulator, grant location and place it, for the behaviour tests
+#
+# THE APP IS INSTALLED BEFORE IT IS GRANTED, and the order is the whole target. `simctl privacy
+# grant` writes a TCC entry for a bundle id, and installing an app that was not there creates a
+# FRESH one — so granting first and letting `xcodebuild test` install afterwards throws the
+# grant away. That is not theory: it is why CI failed on a runner while the same command passed
+# here, and it reproduces locally the moment you `simctl uninstall` first. Every local green
+# before this was an accident of the app already being installed from a previous run.
+#
+# The path comes from `-showBuildSettings` rather than a hardcoded DerivedData guess, because
+# that directory is hashed per checkout location and differs between this machine and a runner.
+ios-sim-world:  ## Boot, build, install and permit the simulator, for the behaviour tests
 	-xcrun simctl boot "$(IOS_SIM)"
 	-xcrun simctl bootstatus "$(IOS_SIM)"
+	cd apps/ios && xcodebuild -project App/SwimZH.xcodeproj -scheme SwimZH \
+		-destination '$(IOS_DESTINATION)' build-for-testing
+	xcrun simctl install booted "$$(cd apps/ios && xcodebuild -project App/SwimZH.xcodeproj \
+		-scheme SwimZH -destination '$(IOS_DESTINATION)' -showBuildSettings 2>/dev/null \
+		| awk -F' = ' '/ TARGET_BUILD_DIR =/{d=$$2} / FULL_PRODUCT_NAME =/{n=$$2} \
+		  END{print d"/"n}')"
 	xcrun simctl privacy booted grant location ch.swimzh.SwimZH
 	xcrun simctl location booted set 47.3450,8.5340
 
