@@ -48,7 +48,14 @@ public enum PlaceSource: String, Equatable, Hashable, Sendable {
 /// cannot be fixed by them at all (Screen Time, or a managed device); `unavailable` is not about
 /// permission — Location Services is off device-wide, or no fix arrived — and Settings for this
 /// app would show nothing wrong.
-public enum LocationRefusal: String, Equatable, Hashable, Sendable {
+///
+/// `CaseIterable` IS LOAD-BEARING, not a convenience. Three tests sweep "every refusal" — that
+/// each has its own sentence, that none installs a place, that each sentence is really in the
+/// catalog — and they used to sweep a hand-written array literal. A fourth cause added here
+/// (`precise-only`, say) would have compiled, shipped, and rendered `place.refused.preciseOnly`
+/// as itself on screen, where a raw catalog key reads as a design choice rather than as a
+/// missing string — with every gate green, because the literal did not know about it.
+public enum LocationRefusal: String, Equatable, Hashable, Sendable, CaseIterable {
   case denied
   case restricted
   case unavailable
@@ -63,6 +70,20 @@ public enum LocationState: Equatable, Sendable {
   case locating
   case fixed(GeoPoint)
   case refused(LocationRefusal)
+
+  /// Every state, for the sweeps that must hold across all of them.
+  ///
+  /// A hand-maintained list because `fixed` carries a coordinate, so the compiler cannot
+  /// synthesise `CaseIterable` here. It is still better than the literals it replaces, for two
+  /// reasons: it is ONE list rather than one per test, so a new state is added in a single
+  /// place; and it fans out over `LocationRefusal.allCases`, which is the arm that actually
+  /// grows — a fourth refusal reaches every sweep with no edit at all.
+  ///
+  /// `fixed` needs a coordinate, and the caller supplies it: any point will do, since no rule
+  /// in this file reads the value.
+  public static func allStates(fixedAt point: GeoPoint) -> [LocationState] {
+    [.idle, .locating, .fixed(point)] + LocationRefusal.allCases.map(LocationState.refused)
+  }
 }
 
 extension Places {

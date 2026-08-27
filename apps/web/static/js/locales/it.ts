@@ -303,6 +303,8 @@ export const it = {
   "verdict.hasSessions": "Con sessioni",
   "headline.noneNowNextAt":
     "Ora niente aperto per te — la prossima alle {hhmm}",
+  "headline.noneNowMaybeAt":
+    "Ora niente aperto per te — chiedi alla struttura per le {hhmm}",
   "headline.noneLeftToday": "Oggi niente più aperto per te",
   "headline.poolsWithSessions": {
     one: "{count} piscina con sessioni",

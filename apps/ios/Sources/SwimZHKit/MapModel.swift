@@ -187,11 +187,24 @@ public func findRow(_ sections: [ListSection], poolID: String) -> PoolRow? {
 /// every call site branch on a distinction the renderer already has to make anyway (a count
 /// badge or a tier glyph), and makes the tap handler two functions where it is one.
 public struct PinCluster: Equatable, Sendable, Identifiable {
-  /// The pins in it, best first. Never empty.
+  /// The pins in it, best first. NEVER EMPTY — and that is now a fact rather than a promise:
+  /// the only way in is `init(lead:others:)`, so `pins[0]` cannot be a subscript out of range.
   public let pins: [PoolPin]
 
-  public init(pins: [PoolPin]) {
-    self.pins = pins
+  /// The lead FIRST and separately, because `lead` is `pins[0]` and the old `init(pins:)`
+  /// happily accepted `[]` — a `PinCluster(pins: []).lead` was a crash the type system was
+  /// documented as preventing ("Never empty") and did not. A bad state that cannot be built
+  /// needs no invariant check at the read.
+  public init(lead: PoolPin, others: [PoolPin] = []) {
+    self.pins = [lead] + others
+  }
+
+  /// The same thing from an array whose non-emptiness is only known at runtime — a greedy
+  /// grouping loop's output, say. Nil rather than a trap: the caller that has an empty array
+  /// has nothing to draw, which is an answer, not a failure.
+  public init?(pins: [PoolPin]) {
+    guard let lead = pins.first else { return nil }
+    self.init(lead: lead, others: Array(pins.dropFirst()))
   }
 
   /// The best-ranked pin in the group, which is also its ANCHOR: the badge is drawn at this
@@ -247,20 +260,35 @@ public let expandedClusterSpanMetres: Double = 150
 /// is the pre-clustering behaviour, and correct: a map with no known zoom cannot say what
 /// overlaps.
 public func clusterPins(_ pins: [PoolPin], metresPerPoint: Double) -> [PinCluster] {
-  guard metresPerPoint > 0 else { return pins.map { PinCluster(pins: [$0]) } }
+  guard metresPerPoint > 0 else { return pins.map { PinCluster(lead: $0) } }
   let radiusKm = clusterSpacingPoints * metresPerPoint / 1000
-  var groups: [[PoolPin]] = []
+  // The lead is held APART from the rest rather than as `group[0]`, which is what makes the
+  // "walking best first means the first pin to claim a patch of screen is the lead" comment
+  // above a fact the type carries instead of an array index every reader has to re-derive.
+  var groups: [(lead: PoolPin, others: [PoolPin])] = []
   for pin in pins.sorted(by: pinRankOrder) {
-    if let index = groups.firstIndex(where: { haversineKm($0[0].point, pin.point) <= radiusKm }) {
-      groups[index].append(pin)
+    if let index = groups.firstIndex(where: { haversineKm($0.lead.point, pin.point) <= radiusKm }) {
+      groups[index].others.append(pin)
     } else {
-      groups.append([pin])
+      groups.append((lead: pin, others: []))
     }
   }
   // WORST FIRST on the way out, so the most interesting cluster is the annotation MapKit draws
   // LAST and therefore the one on top where two badges still touch. `poolPins` used to do this
   // with a `.reversed()`; it belongs here, where the stacking is actually decided.
-  return groups.map(PinCluster.init).sorted { $0.lead.tier.rank > $1.lead.tier.rank }
+  return groups.map { PinCluster(lead: $0.lead, others: $0.others) }.sorted(by: clusterDrawOrder)
+}
+
+/// Worst first, and TOTAL — the exact reverse of `pinRankOrder`, tie-break included.
+///
+/// It used to compare `tier.rank` alone, which is the same defect `pinRankOrder`'s tie-break
+/// exists to prevent, one level up: two clusters both led by an `open now` pool have equal
+/// ranks, `sorted(by:)` is not documented as stable, so the pair could come out in either
+/// order between two runs at the same zoom — and SwiftUI, handed the same annotations in a
+/// different sequence, rebuilds them. Reusing `pinRankOrder` with its arguments swapped is
+/// what keeps the two orders from drifting apart if either gains a term.
+private func clusterDrawOrder(_ lhs: PinCluster, _ rhs: PinCluster) -> Bool {
+  pinRankOrder(rhs.lead, lhs.lead)
 }
 
 /// Best first, and TOTAL — ties broken by pool id.

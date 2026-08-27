@@ -34,6 +34,12 @@
 // and settles when the finger lifts, which is one recompute per gesture instead of one per
 // frame — and a badge whose count flickered while you were still zooming would be worse than
 // the wait.
+//
+// "Once per gesture" is a claim about WHERE the grouping is stored, not only about how often
+// the camera reports. Held as a computed property it was recomputed on every `body` evaluation
+// — every selection, every geometry report — plus twice more inside the tap handler, which is
+// three thousand distance checks several times per tap. It is `@State` now, written by
+// `regroup()` alone, from the two inputs that can actually change it: the answer, and the zoom.
 
 import MapKit
 import SwiftUI
@@ -50,17 +56,32 @@ struct PoolMapView: View {
   @State private var selectedID: String?
   @State private var camera: MapCameraPosition = .automatic
   /// How many metres one screen point covers, read off the live camera. Zero until the map has
-  /// reported one, which `clusterPins` reads as "no zoom known yet" and leaves every pin alone.
+  /// reported one AND been measured, which `clusterPins` reads as "no zoom known yet" and
+  /// leaves every pin alone.
   @State private var metresPerPoint: Double = 0
   /// The map's own width in points — the other half of `metresPerPoint`, and the reason the
   /// clustering distance is a screen fact rather than a geographic one.
   @State private var width: Double = 0
+  /// The region the camera last settled at, KEPT rather than consumed.
+  ///
+  /// `metresPerPoint` needs the region and the width, and the two arrive from two independent
+  /// callbacks (`onMapCameraChange` and `onGeometryChange`) with no ordering guarantee between
+  /// them. The first version divided by `max(width, 1)`, so a camera callback that landed first
+  /// divided by one point: `metresPerPoint` became the region's ENTIRE width in metres, the
+  /// clustering radius became tens of kilometres, and the whole city collapsed into a single
+  /// badge that stayed until the reader made another gesture. Holding the region lets whichever
+  /// input arrives second complete the pair instead of being missed.
+  @State private var region: MKCoordinateRegion?
 
-  /// The pins, grouped for THIS zoom. Recomputed when the camera settles or the answer changes,
-  /// which is what makes the badges follow a pinch.
-  private var clusters: [PinCluster] {
-    clusterPins(pins.pins, metresPerPoint: metresPerPoint)
-  }
+  /// The pins, grouped for THIS zoom — CACHED, and the caching is not premature.
+  ///
+  /// `clusterPins` is a greedy O(n²) pass, about three thousand haversine distance checks at 57
+  /// pools. As a computed property it ran on every `body` evaluation — every selection, every
+  /// width report, every camera change — and then twice more in the same turn, because `select`
+  /// reads it and `expand` reads it again. It is recomputed here only when one of its two
+  /// genuine inputs moves (`pins`, `metresPerPoint`), which is what the file header has always
+  /// claimed: once per gesture.
+  @State private var clusters: [PinCluster] = []
 
   var body: some View {
     ZStack(alignment: .bottom) {
@@ -78,6 +99,22 @@ struct PoolMapView: View {
       proxy.size.width
     } action: {
       width = $0
+      rescale()
+    }
+    // THE ANSWER CHANGED UNDER THE CARD. The day strip stays on screen in map mode, so tapping
+    // a different chip replaces `pins` while a card is up — and the card holds a whole
+    // `PoolPin` captured at tap time, so it went on rendering the PREVIOUS day's verdict, mark
+    // and distance under the new day's map. A stale answer wearing a current pool's name is the
+    // same class of thing the tier colours exist to prevent.
+    //
+    // Dropped rather than re-resolved, deliberately: after a regroup the pool may no longer be
+    // a cluster LEAD, and a cluster's id is its lead's pool id — so a re-resolved card would
+    // sit above a map that has no selection to match it, and the two would disagree about
+    // what is selected. Losing the card is honest; keeping a wrong one is not.
+    .onChange(of: pins) { _, _ in
+      selectedID = nil
+      selected = nil
+      regroup()
     }
   }
 
@@ -106,11 +143,18 @@ struct PoolMapView: View {
     // (off, following, following-with-heading), it prompts for permission when it needs to, and
     // it is the button every other map on the phone puts in that corner.
     .mapControls { MapUserLocationButton() }
-    .onAppear(perform: frame)
+    .onAppear {
+      frame()
+      // With no camera reported yet `metresPerPoint` is 0, which `clusterPins` reads as "no
+      // zoom known" and answers with one cluster per pin — the correct first frame, and the
+      // reason this can run before any measurement has arrived.
+      regroup()
+    }
     // The camera as an INPUT. See the header: what overlaps is a fact about zoom, so the
     // grouping cannot be computed once. `.onEnd`, so it settles when the finger lifts.
     .onMapCameraChange(frequency: .onEnd) { context in
-      metresPerPoint = metres(across: context.region) / max(width, 1)
+      region = context.region
+      rescale()
     }
     .onChange(of: selectedID) { _, id in select(id) }
     // A pin is a selection, like a day chip and like the mode switch — same feedback, because
@@ -178,6 +222,26 @@ struct PoolMapView: View {
         center: CLLocationCoordinate2D(
           latitude: framed.centre.lat, longitude: framed.centre.lon),
         latitudinalMeters: framed.tallMetres, longitudinalMeters: framed.wideMetres))
+  }
+
+  /// Recompute the scale, and only when BOTH halves of it are real.
+  ///
+  /// The guard is on a genuine width rather than a clamped one: a width of zero means "not
+  /// measured yet", not "one point wide", and dividing by the clamp is what produced a
+  /// city-wide clustering radius. Doing nothing until the pair is complete is safe because
+  /// whichever input arrives second calls this again.
+  private func rescale() {
+    guard let region, width > 0 else { return }
+    let scale = metres(across: region) / width
+    guard scale != metresPerPoint else { return }
+    metresPerPoint = scale
+    regroup()
+  }
+
+  /// Regroup the pins for the current zoom. The ONE place `clusterPins` is called — see
+  /// `clusters` for why that matters.
+  private func regroup() {
+    clusters = clusterPins(pins.pins, metresPerPoint: metresPerPoint)
   }
 
   private func coordinate(_ point: GeoPoint) -> CLLocationCoordinate2D {

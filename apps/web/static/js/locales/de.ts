@@ -319,6 +319,8 @@ export const de = {
   "verdict.hasSessions": "Hat Zeiten",
   "headline.noneNowNextAt":
     "Jetzt nichts für dich offen — als Nächstes um {hhmm}",
+  "headline.noneNowMaybeAt":
+    "Jetzt nichts für dich offen — frag beim Bad wegen {hhmm} nach",
   "headline.noneLeftToday": "Heute nichts mehr für dich offen",
   "headline.poolsWithSessions": {
     one: "{count} Bad mit Zeiten",

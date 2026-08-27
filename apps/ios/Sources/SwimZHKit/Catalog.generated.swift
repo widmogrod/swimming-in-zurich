@@ -387,6 +387,10 @@ extension Catalog {
         Parameter(name: "theme", kind: .text)
       ], isPlural: false),
     "headline.noneLeftToday": Entry(parameters: [], isPlural: false),
+    "headline.noneNowMaybeAt": Entry(
+      parameters: [
+        Parameter(name: "hhmm", kind: .text)
+      ], isPlural: false),
     "headline.noneNowNextAt": Entry(
       parameters: [
         Parameter(name: "hhmm", kind: .text)

@@ -8093,6 +8093,41 @@
         }
       }
     },
+    "headline.noneNowMaybeAt": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Jetzt nichts für dich offen — frag beim Bad wegen %1$@ nach"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nothing open to you now — check with the pool about %1$@"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rien d'ouvert pour vous maintenant — renseignez-vous sur place pour %1$@"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ora niente aperto per te — chiedi alla struttura per le %1$@"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Teraz nic dla ciebie otwartego — zapytaj w obiekcie o %1$@"
+          }
+        }
+      }
+    },
     "headline.noneNowNextAt": {
       "extractionState": "manual",
       "localizations": {

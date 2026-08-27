@@ -90,6 +90,19 @@ final class TodayModel {
   /// filter and read `state` on the next line would otherwise be reading the PREVIOUS answer,
   /// and would pass or fail on scheduling rather than on behaviour.
   private(set) var pendingRefresh: Task<Void, Never>?
+  /// Which choice of ORIGIN is current — the same shape as `generation`, for the same reason
+  /// and a worse symptom.
+  ///
+  /// Taking a fix suspends, and the place list deliberately does not dismiss when the device
+  /// row is tapped (both rows must stay reachable, so the reader can change their mind). So:
+  /// tap "Use my location", tap "Zürich HB" while the fix is still coming, and the suspended
+  /// `useMyLocation` used to resume and overwrite the station with the device — leaving
+  /// `preferred` false, which is what the picker renders from, over a `.device` place, which is
+  /// what the distances are measured from. Two controls disagreeing about one fact.
+  ///
+  /// Every entry point that settles the origin bumps this, so the newest choice wins and an
+  /// older one that is still awaiting a satellite installs nothing at all.
+  private var placeGeneration = 0
 
   /// Where the favourites live. Local only: there is no account and no sync, which is what
   /// lets the privacy manifest declare UserDefaults with reason `CA92.1` and nothing else.
@@ -111,14 +124,16 @@ final class TodayModel {
   /// Hauptbahnhof while the reader believes it is measuring from their phone.
   func useMyLocation() async {
     location.preferred = true
+    let mine = beginPlaceChoice()
     await location.locate()
-    guard let place = devicePlace(location.state) else { return }
+    guard mine == placeGeneration, let place = devicePlace(location.state) else { return }
     filters.place = place
   }
 
   /// Go back to a named place. It stops the preference too, or the next launch would silently
   /// take a fix for a reader who has just said they want the station.
   func useNamedPlace(_ place: Place?) {
+    _ = beginPlaceChoice()
     location.stopUsing()
     filters.place = place
   }
@@ -202,9 +217,17 @@ final class TodayModel {
   /// Coming back to the foreground is when a position taken before a tram ride is most likely
   /// to be wrong. It refreshes only a fix we already have — see `LocationSource.refreshIfUsing`.
   func refreshLocation() async {
+    let mine = beginPlaceChoice()
     await location.refreshIfUsing()
-    guard let place = devicePlace(location.state) else { return }
+    guard mine == placeGeneration, let place = devicePlace(location.state) else { return }
     filters.place = place
+  }
+
+  /// Claim the origin for this caller, and hand back the ticket it must still hold after any
+  /// await before it may install a place. See `placeGeneration`.
+  private func beginPlaceChoice() -> Int {
+    placeGeneration += 1
+    return placeGeneration
   }
 
   func load(now: Date = Date()) async {
@@ -223,10 +246,32 @@ final class TodayModel {
       // far away today.
       pools = try await store.pools()
       kinds = poolKinds(pools)
-      // Open on today when the horizon contains it, and on the horizon's first day when it
-      // does not — a store whose horizon has run out must still show something real.
+      // THE FIRST LOAD BUILDS THE FILTERS; A RELOAD KEEPS THEM. `load` is not only the launch
+      // path — `refreshStore` calls it on every foreground that installs a newer store — and an
+      // unconditional `Filters(day:)` there threw away gender, age, radius, kinds, search, both
+      // toggles, and the PLACE.
+      //
+      // The place is the half that made it a lie rather than an annoyance. `location.preferred`
+      // and `location.state` live on `LocationSource` and are untouched by this, so the place
+      // picker went on showing the device row ticked and the reader went on believing they were
+      // being measured from their phone, while every distance was silently re-measured from
+      // Hauptbahnhof. That is `Located.swift`'s invariant — a position we do not have must never
+      // render as a distance — arriving through the back door, and the worst version of it:
+      // nothing on screen changed to say so.
+      //
+      // `filters` is initialised as `Filters(day: "")`, so an empty day is already the "never
+      // loaded" sentinel and needs no second flag. The one thing a reload MAY overrule is the
+      // day, because a new store can publish a horizon that no longer covers the day being
+      // shown; the clamp is the same rule as the first load's.
       installingFilters = true
-      filters = Filters(day: metadata.covers(day: today) ? today : metadata.horizonStart)
+      let firstCovered = metadata.covers(day: today) ? today : metadata.horizonStart
+      if filters.day.isEmpty {
+        // Open on today when the horizon contains it, and on the horizon's first day when it
+        // does not — a store whose horizon has run out must still show something real.
+        filters = Filters(day: firstCovered)
+      } else if !metadata.covers(day: filters.day) {
+        filters.day = firstCovered
+      }
       installingFilters = false
       await refresh(now: now)
     } catch {

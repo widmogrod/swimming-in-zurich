@@ -164,6 +164,15 @@ public struct PoolRow: Equatable, Sendable, Identifiable {
   /// a pool the reader has just asked not to see would be worse than the zero it replaced.
   /// Always nil off today: "next" is a present-tense claim (invariant E1).
   public let nextOpenToYou: String?
+  /// This pool's next session TODAY whose eligibility we CANNOT DECIDE (`.check`), as `HH:MM`,
+  /// or nil. The `.check` twin of `nextOpenToYou`, and it exists because merging the two is the
+  /// app's oldest bug in a new place.
+  ///
+  /// Without it the screen said "Nothing more open to you today" above a row reading
+  /// "Opens 14:00 ?": a `WomenOnly` session with no gender set is `.check` — "we cannot tell
+  /// whether you may attend" — and counting it as a `.no` turns an unknown into a definite
+  /// negative, which is the one thing this app never does. Same nil-off-today rule as its twin.
+  public let nextToCheck: String?
   /// Whether a session is running now AND this person may attend it — what "open to you"
   /// counts, and what the row's accent keys off.
   public let openToYou: Bool
@@ -196,6 +205,10 @@ public struct ListModel: Equatable, Sendable {
   /// there: "next" is a claim about the present, and the store is asked at a fixed midday
   /// moment on any other date.
   public let nextOpenToYou: String?
+  /// The earliest session TODAY whose eligibility we cannot decide, as `HH:MM`, or nil. The
+  /// headline's third branch; see `PoolRow.nextToCheck` for why a `.check` may never be
+  /// counted with a `.no`.
+  public let nextToCheck: String?
   /// Whether this answer is for the day the user is standing in. False turns off every
   /// wall-clock claim in the model, which is the whole of finding B1.
   public let isToday: Bool
@@ -229,6 +242,16 @@ public struct ListModel: Equatable, Sendable {
     // interpolated number is precisely the broken grammar `plurals.ts` exists to stop.
     if openToYouCount > 0 { return Message("mobile.openToYou", count: openToYouCount) }
     if let next = nextOpenToYou { return Message("headline.noneNowNextAt", ["hhmm": next]) }
+    // FOUR OUTCOMES, NOT THREE, and this is the branch that was missing. A session we cannot
+    // decide is not a session the reader is barred from: with no gender set, a `WomenOnly`
+    // hour at 14:00 is `.check` — "we cannot tell" — and the model used to fall straight
+    // through to "Nothing more open to you today", printed at the largest size on the page
+    // directly above a row reading "Opens 14:00 ?". That is an UNKNOWN stated as a definite
+    // negative, the exact harm the whole four-state vocabulary exists to prevent.
+    //
+    // It sits BELOW `nextOpenToYou` deliberately: when both exist, a time the reader may
+    // certainly attend is the more useful sentence than one they must ring up about.
+    if let check = nextToCheck { return Message("headline.noneNowMaybeAt", ["hhmm": check]) }
     return Message("headline.noneLeftToday")
   }
 }
@@ -267,6 +290,7 @@ public func listModel(
       openToYouCount: 0,
       scheduledPoolCount: 0,
       nextOpenToYou: nil,
+      nextToCheck: nil,
       isToday: isToday,
       beyondHorizon: true
     )
@@ -281,6 +305,7 @@ public func listModel(
     openToYouCount: rows.filter(\.openToYou).count,
     scheduledPoolCount: rows.filter { !$0.options.isEmpty }.count,
     nextOpenToYou: earliestOpening(rows),
+    nextToCheck: earliestToCheck(rows),
     isToday: isToday,
     beyondHorizon: false
   )
@@ -364,6 +389,15 @@ private func sessionRow(
     isToday
     ? options.first(where: { time < $0.window.start && $0.mark == .attend })
     : nil
+  // The THIRD answer, kept apart from both of the above. `.check` is not `.attend` (we cannot
+  // promise the reader this hour) and it is emphatically not `.no` (nobody has excluded them),
+  // so it needs its own carrier: folding it into `nextYours` would put a tick over an unknown,
+  // and leaving it out entirely is what made the screen say "Nothing more open to you today"
+  // above a 14:00 women-only row for a reader who never told us their gender.
+  let nextCheck =
+    isToday
+    ? options.first(where: { time < $0.window.start && $0.mark == .check })
+    : nil
   return PoolRow(
     poolID: first.poolID,
     poolName: first.poolName,
@@ -381,6 +415,7 @@ private func sessionRow(
     state: nil,
     isFavourite: favourites.contains(first.poolID),
     nextOpenToYou: nextYours?.window.start.hhmm,
+    nextToCheck: nextCheck?.window.start.hhmm,
     // "Open to you" is present tense, so it can only ever be true for today.
     openToYou: isToday && covering?.mark == .attend
   )
@@ -393,6 +428,14 @@ private func sessionRow(
 /// `TimeOfDay.hhmm` rather than from a source's prose.
 func earliestOpening(_ rows: [PoolRow]) -> String? {
   rows.compactMap(\.nextOpenToYou).min()
+}
+
+/// The earliest `HH:MM` any of these rows has a session we cannot decide for the reader, or
+/// nil. Same lexical-`min` reasoning as `earliestOpening`, and narrowed with the rows for the
+/// same reason: a time pointing at a pool the favourites filter has just hidden is worse than
+/// no time at all.
+func earliestToCheck(_ rows: [PoolRow]) -> String? {
+  rows.compactMap(\.nextToCheck).min()
 }
 
 /// "+2 more today" — but ONLY on today.
@@ -481,6 +524,7 @@ private func ghostRows(
       // A ghost has no sessions at all, so it has no next one either — and a closed pool
       // certainly does not open to you later today.
       nextOpenToYou: nil,
+      nextToCheck: nil,
       openToYou: false
     )
   }
@@ -535,6 +579,7 @@ extension ListModel {
       // NARROWED WITH THE ROWS. "Next at 09:00" beside a favourites-only list showing nothing
       // would be pointing at a pool the reader has just asked not to see.
       nextOpenToYou: earliestOpening(sections.flatMap(\.rows).filter(\.isFavourite)),
+      nextToCheck: earliestToCheck(sections.flatMap(\.rows).filter(\.isFavourite)),
       isToday: isToday,
       beyondHorizon: beyondHorizon
     )

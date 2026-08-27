@@ -35,11 +35,18 @@ hooks:  ## Install pre-commit + pre-push git hooks
 # Order is load-bearing here as in the other two: from S2b, `crap_swift.py` reads the
 # coverage `swift test` writes, so tests run before the gate.
 
-.PHONY: ios-export ios-fixtures ios-field-coverage ios-locales ios-locales-check ios-qa
+.PHONY: ios-export ios-fixtures ios-field-coverage ios-locales ios-locales-check ios-qa \
+        ios-lint ios-build ios-test ios-crap ios-gate-tests ios-sim-test
 
 IOS_STORE := apps/ios/Sources/SwimZHKit/Resources/ios.sqlite
 IOS_RELEASE_DIR ?= dist/ios
-IOS_DESTINATION ?= platform=iOS Simulator,name=iPhone 17
+# ONE device name, and `IOS_DESTINATION` is DERIVED from it. They were two independent
+# copies, which is a trap with no error message: `ios-sim-world` grants location to the
+# simulator named by one, `xcodebuild` runs the tests on the simulator named by the other, so
+# overriding a single variable would leave the behaviour test exercising the location-refusal
+# path on an ungranted device while claiming to prove the grant path.
+IOS_SIM ?= iPhone 17
+IOS_DESTINATION ?= platform=iOS Simulator,name=$(IOS_SIM)
 
 # Deliberately writes to the RELEASE dir, never to $(IOS_STORE). Those are two different
 # artifacts that briefly shared one path, and the sharing was a trap: $(IOS_STORE) is the
@@ -102,16 +109,41 @@ ios-field-coverage:  ## Regenerate field_coverage.json from the pydantic respons
 # dead code in CI on every runner. It goes after the CRAP step so the build directory and
 # the coverage data exist, and `--no-cov` because the coverage floor belongs to the Python
 # chain alone and must not be computed from this partial selection.
-ios-qa:  ## Swift chain: locale check -> format lint -> build -> test+coverage -> CRAP -> gate tests -> simulator test
-	$(MAKE) ios-locales-check
+#
+# Each step is its own target, and CI's `ios-qa` job calls THESE rather than re-typing the
+# commands. The job was a hand transcription — it agreed with this recipe step for step and
+# nothing said it had to, so the destination string lived in three places and a change here
+# could leave CI running something else while both stayed green. One name per step keeps the
+# job's per-step reporting (a red step says which gate failed) without a second copy of the
+# command it runs.
+ios-lint:  ## swift format lint, package AND app
 	cd apps/ios && swift format lint --strict --recursive Sources Tests App
+
+ios-build:  ## Build the SwiftPM package
 	cd apps/ios && swift build
+
+ios-test:  ## Test the package with the coverage the CRAP gate reads
 	cd apps/ios && swift test --enable-code-coverage
+
+ios-crap:  ## The Swift CRAP gate (reads the coverage `ios-test` wrote)
 	uv run python scripts/crap_swift.py
+
+ios-gate-tests:  ## The gates' OWN tests, which need `apps/ios/.build` to exist
 	uv run pytest tests/scripts --no-cov
-	$(MAKE) ios-sim-world
+
+ios-sim-test:  ## Build + test the app target in the simulator (also runs the size ratchet)
 	cd apps/ios && xcodebuild -project App/SwimZH.xcodeproj -scheme SwimZH \
 		-destination '$(IOS_DESTINATION)' test
+
+ios-qa:  ## Swift chain: locale check -> format lint -> build -> test+coverage -> CRAP -> gate tests -> simulator test
+	$(MAKE) ios-locales-check
+	$(MAKE) ios-lint
+	$(MAKE) ios-build
+	$(MAKE) ios-test
+	$(MAKE) ios-crap
+	$(MAKE) ios-gate-tests
+	$(MAKE) ios-sim-world
+	$(MAKE) ios-sim-test
 	@echo "iOS QA: all green"
 
 # --- the weekly release ---------------------------------------------------------------------
@@ -146,7 +178,9 @@ IOS_STORE_URL ?=
 # refusal path while claiming to prove the fix path, which is a green gate proving the opposite
 # of what it says. Only the boot lines are optional, because a device already booted makes
 # `simctl boot` exit non-zero and that is the normal local case.
-IOS_SIM ?= iPhone 17
+#
+# `IOS_SIM` is declared once, up with `IOS_DESTINATION` — which is derived from it, so this
+# target and `xcodebuild` cannot be pointed at two different simulators.
 ios-sim-world:  ## Boot the simulator, grant location and place it, for the behaviour tests
 	-xcrun simctl boot "$(IOS_SIM)"
 	-xcrun simctl bootstatus "$(IOS_SIM)"

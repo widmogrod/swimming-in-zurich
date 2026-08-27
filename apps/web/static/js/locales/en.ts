@@ -395,6 +395,12 @@ export const en = {
   "verdict.notOpenToYou": "Not open to you",
   "verdict.hasSessions": "Has sessions",
   "headline.noneNowNextAt": "Nothing open to you now — next at {hhmm}",
+  // The third of the four "nothing open right now" answers, and the one whose absence was a
+  // defect: there IS a later session, but nothing we were told decides whether the reader may
+  // attend it (a women-only hour, no gender set). `noneLeftToday` would state a definite
+  // negative from an unknown, which is the one claim this app never makes.
+  "headline.noneNowMaybeAt":
+    "Nothing open to you now — check with the pool about {hhmm}",
   "headline.noneLeftToday": "Nothing more open to you today",
   "headline.poolsWithSessions": {
     one: "{count} pool with sessions",

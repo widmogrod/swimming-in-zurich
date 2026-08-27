@@ -56,9 +56,14 @@ public struct Place: Equatable, Hashable, Sendable, Identifiable {
   /// How these coordinates were arrived at. See `PlaceSource` in `Located.swift` — it travels
   /// WITH the point rather than beside it, so a label and a position that disagree about where
   /// they came from cannot be constructed.
+  ///
+  /// NO DEFAULT on the initialiser, and the sentence above is why. `source: .preset` as a
+  /// default made the claim untrue: a new `Place` built from a fix, by anyone who forgot the
+  /// argument, would have carried "one of our three curated points" over the reader's own
+  /// coordinates — silently, and with the compiler's blessing. Every call site states it.
   public let source: PlaceSource
 
-  public init(id: String, label: Wording, point: GeoPoint, source: PlaceSource = .preset) {
+  public init(id: String, label: Wording, point: GeoPoint, source: PlaceSource) {
     self.id = id
     self.label = label
     self.point = point
@@ -79,10 +84,15 @@ public struct Place: Equatable, Hashable, Sendable, Identifiable {
 /// to be the right one, and `Places.me(at:)` is exactly the "one more `Place`" it described.
 public enum Places {
   public static let presets: [Place] = [
-    Place(id: "hb", label: .key("place.hb"), point: GeoPoint(lat: 47.3779, lon: 8.5403)),
-    Place(id: "bellevue", label: .verbatim("Bellevue"), point: GeoPoint(lat: 47.3671, lon: 8.5451)),
     Place(
-      id: "zuerichhorn", label: .verbatim("Zürichhorn"), point: GeoPoint(lat: 47.3606, lon: 8.551)),
+      id: "hb", label: .key("place.hb"), point: GeoPoint(lat: 47.3779, lon: 8.5403),
+      source: .preset),
+    Place(
+      id: "bellevue", label: .verbatim("Bellevue"), point: GeoPoint(lat: 47.3671, lon: 8.5451),
+      source: .preset),
+    Place(
+      id: "zuerichhorn", label: .verbatim("Zürichhorn"), point: GeoPoint(lat: 47.3606, lon: 8.551),
+      source: .preset),
   ]
 
   /// The default origin, matching the web's `PLACE_PRESETS[0]`.
@@ -137,9 +147,16 @@ public struct Filters: Equatable, Sendable {
   /// answer is about some day, so counting it would make the control read as "on" always and
   /// tell a reader nothing. Search is not one either: while you are typing, the field itself
   /// is the visible evidence.
+  ///
+  /// NEITHER IS THE PLACE, and it used to be counted — by exactly the reasoning the day is
+  /// excluded for. `init` DEFAULTS `place` to `Places.default` (the station), so `place != nil`
+  /// was true on a cold start with nothing chosen at all, and the filter button wore its
+  /// "active" badge from launch and never took it off. It is not only a default: a place with
+  /// no radius removes no pool from the list, it only decides what "nearest first" measures
+  /// from. `radiusKm` is the term that does the narrowing, and it is still counted.
   public var isNarrowed: Bool {
-    gender != nil || age != nil || eligibleOnly || !kinds.isEmpty || place != nil
-      || radiusKm != nil || favouritesOnly
+    gender != nil || age != nil || eligibleOnly || !kinds.isEmpty || radiusKm != nil
+      || favouritesOnly
   }
 
   public init(

@@ -19,7 +19,8 @@ struct MapModelTests {
       tier: tier, mark: .attend,
       verdict: Verdict(head: Message("mobile.verdict.openNow")),
       options: [], inlineOptions: [], hiddenSessionCount: 0, moreSessionsLabel: nil,
-      state: nil, isFavourite: favourite, nextOpenToYou: nil, openToYou: true)
+      state: nil, isFavourite: favourite, nextOpenToYou: nil, nextToCheck: nil,
+      openToYou: true)
   }
 
   static func sections(_ rows: [PoolRow]) -> [ListSection] { [ListSection(tier: .now, rows: rows)] }
@@ -209,6 +210,12 @@ struct PinClusterTests {
   @Test("no pins, no clusters — and no empty cluster either")
   func emptyIsEmpty() {
     #expect(clusterPins([], metresPerPoint: 10).isEmpty)
+    // ...and one cannot be built at all. `lead` is `pins[0]`, so the old `init(pins:)` — which
+    // took `[]` without complaint — made a value whose documented "Never empty" was a comment
+    // rather than a fact, and whose every reader (`lead`, `point`, `id`) trapped. The failable
+    // form is the only array-shaped way in.
+    #expect(PinCluster(pins: []) == nil)
+    #expect(PinCluster(pins: [Self.pin("a", Self.zurich)])?.count == 1)
   }
 
   // MARK: - Which pin leads, and where the badge sits
@@ -257,11 +264,20 @@ struct PinClusterTests {
     // `sorted(by:)` is not documented as stable, so without the id tie-break two same-tier
     // pools could swap, the cluster's `id` would change, and SwiftUI would rebuild the
     // annotation on a camera change that moved nothing.
-    let pins = [Self.pin("b", Self.east(50)), Self.pin("a", Self.zurich)]
-    let once = clusterPins(pins, metresPerPoint: 10)
-    let twice = clusterPins(pins.reversed(), metresPerPoint: 10)
+    //
+    // FAR APART, so they land in TWO clusters, and that is the whole difference from the test
+    // this replaces. Fifty metres put both pins in ONE cluster, so the assertion compared two
+    // one-element arrays and passed no matter what the EMISSION sort did — which was for a
+    // long time `tier.rank` alone, with no tie-break at all. Two same-tier clusters is the
+    // only shape that exercises it.
+    let pins = [Self.pin("b", Self.east(4_000)), Self.pin("a", Self.zurich)]
+    let once = clusterPins(pins, metresPerPoint: 1)
+    let twice = clusterPins(pins.reversed(), metresPerPoint: 1)
+    #expect(once.count == 2, "the two pins must be far enough apart to be two clusters")
     #expect(once.map(\.id) == twice.map(\.id))
-    #expect(once[0].lead.poolID == "a")
+    // Worst first on the way out, and within one tier "worst" is the higher pool id — the
+    // reverse of `pinRankOrder`, so the two orders cannot drift apart.
+    #expect(once.map(\.id) == ["b", "a"])
   }
 
   // MARK: - Expanding one
@@ -271,9 +287,8 @@ struct PinClusterTests {
     // The bug this exists to prevent: `pinFrame`'s 1.5 km floor is right for the whole city and
     // catastrophic for one cluster, whose pins are a few dozen metres apart by construction. A
     // reader who taps to get closer must not be thrown out to a 1.5 km view.
-    let cluster = PinCluster(pins: [
-      Self.pin("a", Self.zurich), Self.pin("b", Self.east(80)),
-    ])
+    let cluster = PinCluster(
+      lead: Self.pin("a", Self.zurich), others: [Self.pin("b", Self.east(80))])
     let framed = try! #require(clusterFrame(cluster))
     #expect(framed.wideMetres == expandedClusterSpanMetres)
     #expect(framed.wideMetres < minimumMapSpanMetres)
@@ -281,9 +296,8 @@ struct PinClusterTests {
 
   @Test("a cluster wide enough to need it is framed on its own extent, not on the floor")
   func aWideClusterKeepsItsExtent() {
-    let cluster = PinCluster(pins: [
-      Self.pin("a", Self.zurich), Self.pin("b", Self.east(900)),
-    ])
+    let cluster = PinCluster(
+      lead: Self.pin("a", Self.zurich), others: [Self.pin("b", Self.east(900))])
     let framed = try! #require(clusterFrame(cluster))
     #expect(framed.wideMetres > expandedClusterSpanMetres)
   }

@@ -25,10 +25,15 @@ struct LocatedTests {
     // call site. `.locating` is the tempting one — the reader has just asked, and a spinner
     // wants somewhere to live — but there is no coordinate yet, so anything installed here
     // would be a position the app does not have, rendered as a distance to fifty-seven pools.
-    #expect(devicePlace(.idle) == nil)
-    #expect(devicePlace(.locating) == nil)
-    for refusal in [LocationRefusal.denied, .restricted, .unavailable] {
-      #expect(devicePlace(.refused(refusal)) == nil, "\(refusal)")
+    //
+    // Swept over `LocationState.allStates` rather than a literal list, so a state added to the
+    // enum arrives here without an edit. The literal it replaces could not have caught one.
+    for state in LocationState.allStates(fixedAt: Self.bellevue) {
+      guard case .fixed = state else {
+        #expect(devicePlace(state) == nil, "\(state) installed a place")
+        continue
+      }
+      #expect(devicePlace(state) != nil, "a fix must still install one")
     }
   }
 
@@ -43,7 +48,7 @@ struct LocatedTests {
   }
 
   @Test("walking a few metres does not make it a different place")
-  func theDeviceePlaceKeepsItsIdentity() {
+  func theDevicePlaceKeepsItsIdentity() {
     // A `Place` id derived from the coordinates would make `Filters` unequal on every fix, and
     // `TodayModel` reloads the whole answer when the filters change — so a phone on a windowsill
     // would rebuild fifty-seven rows every time the last decimal moved.
@@ -68,9 +73,7 @@ struct LocatedTests {
     // somewhere that cannot help them: Settings fixes `denied`, cannot fix `restricted`, and
     // will look entirely correct for `unavailable`.
     var seen: Set<String> = []
-    for state in [
-      LocationState.locating, .refused(.denied), .refused(.restricted), .refused(.unavailable),
-    ] {
+    for state in [LocationState.locating] + LocationRefusal.allCases.map(LocationState.refused) {
       let note = try! #require(locationNote(state), "\(state) explains nothing")
       #expect(seen.insert(note.key).inserted, "\(state) reuses another state's sentence")
     }
@@ -79,14 +82,14 @@ struct LocatedTests {
   @Test("only a denial can be fixed in Settings")
   func settingsIsOfferedOnlyWhereItHelps() {
     #expect(settingsCanFix(.refused(.denied)))
-    // Screen Time or a managed device: the switch exists and this reader may not move it.
-    #expect(!settingsCanFix(.refused(.restricted)))
-    // Location Services off device-wide, or simply no fix yet — this app's Settings page would
-    // show nothing wrong at all.
-    #expect(!settingsCanFix(.refused(.unavailable)))
-    #expect(!settingsCanFix(.idle))
-    #expect(!settingsCanFix(.locating))
-    #expect(!settingsCanFix(.fixed(Self.bellevue)))
+    // ...and NOTHING else, swept rather than listed. `restricted` is Screen Time or a managed
+    // device — the switch exists and this reader may not move it — and `unavailable` is
+    // Location Services off device-wide, for which this app's own Settings page would look
+    // entirely correct. A fourth refusal reaches this sweep through `allCases` and must state
+    // its own answer here before it can ship an "Open Settings" button that leads nowhere.
+    for state in LocationState.allStates(fixedAt: Self.bellevue) where state != .refused(.denied) {
+      #expect(!settingsCanFix(state), "\(state) offers Settings")
+    }
   }
 
   // MARK: - Launch
@@ -112,11 +115,12 @@ struct LocatedTests {
     // lint that checks literal keys cannot see and which `interpolatedKeysHaveARealPrefix` can
     // only check the prefix of. So the cases are enumerated here, where the enum is: a fourth
     // refusal added without its sentence would render as the key itself, which on screen reads
-    // as a design choice rather than as a missing string.
+    // as a design choice rather than as a missing string. `allCases` is what makes that true:
+    // the array literal this loop used to walk did not grow when the enum did.
     //
     // Only KEY existence, not five-language parity: that is the web catalogs' own gate
     // (`locales/parity.test.ts`), and re-checking it here would be a second, weaker copy.
-    for refusal in [LocationRefusal.denied, .restricted, .unavailable] {
+    for refusal in LocationRefusal.allCases {
       let note = try! #require(locationNote(.refused(refusal)))
       #expect(Catalog.entries[note.key] != nil, "no sentence for \(refusal)")
     }

@@ -71,6 +71,12 @@ jobs:
   # and cannot build SwiftUI at all. `swift format` ships with Xcode, so no third-party
   # linter is installed. From S2b this job also runs `scripts/crap_swift.py`, which reads
   # the coverage `swift test` writes — which is why the order below is fixed.
+  #
+  # Every step below RUNS A MAKEFILE TARGET rather than its own copy of the command. This job
+  # used to be a hand transcription of `make ios-qa`: it agreed step for step and nothing made
+  # it, so the simulator destination was written out here a third time and an edit to the
+  # Makefile could leave CI silently testing something else. The steps stay separate so a red
+  # run names the gate that failed; only the commands are shared.
   ios-qa:
     runs-on: macos-latest
     steps:
@@ -111,27 +117,24 @@ jobs:
       # `App` as well as the package: `swift build` below compiles only the package, so
       # without it the SwiftUI layer — the one S3a grows most — would drift unchecked.
       - name: Format lint (swift format, strict — package AND app)
-        working-directory: apps/ios
-        run: swift format lint --strict --recursive Sources Tests App
+        run: make ios-lint
 
       - name: Build the package
-        working-directory: apps/ios
-        run: swift build
+        run: make ios-build
 
       # SwiftPM only: no simulator, no network. This is where the rule layer is proved,
       # including the replay of the generated eligibility contract and the golden answers.
       # --enable-code-coverage is what the CRAP gate below reads; without it that gate has
       # no input at all, which is why the two steps are adjacent and in this order.
       - name: Test the package (with coverage)
-        working-directory: apps/ios
-        run: swift test --enable-code-coverage
+        run: make ios-test
 
       # Order is load-bearing, exactly as pytest->crap.py and vitest->crap_ts.mjs: this
       # reads the coverage the step above writes and is stale without it. It scores
       # Sources/SwimZHKit only - the thin app target is excluded, because a SwiftUI view
       # body reports inflated executable lines and cannot be unit-tested headlessly.
       - name: CRAP gate (Swift)
-        run: uv run python scripts/crap_swift.py
+        run: make ios-crap
 
       # The gate's OWN tests, and they run here rather than only in the ubuntu `qa` job
       # because two of them - the CRAP offender path and the coverage join - skip without
@@ -140,7 +143,7 @@ jobs:
       # coverage data exist; --no-cov because the coverage floor belongs to the Python
       # chain alone and must not be computed from this partial selection.
       - name: Gate self-tests (crap_swift + ios_budget)
-        run: uv run pytest tests/scripts --no-cov
+        run: make ios-gate-tests
 
       # The simulator's WORLD, and it must be set before the tests rather than inside them.
       # `BehaviourTests.testMyLocationChangesWhatNearestMeans` proves that the phone's own
@@ -162,7 +165,4 @@ jobs:
       # Also where the size ratchet fires: scripts/ios_budget.py is the app target's last
       # build phase, so a regression in app_minus_sqlite or sqlite fails this step.
       - name: Build and test the app in the simulator
-        working-directory: apps/ios
-        run: |
-          xcodebuild -project App/SwimZH.xcodeproj -scheme SwimZH \
-            -destination 'platform=iOS Simulator,name=iPhone 17' test
+        run: make ios-sim-test

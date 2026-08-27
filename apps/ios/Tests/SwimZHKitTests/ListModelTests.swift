@@ -268,6 +268,98 @@ struct ListModelTests {
     #expect(Self.en(built.headline) == "Nothing more open to you today")
   }
 
+  @Test("a later session we cannot decide is said as one, never as nothing")
+  func aCheckLaterIsNotNothing() {
+    // THE DEFECT, and it is a product-invariant violation rather than a wording preference. A
+    // `WomenOnly` hour with no gender set resolves to `womenOnlyNeedsGender` — `.check`, "we
+    // cannot tell whether you may attend". The headline only knew `.attend`, so it fell through
+    // to "Nothing more open to you today" and printed it at the largest size on the page,
+    // directly above a row reading "Opens 14:00" with a `?` badge. An unknown stated as a
+    // definite negative is the one claim this app never makes.
+    let answer = Self.answer(
+      options: [Self.option(pool: "p", from: 14, to: 16, access: .womenOnly(note: ""))],
+      day: "2026-08-24")
+    let built = Self.model(answer, today: "2026-08-24", at: TimeOfDay(hour: 12, minute: 0))
+    #expect(built.sections[0].rows[0].mark == .check)
+    #expect(built.openToYouCount == 0)
+    #expect(built.nextOpenToYou == nil)
+    #expect(built.nextToCheck == "14:00")
+    #expect(Self.en(built.headline) == "Nothing open to you now — check with the pool about 14:00")
+  }
+
+  @Test("a time you certainly may attend beats one you would have to ring up about")
+  func aCertainLaterSessionWinsOverAnUnknownOne() {
+    // Both branches are live here and the ORDER between them is the rule: the `.check` session
+    // is EARLIER, and the headline still names the later `.attend` one, because "you may swim
+    // at 15:00" is a more useful sentence than "phone them about 13:00". The unknown has not
+    // been hidden — its row still says `Opens 13:00 ?` — it has only lost the headline.
+    let answer = Self.answer(
+      options: [
+        Self.option(pool: "check", from: 13, to: 14, access: .womenOnly(note: "")),
+        Self.option(pool: "open", from: 15, to: 16),
+      ],
+      day: "2026-08-24")
+    let built = Self.model(answer, today: "2026-08-24", at: TimeOfDay(hour: 12, minute: 0))
+    #expect(built.nextToCheck == "13:00")
+    #expect(built.nextOpenToYou == "15:00")
+    #expect(Self.en(built.headline) == "Nothing open to you now — next at 15:00")
+  }
+
+  @Test("the four things the headline can say, and each only where it is true")
+  func theHeadlineHasFourAnswers() {
+    // All four in one place, because the defect was not in any one of them — it was in there
+    // being only three. Each is driven by the same pool at a different hour.
+    let day = "2026-08-24"
+    let sessions = [
+      Self.option(pool: "open", from: 10, to: 13),
+      Self.option(pool: "check", from: 14, to: 16, access: .womenOnly(note: "")),
+    ]
+    func headline(at hour: Int) -> String {
+      Self.en(
+        Self.model(
+          Self.answer(options: sessions, day: day), today: day, at: TimeOfDay(hour: hour, minute: 0)
+        )
+        .headline)
+    }
+    // (a) something is running that this person may attend — a count, and never a zero.
+    #expect(headline(at: 11) == "1 pool open to you now")
+    // (b) nothing now, but a session they certainly may attend later.
+    #expect(headline(at: 9) == "Nothing open to you now — next at 10:00")
+    // (c) nothing now, nothing certain later, but something we cannot decide for them.
+    #expect(headline(at: 13) == "Nothing open to you now — check with the pool about 14:00")
+    // (d) nothing now and nothing later AT ALL — the only case in which a bare negative is
+    // honest, because the `.check` session has finished too.
+    #expect(headline(at: 17) == "Nothing more open to you today")
+  }
+
+  @Test("the earliest within each case, not the first row's")
+  func eachCaseTakesItsEarliest() {
+    // `nextToCheck` obeys the same rule `nextOpenToYou` does and for the same reason: the rows
+    // are ordered by distance, not by time, so "the first row's" would be whichever pool
+    // happened to be nearest.
+    let answer = Self.answer(
+      options: [
+        Self.option(pool: "late", from: 18, to: 20, access: .womenOnly(note: ""), distanceKm: 0.1),
+        Self.option(pool: "early", from: 15, to: 16, access: .womenOnly(note: ""), distanceKm: 9.0),
+      ],
+      day: "2026-08-24")
+    let built = Self.model(answer, today: "2026-08-24", at: TimeOfDay(hour: 12, minute: 0))
+    #expect(built.sections[0].rows.first?.poolID == "late", "rows are ordered by distance")
+    #expect(built.nextToCheck == "15:00")
+  }
+
+  @Test("off today nothing is said about a check either")
+  func noCheckOffToday() {
+    // The `.check` twin obeys invariant E1 exactly as its `.attend` sibling does: off today the
+    // store is asked at a fixed midday moment, so "later" has no meaning to be spoken.
+    let answer = Self.answer(
+      options: [Self.option(pool: "p", from: 14, to: 16, access: .womenOnly(note: ""))],
+      day: "2026-12-20")
+    let built = Self.model(answer, today: "2026-08-24", at: TimeOfDay(hour: 12, minute: 0))
+    #expect(built.nextToCheck == nil)
+    #expect(Self.en(built.headline) == "1 pool with sessions")
+  }
+
   @Test("off today there is no `next`, because there is no clock to be next to")
   func noNextOffToday() {
     // The same invariant `openToYouCount` obeys (E1): off today the store is asked at a fixed
@@ -525,7 +617,6 @@ struct ListModelTests {
       { (f: inout Filters) in f.age = 34 },
       { (f: inout Filters) in f.eligibleOnly = true },
       { (f: inout Filters) in f.kinds = ["indoor"] },
-      { (f: inout Filters) in f.place = Places.default },
       { (f: inout Filters) in f.radiusKm = 2 },
       { (f: inout Filters) in f.favouritesOnly = true },
     ] {
@@ -543,6 +634,26 @@ struct ListModelTests {
     var searched = none
     searched.search = "letzi"
     #expect(!searched.isNarrowed)
+  }
+
+  @Test("a cold start has narrowed nothing, and the button must not say it has")
+  func theDefaultPlaceIsNotANarrowing() {
+    // THE APP'S REAL DEFAULT — `Filters(day:)` with nothing else stated, which is what launch
+    // builds. `place` defaults to the station, so counting `place != nil` made `isNarrowed`
+    // true before the reader had touched a single control: the filter button wore its "active"
+    // glyph from the first frame and never took it off, which teaches a reader that the glyph
+    // means nothing.
+    #expect(Filters(day: "2026-08-24").isNarrowed == false)
+    #expect(Filters(day: "2026-08-24").place == Places.default)
+
+    // And it is not merely a default. A place with no radius removes no pool from the list —
+    // it only decides what "nearest first" measures from — so even a deliberately chosen one
+    // is not a narrowing. The RADIUS is the term that hides pools, and it still counts.
+    var chosen = Filters(day: "2026-08-24")
+    chosen.place = Places.presets[1]
+    #expect(!chosen.isNarrowed)
+    chosen.radiusKm = 2
+    #expect(chosen.isNarrowed)
   }
 
   @Test("the six section titles are distinct, and only `closed` says closed")

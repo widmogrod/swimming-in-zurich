@@ -146,9 +146,18 @@ struct DetailRowView: View {
           Text(row.label, localized)
         }
       }
-    } else if row.id == "phone" {
+    } else if row.id == "phone",
+      let url = URL(string: "tel:\(rendered.filter { !$0.isWhitespace })")
+    {
       // `tel:` is the one URL an offline app can still act on usefully.
-      Link(destination: URL(string: "tel:\(rendered.filter { !$0.isWhitespace })")!) {
+      //
+      // `if let`, not `!`, and the same shape `PoolHeader.call` already uses for the same
+      // field. This is STORE data — a scraped phone string — so any character the scrape
+      // carries through that `URL` will not accept (a parenthesised area code, a stray
+      // non-ASCII digit) crashed the whole sheet rather than losing one row of it. A pool whose
+      // number cannot be dialled falls through to the plain text row below, where the number is
+      // still readable and copyable.
+      Link(destination: url) {
         LabeledContent {
           Text(verbatim: rendered)
         } label: {

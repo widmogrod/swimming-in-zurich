@@ -13,6 +13,15 @@
 // it slower, never wrong. Nothing here reaches the internet, and nothing leaves the device —
 // the fix becomes a `Place` in memory and is never written anywhere.
 //
+// IT ALWAYS ANSWERS, and that took a review to notice. The first version returned only on a
+// denial, a restriction, a fix, or the sequence ending — and `CLLocationUpdate.liveUpdates()`
+// ends on none of those indoors, in airplane mode, or on a simulator with no position set. It
+// simply keeps emitting updates that carry no location. Every consequence of that compounds:
+// `state` stays `.locating` so the row stays disabled forever, `isListening` stays true so no
+// later attempt can recover it, GNSS stays powered, and — worst — `locate()` never returns,
+// which starved the store refresh that awaited it at launch. A control that can wedge is worse
+// than one that fails, because the reader has no way to learn that it did.
+//
 // ONE FIX, NOT A STREAM. `CLLocationUpdate.liveUpdates()` is a continuous sequence and this
 // takes the first usable element and stops. A list that re-sorted itself while the reader
 // walked would move a row out from under a finger already reaching for it — Apple Maps does not
@@ -24,6 +33,13 @@ import CoreLocation
 import Foundation
 import SwiftUI
 import SwimZHKit
+
+/// How long the reader waits before the app admits it cannot place them.
+///
+/// Long enough for a cold GNSS fix outdoors, short enough that a control which is going to fail
+/// says so while the reader is still looking at it. It is a ceiling, not a delay: an ordinary
+/// fix arrives in well under a second and is not made to wait for this.
+let locationDeadlineSeconds: Double = 12
 
 @MainActor
 @Observable
@@ -81,39 +97,55 @@ final class LocationSource {
     await locate()
   }
 
-  /// Wait for the first usable update, then stop.
+  /// Wait for the first usable update or for the deadline, whichever comes first.
+  ///
+  /// A RACE rather than a deadline checked inside the loop, because the loop is not guaranteed
+  /// to spin: a sequence that emits nothing at all would never reach an `if Date() > deadline`
+  /// on any iteration. Two children, first answer wins, the loser cancelled.
+  private func listen() async {
+    let outcome = await withTaskGroup(of: LocationState.self) { group in
+      group.addTask { await Self.firstUpdate() }
+      group.addTask {
+        try? await Task.sleep(for: .seconds(locationDeadlineSeconds))
+        return .refused(.unavailable)
+      }
+      let first = await group.next() ?? .refused(.unavailable)
+      group.cancelAll()
+      return first
+    }
+    state = outcome
+  }
+
+  /// The first update that settles the question, or `unavailable` when the sequence ends
+  /// without one.
+  ///
+  /// `nonisolated` and `static` so the task group's children need no hop back to the main actor
+  /// and touch no mutable state — the only thing that crosses back is the `LocationState`.
   ///
   /// The order of the checks is the contract. `authorizationDenied` and `authorizationRestricted`
   /// are asked BEFORE `location`, because a denied update can still carry a stale coordinate and
   /// using it would be reporting a position the reader has just refused to give.
-  private func listen() async {
+  private nonisolated static func firstUpdate() async -> LocationState {
     do {
       for try await update in CLLocationUpdate.liveUpdates(.default) {
         if update.authorizationDenied || update.authorizationDeniedGlobally {
-          return finish(.refused(.denied))
+          return .refused(.denied)
         }
-        if update.authorizationRestricted { return finish(.refused(.restricted)) }
+        if update.authorizationRestricted { return .refused(.restricted) }
         if let location = update.location {
-          return finish(
-            .fixed(
-              GeoPoint(
-                lat: location.coordinate.latitude, lon: location.coordinate.longitude)))
+          return .fixed(
+            GeoPoint(lat: location.coordinate.latitude, lon: location.coordinate.longitude))
         }
         // `locationUnavailable` is not fatal on its own — it is how the sequence reports "no
-        // fix YET", and it arrives routinely before the first one. Only a sequence that ENDS
-        // without a fix is an answer, which is the `unavailable` below.
-        if update.authorizationRequestInProgress { continue }
+        // fix YET", and it arrives routinely before the first one. What ends the wait is a fix,
+        // an authorisation answer, the sequence ending, or the deadline in `listen`.
       }
-      finish(.refused(.unavailable))
+      return .refused(.unavailable)
     } catch {
       // The sequence itself failed. It is not a denial and must not be worded as one: the
       // reader would be sent to a Settings page showing nothing wrong.
-      finish(.refused(.unavailable))
+      return .refused(.unavailable)
     }
-  }
-
-  private func finish(_ outcome: LocationState) {
-    state = outcome
   }
 
   /// Stop using the device's position, without forgetting that permission was granted.

@@ -344,6 +344,8 @@ export const pl = {
   "verdict.hasSessions": "Ma zajęcia",
   "headline.noneNowNextAt":
     "Teraz nic dla ciebie otwartego — następny o {hhmm}",
+  "headline.noneNowMaybeAt":
+    "Teraz nic dla ciebie otwartego — zapytaj w obiekcie o {hhmm}",
   "headline.noneLeftToday": "Dziś nic więcej dla ciebie otwartego",
   "headline.poolsWithSessions": {
     one: "{count} basen z zajęciami",

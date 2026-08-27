@@ -57,10 +57,10 @@ struct RefreshTests {
   /// second reason and would pass this suite's checks for the wrong one.
   static func store(
     at path: URL, builtAt: String? = nil, schemaVersion: Int? = nil,
-    dropBaditickerColumn: Bool = false
+    withoutBaditickerColumn: Bool = false
   ) throws -> URL {
     try FileManager.default.copyItem(at: try bundledURL(), to: path)
-    guard builtAt != nil || schemaVersion != nil || dropBaditickerColumn else { return path }
+    guard builtAt != nil || schemaVersion != nil || withoutBaditickerColumn else { return path }
     var handle: OpaquePointer?
     #expect(sqlite3_open(path.path, &handle) == SQLITE_OK)
     defer { sqlite3_close_v2(handle) }
@@ -76,18 +76,52 @@ struct RefreshTests {
           handle, "UPDATE meta SET value='\(schemaVersion)' WHERE key='schema_version';", nil, nil,
           nil) == SQLITE_OK)
     }
-    if dropBaditickerColumn {
+    if withoutBaditickerColumn {
       // What a version-1 store genuinely looks like: the column absent, not merely a different
       // number in `meta`. A detail read against this throws `no such column`.
+      //
+      // The table is REBUILT rather than altered: `ALTER TABLE … DROP COLUMN` needs SQLite
+      // 3.35 (2021), and the GitHub macOS runner links an older libsqlite3 where it returns
+      // an error instead of SQLITE_OK — green on a developer's machine, red in CI, and red
+      // for a reason that reads as a defect in the code under test rather than in the
+      // fixture. `CREATE TABLE … AS SELECT` and `ALTER TABLE … RENAME TO` predate every
+      // SQLite this ships against. The rebuilt table loses its PRIMARY KEY and STRICT-ness,
+      // which nothing here reads: what this fixture must have is the column GONE, so a
+      // detail read fails exactly as it would in the field.
+      let columns = columnNames(of: "pool", in: handle)
       #expect(
-        sqlite3_exec(handle, "ALTER TABLE pool DROP COLUMN baditicker_poiid;", nil, nil, nil)
-          == SQLITE_OK)
+        columns.contains("baditicker_poiid"),
+        "the bundled store no longer has the column this fixture removes")
+      let kept = columns.filter { $0 != "baditicker_poiid" }.joined(separator: ", ")
+      let rebuild = """
+        CREATE TABLE pool_v1 AS SELECT \(kept) FROM pool;
+        DROP TABLE pool;
+        ALTER TABLE pool_v1 RENAME TO pool;
+        """
+      #expect(sqlite3_exec(handle, rebuild, nil, nil, nil) == SQLITE_OK)
+      #expect(!columnNames(of: "pool", in: handle).contains("baditicker_poiid"))
     }
     // The rewrite journal must not be left behind: a `-wal`/`-shm` pair beside the file is
     // exactly what the export removes, and leaving one would make these fixtures unlike the
     // real article.
     #expect(sqlite3_exec(handle, "PRAGMA journal_mode=DELETE;", nil, nil, nil) == SQLITE_OK)
     return path
+  }
+
+  /// A table's column names, in declaration order — read from the file rather than written
+  /// down here, so a schema that grows a column cannot leave this suite rebuilding a table
+  /// with the new column silently missing too.
+  static func columnNames(of table: String, in handle: OpaquePointer?) -> [String] {
+    var statement: OpaquePointer?
+    #expect(
+      sqlite3_prepare_v2(handle, "PRAGMA table_info(\(table));", -1, &statement, nil) == SQLITE_OK)
+    defer { sqlite3_finalize(statement) }
+    var names: [String] = []
+    while sqlite3_step(statement) == SQLITE_ROW {
+      guard let bytes = sqlite3_column_text(statement, 1) else { continue }
+      names.append(String(cString: bytes))
+    }
+    return names
   }
 
   static func manifest(
@@ -489,7 +523,7 @@ struct RefreshTests {
     // than merely carrying a different number in `meta`.
     _ = try Self.store(
       at: installed, builtAt: "2020-01-01T00:00:00+01:00",
-      schemaVersion: appStoreSchemaVersion - 1, dropBaditickerColumn: true)
+      schemaVersion: appStoreSchemaVersion - 1, withoutBaditickerColumn: true)
 
     let served = try await host.store()
     let metadata = try await served.metadata()
