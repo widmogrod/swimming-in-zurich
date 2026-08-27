@@ -56,3 +56,11 @@ DerivedData/
 # from the recorded cassettes, and the Swift and Xcode chains both need it on a fresh
 # checkout that has no gold store and no network. Regenerate with `make ios-fixtures`.
 !apps/ios/Sources/SwimZHKit/Resources/ios.sqlite
+
+# fastlane runs in the release workflow only (see .github/workflows/release.yml). These are
+# the run artefacts it drops in the working tree; the Fastfile itself IS committed.
+fastlane/report.xml
+fastlane/Preview.html
+fastlane/screenshots
+.bundle/
+vendor/bundle/
