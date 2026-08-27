@@ -133,7 +133,9 @@ ios-gate-tests:  ## The gates' OWN tests, which need `apps/ios/.build` to exist
 
 ios-sim-test:  ## Build + test the app target in the simulator (also runs the size ratchet)
 	cd apps/ios && xcodebuild -project App/SwimZH.xcodeproj -scheme SwimZH \
-		-destination '$(IOS_DESTINATION)' test
+		-destination '$(IOS_DESTINATION)' \
+		-skip-testing:SwimZHUITests/ScreenshotTests \
+		test
 
 ios-qa:  ## Swift chain: locale check -> format lint -> build -> test+coverage -> CRAP -> gate tests -> simulator test
 	$(MAKE) ios-locales-check
@@ -214,3 +216,55 @@ ios-release:  ## Build the release store + manifest.json (IOS_STORE_URL=https://
 		--out $(IOS_RELEASE_DIR)/ios.sqlite \
 		--manifest $(IOS_RELEASE_DIR)/manifest.json \
 		--url '$(IOS_STORE_URL)'
+
+.PHONY: ios-screenshots
+
+# The App Store screenshot set. SEPARATE from `ios-qa` on purpose, and skipped by name in
+# `ios-sim-test` above: it runs on a 6.9" device the rest of the chain does not use, and it
+# proves no behaviour of its own — `BehaviourTests` already owns every gesture it performs.
+#
+# 6.9" IS THE ONLY SIZE APPLE STILL REQUIRES (1320 x 2868); it scales that set down for
+# every smaller device, so one simulator is the whole submission.
+IOS_SHOT_SIM ?= iPhone 17 Pro Max
+IOS_SHOT_DIR ?= dist/screenshots
+IOS_SHOT_RESULT := dist/screenshots.xcresult
+
+ios-screenshots:  ## Capture the App Store screenshot set into dist/screenshots/
+	# THE APP'S CLOCK IS THE HOST'S, and there is no seam to fake it — `TodayModel.load(now:)`
+	# takes the date but the app wires `Date()`. So a capture at 01:00 photographs the honest
+	# but unsellable headline "Nothing open to you now", which is how the first run of this
+	# target ended. Refusing beats uploading it: the App Store shows the first screenshot
+	# before anything else, and nobody re-reads a set they believe they already took.
+	@hour=$$(date +%H); \
+	if [ "$$hour" -lt 09 ] || [ "$$hour" -ge 19 ]; then \
+		echo "make ios-screenshots: it is $$hour:00 — the pools are shut, so the first"; \
+		echo "screenshot would read \"Nothing open to you now\". Run between 09:00 and 19:00."; \
+		exit 2; \
+	fi
+	-xcrun simctl boot "$(IOS_SHOT_SIM)"
+	-xcrun simctl bootstatus "$(IOS_SHOT_SIM)"
+	# BY NAME, NOT `booted`. With two simulators up — and `ios-sim-world` boots another one —
+	# `booted` is ambiguous, and the first run of this target sent the override to the wrong
+	# device and photographed the real clock.
+	#
+	# Apple's own 09:41, full battery, full bars. Not vanity: a real status bar puts a battery
+	# percentage and a carrier name in a store screenshot, and both read as clutter a reviewer
+	# notices before they notice the app.
+	xcrun simctl status_bar "$(IOS_SHOT_SIM)" override \
+		--time "09:41" --batteryState charged --batteryLevel 100 \
+		--cellularBars 4 --wifiBars 3
+	rm -rf "$(IOS_SHOT_DIR)" "$(IOS_SHOT_RESULT)"
+	cd apps/ios && xcodebuild -project App/SwimZH.xcodeproj -scheme SwimZH \
+		-destination 'platform=iOS Simulator,name=$(IOS_SHOT_SIM)' \
+		-only-testing:SwimZHUITests/ScreenshotTests \
+		-resultBundlePath "$(CURDIR)/$(IOS_SHOT_RESULT)" \
+		test
+	# The screenshots are ATTACHMENTS inside the result bundle, not files — which is why the
+	# test marks them `.keepAlways`, the default lifetime deleting them on a passing run.
+	mkdir -p "$(IOS_SHOT_DIR)"
+	xcrun xcresulttool export attachments \
+		--path "$(IOS_SHOT_RESULT)" --output-path "$(IOS_SHOT_DIR)"
+	# xcresulttool names every file after its attachment UUID and puts the name the test chose
+	# in manifest.json beside them. Unrenamed, the five shots sort at random and the upload
+	# order — which IS the order Apple shows them in — becomes whatever the filesystem says.
+	uv run python scripts/name_screenshots.py "$(IOS_SHOT_DIR)"
