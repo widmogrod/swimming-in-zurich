@@ -209,6 +209,7 @@ export const en = {
     "SwimZH uses your location to measure how far each pool is and to show you on the map. It stays on your phone.",
   "place.useMyLocation": "Use my location",
   "place.myLocation": "My location",
+  "place.fixedAgo": "taken {age} ago",
 
   // --- DateStepper ------------------------------------------------------------------
   "date.selectedDay": "Selected day",

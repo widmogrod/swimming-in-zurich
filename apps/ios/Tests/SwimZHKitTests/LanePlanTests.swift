@@ -217,18 +217,64 @@ struct LanePlanTests {
   /// the store derives it (`Store.swift`: `openAtQueryTime(window, at: time)`). The earlier
   /// version took it as a free parameter, which decoupled the flag from the instant and meant
   /// the coupling the summary rule depends on was never exercised at all.
-  static func option(day: LaneDay, at time: TimeOfDay) -> SwimOption {
+  /// A session that published nothing the second line could carry: no lane plan, no price,
+  /// no fair-weather caveat. The ordinary case for most of the roster.
+  static func bareOption(price: PriceEntry? = nil) -> SwimOption {
+    SwimOption(
+      poolID: "p", poolName: "Pool", poolKind: "indoor", basinID: "b", basinName: "25m",
+      lengthM: 25, lanes: 4, window: fixtureWindow, access: .publicSwim, weather: "any",
+      eligibility: eligibility(Person(), .publicSwim), openAtQueryTime: true, price: price,
+      distanceKm: nil, laneAvailability: nil, laneTimeline: nil, laneDayView: nil,
+      laneBestPublic: nil)
+  }
+
+  /// A tariff line, for the case where a price is the ONLY supporting fact.
+  static let aPrice = PriceEntry(
+    category: .adult, amountCHF: 8, display: "Erwachsene (ab 20 J.) Fr. 8.00", minAge: 20)
+
+  static func option(day: LaneDay, at time: TimeOfDay, price: PriceEntry? = nil) -> SwimOption {
     let window = fixtureWindow
     return SwimOption(
       poolID: "p", poolName: "Pool", poolKind: "indoor", basinID: "b", basinName: "25m",
       lengthM: 25, lanes: 4, window: window, access: .publicSwim, weather: "any",
       eligibility: eligibility(Person(), .publicSwim),
-      openAtQueryTime: openAtQueryTime(window, at: time), price: nil,
+      openAtQueryTime: openAtQueryTime(window, at: time), price: price,
       distanceKm: nil,
       laneAvailability: day.availability(at: time),
       laneTimeline: day.availabilityTimeline(within: window),
       laneDayView: day,
       laneBestPublic: day.bestPublicTime(within: window))
+  }
+
+  @Test("a session with nothing below its time earns no second line; one with lanes does")
+  func supportingFactsDecideWhetherASecondLineAppears() throws {
+    // MOVED OUT OF `SessionLine`, where it decided whether a whole line of a pool row appeared
+    // from inside a SwiftUI body — the app target is outside the CRAP gate and a body cannot be
+    // unit-tested, so it was a rule nothing measured.
+    //
+    // A lane plan is one of the three things the second line can carry, and it earns the line
+    // on ANY day: `laneSummary` withholds only the WALL-CLOCK split off today, falling back to
+    // the session's own opening split, so the line still has something true to say. (The first
+    // version of this test asserted the opposite and was wrong about its own subject — the
+    // fallback in `laneSummary` above is what settles it.)
+    let day = try Self.fixtureDay()
+    let withLanes = Self.option(day: day, at: TimeOfDay(hour: 9, minute: 0))
+    #expect(withLanes.hasSupportingFacts(isToday: true, format: Self.format))
+    #expect(withLanes.hasSupportingFacts(isToday: false, format: Self.format))
+
+    // ...and a session that published none of the three earns no line at all. Most of the city
+    // is this case — eight lane sheets exist for fifty-seven pools — so an always-present row
+    // would spend its spacing on nothing, which is what it looked like: a ragged rhythm down
+    // the card.
+    #expect(!Self.bareOption().hasSupportingFacts(isToday: true, format: Self.format))
+  }
+
+  @Test("a price alone is enough to earn the second line")
+  func aPriceAloneEarnsTheLine() {
+    // Each of the three facts must be sufficient ON ITS OWN. An `&&` where the rule wants `||`
+    // would silently hide the price on every pool with no lane plan — which is most of them.
+    #expect(
+      Self.bareOption(price: Self.aPrice).hasSupportingFacts(isToday: true, format: Self.format))
   }
 
   @Test("the row's lane line describes the SESSION, not the wall clock")

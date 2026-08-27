@@ -41,11 +41,53 @@ import SwimZHKit
 /// fix arrives in well under a second and is not made to wait for this.
 let locationDeadlineSeconds: Double = 12
 
+/// What `TodayModel` needs from the phone's position — the seam that makes the ordering rules
+/// around it testable.
+///
+/// IT EXISTS BECAUSE A TEST COULD NOT FAIL. `TodayModelTests.aLaterNamedPlaceBeatsAnEarlierFix`
+/// drives the race the `placeGeneration` counter was added for: a fix that lands AFTER the
+/// reader has chosen a named place must not overwrite it. Against a real `LocationSource` in a
+/// simulator the fix comes back refused in milliseconds, so the test passed because
+/// `devicePlace(.refused)` is nil — the neighbouring invariant — and never because the counter
+/// held. Deleting `placeGeneration` left it green, which makes it a green gate for a rule it
+/// does not exercise.
+///
+/// A double can hold the fix open across the reader's second tap, which is the only way to put
+/// a REAL fix on the far side of that suspension. The pattern is this codebase's own, twice
+/// over: `HTTPFetching` is injected into `StoreHost.refresh` so every refusal path is driven
+/// without a network, and `LaunchMeasurement` exists so `LaunchSignpost`'s state machine is
+/// provable with no MetricKit daemon. `LocationSource` already had every one of these members
+/// in this shape; conforming cost it nothing.
+@MainActor
+protocol LocationFixing: AnyObject {
+  var state: LocationState { get }
+  /// When the held fix was taken, for `stalePositionNote`. Nil when there is none.
+  var fixedAt: Date? { get }
+  var preferred: Bool { get set }
+  var isAuthorised: Bool { get }
+  func locate() async
+  func refreshIfUsing() async
+  func stopUsing()
+}
+
 @MainActor
 @Observable
-final class LocationSource {
+final class LocationSource: LocationFixing {
   /// What the app knows about where the reader is. The rules that read this are the kit's.
   private(set) var state: LocationState = .idle
+
+  /// When the fix the app is currently MEASURING FROM was taken, or nil if there has been none.
+  ///
+  /// It survives a failed refresh on purpose, and that is the whole reason it exists.
+  /// `refreshIfUsing` runs on every return to the foreground; when it is refused or times out,
+  /// `state` becomes a refusal but the `Place` installed from the earlier fix stays — a
+  /// position that was true is better than none, and better than silently reverting to the
+  /// station. What was missing is that nothing said it was old, so this timestamp is what
+  /// `stalePositionAge` reads to decide whether the age has to be shown. Clearing it here on a
+  /// refusal would throw away the only fact that makes the honest caption possible.
+  ///
+  /// An instant, never a coordinate: nothing about where the reader was is written down.
+  private(set) var fixedAt: Date?
 
   /// Whether the reader has chosen to be measured from their own position.
   ///
@@ -113,6 +155,9 @@ final class LocationSource {
       group.cancelAll()
       return first
     }
+    // Stamped only on a fix, and only from the answer we are about to install — so the
+    // timestamp and the coordinate it dates always come from the same update.
+    if case .fixed = outcome { fixedAt = Date() }
     state = outcome
   }
 
@@ -152,5 +197,8 @@ final class LocationSource {
   func stopUsing() {
     preferred = false
     state = .idle
+    // The fix is no longer being measured from, so its age is no longer anything to report.
+    // (Unlike a refusal, which leaves the place installed — see `fixedAt`.)
+    fixedAt = nil
   }
 }

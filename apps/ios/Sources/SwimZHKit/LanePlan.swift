@@ -478,6 +478,22 @@ extension SwimOption {
     }
     return opening.summary(format)
   }
+
+  /// Whether this session has anything to say BELOW its time and basin.
+  ///
+  /// A `SessionLine` is two ranks: when and where on the first line, what it costs and what is
+  /// left on the second. The second line is absent entirely when the source published none of
+  /// it — an always-present row would still cost its spacing, which showed up as a ragged
+  /// rhythm down the card.
+  ///
+  /// IT LIVES HERE RATHER THAN IN THE VIEW, and that is the whole reason this function exists:
+  /// the app target is outside the CRAP gate and a SwiftUI body cannot be unit-tested, so the
+  /// predicate deciding whether a whole line of a row appears was a rule nothing measured. It
+  /// reads the same three facts in the same order, and `laneSummary` above is one of them —
+  /// which is also why `isToday` and `format` are threaded in rather than assumed.
+  public func hasSupportingFacts(isToday: Bool, format: Format) -> Bool {
+    laneSummary(isToday: isToday, format: format) != nil || price != nil || isFairWeatherOnly
+  }
 }
 
 extension LaneHold {

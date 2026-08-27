@@ -27,6 +27,7 @@
 		1A000000000000000000071 /* PoolMapView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A000000000000000000070 /* PoolMapView.swift */; };
 		1A00000000000000000004B /* TypeSizeBridgeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A00000000000000000004A /* TypeSizeBridgeTests.swift */; };
 		1A00000000000000000004D /* LocalizationDeviceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A00000000000000000004C /* LocalizationDeviceTests.swift */; };
+		1A000000000000000000091 /* TodayModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A000000000000000000090 /* TodayModelTests.swift */; };
 		1A00000000000000000004F /* Localization.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A00000000000000000004E /* Localization.swift */; };
 		1A000000000000000000051 /* RibbonCanvas.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A000000000000000000050 /* RibbonCanvas.swift */; };
 		1A000000000000000000053 /* LaneGanttView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A000000000000000000052 /* LaneGanttView.swift */; };
@@ -77,6 +78,7 @@
 		1A000000000000000000070 /* PoolMapView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PoolMapView.swift; sourceTree = "<group>"; };
 		1A00000000000000000004A /* TypeSizeBridgeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TypeSizeBridgeTests.swift; sourceTree = "<group>"; };
 		1A00000000000000000004C /* LocalizationDeviceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalizationDeviceTests.swift; sourceTree = "<group>"; };
+		1A000000000000000000090 /* TodayModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TodayModelTests.swift; sourceTree = "<group>"; };
 		1A00000000000000000004E /* Localization.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Localization.swift; sourceTree = "<group>"; };
 		1A000000000000000000050 /* RibbonCanvas.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RibbonCanvas.swift; sourceTree = "<group>"; };
 		1A000000000000000000052 /* LaneGanttView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LaneGanttView.swift; sourceTree = "<group>"; };
@@ -166,6 +168,7 @@
 				1A00000000000000000002E /* MemoryMetricTests.swift */,
 				1A00000000000000000004A /* TypeSizeBridgeTests.swift */,
 				1A00000000000000000004C /* LocalizationDeviceTests.swift */,
+				1A000000000000000000090 /* TodayModelTests.swift */,
 			);
 			path = SwimZHTests;
 			sourceTree = "<group>";
@@ -372,6 +375,7 @@
 				1A00000000000000000002F /* MemoryMetricTests.swift in Sources */,
 				1A00000000000000000004B /* TypeSizeBridgeTests.swift in Sources */,
 				1A00000000000000000004D /* LocalizationDeviceTests.swift in Sources */,
+				1A000000000000000000091 /* TodayModelTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

@@ -187,6 +187,7 @@ export const pl = {
     "SwimZH używa Twojej lokalizacji, aby zmierzyć odległość do każdego basenu i pokazać Cię na mapie. Zostaje ona na Twoim telefonie.",
   "place.useMyLocation": "Użyj mojej lokalizacji",
   "place.myLocation": "Moja lokalizacja",
+  "place.fixedAgo": "ustalona {age} temu",
 
   "date.selectedDay": "Wybrany dzień",
   "date.previousDay": "Poprzedni dzień",

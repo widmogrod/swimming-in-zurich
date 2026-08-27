@@ -569,6 +569,10 @@ extension Catalog {
     "pill.opensLater": Entry(parameters: [], isPlural: false),
     "pill.unknown": Entry(parameters: [], isPlural: false),
     "place.anywhere": Entry(parameters: [], isPlural: false),
+    "place.fixedAgo": Entry(
+      parameters: [
+        Parameter(name: "age", kind: .text)
+      ], isPlural: false),
     "place.hb": Entry(parameters: [], isPlural: false),
     "place.locating": Entry(parameters: [], isPlural: false),
     "place.myLocation": Entry(parameters: [], isPlural: false),

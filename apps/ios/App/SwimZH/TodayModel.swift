@@ -36,8 +36,11 @@ final class TodayModel {
   /// "which language is this" rather than two that must agree.
   private let localized: Localized
 
-  init(localized: Localized = .current) {
+  /// `location` is defaulted so no call site changes; a test passes a double that can hold a
+  /// fix open across the reader's second tap. See `LocationFixing`.
+  init(localized: Localized = .current, location: (any LocationFixing)? = nil) {
     self.localized = localized
+    self.location = location ?? LocationSource()
   }
 
   private static let log = Logger(subsystem: "ch.swimzh.app", category: "store")
@@ -113,7 +116,11 @@ final class TodayModel {
   /// Owned by the model rather than by a view, because the DECISION it feeds — what
   /// `filters.place` becomes — is the model's, and because a fix taken on the find screen must
   /// still be the origin when the map draws its distances.
-  let location = LocationSource()
+  ///
+  /// The PROTOCOL, not the class, and defaulted in `init` so no call site changes: a test needs
+  /// to hold a fix open across the reader's second tap, which a real `CLLocationManager` in a
+  /// simulator will not do. See `LocationFixing`.
+  let location: any LocationFixing
 
   /// Measure from the phone.
   ///

@@ -185,10 +185,14 @@ struct PoolActions: View {
       // Apple's own documented URL scheme, with the pool's NAME as the label so Maps shows the
       // pool rather than a pair of coordinates. Percent-encoded, because half of them contain
       // an umlaut and one contains a slash.
-      ActionButton(caption: Message("action.directions"), symbol: Icon.directions) {
-        openURL(mapsURL(point))
+      // Only when a URL can actually be built. An action that opens nothing is worse than an
+      // absent one: the reader presses it and learns only that the app does not work.
+      if let url = mapsURL(point) {
+        ActionButton(caption: Message("action.directions"), symbol: Icon.directions) {
+          openURL(url)
+        }
+        .accessibilityIdentifier("directionsButton")
       }
-      .accessibilityIdentifier("directionsButton")
     }
   }
 
@@ -208,12 +212,11 @@ struct PoolActions: View {
     }
   }
 
-  private func mapsURL(_ point: GeoPoint) -> URL {
-    let label =
-      detail.name.addingPercentEncoding(withAllowedCharacters: .alphanumerics) ?? detail.name
-    let coordinates = "\(point.lat),\(point.lon)"
-    return URL(string: "http://maps.apple.com/?daddr=\(coordinates)&q=\(label)")
-      ?? URL(string: "http://maps.apple.com/")!
+  /// The kit builds the string; this only turns it into a `URL`. The escaping and the
+  /// locale-independent coordinate formatting are rules with a test — see `mapsDirectionsURL`,
+  /// which replaced a version here that force-unwrapped a fallback on its own output.
+  private func mapsURL(_ point: GeoPoint) -> URL? {
+    URL(string: mapsDirectionsURL(to: point, named: detail.name))
   }
 }
 

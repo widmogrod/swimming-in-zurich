@@ -131,6 +131,67 @@ public func locationNote(_ state: LocationState) -> Message? {
   }
 }
 
+/// How old a fix may be before the app must say so, out loud, wherever it is presented.
+///
+/// TEN MINUTES, and the number is a judgement rather than a measurement, so here is the
+/// reasoning it has to survive. The defect it guards is real and not hypothetical:
+/// `refreshIfUsing` re-fixes on every return to the foreground, and when that refresh is
+/// refused or times out the PREVIOUS fix stays installed — correctly, because a position that
+/// was true half an hour ago beats no position and beats silently reverting to the station.
+/// What was missing is that nothing anywhere said it was old, so a coordinate taken before a
+/// tram ride went on labelling itself "My location" and every distance drawn from it read as
+/// current.
+///
+/// Ten minutes is roughly 800 m at a walking pace and around 3 km on a tram — both larger than
+/// the gaps between the central pools, so both are enough to reorder a nearest-first list and
+/// to change the answer to "within 1 km". Under ten minutes the error is smaller than the
+/// distances themselves are rendered to, and a caption would be pedantry.
+///
+/// It is deliberately far shorter than `TempReading.stalenessLimit` (six hours) and matches the
+/// web's OCCUPANCY limit instead: water temperature is measured a few times a day and a reader
+/// does not move it, whereas a position is invalidated by the reader themselves. Different
+/// speeds, not different standards.
+///
+/// A phone on a desk is not nagged by this: the sentence appears ONLY in the place picker's
+/// "use my location" row, which is the one screen whose whole subject is where distances are
+/// measured from. Nothing in the list, and no badge, grows out of it.
+public let positionStalenessLimit: TimeInterval = 10 * 60
+
+/// How old the installed fix is — but ONLY when that age has to be shown. Nil means say nothing.
+///
+/// KEYED ON WHEN THE FIX WAS TAKEN, never on `LocationState`, and that is the whole rule. The
+/// case this exists for is precisely the one where the state is NOT `.fixed`: a foreground
+/// refresh that is refused leaves `state == .refused(.unavailable)` while the place installed
+/// from the earlier fix stays on screen. A staleness test gated on `.fixed` would go quiet in
+/// exactly the situation it was written for.
+///
+/// Nil for a fix in the FUTURE, on the same principle as `liveWaterCaveat`: our clock and the
+/// one that stamped it disagree, and "taken -3 min ago" is worse than saying less. Nil for no
+/// fix at all — there is no position, so there is no age to report and no claim to correct.
+///
+/// Strictly greater than the limit, matching `TempReading.isStale`: at exactly ten minutes the
+/// fix is still inside the window this file calls current.
+public func stalePositionAge(fixedAt: Date?, at now: Date) -> TimeInterval? {
+  guard let fixedAt else { return nil }
+  let age = now.timeIntervalSince(fixedAt)
+  guard age > positionStalenessLimit else { return nil }
+  return age
+}
+
+/// The sentence for an old fix — "taken 25 min ago" — or nil while it is still current.
+///
+/// It reuses the app's EXISTING age vocabulary rather than inventing a second one: the same
+/// `humanizedAge` that renders `detail.liveMeasuredAgo` for the live water temperature, which
+/// is the identical problem (a measurement presented long after it was taken) already solved
+/// once. Only the verb differs — a temperature is measured, a position is taken — so the
+/// catalog gains one key and no new grammar.
+public func stalePositionNote(fixedAt: Date?, at now: Date, in localized: Localized) -> Message? {
+  guard let age = stalePositionAge(fixedAt: fixedAt, at: now),
+    let rendered = humanizedAge(age, localized)
+  else { return nil }
+  return Message("place.fixedAgo", ["age": rendered])
+}
+
 /// Whether the reader can usefully be sent to Settings about this.
 ///
 /// Only `denied`, and the distinction is the point of `LocationRefusal` having three cases.

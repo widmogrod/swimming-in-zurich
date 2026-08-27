@@ -154,6 +154,7 @@ export const it = {
     "SwimZH usa la tua posizione per misurare quanto dista ogni piscina e per mostrarti sulla mappa. Resta sul tuo telefono.",
   "place.useMyLocation": "Usa la mia posizione",
   "place.myLocation": "La mia posizione",
+  "place.fixedAgo": "rilevata {age} fa",
   "date.selectedDay": "Giorno selezionato",
   "date.previousDay": "Giorno precedente",
   "date.nextDay": "Giorno successivo",

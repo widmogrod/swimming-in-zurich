@@ -29,7 +29,7 @@ struct FilterButton: View {
   let kinds: [String]
   /// The phone's own position. Threaded down rather than reached for, so this file has no
   /// opinion about Core Location and the sheet can be previewed without one.
-  let location: LocationSource
+  let location: any LocationFixing
   /// Measure from the phone. `async` because it is a device that takes a moment to answer, and
   /// the row has to be able to say so while it does.
   let onUseMyLocation: () async -> Void
@@ -69,7 +69,7 @@ struct FilterSheet: View {
   @Environment(\.localized) private var localized
   @Binding var filters: Filters
   let kinds: [String]
-  let location: LocationSource
+  let location: any LocationFixing
   let onUseMyLocation: () async -> Void
   let onUseNamedPlace: (Place?) -> Void
   @Environment(\.dismiss) private var dismiss
@@ -194,7 +194,7 @@ struct FilterSheet: View {
     /// something at that moment is nothing at all. Both ways of choosing are closures now, and
     /// the device one installs a place only if `devicePlace` yields one.
     let place: Place?
-    let location: LocationSource
+    let location: any LocationFixing
     let onUseMyLocation: () async -> Void
     let onUseNamedPlace: (Place?) -> Void
     @State private var query = ""
@@ -255,6 +255,20 @@ struct FilterSheet: View {
       if location.state == .locating {
         ProgressView()
       } else if place?.source == .device {
+        // HOW OLD THE FIX IS, next to the tick that says it is the one in use. The row could
+        // say "Use my location ✓" over a coordinate taken before a tram ride — a foreground
+        // refresh that is refused leaves the earlier fix installed, which is right, but until
+        // now nothing on any screen said it was old. `Date()` is read as the row is drawn:
+        // this is a pushed screen the reader has just opened, so the age is current when it
+        // is read, and a ticking caption in a picker would be movement for its own sake.
+        // No identifier of its own: a `Button` combines its label's children into ONE
+        // accessibility element (the reason `myLocationRow` is an `HStack` at all), so this
+        // reaches VoiceOver as part of the row's own announcement rather than beside it.
+        if let stale = stalePositionNote(fixedAt: location.fixedAt, at: Date(), in: localized) {
+          Text(stale, localized)
+            .font(.rowFact)
+            .foregroundStyle(.secondary)
+        }
         Image(systemName: Icon.selected)
           .accessibilityLabel(Text(Message("a11y.selected"), localized))
       }

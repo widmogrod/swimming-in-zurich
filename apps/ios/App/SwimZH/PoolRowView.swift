@@ -366,9 +366,10 @@ struct SessionLine: View {
     }
   }
 
+  /// The kit's rule, not one of ours. It decides whether a whole line of the row appears, which
+  /// is exactly the kind of thing that must not live in a body the CRAP gate never scores.
   private var hasSupport: Bool {
-    option.laneSummary(isToday: isToday, format: localized.format) != nil || option.price != nil
-      || option.isFairWeatherOnly
+    option.hasSupportingFacts(isToday: isToday, format: localized.format)
   }
 
   /// "5 of 8 lanes open" — `OptionOut.lane_availability`, rendered.

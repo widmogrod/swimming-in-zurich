@@ -162,6 +162,7 @@ export const de = {
     "SwimZH nutzt deinen Standort, um die Entfernung zu jedem Bad zu messen und dich auf der Karte zu zeigen. Er bleibt auf deinem Gerät.",
   "place.useMyLocation": "Meinen Standort verwenden",
   "place.myLocation": "Mein Standort",
+  "place.fixedAgo": "vor {age} ermittelt",
 
   "date.selectedDay": "Gewählter Tag",
   "date.previousDay": "Vorheriger Tag",

@@ -92,6 +92,72 @@ struct LocatedTests {
     }
   }
 
+  // MARK: - An old fix is still a fix, but it must say so
+
+  @Test("a fix taken a moment ago says nothing")
+  func afreshFixIsSilent() {
+    // Silence is the right answer while the position is current: a caption under every fix
+    // would be noise, and noise is what teaches readers to ignore the one that matters.
+    let now = Date()
+    #expect(stalePositionAge(fixedAt: now.addingTimeInterval(-60), at: now) == nil)
+  }
+
+  @Test("an old fix reports its age")
+  func anOldFixIsReported() {
+    // THE DEFECT. `refreshIfUsing` re-fixes on every return to the foreground; when that
+    // refresh is refused or times out, the place installed from the earlier fix stays on
+    // screen — correctly, because a position that was true beats none and beats silently
+    // reverting to the station. Without this rule the list went on drawing distances labelled
+    // "My location" from a coordinate taken before a tram ride, with nothing anywhere saying so.
+    let now = Date()
+    let age = try! #require(
+      stalePositionAge(fixedAt: now.addingTimeInterval(-25 * 60), at: now))
+    #expect(age == 25 * 60)
+  }
+
+  @Test("the boundary belongs to the fresh side")
+  func exactlyTheLimitIsStillCurrent() {
+    // Strictly greater, matching `TempReading.isStale`. A fix at exactly the limit is inside
+    // the window this app calls current; one second past it is not.
+    let now = Date()
+    #expect(stalePositionAge(fixedAt: now - positionStalenessLimit, at: now) == nil)
+    #expect(stalePositionAge(fixedAt: now - positionStalenessLimit - 1, at: now) != nil)
+  }
+
+  @Test("no fix means no age, whatever the app is currently doing")
+  func noFixClaimsNothing() {
+    // Swept over every state — including the refusals, through `allCases` — because the rule
+    // is keyed on WHEN a fix was taken and never on the state. A reader who has been refused
+    // and never had a position must not be told how old one is; and the sweep is also what
+    // pins the other half, that a refusal reached AFTER a fix does not silence the caption.
+    let now = Date()
+    #expect(stalePositionAge(fixedAt: nil, at: now) == nil)
+    for state in LocationState.allStates(fixedAt: Self.bellevue) {
+      #expect(stalePositionAge(fixedAt: nil, at: now) == nil, "\(state) invented an age")
+      #expect(
+        stalePositionAge(fixedAt: now.addingTimeInterval(-25 * 60), at: now) != nil,
+        "\(state) silenced the age of a fix still on screen")
+    }
+    // A fix in the FUTURE is the same answer for a different reason: our clock and the one
+    // that stamped it disagree, and "taken -3 min ago" is worse than saying less.
+    #expect(stalePositionAge(fixedAt: now.addingTimeInterval(60), at: now) == nil)
+  }
+
+  @Test("the old-fix sentence is a sentence, in the age vocabulary the app already speaks")
+  func theStaleNoteRenders() {
+    // Reuses `humanizedAge` — the same renderer behind `detail.liveMeasuredAgo`, which is this
+    // problem (a measurement read long after it was taken) already solved once. A second age
+    // vocabulary would be two sets of plural rules to keep true in five languages.
+    let now = Date()
+    #expect(stalePositionNote(fixedAt: now, at: now, in: CatalogFixture.english) == nil)
+    let note = try! #require(
+      stalePositionNote(
+        fixedAt: now.addingTimeInterval(-25 * 60), at: now, in: CatalogFixture.english))
+    #expect(note.key == "place.fixedAgo")
+    #expect(Catalog.entries[note.key] != nil, "no sentence for an old fix")
+    #expect(CatalogFixture.english(note).contains("25"))
+  }
+
   // MARK: - Launch
 
   @Test("the choice sticks, and launch never prompts")

@@ -248,17 +248,12 @@ struct PoolMapView: View {
     CLLocationCoordinate2D(latitude: point.lat, longitude: point.lon)
   }
 
-  /// How wide this region is on the ground, in metres.
-  ///
-  /// Measured with the SAME `haversineKm` the kit frames with, rather than by multiplying the
-  /// longitude span by a constant: the two would disagree by the cosine of the latitude, and a
-  /// clustering radius that was 30% out is a map that groups pools it should not.
+  /// How wide this region is on the ground, in metres. The arithmetic is the kit's
+  /// (`metresAcross`); this only unpacks MapKit's own type, which is why the rule could not
+  /// live there until it took two numbers instead of an `MKCoordinateRegion`.
   private func metres(across region: MKCoordinateRegion) -> Double {
-    let lat = region.center.latitude
-    let half = region.span.longitudeDelta / 2
-    return haversineKm(
-      GeoPoint(lat: lat, lon: region.center.longitude - half),
-      GeoPoint(lat: lat, lon: region.center.longitude + half)) * 1000
+    metresAcross(
+      latitude: region.center.latitude, lonDelta: region.span.longitudeDelta)
   }
 }
 

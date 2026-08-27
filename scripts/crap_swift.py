@@ -550,7 +550,30 @@ def collect_scores(
 
 
 def _run(args: list[str], cwd: Path) -> str:
-    return subprocess.run(args, cwd=cwd, capture_output=True, text=True, check=True).stdout.strip()
+    """Run a tool, and turn its failure into a sentence rather than a stack trace.
+
+    `llvm-cov` is the one that fails in practice, and it fails for a mundane reason with an
+    unhelpful shape: the profile it reads is written by `swift test --enable-code-coverage`, so
+    running a plain `swift test` (or a `--filter` run) in between leaves a profile that no
+    longer matches the rebuilt binary. `llvm-cov` exits 1, `check=True` raises, and what the
+    reader sees is forty lines of Python ending in `CalledProcessError` — which says nothing
+    about coverage, nothing about the ordering, and nothing about the one command that fixes it.
+
+    The gate itself is unchanged: this still stops. It stops having SAID something.
+    """
+    result = subprocess.run(args, cwd=cwd, capture_output=True, text=True, check=False)
+    if result.returncode == 0:
+        return result.stdout.strip()
+    tool = Path(args[0]).name if args else "?"
+    detail = (result.stderr or result.stdout).strip().splitlines()
+    raise SystemExit(
+        f"{tool} failed ({' '.join(args[:3])} ...): "
+        + (detail[-1] if detail else f"exit {result.returncode}")
+        + "\n\nIf this names a coverage profile, the profile and the test binary have drifted "
+        "apart — a plain `swift test` between the coverage run and this gate is enough to do "
+        "it. Re-run them in order:\n"
+        "    make ios-test && make ios-crap"
+    )
 
 
 def test_binary(bin_path: Path) -> Path:
