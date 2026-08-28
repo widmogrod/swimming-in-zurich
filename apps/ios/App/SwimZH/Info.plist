@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  A BASE Info.plist, holding exactly one thing Xcode's build settings cannot express.
+
+  `GENERATE_INFOPLIST_FILE` stays YES: every other key — the bundle identifier, the supported
+  orientations, the scene manifest, the five-language location purpose string — is still
+  generated and merged on top of this file. This exists solely because the launch screen's
+  BACKGROUND COLOUR is a nested key (`UILaunchScreen.UIColorName`) and the `INFOPLIST_KEY_*`
+  bridge only covers flat ones: `INFOPLIST_KEY_UILaunchScreen_Generation` is a real setting and
+  `INFOPLIST_KEY_UILaunchScreen_UIColorName` is not. Setting the latter looks entirely correct,
+  builds without a warning, and is silently dropped — which is what happened here first, and
+  what a screenshot of the launch screen caught.
+
+  WHY IT IS WORTH A FILE. An empty `UILaunchScreen` dict is a BLANK WHITE screen, and it is
+  shown for the whole of pre-main — measured at ~1.3 s on the simulator, which is 87% of this
+  app's launch. On a phone in dark mode that is a full-screen white flash between the home
+  screen and a dark app. `LaunchBackground` is the same colour the list draws on, in both
+  appearances, so the launch screen looks like the app arriving rather than like a blank page.
+-->
+<plist version="1.0">
+<dict>
+	<key>UILaunchScreen</key>
+	<dict>
+		<key>UIColorName</key>
+		<string>LaunchBackground</string>
+	</dict>
+</dict>
+</plist>

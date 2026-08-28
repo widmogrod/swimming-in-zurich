@@ -1,0 +1,41 @@
+{
+  "sourceLanguage": "en",
+  "strings": {
+    "NSLocationWhenInUseUsageDescription": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "SwimZH uses your location to measure how far each pool is and to show you on the map. It stays on your phone."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "SwimZH nutzt deinen Standort, um die Entfernung zu jedem Bad zu messen und dich auf der Karte zu zeigen. Er bleibt auf deinem Gerät."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "SwimZH utilise votre position pour mesurer la distance de chaque piscine et vous situer sur la carte. Elle reste sur votre téléphone."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "SwimZH usa la tua posizione per misurare quanto dista ogni piscina e per mostrarti sulla mappa. Resta sul tuo telefono."
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "SwimZH używa Twojej lokalizacji, aby zmierzyć odległość do każdego basenu i pokazać Cię na mapie. Zostaje ona na Twoim telefonie."
+          }
+        }
+      }
+    }
+  },
+  "version": "1.0"
+}

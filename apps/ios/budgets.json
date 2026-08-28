@@ -1,0 +1,36 @@
+{
+  "_comment": [
+    "Non-functional budgets for the iOS app, as a committed ratchet. Two size numbers,",
+    "never one: `ios.sqlite` grows with the data horizon and the binary grows with the",
+    "app, so a combined figure would let a weekly data refresh mask a code regression.",
+    "Enforced by scripts/ios_budget.py, which runs as a Run Script build phase on the",
+    "app target and therefore fires inside the chain's closing `xcodebuild ... test`.",
+    "`measured_bytes` is informational (refresh it with `--record`); `limit_bytes` is",
+    "the gate. Raise a limit only deliberately, with the reason recorded in the plan."
+  ],
+  "app_minus_sqlite": {
+    "limit_bytes": 4194304,
+    "plan_ratchet_bytes": 4194304,
+    "ceiling_bytes": 31457280,
+    "measured_bytes": 2088982,
+    "how": "sum of every bundled Mach-O's __TEXT segment (size -m) + every non-Mach-O resource, minus ios.sqlite",
+    "why": "RAISED DELIBERATELY to 4 MB at S5 (2 MB at S3b, 1 MB at S2b). This is the PLAN's own ratchet figure \u2014 `plan_ratchet_bytes` is unchanged and the two are now equal, so this is not a widening beyond what the plan agreed; it is the last step inside it. WHY NOW, with the number: S4's five compiled string catalogs took the measurement from 1,339,498 B to 1,908,758 B, 91% of the 2 MB limit. S5 then added the Baditicker client, the manifest/download/validate/swap path, `StoreHost`, and the sheet row that renders a live reading, measuring 2,088,982 B (__TEXT 1,900,544 + resources 188,438) \u2014 99.6% of 2 MB, i.e. 24 KB of headroom, which is a gate that fails on the next paragraph of a comment rather than on a real regression. Against 4 MB the app sits at 49.8%, and against the 30 MB ceiling the user set, 6.6%. Do NOT raise this again without moving the plan's ratchet first, and never to make a build pass. Still an UNSIGNED PROXY on the Debug configuration, not the thinned download: -exportArchive needs a signing identity CI has not got. Measured context: a stripped hello-world SwiftUI binary is ~71 KB, so the 30 MB ceiling was never in play."
+  },
+  "sqlite": {
+    "limit_bytes": 8388608,
+    "measured_bytes": 1794048,
+    "how": "the size of ios.sqlite inside the built bundle",
+    "why": "The plan's 8 MB bound, which S1's export test also asserts. It is deliberately NOT tightened to the committed 140-day fixture store (1.75 MB): `make ios-export` swaps in the real 400-day store, measured at 5.00 MB, and a ratchet below that would fail the release build rather than catch a regression."
+  },
+  "peak_memory": {
+    "limit_bytes": 104857600,
+    "how": "XCTMemoryMetric in the app-hosted MetricTests, over a full 57-pool answer",
+    "measured_bytes": 65077750,
+    "why": "The plan's 100 MB ceiling, deliberately generous. XCTMemoryMetric is meaningless against an XCUIApplication because it measures the test runner, hence an app-hosted unit test. Measured on Xcode 26 it emits two sub-metrics: XCTMetric_Memory.physical (the delta) read 0.000 kB across all five iterations - useless, as the plan predicted - and XCTMetric_Memory.physical_peak reported '51.3 MB'. So the gate is task_vm_info.phys_footprint against this limit; XCTMemoryMetric is the loose ratchet beside it. UNITS, because the earlier prose here was wrong: Xcode's 'MB' labels are KiB scaled by 1000, so its '51.3 MB' is 52,531,675 B = 50.1 MiB = 52.5 MB, and S3b's '63.55 MB' is 65,077,750 B = 62.1 MiB = 65.1 MB. Those are the measured_bytes figures, unchanged; only the prose was mislabelled. S3b's rise from 52.5 to 65.1 MB is the visual half of the app, the lane derivations now attached to every option, and the detail sheet, all landing at once. Against the 100 MB (104,857,600 B) limit that is 62.1% used - headroom 38%, down from 50% at S2b - worth knowing before S5 adds a downloaded store and a live client."
+  },
+  "launch_seconds": {
+    "target": 1.0,
+    "how": "the OSSignposter interval in LaunchSignpost, registered with MetricKit extendLaunchMeasurement(forTaskID:)",
+    "why": "NOT a CI gate. Xcode stores performance baselines per device configuration precisely because they do not travel, and no published simulator-variance figure was found. S2b ships the instrument; the number is read on a real device."
+  }
+}

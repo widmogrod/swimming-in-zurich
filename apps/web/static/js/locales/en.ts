@@ -198,8 +198,18 @@ export const en = {
   // --- Combobox / PlaceTypeahead ----------------------------------------------------
   "combo.noMatches": "No matches",
   "combo.noPoolsMatch": "No pools match",
+  "place.locating": "Finding where you are…",
+  "place.refused.denied":
+    "SwimZH cannot see your location. You can allow it in Settings.",
+  "place.refused.restricted": "This device does not allow location for apps.",
+  "place.refused.unavailable":
+    "No position available right now. Distances are from the place above.",
+  "action.openSettings": "Open Settings",
+  "ios.location.purpose":
+    "SwimZH uses your location to measure how far each pool is and to show you on the map. It stays on your phone.",
   "place.useMyLocation": "Use my location",
   "place.myLocation": "My location",
+  "place.fixedAgo": "taken {age} ago",
 
   // --- DateStepper ------------------------------------------------------------------
   "date.selectedDay": "Selected day",
@@ -340,8 +350,8 @@ export const en = {
   "mobile.lanesUntil": "{public} of {total} lanes public until {hhmm}",
 
   "mobile.openToYou": {
-    one: "{count} open to you now",
-    other: "{count} open to you now",
+    one: "{count} pool open to you now",
+    other: "{count} pools open to you now",
   },
   "mobile.openToYouOn": {
     one: "{count} open to you on {day}",
@@ -350,4 +360,334 @@ export const en = {
   "mobile.filters": "Filters",
   "mobile.today": "Today",
   "mobile.lanePlan": "Lane plan",
+
+  // --- The native iOS app (native-ios-app S4) --------------------------------------
+  //
+  // The phone is not a second product with a second vocabulary: it renders THIS catalog,
+  // projected into `Localizable.xcstrings` by `scripts/locales_to_xcstrings.mjs`. Keys
+  // added below are the ones the web has no surface for (a facility sheet, a VoiceOver
+  // layout for a Canvas, an all-pools browser); everything the web already words —
+  // `access.*`, `closure.*`, `mobile.verdict.*`, `toolbar.age.*` — is REUSED rather than
+  // re-authored, which is the only way the two clients can be checked against each other.
+
+  // Day states. Four of the five are admissions that we do not know a pool's hours; not one
+  // of them may be worded as a closure. `stateLabelsAreDayAgnostic` (Swift) also forbids
+  // "today"/"now" here: a state row is rendered for every date in the horizon.
+  "state.openUnscheduled": "Open, but hours are not listed",
+  "state.beyondHorizon": "Beyond the published horizon",
+  "state.beyondHorizon.body":
+    "We publish answers through {date}. This is not the same as the pools being closed — we simply have not resolved this day yet.",
+  "state.notStated": "State not stated",
+  // A status a newer store carries and this build has never seen: said as itself, never
+  // guessed at. Guessing, given the vocabulary, would mean guessing "closed".
+  "state.unrecognised": "{status}",
+  // Whole sentences rather than a "Closed" head glued to a reason clause: the two halves
+  // do not compose in every language, and `status.closed_reason` above already shows what
+  // the nesting costs when the reason is itself a translated word.
+  "state.closed.outOfSeason": "Closed — outside its season",
+  "state.closed.noSessions": "Closed — no sessions",
+  "state.closed.unmapped": "Closed — “{text}”",
+  "state.closed.unclassified": "Closed — reason not classified",
+  "state.closed.other": "Closed — {code}",
+  "state.closed.unstated": "Closed — reason not stated",
+
+  // Phone list tiers and verdicts beyond the web's set.
+  "tier.scheduled": "Open that day",
+  "verdict.notOpenToYou": "Not open to you",
+  "verdict.hasSessions": "Has sessions",
+  "headline.noneNowNextAt": "Nothing open to you now — next at {hhmm}",
+  // The third of the four "nothing open right now" answers, and the one whose absence was a
+  // defect: there IS a later session, but nothing we were told decides whether the reader may
+  // attend it (a women-only hour, no gender set). `noneLeftToday` would state a definite
+  // negative from an unknown, which is the one claim this app never makes.
+  "headline.noneNowMaybeAt":
+    "Nothing open to you now — check with the pool about {hhmm}",
+  "headline.noneLeftToday": "Nothing more open to you today",
+  "headline.poolsWithSessions": {
+    one: "{count} pool with sessions",
+    other: "{count} pools with sessions",
+  },
+  // Deliberately NOT plural entries: there is no noun to inflect, so a plural form per
+  // locale would be four identical strings — which Polish's own `other`-is-the-decimal-form
+  // rule then flags as a copy-paste. The count is a bare number here.
+  "row.moreToday": "+{count} more today",
+  "row.moreThatDay": "+{count} more that day",
+
+  // Day-level banners. A warning is OURS (it qualifies the answer); a notice is the pool's
+  // own words and is never translated, so it has no key.
+  "banner.calendarCoverage.title": "Holiday calendar incomplete",
+  "banner.holidayHoursUnverified.title": "Holiday hours unconfirmed",
+  "banner.generic.title": "Please note",
+  // BYTE-FOR-BYTE the sentence `etl/ios_export.render_warning` produces, capitalisation and
+  // final punctuation included — which is why it reads as a fragment rather than as a sentence.
+  // That is deliberate: `GoldenAnswerTests` renders this key through the English catalog and
+  // compares it to the golden `find_swim_options` output, so any drift in MEANING between the
+  // exporter and the client fails there. The other four locales are ordinary sentences; only
+  // English is the oracle.
+  "warning.calendar_coverage":
+    "calendar data not available for {year}; holiday-dependent schedules may be inaccurate",
+  "warning.holiday_hours_unverified":
+    "{date} is a public holiday and these pools do not publish their holiday hours; the times shown are their usual weekday hours and are unconfirmed: {pools}",
+  "warning.unknown": "{code}",
+
+  // The access legend's explanations. The LABELS are `access.*` above, shared with the web
+  // board's legend; only the sentences are new.
+  "access.public.desc":
+    "Open public swimming — anyone may enter during these hours.",
+  "access.lane.desc":
+    "Lane swimming (Bahnenschwimmen) — public, organised into lanes for laps/training.",
+  "access.family.desc":
+    "Family/children session — public, oriented to families and kids.",
+  "access.women.desc":
+    "Women-only session (Frauenbad / Frauenschwimmen) — reserved for women.",
+  "access.seniors.desc":
+    "Seniors session — reserved for guests aged 60 and over.",
+  "access.school.desc": "Reserved for school classes — not open to the public.",
+  "access.club.desc":
+    "Reserved for a club/association — not open to the public.",
+  "access.adults.desc":
+    "Adults-only public window — reserved for guests aged 18 and over (typical for school-pool evening swims).",
+  "access.girls.desc":
+    "Girls-only session (für Mädchen) — the pool publishes no age cutoff, so confirm with the venue.",
+  "access.genderDiverse.desc":
+    "Session open to trans and non-binary people aged 16 and over.",
+  "access.accompanied.desc":
+    "For children only when accompanied by an adult (für Kinder nur mit Erwachsenen).",
+  // Never "public swimming" for a class this build does not know: an unheard-of session is
+  // a reason to ask, not a welcome.
+  "access.unknown": "Session — check with the pool",
+
+  // The WFS roster's kind vocabulary. `poolKind.unknown` passes an unseen kind through as
+  // itself rather than folding it into "indoor" — a mislabelled pool sends somebody to the
+  // wrong kind of water.
+  "poolKind.indoor": "Indoor pool",
+  "poolKind.outdoor": "Outdoor pool",
+  "poolKind.lake": "Lake bath",
+  "poolKind.river": "River bath",
+  "poolKind.thermal": "Thermal bath",
+  "poolKind.school": "School pool",
+  "poolKind.paddling": "Paddling pool",
+  "poolKind.unknown": "{kind}",
+
+  // --- The facility sheet -----------------------------------------------------------
+  //
+  // iOS 26 renders a section header exactly as it is written — it no longer upper-cases
+  // them — so every heading here is sentence case and must READ as a heading unaided.
+  "detail.section.where": "Where",
+  "detail.section.admission": "Admission",
+  "detail.section.season": "Season",
+  "detail.section.basins": "Basins",
+  "detail.section.features": "Features",
+  "detail.section.lockers": "Lockers",
+  "detail.section.rentals": "Rentals",
+  "detail.section.lanes": "Lane plans",
+  "detail.section.provenance": "Where this came from",
+
+  "detail.fact.address": "Address",
+  "detail.fact.phone": "Phone",
+  "detail.fact.website": "Website",
+  "detail.fact.about": "About",
+  "detail.fact.schedule": "Schedule",
+  "detail.fact.entry": "Entry",
+  "detail.fact.yourRate": "Your rate",
+  "detail.fact.pricesRead": "Prices read",
+  "detail.fact.tariffPage": "Tariff page",
+  "detail.fact.lastAdmission": "Last admission",
+  "detail.fact.season": "Open season",
+
+  "freshness.scraped": "Published by the pool",
+  "freshness.awaiting": "Not published yet",
+  "freshness.noSource": "No timetable to read",
+  "freshness.unknown": "Unrecognised state: {state}",
+  "freshness.awaiting.caveat":
+    "This pool has a timetable page, but it has not been read into this app yet.",
+  "freshness.noSource.caveat":
+    "This pool publishes no timetable of its own. That is not the same as being closed.",
+  "freshness.unknown.caveat":
+    "This app does not recognise this state; check with the pool.",
+
+  "priceCategory.adult": "Adult",
+  "priceCategory.youth": "Youth",
+  "priceCategory.child": "Child",
+  "priceCategory.senior": "Senior",
+  "priceCategory.unknown": "{category}",
+  "price.minAgeCaveat": "Published for ages {minAge} and over.",
+  "price.staleCaveat":
+    "Prices come from the pool’s own page and can change without notice.",
+
+  "admission.free": "Free",
+  "admission.tariff": "Paid — see the rates below",
+  // NOT "free": an unstated admission is unknown, and "free" sends somebody to a turnstile
+  // with no money.
+  "admission.unknown": "Not published — check with the pool",
+  "detail.lastAdmission.value": "{duration} before closing",
+
+  "season.range": "{from} to {to}",
+  "season.rangeWithDays": "{startDay} {from} to {endDay} {to}",
+  "season.fairWeatherCaveat":
+    "Published for fair weather; the pool may not open in poor weather.",
+
+  "basin.fact.size": "Size",
+  "basin.fact.lanes": "Lanes",
+  "basin.fact.water": "Water",
+  "basin.fact.diving": "Diving",
+  "basin.fact.lanePlan": "Lane plan",
+  "basin.size.lengthByWidth": "{length} × {width}",
+  "basin.size.length": "{length}",
+  "basin.size.width": "{width} wide",
+  "basin.tempNominalCaveat": "The pool’s stated temperature, not a reading.",
+  "basin.parsedProseCaveat":
+    "Read from the pool’s prose, so it may be approximate.",
+  "basinKind.swimmer": "Swimmers’ pool",
+  "basinKind.non_swimmer": "Non-swimmers’ pool",
+  "basinKind.diving": "Diving pool",
+  "basinKind.learner": "Learner pool",
+  "basinKind.paddling": "Paddling pool",
+  "basinKind.multi_purpose": "Multi-purpose pool",
+  "basinKind.thermal": "Thermal pool",
+  "basinKind.outdoor": "Outdoor pool",
+  "basinKind.unknown": "{kind}",
+
+  "feature.fact.surcharge": "Surcharge",
+  "feature.fact.temperature": "Temperature",
+  "feature.fact.hours": "Hours on this date",
+  "feature.hoursNotListed": "Hours not listed for this date",
+  "feature.closed": "Closed — {reason}",
+  // Lower-case clauses, because they are read INSIDE `feature.closed` above. They are the
+  // one place this catalog nests, and they are worded as fragments on purpose.
+  "closureClause.out_of_season": "outside its season",
+  "closureClause.no_sessions": "no hours published for this date",
+  "closureClause.closure": "the pool states a closure",
+  "closureClause.unknown": "{reason}",
+  "featureKind.sauna": "Sauna",
+  "featureKind.gastronomy": "Restaurant or kiosk",
+  "featureKind.sunbathing": "Sunbathing lawn",
+  "featureKind.playground": "Playground",
+  "featureKind.slide": "Water slide",
+  "featureKind.wellness": "Wellness area",
+  "featureKind.sport": "Sports facility",
+  "featureKind.unknown": "{kind}",
+
+  "lockerKind.wardrobe": "Wardrobe locker",
+  "lockerKind.valuables": "Valuables locker",
+  "lockerKind.cabin": "Changing cabin",
+  "lockerKind.unknown": "{kind}",
+  "rentalKind.towel": "Towel",
+  "rentalKind.locker": "Locker",
+  "rentalKind.deck_chair": "Deck chair",
+  "rentalKind.swim_aid": "Swimming aid",
+  "rentalKind.unknown": "{kind}",
+  "fee.free": "Free",
+  "fee.unstated": "Price not published",
+  "fee.amount": "{amount}",
+  "fee.perPeriod": "per {period}",
+  "fee.deposit": "deposit {amount}",
+
+  "panel.bestWindow": {
+    one: "{start}–{end}, {count} lane",
+    other: "{start}–{end}, {count} lanes",
+  },
+  // NOT a plural entry: the string names the lanes ("lane 3", "lanes 3, 4") without
+  // counting them, and `xcstringstool` refuses a plural variation whose forms do not
+  // interpolate the number — its own advice is "use separate top-level strings for one
+  // and greater than one". No language here needs more than the two, because the noun
+  // has no numeral in front of it.
+  "panel.clubSlot.oneLane": "{start}–{end}, lane {lanes}",
+  "panel.clubSlot.manyLanes": "{start}–{end}, lanes {lanes}",
+  "prov.fact.readFrom": "Read from",
+  "prov.fact.accurateAsOf": "Accurate as of",
+  "prov.fact.curation": "Curation",
+  "prov.curated.yes": "Hand-checked",
+  "prov.curated.no": "Read straight from the pool’s own page",
+
+  // --- Lane plans -------------------------------------------------------------------
+  "lane.incompleteCaveat":
+    "Some lanes could not be read from the pool’s plan, so this is incomplete.",
+  // Zero public lanes is NOT "0 of 8 open", which reads as a measurement. Each of the four
+  // is a WHOLE sentence: the partial variants exist so no language has to glue "— some
+  // lanes unreadable" onto the end of another sentence.
+  "lane.nonePublic": "no lanes open to the public",
+  "lane.nonePublic.partial":
+    "no lanes open to the public — some lanes unreadable",
+  "lane.publicOfTotal": {
+    one: "{public} of {count} lane open",
+    other: "{public} of {count} lanes open",
+  },
+  "lane.publicOfTotal.partial": {
+    one: "{public} of {count} lane open — some lanes unreadable",
+    other: "{public} of {count} lanes open — some lanes unreadable",
+  },
+  "lane.openToPublic": "open to the public",
+  "lane.spoken": "Lane {lane}, {start} to {end}, {holder}",
+
+  // --- VoiceOver over the ribbon canvas ---------------------------------------------
+  //
+  // `Canvas` offers no per-element accessibility, so these ARE the ribbon for a screen
+  // reader. Day-agnostic without exception: a ribbon is painted for whichever day the
+  // strip selects, so "today" here would be spoken on ninety-odd future dates.
+  "a11y.blockLabel": "{start} to {end}, {access}",
+  "a11y.fact.publicLanes": "Lanes open to the public",
+  "a11y.value.ofTotal": "{public} of {total}",
+  "a11y.fact.laneData": "Lane data",
+  "a11y.value.laneDataIncomplete": "incomplete for this basin",
+  "a11y.fact.lanes": "Lanes",
+  "a11y.fact.reservedBy": "Reserved by",
+  "a11y.value.ownerAndOthers": "{owner} and others",
+  "a11y.fact.laneSplit": "Lane split",
+  "a11y.value.laneSplitUnpublished": "not published for this pool",
+  "a11y.selected": "Selected",
+
+  // --- Phone chrome -----------------------------------------------------------------
+  "map.poolsHere": {
+    one: "{count} pool here",
+    other: "{count} pools here",
+  },
+  "nav.map": "Map",
+  "nav.list": "List",
+  "action.directions": "Directions",
+  "action.call": "Call",
+  "action.openInMaps": "Open in Maps",
+  "nav.allPools": "All pools",
+  "nav.accessTypes": "What the labels mean",
+  "nav.browse": "Browse",
+  "nav.findAPool": "Find a pool",
+  "accessTypes.title": "Session types",
+  "accessTypes.footer":
+    "A session’s own rules always win: what a pool publishes for a particular hour is what this app shows, and these are the categories it sorts them into.",
+  "browser.noMatch.body": "Try a different name, or another kind.",
+  "browser.filterByKind": "Filter by kind",
+  "browser.kind": "Kind",
+  "browser.allKinds": "All kinds",
+  "gantt.title": "Lanes, hour by hour",
+  "error.store.title": "Cannot read the pool data",
+  "error.store.body":
+    "The bundled pool data could not be opened, so there is nothing to show. Reinstalling the app restores it.",
+  "state.none.body.phone":
+    "Try a wider area, another day, or fewer filters. This is not the same as everything being closed.",
+  "meta.dataFrom": "Data from",
+  "meta.answersThrough": "Answers through",
+  "meta.offlineNote":
+    "Works offline. Everything here was resolved before the app shipped.",
+  "action.favourite": "Favourite",
+  "action.unfavourite": "Unfavourite",
+  "action.showLanePlan": "Show the lane plan",
+  "action.hideLanePlan": "Hide the lane plan",
+  "action.done": "Done",
+  "session.fairWeather.badge": "Fair weather only",
+  "filter.none": "No filters",
+  "filter.section.who": "Who",
+  "filter.section.where": "Where",
+  "filter.section.what": "What",
+  "filter.eligibleOnly": "Open to me only",
+  "filter.eligibleOnly.toggle": "Only sessions open to me",
+  "filter.favourites": "Favourites",
+  "filter.favouritesOnly.toggle": "Only my favourites",
+  "filter.measureFrom": "Measure from",
+  "filter.within": "Within",
+  "filter.anyDistance": "Any distance",
+  "filter.poolKinds": "Pool kinds",
+  "filter.allKinds": "All",
+  "place.anywhere": "Anywhere",
+  "place.searchPrompt": "Search places",
+  "place.hb": "Zürich HB (main station)",
 } as const;

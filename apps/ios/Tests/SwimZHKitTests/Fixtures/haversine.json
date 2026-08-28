@@ -1,0 +1,78 @@
+{
+  "_note": "GENERATED from swimzh.domain.geo.haversine_km by scripts/ios_fixtures.py \u2014 do NOT hand-edit. Replayed by the Swift GeoTests, which must agree to 1e-6 km. Regenerate with `make ios-fixtures`.",
+  "tolerance_km": 1e-06,
+  "cases": [
+    {
+      "name": "hallenbad-city to oerlikon",
+      "a": {
+        "lat": 47.3739,
+        "lon": 8.531
+      },
+      "b": {
+        "lat": 47.4103,
+        "lon": 8.5498
+      },
+      "km": 4.28777945616235
+    },
+    {
+      "name": "identical points",
+      "a": {
+        "lat": 47.3739,
+        "lon": 8.531
+      },
+      "b": {
+        "lat": 47.3739,
+        "lon": 8.531
+      },
+      "km": 0.0
+    },
+    {
+      "name": "ten metres apart",
+      "a": {
+        "lat": 47.3739,
+        "lon": 8.531
+      },
+      "b": {
+        "lat": 47.37397,
+        "lon": 8.5311
+      },
+      "km": 0.010830049301467831
+    },
+    {
+      "name": "across the equator",
+      "a": {
+        "lat": -33.8688,
+        "lon": 151.2093
+      },
+      "b": {
+        "lat": 47.3769,
+        "lon": 8.5417
+      },
+      "km": 16567.79852009368
+    },
+    {
+      "name": "over the pole",
+      "a": {
+        "lat": 89.9,
+        "lon": 0.0
+      },
+      "b": {
+        "lat": 89.9,
+        "lon": 180.0
+      },
+      "km": 22.23901604670598
+    },
+    {
+      "name": "date line",
+      "a": {
+        "lat": 0.0,
+        "lon": 179.9
+      },
+      "b": {
+        "lat": 0.0,
+        "lon": -179.9
+      },
+      "km": 22.23901604670676
+    }
+  ]
+}

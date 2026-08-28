@@ -45,6 +45,9 @@ ignore = [
 "apps/web/api/ui/router.py" = ["E501"]
 # Vendored QA gate script legitimately shells out to `radon` by name.
 "scripts/**" = ["S603", "S607"]
+# The gate scripts' own tests run those gates end to end, via `sys.executable` and a fixed
+# path — the same S603 false positive as `scripts/` above, one directory down.
+"tests/scripts/**" = ["S101", "S603"]
 # The JS unit-test bridge legitimately shells out to the pinned `node` binary
 # (resolved via shutil.which, fixed args) to run `node --test`; S603's
 # untrusted-input heuristic is a false positive here, same as scripts/ above.
@@ -99,6 +102,16 @@ min-complexity = 5
 # ratchet; calibrated to current TS reality (max is urlstate.ts fromParams: cc 20 @ 100% cov
 # → CRAP 20), same 30/5 bar as the Python gate. Raise as coverage grows; never lower to pass.
 [tool.crap-ts]
+threshold = 30.0
+min-complexity = 5
+
+# Swift CRAP gate (scripts/crap_swift.py) — FORMULA parity with [tool.crap] above
+# (cc**2*(1-cov)**3 + cc; offender when cc > min-complexity AND crap > threshold). Its
+# complexity source is that script's own token scan, because SwiftLint counts decision
+# points from 0 and is func-only (blind to a var body) — so this is its own
+# no-regression ratchet at the same 30/5 bar. Scores apps/ios/Sources/SwimZHKit ONLY:
+# a SwiftUI view body reports inflated executable lines and cannot be unit-tested.
+[tool.crap-swift]
 threshold = 30.0
 min-complexity = 5
 

@@ -145,8 +145,19 @@ export const fr = {
   "sources.chipAria": "{name} — ouvre {host} dans un nouvel onglet",
   "combo.noMatches": "Aucun résultat",
   "combo.noPoolsMatch": "Aucune piscine correspondante",
+  "place.locating": "Recherche de votre position…",
+  "place.refused.denied":
+    "SwimZH ne voit pas votre position. Vous pouvez l'autoriser dans Réglages.",
+  "place.refused.restricted":
+    "Cet appareil n'autorise pas la localisation pour les apps.",
+  "place.refused.unavailable":
+    "Aucune position pour le moment. Les distances partent du lieu ci-dessus.",
+  "action.openSettings": "Ouvrir Réglages",
+  "ios.location.purpose":
+    "SwimZH utilise votre position pour mesurer la distance de chaque piscine et vous situer sur la carte. Elle reste sur votre téléphone.",
   "place.useMyLocation": "Utiliser ma position",
   "place.myLocation": "Ma position",
+  "place.fixedAgo": "relevée il y a {age}",
   "date.selectedDay": "Jour sélectionné",
   "date.previousDay": "Jour précédent",
   "date.nextDay": "Jour suivant",
@@ -263,9 +274,9 @@ export const fr = {
   "mobile.lanesUntil": "{public} couloirs sur {total} publics jusqu’à {hhmm}",
 
   "mobile.openToYou": {
-    one: "{count} ouvert pour vous maintenant",
-    many: "{count} ouverts pour vous maintenant",
-    other: "{count} ouverts pour vous maintenant",
+    one: "{count} piscine ouverte pour vous maintenant",
+    many: "{count} piscines ouvertes pour vous maintenant",
+    other: "{count} piscines ouvertes pour vous maintenant",
   },
   "mobile.openToYouOn": {
     one: "{count} ouvert pour vous {day}",
@@ -275,4 +286,289 @@ export const fr = {
   "mobile.filters": "Filtres",
   "mobile.today": "Aujourd’hui",
   "mobile.lanePlan": "Plan des couloirs",
+  // --- L’app iOS native (native-ios-app S4) -----------------------------------------
+
+  "state.openUnscheduled": "Ouvert, mais horaires non publiés",
+  "state.beyondHorizon": "Au-delà de l’horizon publié",
+  "state.beyondHorizon.body":
+    "Nous publions des réponses jusqu’au {date}. Ce n’est pas la même chose que des piscines fermées — nous n’avons simplement pas encore traité ce jour.",
+  "state.notStated": "État non indiqué",
+  "state.unrecognised": "{status}",
+  "state.closed.outOfSeason": "Fermé — hors saison",
+  "state.closed.noSessions": "Fermé — aucune séance",
+  "state.closed.unmapped": "Fermé — « {text} »",
+  "state.closed.unclassified": "Fermé — motif non classé",
+  "state.closed.other": "Fermé — {code}",
+  "state.closed.unstated": "Fermé — motif non indiqué",
+
+  "tier.scheduled": "Ouvert ce jour-là",
+  "verdict.notOpenToYou": "Pas pour vous",
+  "verdict.hasSessions": "Des séances existent",
+  "headline.noneNowNextAt":
+    "Rien d'ouvert pour vous maintenant — prochaine à {hhmm}",
+  "headline.noneNowMaybeAt":
+    "Rien d'ouvert pour vous maintenant — renseignez-vous sur place pour {hhmm}",
+  "headline.noneLeftToday": "Plus rien d'ouvert pour vous aujourd'hui",
+  "headline.poolsWithSessions": {
+    one: "{count} piscine avec des séances",
+    many: "{count} piscines avec des séances",
+    other: "{count} piscines avec des séances",
+  },
+  "row.moreToday": "+{count} de plus aujourd’hui",
+  "row.moreThatDay": "+{count} de plus ce jour-là",
+
+  "banner.calendarCoverage.title": "Calendrier des jours fériés incomplet",
+  "banner.holidayHoursUnverified.title":
+    "Horaires des jours fériés non confirmés",
+  "banner.generic.title": "À noter",
+  "warning.calendar_coverage":
+    "Les données de calendrier ne sont pas disponibles pour {year} ; les horaires liés aux jours fériés peuvent être inexacts.",
+  "warning.holiday_hours_unverified":
+    "Le {date} est un jour férié et ces piscines ne publient pas leurs horaires de jour férié ; les heures affichées sont leurs horaires habituels de semaine et ne sont pas confirmées : {pools}",
+  "warning.unknown": "{code}",
+
+  "access.public.desc":
+    "Bain public — l’entrée est ouverte à tous pendant ces heures.",
+  "access.lane.desc":
+    "Nage en ligne (Bahnenschwimmen) — public, organisé en couloirs pour la nage et l’entraînement.",
+  "access.family.desc":
+    "Séance famille/enfants — publique, pensée pour les familles et les enfants.",
+  "access.women.desc":
+    "Séance réservée aux femmes (Frauenbad / Frauenschwimmen).",
+  "access.seniors.desc":
+    "Séance seniors — réservée aux personnes de 60 ans et plus.",
+  "access.school.desc": "Réservé aux classes d’école — non ouvert au public.",
+  "access.club.desc":
+    "Réservé à un club ou une association — non ouvert au public.",
+  "access.adults.desc":
+    "Créneau public réservé aux adultes de 18 ans et plus (typique des soirées en piscine scolaire).",
+  "access.girls.desc":
+    "Séance réservée aux filles (für Mädchen) — la piscine ne publie pas de limite d’âge, renseignez-vous sur place.",
+  "access.genderDiverse.desc":
+    "Séance ouverte aux personnes trans et non binaires de 16 ans et plus.",
+  "access.accompanied.desc":
+    "Pour les enfants uniquement accompagnés d’un adulte (für Kinder nur mit Erwachsenen).",
+  // Jamais « bain public » pour une catégorie inconnue : l’inconnu invite à demander,
+  // pas à entrer.
+  "access.unknown": "Séance — renseignez-vous auprès de la piscine",
+
+  "poolKind.indoor": "Piscine couverte",
+  "poolKind.outdoor": "Piscine en plein air",
+  "poolKind.lake": "Bain lacustre",
+  "poolKind.river": "Bain fluvial",
+  "poolKind.thermal": "Bain thermal",
+  "poolKind.school": "Piscine scolaire",
+  "poolKind.paddling": "Pataugeoire",
+  "poolKind.unknown": "{kind}",
+
+  // --- La fiche de l’établissement --------------------------------------------------
+  "detail.section.where": "Où",
+  "detail.section.admission": "Entrée",
+  "detail.section.season": "Saison",
+  "detail.section.basins": "Bassins",
+  "detail.section.features": "Équipements",
+  "detail.section.lockers": "Casiers",
+  "detail.section.rentals": "Locations",
+  "detail.section.lanes": "Plans des couloirs",
+  "detail.section.provenance": "D’où viennent ces données",
+
+  "detail.fact.address": "Adresse",
+  "detail.fact.phone": "Téléphone",
+  "detail.fact.website": "Site web",
+  "detail.fact.about": "Présentation",
+  "detail.fact.schedule": "Horaire",
+  "detail.fact.entry": "Entrée",
+  "detail.fact.yourRate": "Votre tarif",
+  "detail.fact.pricesRead": "Tarifs relevés le",
+  "detail.fact.tariffPage": "Page des tarifs",
+  "detail.fact.lastAdmission": "Dernière entrée",
+  "detail.fact.season": "Saison d’ouverture",
+
+  "freshness.scraped": "Publié par la piscine",
+  "freshness.awaiting": "Pas encore publié",
+  "freshness.noSource": "Aucun horaire à relever",
+  "freshness.unknown": "État non reconnu : {state}",
+  "freshness.awaiting.caveat":
+    "Cette piscine a une page d’horaires, mais elle n’a pas encore été relevée dans cette app.",
+  "freshness.noSource.caveat":
+    "Cette piscine ne publie pas d’horaire propre. Ce n’est pas la même chose que fermée.",
+  "freshness.unknown.caveat":
+    "Cette app ne reconnaît pas cet état ; renseignez-vous auprès de la piscine.",
+
+  "priceCategory.adult": "Adultes",
+  "priceCategory.youth": "Jeunes",
+  "priceCategory.child": "Enfants",
+  "priceCategory.senior": "Seniors",
+  "priceCategory.unknown": "{category}",
+  "price.minAgeCaveat": "Publié pour les {minAge} ans et plus.",
+  "price.staleCaveat":
+    "Les tarifs proviennent de la page de la piscine et peuvent changer sans préavis.",
+
+  "admission.free": "Gratuit",
+  "admission.tariff": "Payant — voir les tarifs ci-dessous",
+  // Jamais « gratuit » : une entrée non publiée est inconnue.
+  "admission.unknown": "Non publié — renseignez-vous auprès de la piscine",
+  "detail.lastAdmission.value": "{duration} avant la fermeture",
+
+  "season.range": "du {from} au {to}",
+  "season.rangeWithDays": "du {startDay} {from} au {endDay} {to}",
+  "season.fairWeatherCaveat":
+    "Publié pour le beau temps ; la piscine peut ne pas ouvrir par mauvais temps.",
+
+  "basin.fact.size": "Dimensions",
+  "basin.fact.lanes": "Couloirs",
+  "basin.fact.water": "Eau",
+  "basin.fact.diving": "Plongeoir",
+  "basin.fact.lanePlan": "Plan des couloirs",
+  "basin.size.lengthByWidth": "{length} × {width}",
+  "basin.size.length": "{length}",
+  "basin.size.width": "{width} de large",
+  "basin.tempNominalCaveat":
+    "Température annoncée par la piscine, pas une mesure.",
+  "basin.parsedProseCaveat":
+    "Relevé dans le texte de la piscine, donc peut-être approximatif.",
+  "basinKind.swimmer": "Bassin sportif",
+  "basinKind.non_swimmer": "Bassin non-nageurs",
+  "basinKind.diving": "Bassin de plongeon",
+  "basinKind.learner": "Bassin d’apprentissage",
+  "basinKind.paddling": "Pataugeoire",
+  "basinKind.multi_purpose": "Bassin polyvalent",
+  "basinKind.thermal": "Bassin thermal",
+  "basinKind.outdoor": "Bassin extérieur",
+  "basinKind.unknown": "{kind}",
+
+  "feature.fact.surcharge": "Supplément",
+  "feature.fact.temperature": "Température",
+  "feature.fact.hours": "Horaires ce jour-là",
+  "feature.hoursNotListed": "Horaires non publiés pour ce jour",
+  "feature.closed": "Fermé — {reason}",
+  // Clauses en minuscules : elles se lisent À L’INTÉRIEUR de `feature.closed`.
+  "closureClause.out_of_season": "hors saison",
+  "closureClause.no_sessions": "aucun horaire publié pour ce jour",
+  "closureClause.closure": "la piscine indique une fermeture",
+  "closureClause.unknown": "{reason}",
+  "featureKind.sauna": "Sauna",
+  "featureKind.gastronomy": "Restaurant ou kiosque",
+  "featureKind.sunbathing": "Pelouse de bronzage",
+  "featureKind.playground": "Place de jeux",
+  "featureKind.slide": "Toboggan aquatique",
+  "featureKind.wellness": "Espace bien-être",
+  "featureKind.sport": "Installation sportive",
+  "featureKind.unknown": "{kind}",
+
+  "lockerKind.wardrobe": "Casier à vêtements",
+  "lockerKind.valuables": "Casier à objets de valeur",
+  "lockerKind.cabin": "Cabine",
+  "lockerKind.unknown": "{kind}",
+  "rentalKind.towel": "Linge",
+  "rentalKind.locker": "Casier",
+  "rentalKind.deck_chair": "Chaise longue",
+  "rentalKind.swim_aid": "Aide à la nage",
+  "rentalKind.unknown": "{kind}",
+  "fee.free": "Gratuit",
+  "fee.unstated": "Tarif non publié",
+  "fee.amount": "{amount}",
+  "fee.perPeriod": "par {period}",
+  "fee.deposit": "caution {amount}",
+
+  "panel.bestWindow": {
+    one: "{start}–{end}, {count} couloir",
+    many: "{start}–{end}, {count} couloirs",
+    other: "{start}–{end}, {count} couloirs",
+  },
+  "panel.clubSlot.oneLane": "{start}–{end}, couloir {lanes}",
+  "panel.clubSlot.manyLanes": "{start}–{end}, couloirs {lanes}",
+  "prov.fact.readFrom": "Relevé sur",
+  "prov.fact.accurateAsOf": "À jour au",
+  "prov.fact.curation": "Curation",
+  "prov.curated.yes": "Vérifié à la main",
+  "prov.curated.no": "Relevé directement sur la page de la piscine",
+
+  // --- Plans des couloirs -----------------------------------------------------------
+  "lane.incompleteCaveat":
+    "Certains couloirs n’ont pas pu être relevés sur le plan de la piscine ; cette information est donc incomplète.",
+  "lane.nonePublic": "aucun couloir ouvert au public",
+  "lane.nonePublic.partial":
+    "aucun couloir ouvert au public — certains couloirs illisibles",
+  "lane.publicOfTotal": {
+    one: "{public} couloir ouvert sur {count}",
+    many: "{public} couloirs ouverts sur {count}",
+    other: "{public} couloirs ouverts sur {count}",
+  },
+  "lane.publicOfTotal.partial": {
+    one: "{public} couloir ouvert sur {count} — certains couloirs illisibles",
+    many: "{public} couloirs ouverts sur {count} — certains couloirs illisibles",
+    other:
+      "{public} couloirs ouverts sur {count} — certains couloirs illisibles",
+  },
+  "lane.openToPublic": "ouvert au public",
+  "lane.spoken": "Couloir {lane}, de {start} à {end}, {holder}",
+
+  // --- VoiceOver sur le ruban -------------------------------------------------------
+  "a11y.blockLabel": "de {start} à {end}, {access}",
+  "a11y.fact.publicLanes": "Couloirs ouverts au public",
+  "a11y.value.ofTotal": "{public} sur {total}",
+  "a11y.fact.laneData": "Données des couloirs",
+  "a11y.value.laneDataIncomplete": "incomplètes pour ce bassin",
+  "a11y.fact.lanes": "Couloirs",
+  "a11y.fact.reservedBy": "Réservé par",
+  "a11y.value.ownerAndOthers": "{owner} et d’autres",
+  "a11y.fact.laneSplit": "Répartition des couloirs",
+  "a11y.value.laneSplitUnpublished": "non publiée pour cette piscine",
+  "a11y.selected": "Sélectionné",
+
+  // --- Interface du téléphone -------------------------------------------------------
+  "map.poolsHere": {
+    one: "{count} piscine ici",
+    many: "{count} piscines ici",
+    other: "{count} piscines ici",
+  },
+  "nav.map": "Carte",
+  "nav.list": "Liste",
+  "action.directions": "Itinéraire",
+  "action.call": "Appeler",
+  "action.openInMaps": "Ouvrir dans Plans",
+  "nav.allPools": "Toutes les piscines",
+  "nav.accessTypes": "Ce que signifient les libellés",
+  "nav.browse": "Parcourir",
+  "nav.findAPool": "Trouver une piscine",
+  "accessTypes.title": "Types de séance",
+  "accessTypes.footer":
+    "Les règles propres à une séance priment toujours : cette app affiche ce que la piscine publie pour une heure donnée, et voici les catégories dans lesquelles elle les classe.",
+  "browser.noMatch.body": "Essayez un autre nom, ou un autre type.",
+  "browser.filterByKind": "Filtrer par type",
+  "browser.kind": "Type",
+  "browser.allKinds": "Tous les types",
+  "gantt.title": "Couloirs, heure par heure",
+  "error.store.title": "Impossible de lire les données des piscines",
+  "error.store.body":
+    "Les données des piscines fournies avec l’app n’ont pas pu être ouvertes, il n’y a donc rien à afficher. Réinstaller l’app les rétablit.",
+  "state.none.body.phone":
+    "Essayez une zone plus large, un autre jour ou moins de filtres. Ce n’est pas la même chose que si tout était fermé.",
+  "meta.dataFrom": "Données du",
+  "meta.answersThrough": "Réponses jusqu’au",
+  "meta.offlineNote":
+    "Fonctionne hors ligne. Tout ici a été calculé avant la publication de l’app.",
+  "action.favourite": "Ajouter aux favoris",
+  "action.unfavourite": "Retirer des favoris",
+  "action.showLanePlan": "Afficher le plan des couloirs",
+  "action.hideLanePlan": "Masquer le plan des couloirs",
+  "action.done": "OK",
+  "session.fairWeather.badge": "Uniquement par beau temps",
+  "filter.none": "Aucun filtre",
+  "filter.section.who": "Qui",
+  "filter.section.where": "Où",
+  "filter.section.what": "Quoi",
+  "filter.eligibleOnly": "Ouvert pour moi uniquement",
+  "filter.eligibleOnly.toggle": "Uniquement les séances ouvertes pour moi",
+  "filter.favourites": "Favoris",
+  "filter.favouritesOnly.toggle": "Uniquement mes favoris",
+  "filter.measureFrom": "Mesurer depuis",
+  "filter.within": "Dans un rayon de",
+  "filter.anyDistance": "Toute distance",
+  "filter.poolKinds": "Types de piscine",
+  "filter.allKinds": "Tous",
+  "place.anywhere": "Partout",
+  "place.searchPrompt": "Rechercher un lieu",
+  "place.hb": "Zurich HB (gare centrale)",
 } as const satisfies CatalogFor<"fr">;

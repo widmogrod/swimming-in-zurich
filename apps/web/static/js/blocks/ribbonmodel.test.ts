@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest';
-import { readFileSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import type {
@@ -279,4 +279,187 @@ test('ribbonsFor draws statuses first (background), then options (foreground)', 
   const firstOption = ribbons.findIndex((r) => r.kind === 'option');
   const lastStatus = ribbons.map((r) => r.kind).lastIndexOf('status');
   if (firstOption !== -1 && lastStatus !== -1) expect(lastStatus < firstOption).toBeTruthy();
+});
+
+// --- The cross-client golden (plan S3b acceptance 1) -------------------------------------
+//
+// The iOS app paints the SAME ribbon encoding from the same facts, and nothing about the two
+// implementations makes either notice when the other changes: the TypeScript module gains a
+// variant, the Swift port silently keeps drawing four, and the two clients disagree about what
+// a pool's day looks like. So this suite emits a golden artifact — inputs and the ribbon each
+// produces — and `apps/ios/Tests/SwimZHKitTests/RibbonModelTests.swift` replays it.
+//
+// TWO CANONICALISATIONS, both deliberate:
+//  * keys are sorted recursively, so the file diffs by CONTENT rather than by whatever order a
+//    spread happened to produce;
+//  * `label` is DROPPED and `label_key` kept. `label` is `t(...)` output — locale-dependent —
+//    so a golden carrying it would pin this suite's active locale into a cross-client contract
+//    and go red the day a translation is improved. The key is what both clients agree on.
+
+const GOLDEN = join(HERE, 'fixtures', 'ribbon_golden.json');
+
+/** The sources the golden is drawn from: between them they exercise every variant. */
+const GOLDEN_SOURCES = ['swim_day.json', 'access_families.json'] as const;
+
+/**
+ * One option the committed fixtures cannot supply: thickness that is NOT exactly representable
+ * in binary floating point, and `partial: true`.
+ *
+ * Every thickness in the fixture-drawn half of the golden is 0.5, 0.75 or 1 — all exact — so a
+ * port that rounded to two decimals, or formatted through a float, would reproduce the golden
+ * byte for byte and the cross-client contract would prove nothing about the arithmetic. 5/6 is
+ * 0.8333333333333334 and 1/3 is 0.3333333333333333: both are long enough that any rounding
+ * shows up immediately. `partial` was also `false` on every committed segment, so the flag that
+ * decides whether a swimmer is told the count is a floor was pinned at one value only.
+ *
+ * Held inline rather than as a new file under `apps/web/tests/fixtures/`: it is a property of
+ * this contract, not a shape any other suite reads.
+ */
+const GOLDEN_INLINE: { source: string; options: RibbonOption[] } = {
+  source: 'inline:awkward_thickness',
+  options: [
+    {
+      facility_id: 'inline',
+      facility: 'Awkward Fractions',
+      basin: 'Main',
+      access: 'PublicSwim',
+      start: '06:00',
+      end: '09:00',
+      lanes: 6,
+      lane_timeline: {
+        segments: [
+          // 5/6 — the case the exact-thirds and halves above cannot make.
+          {
+            start: '06:00',
+            end: '07:00',
+            lane_count: 6,
+            public_lanes: 5,
+            reserved_lanes: 1,
+            partial: true,
+          },
+          // 1/3, and `partial` back to false so both values ride in one entry.
+          {
+            start: '07:00',
+            end: '09:00',
+            lane_count: 6,
+            public_lanes: 2,
+            reserved_lanes: 4,
+            partial: false,
+          },
+        ],
+      },
+    } as RibbonOption,
+  ],
+};
+
+function sortedDeep(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(sortedDeep);
+  if (value && typeof value === 'object') {
+    const source = value as Record<string, unknown>;
+    const out: Record<string, unknown> = {};
+    for (const key of Object.keys(source).sort()) {
+      if (source[key] === undefined) continue;
+      out[key] = sortedDeep(source[key]);
+    }
+    return out;
+  }
+  return value;
+}
+
+function canonicalRibbon(ribbon: Ribbon): unknown {
+  const copy: Record<string, unknown> = { ...ribbon };
+  delete copy.label;
+  return sortedDeep(copy);
+}
+
+interface GoldenEntry {
+  source: string;
+  kind: 'option' | 'status';
+  index: number;
+  input: unknown;
+  ribbon: unknown;
+}
+
+function goldenEntries(): GoldenEntry[] {
+  const entries: GoldenEntry[] = [];
+  for (const source of GOLDEN_SOURCES) {
+    const day = load<{ options?: RibbonOption[]; statuses?: RibbonStatus[] }>(source);
+    (day.options ?? []).forEach((option, index) => {
+      entries.push({
+        source,
+        kind: 'option',
+        index,
+        input: sortedDeep(option),
+        ribbon: canonicalRibbon(optionRibbon(option)),
+      });
+    });
+    (day.statuses ?? []).forEach((status, index) => {
+      entries.push({
+        source,
+        kind: 'status',
+        index,
+        input: sortedDeep(status),
+        ribbon: canonicalRibbon(statusRibbon(status)),
+      });
+    });
+  }
+  GOLDEN_INLINE.options.forEach((option, index) => {
+    entries.push({
+      source: GOLDEN_INLINE.source,
+      kind: 'option',
+      index,
+      input: sortedDeep(option),
+      ribbon: canonicalRibbon(optionRibbon(option)),
+    });
+  });
+  return entries;
+}
+
+test('the committed ribbon golden still equals what this module produces', () => {
+  const entries = goldenEntries();
+  const text =
+    JSON.stringify(
+      {
+        _note:
+          'GENERATED by blocks/ribbonmodel.test.ts — do NOT hand-edit. Replayed by ' +
+          'apps/ios/Tests/SwimZHKitTests/RibbonModelTests.swift so the two clients cannot ' +
+          'disagree about the ribbon encoding. `label` is dropped (locale-dependent output); ' +
+          '`label_key` is kept. Regenerate with REGENERATE_RIBBON_GOLDEN=1 npm test.',
+        entries,
+      },
+      null,
+      2,
+    ) + '\n';
+  if (process.env.REGENERATE_RIBBON_GOLDEN) {
+    mkdirSync(join(HERE, 'fixtures'), { recursive: true });
+    writeFileSync(GOLDEN, text, 'utf-8');
+  }
+  expect(readFileSync(GOLDEN, 'utf-8')).toBe(text);
+});
+
+test('the golden exercises EVERY variant — otherwise the Swift port is unpinned', () => {
+  // A golden of nothing but `unpublished` ribbons would pass forever while the stack, the
+  // lane ribbon and the two terminal states drifted apart on the phone.
+  const variants = new Set(
+    goldenEntries().map((entry) => (entry.ribbon as { variant?: string }).variant),
+  );
+  expect(variants).toEqual(new Set(['lanestack', 'lanes', 'unpublished', 'closed', 'ghost']));
+});
+
+test('the golden pins thickness that is NOT exactly representable, and both partial values', () => {
+  // Without this the golden's only thicknesses were 0.5, 0.75 and 1 — all exact — so a port
+  // that rounded to two decimals would reproduce it byte for byte and the cross-client contract
+  // would say nothing about the arithmetic it exists to pin.
+  const segments = goldenEntries().flatMap(
+    (entry) => (entry.ribbon as { segments?: RibbonTimelineSegment[] }).segments ?? [],
+  );
+  const thicknesses = segments.map((s) => (s as unknown as { thickness: number }).thickness);
+  expect(thicknesses).toContain(5 / 6);
+  expect(thicknesses).toContain(1 / 3);
+  // Long enough that any rounding to two, or even ten, decimals shows.
+  for (const value of [5 / 6, 1 / 3]) {
+    expect(String(value).length).toBeGreaterThan(12);
+  }
+  const partials = new Set(segments.map((s) => (s as unknown as { partial: boolean }).partial));
+  expect(partials).toEqual(new Set([true, false]));
 });

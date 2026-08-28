@@ -1,0 +1,2286 @@
+{
+  "_note": "GENERATED from swimzh.domain.query.find_swim_options by tests/etl/test_ios_export.py — do NOT hand-edit. Replayed by the Swift SwimZHKit golden test (plan S2 acceptance 3). Regenerate with SWIMZH_REGENERATE_IOS_PARITY=1.",
+  "generated_for": {
+    "today": "2026-08-23",
+    "at": "12:00"
+  },
+  "cases": [
+    {
+      "pool_id": "hallenbad-city",
+      "date": "2026-08-24",
+      "persona": "unspecified",
+      "gender": null,
+      "age": null,
+      "at": "12:00",
+      "options": [
+        {
+          "basin_id": "hallenbad-city-main",
+          "start": "06:00",
+          "end": "22:00",
+          "access": "PublicSwim",
+          "access_params": {},
+          "weather": "any",
+          "open_at_query_time": true,
+          "eligible": true,
+          "reason_code": "public",
+          "price": {
+            "category": "adult",
+            "amount_chf": 8.0,
+            "display": "Erwachsene (ab 20 J.) Fr. 8.00",
+            "min_age": 20
+          }
+        },
+        {
+          "basin_id": "city-50m",
+          "start": "06:00",
+          "end": "22:00",
+          "access": "PublicSwim",
+          "access_params": {},
+          "weather": "any",
+          "open_at_query_time": true,
+          "eligible": true,
+          "reason_code": "public",
+          "price": {
+            "category": "adult",
+            "amount_chf": 8.0,
+            "display": "Erwachsene (ab 20 J.) Fr. 8.00",
+            "min_age": 20
+          }
+        }
+      ],
+      "statuses": [],
+      "warnings": []
+    },
+    {
+      "pool_id": "hallenbad-oerlikon",
+      "date": "2026-08-24",
+      "persona": "unspecified",
+      "gender": null,
+      "age": null,
+      "at": "12:00",
+      "options": [
+        {
+          "basin_id": "hallenbad-oerlikon-main",
+          "start": "06:00",
+          "end": "20:00",
+          "access": "PublicSwim",
+          "access_params": {},
+          "weather": "any",
+          "open_at_query_time": true,
+          "eligible": true,
+          "reason_code": "public",
+          "price": {
+            "category": "adult",
+            "amount_chf": 8.0,
+            "display": "Erwachsene (ab 20 J.) Fr. 8.00",
+            "min_age": 20
+          }
+        },
+        {
+          "basin_id": "oerlikon-50m",
+          "start": "06:00",
+          "end": "20:00",
+          "access": "PublicSwim",
+          "access_params": {},
+          "weather": "any",
+          "open_at_query_time": true,
+          "eligible": true,
+          "reason_code": "public",
+          "price": {
+            "category": "adult",
+            "amount_chf": 8.0,
+            "display": "Erwachsene (ab 20 J.) Fr. 8.00",
+            "min_age": 20
+          }
+        },
+        {
+          "basin_id": "oerlikon-sprungbecken",
+          "start": "06:00",
+          "end": "20:00",
+          "access": "PublicSwim",
+          "access_params": {},
+          "weather": "any",
+          "open_at_query_time": true,
+          "eligible": true,
+          "reason_code": "public",
+          "price": {
+            "category": "adult",
+            "amount_chf": 8.0,
+            "display": "Erwachsene (ab 20 J.) Fr. 8.00",
+            "min_age": 20
+          }
+        }
+      ],
+      "statuses": [],
+      "warnings": []
+    },
+    {
+      "pool_id": "schulschwimmanlage-aemtler",
+      "date": "2026-08-24",
+      "persona": "unspecified",
+      "gender": null,
+      "age": null,
+      "at": "12:00",
+      "options": [
+        {
+          "basin_id": "schulschwimmanlage-aemtler-main",
+          "start": "18:45",
+          "end": "19:30",
+          "access": "WomenOnly",
+          "access_params": {
+            "note": ""
+          },
+          "weather": "any",
+          "open_at_query_time": false,
+          "eligible": false,
+          "reason_code": "women_only_needs_gender",
+          "price": {
+            "category": "adult",
+            "amount_chf": 5.0,
+            "display": "Erwachsene (ab 20 J.) Fr. 5.00",
+            "min_age": 20
+          }
+        },
+        {
+          "basin_id": "schulschwimmanlage-aemtler-main",
+          "start": "19:30",
+          "end": "20:15",
+          "access": "PublicSwim",
+          "access_params": {},
+          "weather": "any",
+          "open_at_query_time": false,
+          "eligible": true,
+          "reason_code": "public",
+          "price": {
+            "category": "adult",
+            "amount_chf": 5.0,
+            "display": "Erwachsene (ab 20 J.) Fr. 5.00",
+            "min_age": 20
+          }
+        },
+        {
+          "basin_id": "schulschwimmanlage-aemtler-main",
+          "start": "20:15",
+          "end": "21:00",
+          "access": "AdultsOnly",
+          "access_params": {
+            "min_age": 18,
+            "note": ""
+          },
+          "weather": "any",
+          "open_at_query_time": false,
+          "eligible": false,
+          "reason_code": "adults_only_needs_age",
+          "price": {
+            "category": "adult",
+            "amount_chf": 5.0,
+            "display": "Erwachsene (ab 20 J.) Fr. 5.00",
+            "min_age": 20
+          }
+        }
+      ],
+      "statuses": [],
+      "warnings": []
+    },
+    {
+      "pool_id": "hallenbad-city",
+      "date": "2026-08-24",
+      "persona": "woman-30",
+      "gender": "female",
+      "age": 30,
+      "at": "12:00",
+      "options": [
+        {
+          "basin_id": "hallenbad-city-main",
+          "start": "06:00",
+          "end": "22:00",
+          "access": "PublicSwim",
+          "access_params": {},
+          "weather": "any",
+          "open_at_query_time": true,
+          "eligible": true,
+          "reason_code": "public",
+          "price": {
+            "category": "adult",
+            "amount_chf": 8.0,
+            "display": "Erwachsene (ab 20 J.) Fr. 8.00",
+            "min_age": 20
+          }
+        },
+        {
+          "basin_id": "city-50m",
+          "start": "06:00",
+          "end": "22:00",
+          "access": "PublicSwim",
+          "access_params": {},
+          "weather": "any",
+          "open_at_query_time": true,
+          "eligible": true,
+          "reason_code": "public",
+          "price": {
+            "category": "adult",
+            "amount_chf": 8.0,
+            "display": "Erwachsene (ab 20 J.) Fr. 8.00",
+            "min_age": 20
+          }
+        }
+      ],
+      "statuses": [],
+      "warnings": []
+    },
+    {
+      "pool_id": "hallenbad-oerlikon",
+      "date": "2026-08-24",
+      "persona": "woman-30",
+      "gender": "female",
+      "age": 30,
+      "at": "12:00",
+      "options": [
+        {
+          "basin_id": "hallenbad-oerlikon-main",
+          "start": "06:00",
+          "end": "20:00",
+          "access": "PublicSwim",
+          "access_params": {},
+          "weather": "any",
+          "open_at_query_time": true,
+          "eligible": true,
+          "reason_code": "public",
+          "price": {
+            "category": "adult",
+            "amount_chf": 8.0,
+            "display": "Erwachsene (ab 20 J.) Fr. 8.00",
+            "min_age": 20
+          }
+        },
+        {
+          "basin_id": "oerlikon-50m",
+          "start": "06:00",
+          "end": "20:00",
+          "access": "PublicSwim",
+          "access_params": {},
+          "weather": "any",
+          "open_at_query_time": true,
+          "eligible": true,
+          "reason_code": "public",
+          "price": {
+            "category": "adult",
+            "amount_chf": 8.0,
+            "display": "Erwachsene (ab 20 J.) Fr. 8.00",
+            "min_age": 20
+          }
+        },
+        {
+          "basin_id": "oerlikon-sprungbecken",
+          "start": "06:00",
+          "end": "20:00",
+          "access": "PublicSwim",
+          "access_params": {},
+          "weather": "any",
+          "open_at_query_time": true,
+          "eligible": true,
+          "reason_code": "public",
+          "price": {
+            "category": "adult",
+            "amount_chf": 8.0,
+            "display": "Erwachsene (ab 20 J.) Fr. 8.00",
+            "min_age": 20
+          }
+        }
+      ],
+      "statuses": [],
+      "warnings": []
+    },
+    {
+      "pool_id": "schulschwimmanlage-aemtler",
+      "date": "2026-08-24",
+      "persona": "woman-30",
+      "gender": "female",
+      "age": 30,
+      "at": "12:00",
+      "options": [
+        {
+          "basin_id": "schulschwimmanlage-aemtler-main",
+          "start": "18:45",
+          "end": "19:30",
+          "access": "WomenOnly",
+          "access_params": {
+            "note": ""
+          },
+          "weather": "any",
+          "open_at_query_time": false,
+          "eligible": true,
+          "reason_code": "women_only_welcome",
+          "price": {
+            "category": "adult",
+            "amount_chf": 5.0,
+            "display": "Erwachsene (ab 20 J.) Fr. 5.00",
+            "min_age": 20
+          }
+        },
+        {
+          "basin_id": "schulschwimmanlage-aemtler-main",
+          "start": "19:30",
+          "end": "20:15",
+          "access": "PublicSwim",
+          "access_params": {},
+          "weather": "any",
+          "open_at_query_time": false,
+          "eligible": true,
+          "reason_code": "public",
+          "price": {
+            "category": "adult",
+            "amount_chf": 5.0,
+            "display": "Erwachsene (ab 20 J.) Fr. 5.00",
+            "min_age": 20
+          }
+        },
+        {
+          "basin_id": "schulschwimmanlage-aemtler-main",
+          "start": "20:15",
+          "end": "21:00",
+          "access": "AdultsOnly",
+          "access_params": {
+            "min_age": 18,
+            "note": ""
+          },
+          "weather": "any",
+          "open_at_query_time": false,
+          "eligible": true,
+          "reason_code": "adults_only_welcome",
+          "price": {
+            "category": "adult",
+            "amount_chf": 5.0,
+            "display": "Erwachsene (ab 20 J.) Fr. 5.00",
+            "min_age": 20
+          }
+        }
+      ],
+      "statuses": [],
+      "warnings": []
+    },
+    {
+      "pool_id": "hallenbad-city",
+      "date": "2026-08-24",
+      "persona": "boy-17",
+      "gender": "male",
+      "age": 17,
+      "at": "12:00",
+      "options": [
+        {
+          "basin_id": "hallenbad-city-main",
+          "start": "06:00",
+          "end": "22:00",
+          "access": "PublicSwim",
+          "access_params": {},
+          "weather": "any",
+          "open_at_query_time": true,
+          "eligible": true,
+          "reason_code": "public",
+          "price": {
+            "category": "youth",
+            "amount_chf": 6.0,
+            "display": "Jugendliche (ab 16 J.) Fr. 6.00",
+            "min_age": 16
+          }
+        },
+        {
+          "basin_id": "city-50m",
+          "start": "06:00",
+          "end": "22:00",
+          "access": "PublicSwim",
+          "access_params": {},
+          "weather": "any",
+          "open_at_query_time": true,
+          "eligible": true,
+          "reason_code": "public",
+          "price": {
+            "category": "youth",
+            "amount_chf": 6.0,
+            "display": "Jugendliche (ab 16 J.) Fr. 6.00",
+            "min_age": 16
+          }
+        }
+      ],
+      "statuses": [],
+      "warnings": []
+    },
+    {
+      "pool_id": "hallenbad-oerlikon",
+      "date": "2026-08-24",
+      "persona": "boy-17",
+      "gender": "male",
+      "age": 17,
+      "at": "12:00",
+      "options": [
+        {
+          "basin_id": "hallenbad-oerlikon-main",
+          "start": "06:00",
+          "end": "20:00",
+          "access": "PublicSwim",
+          "access_params": {},
+          "weather": "any",
+          "open_at_query_time": true,
+          "eligible": true,
+          "reason_code": "public",
+          "price": {
+            "category": "youth",
+            "amount_chf": 6.0,
+            "display": "Jugendliche (ab 16 J.) Fr. 6.00",
+            "min_age": 16
+          }
+        },
+        {
+          "basin_id": "oerlikon-50m",
+          "start": "06:00",
+          "end": "20:00",
+          "access": "PublicSwim",
+          "access_params": {},
+          "weather": "any",
+          "open_at_query_time": true,
+          "eligible": true,
+          "reason_code": "public",
+          "price": {
+            "category": "youth",
+            "amount_chf": 6.0,
+            "display": "Jugendliche (ab 16 J.) Fr. 6.00",
+            "min_age": 16
+          }
+        },
+        {
+          "basin_id": "oerlikon-sprungbecken",
+          "start": "06:00",
+          "end": "20:00",
+          "access": "PublicSwim",
+          "access_params": {},
+          "weather": "any",
+          "open_at_query_time": true,
+          "eligible": true,
+          "reason_code": "public",
+          "price": {
+            "category": "youth",
+            "amount_chf": 6.0,
+            "display": "Jugendliche (ab 16 J.) Fr. 6.00",
+            "min_age": 16
+          }
+        }
+      ],
+      "statuses": [],
+      "warnings": []
+    },
+    {
+      "pool_id": "schulschwimmanlage-aemtler",
+      "date": "2026-08-24",
+      "persona": "boy-17",
+      "gender": "male",
+      "age": 17,
+      "at": "12:00",
+      "options": [
+        {
+          "basin_id": "schulschwimmanlage-aemtler-main",
+          "start": "18:45",
+          "end": "19:30",
+          "access": "WomenOnly",
+          "access_params": {
+            "note": ""
+          },
+          "weather": "any",
+          "open_at_query_time": false,
+          "eligible": false,
+          "reason_code": "women_only_excluded",
+          "price": {
+            "category": "youth",
+            "amount_chf": 5.0,
+            "display": "Jugendliche (ab 16 J.) Fr. 5.00",
+            "min_age": 16
+          }
+        },
+        {
+          "basin_id": "schulschwimmanlage-aemtler-main",
+          "start": "19:30",
+          "end": "20:15",
+          "access": "PublicSwim",
+          "access_params": {},
+          "weather": "any",
+          "open_at_query_time": false,
+          "eligible": true,
+          "reason_code": "public",
+          "price": {
+            "category": "youth",
+            "amount_chf": 5.0,
+            "display": "Jugendliche (ab 16 J.) Fr. 5.00",
+            "min_age": 16
+          }
+        },
+        {
+          "basin_id": "schulschwimmanlage-aemtler-main",
+          "start": "20:15",
+          "end": "21:00",
+          "access": "AdultsOnly",
+          "access_params": {
+            "min_age": 18,
+            "note": ""
+          },
+          "weather": "any",
+          "open_at_query_time": false,
+          "eligible": false,
+          "reason_code": "adults_only_too_young",
+          "price": {
+            "category": "youth",
+            "amount_chf": 5.0,
+            "display": "Jugendliche (ab 16 J.) Fr. 5.00",
+            "min_age": 16
+          }
+        }
+      ],
+      "statuses": [],
+      "warnings": []
+    },
+    {
+      "pool_id": "hallenbad-city",
+      "date": "2026-09-17",
+      "persona": "unspecified",
+      "gender": null,
+      "age": null,
+      "at": "12:00",
+      "options": [
+        {
+          "basin_id": "hallenbad-city-main",
+          "start": "06:00",
+          "end": "22:00",
+          "access": "PublicSwim",
+          "access_params": {},
+          "weather": "any",
+          "open_at_query_time": true,
+          "eligible": true,
+          "reason_code": "public",
+          "price": {
+            "category": "adult",
+            "amount_chf": 8.0,
+            "display": "Erwachsene (ab 20 J.) Fr. 8.00",
+            "min_age": 20
+          }
+        },
+        {
+          "basin_id": "city-50m",
+          "start": "06:00",
+          "end": "22:00",
+          "access": "PublicSwim",
+          "access_params": {},
+          "weather": "any",
+          "open_at_query_time": true,
+          "eligible": true,
+          "reason_code": "public",
+          "price": {
+            "category": "adult",
+            "amount_chf": 8.0,
+            "display": "Erwachsene (ab 20 J.) Fr. 8.00",
+            "min_age": 20
+          }
+        }
+      ],
+      "statuses": [],
+      "warnings": []
+    },
+    {
+      "pool_id": "hallenbad-oerlikon",
+      "date": "2026-09-17",
+      "persona": "unspecified",
+      "gender": null,
+      "age": null,
+      "at": "12:00",
+      "options": [
+        {
+          "basin_id": "hallenbad-oerlikon-main",
+          "start": "06:00",
+          "end": "20:00",
+          "access": "PublicSwim",
+          "access_params": {},
+          "weather": "any",
+          "open_at_query_time": true,
+          "eligible": true,
+          "reason_code": "public",
+          "price": {
+            "category": "adult",
+            "amount_chf": 8.0,
+            "display": "Erwachsene (ab 20 J.) Fr. 8.00",
+            "min_age": 20
+          }
+        },
+        {
+          "basin_id": "oerlikon-50m",
+          "start": "06:00",
+          "end": "20:00",
+          "access": "PublicSwim",
+          "access_params": {},
+          "weather": "any",
+          "open_at_query_time": true,
+          "eligible": true,
+          "reason_code": "public",
+          "price": {
+            "category": "adult",
+            "amount_chf": 8.0,
+            "display": "Erwachsene (ab 20 J.) Fr. 8.00",
+            "min_age": 20
+          }
+        },
+        {
+          "basin_id": "oerlikon-sprungbecken",
+          "start": "06:00",
+          "end": "20:00",
+          "access": "PublicSwim",
+          "access_params": {},
+          "weather": "any",
+          "open_at_query_time": true,
+          "eligible": true,
+          "reason_code": "public",
+          "price": {
+            "category": "adult",
+            "amount_chf": 8.0,
+            "display": "Erwachsene (ab 20 J.) Fr. 8.00",
+            "min_age": 20
+          }
+        }
+      ],
+      "statuses": [],
+      "warnings": []
+    },
+    {
+      "pool_id": "schulschwimmanlage-aemtler",
+      "date": "2026-09-17",
+      "persona": "unspecified",
+      "gender": null,
+      "age": null,
+      "at": "12:00",
+      "options": [
+        {
+          "basin_id": "schulschwimmanlage-aemtler-main",
+          "start": "17:15",
+          "end": "19:00",
+          "access": "GirlsOnly",
+          "access_params": {},
+          "weather": "any",
+          "open_at_query_time": false,
+          "eligible": false,
+          "reason_code": "girls_only_needs_gender",
+          "price": {
+            "category": "adult",
+            "amount_chf": 5.0,
+            "display": "Erwachsene (ab 20 J.) Fr. 5.00",
+            "min_age": 20
+          }
+        },
+        {
+          "basin_id": "schulschwimmanlage-aemtler-main",
+          "start": "19:00",
+          "end": "21:00",
+          "access": "WomenOnly",
+          "access_params": {
+            "note": ""
+          },
+          "weather": "any",
+          "open_at_query_time": false,
+          "eligible": false,
+          "reason_code": "women_only_needs_gender",
+          "price": {
+            "category": "adult",
+            "amount_chf": 5.0,
+            "display": "Erwachsene (ab 20 J.) Fr. 5.00",
+            "min_age": 20
+          }
+        }
+      ],
+      "statuses": [],
+      "warnings": []
+    },
+    {
+      "pool_id": "hallenbad-city",
+      "date": "2026-09-17",
+      "persona": "woman-30",
+      "gender": "female",
+      "age": 30,
+      "at": "12:00",
+      "options": [
+        {
+          "basin_id": "hallenbad-city-main",
+          "start": "06:00",
+          "end": "22:00",
+          "access": "PublicSwim",
+          "access_params": {},
+          "weather": "any",
+          "open_at_query_time": true,
+          "eligible": true,
+          "reason_code": "public",
+          "price": {
+            "category": "adult",
+            "amount_chf": 8.0,
+            "display": "Erwachsene (ab 20 J.) Fr. 8.00",
+            "min_age": 20
+          }
+        },
+        {
+          "basin_id": "city-50m",
+          "start": "06:00",
+          "end": "22:00",
+          "access": "PublicSwim",
+          "access_params": {},
+          "weather": "any",
+          "open_at_query_time": true,
+          "eligible": true,
+          "reason_code": "public",
+          "price": {
+            "category": "adult",
+            "amount_chf": 8.0,
+            "display": "Erwachsene (ab 20 J.) Fr. 8.00",
+            "min_age": 20
+          }
+        }
+      ],
+      "statuses": [],
+      "warnings": []
+    },
+    {
+      "pool_id": "hallenbad-oerlikon",
+      "date": "2026-09-17",
+      "persona": "woman-30",
+      "gender": "female",
+      "age": 30,
+      "at": "12:00",
+      "options": [
+        {
+          "basin_id": "hallenbad-oerlikon-main",
+          "start": "06:00",
+          "end": "20:00",
+          "access": "PublicSwim",
+          "access_params": {},
+          "weather": "any",
+          "open_at_query_time": true,
+          "eligible": true,
+          "reason_code": "public",
+          "price": {
+            "category": "adult",
+            "amount_chf": 8.0,
+            "display": "Erwachsene (ab 20 J.) Fr. 8.00",
+            "min_age": 20
+          }
+        },
+        {
+          "basin_id": "oerlikon-50m",
+          "start": "06:00",
+          "end": "20:00",
+          "access": "PublicSwim",
+          "access_params": {},
+          "weather": "any",
+          "open_at_query_time": true,
+          "eligible": true,
+          "reason_code": "public",
+          "price": {
+            "category": "adult",
+            "amount_chf": 8.0,
+            "display": "Erwachsene (ab 20 J.) Fr. 8.00",
+            "min_age": 20
+          }
+        },
+        {
+          "basin_id": "oerlikon-sprungbecken",
+          "start": "06:00",
+          "end": "20:00",
+          "access": "PublicSwim",
+          "access_params": {},
+          "weather": "any",
+          "open_at_query_time": true,
+          "eligible": true,
+          "reason_code": "public",
+          "price": {
+            "category": "adult",
+            "amount_chf": 8.0,
+            "display": "Erwachsene (ab 20 J.) Fr. 8.00",
+            "min_age": 20
+          }
+        }
+      ],
+      "statuses": [],
+      "warnings": []
+    },
+    {
+      "pool_id": "schulschwimmanlage-aemtler",
+      "date": "2026-09-17",
+      "persona": "woman-30",
+      "gender": "female",
+      "age": 30,
+      "at": "12:00",
+      "options": [
+        {
+          "basin_id": "schulschwimmanlage-aemtler-main",
+          "start": "17:15",
+          "end": "19:00",
+          "access": "GirlsOnly",
+          "access_params": {},
+          "weather": "any",
+          "open_at_query_time": false,
+          "eligible": false,
+          "reason_code": "girls_only_confirm",
+          "price": {
+            "category": "adult",
+            "amount_chf": 5.0,
+            "display": "Erwachsene (ab 20 J.) Fr. 5.00",
+            "min_age": 20
+          }
+        },
+        {
+          "basin_id": "schulschwimmanlage-aemtler-main",
+          "start": "19:00",
+          "end": "21:00",
+          "access": "WomenOnly",
+          "access_params": {
+            "note": ""
+          },
+          "weather": "any",
+          "open_at_query_time": false,
+          "eligible": true,
+          "reason_code": "women_only_welcome",
+          "price": {
+            "category": "adult",
+            "amount_chf": 5.0,
+            "display": "Erwachsene (ab 20 J.) Fr. 5.00",
+            "min_age": 20
+          }
+        }
+      ],
+      "statuses": [],
+      "warnings": []
+    },
+    {
+      "pool_id": "hallenbad-city",
+      "date": "2026-09-17",
+      "persona": "boy-17",
+      "gender": "male",
+      "age": 17,
+      "at": "12:00",
+      "options": [
+        {
+          "basin_id": "hallenbad-city-main",
+          "start": "06:00",
+          "end": "22:00",
+          "access": "PublicSwim",
+          "access_params": {},
+          "weather": "any",
+          "open_at_query_time": true,
+          "eligible": true,
+          "reason_code": "public",
+          "price": {
+            "category": "youth",
+            "amount_chf": 6.0,
+            "display": "Jugendliche (ab 16 J.) Fr. 6.00",
+            "min_age": 16
+          }
+        },
+        {
+          "basin_id": "city-50m",
+          "start": "06:00",
+          "end": "22:00",
+          "access": "PublicSwim",
+          "access_params": {},
+          "weather": "any",
+          "open_at_query_time": true,
+          "eligible": true,
+          "reason_code": "public",
+          "price": {
+            "category": "youth",
+            "amount_chf": 6.0,
+            "display": "Jugendliche (ab 16 J.) Fr. 6.00",
+            "min_age": 16
+          }
+        }
+      ],
+      "statuses": [],
+      "warnings": []
+    },
+    {
+      "pool_id": "hallenbad-oerlikon",
+      "date": "2026-09-17",
+      "persona": "boy-17",
+      "gender": "male",
+      "age": 17,
+      "at": "12:00",
+      "options": [
+        {
+          "basin_id": "hallenbad-oerlikon-main",
+          "start": "06:00",
+          "end": "20:00",
+          "access": "PublicSwim",
+          "access_params": {},
+          "weather": "any",
+          "open_at_query_time": true,
+          "eligible": true,
+          "reason_code": "public",
+          "price": {
+            "category": "youth",
+            "amount_chf": 6.0,
+            "display": "Jugendliche (ab 16 J.) Fr. 6.00",
+            "min_age": 16
+          }
+        },
+        {
+          "basin_id": "oerlikon-50m",
+          "start": "06:00",
+          "end": "20:00",
+          "access": "PublicSwim",
+          "access_params": {},
+          "weather": "any",
+          "open_at_query_time": true,
+          "eligible": true,
+          "reason_code": "public",
+          "price": {
+            "category": "youth",
+            "amount_chf": 6.0,
+            "display": "Jugendliche (ab 16 J.) Fr. 6.00",
+            "min_age": 16
+          }
+        },
+        {
+          "basin_id": "oerlikon-sprungbecken",
+          "start": "06:00",
+          "end": "20:00",
+          "access": "PublicSwim",
+          "access_params": {},
+          "weather": "any",
+          "open_at_query_time": true,
+          "eligible": true,
+          "reason_code": "public",
+          "price": {
+            "category": "youth",
+            "amount_chf": 6.0,
+            "display": "Jugendliche (ab 16 J.) Fr. 6.00",
+            "min_age": 16
+          }
+        }
+      ],
+      "statuses": [],
+      "warnings": []
+    },
+    {
+      "pool_id": "schulschwimmanlage-aemtler",
+      "date": "2026-09-17",
+      "persona": "boy-17",
+      "gender": "male",
+      "age": 17,
+      "at": "12:00",
+      "options": [
+        {
+          "basin_id": "schulschwimmanlage-aemtler-main",
+          "start": "17:15",
+          "end": "19:00",
+          "access": "GirlsOnly",
+          "access_params": {},
+          "weather": "any",
+          "open_at_query_time": false,
+          "eligible": false,
+          "reason_code": "girls_only_excluded",
+          "price": {
+            "category": "youth",
+            "amount_chf": 5.0,
+            "display": "Jugendliche (ab 16 J.) Fr. 5.00",
+            "min_age": 16
+          }
+        },
+        {
+          "basin_id": "schulschwimmanlage-aemtler-main",
+          "start": "19:00",
+          "end": "21:00",
+          "access": "WomenOnly",
+          "access_params": {
+            "note": ""
+          },
+          "weather": "any",
+          "open_at_query_time": false,
+          "eligible": false,
+          "reason_code": "women_only_excluded",
+          "price": {
+            "category": "youth",
+            "amount_chf": 5.0,
+            "display": "Jugendliche (ab 16 J.) Fr. 5.00",
+            "min_age": 16
+          }
+        }
+      ],
+      "statuses": [],
+      "warnings": []
+    },
+    {
+      "pool_id": "hallenbad-city",
+      "date": "2026-11-15",
+      "persona": "unspecified",
+      "gender": null,
+      "age": null,
+      "at": "12:00",
+      "options": [
+        {
+          "basin_id": "hallenbad-city-main",
+          "start": "06:00",
+          "end": "22:00",
+          "access": "PublicSwim",
+          "access_params": {},
+          "weather": "any",
+          "open_at_query_time": true,
+          "eligible": true,
+          "reason_code": "public",
+          "price": {
+            "category": "adult",
+            "amount_chf": 8.0,
+            "display": "Erwachsene (ab 20 J.) Fr. 8.00",
+            "min_age": 20
+          }
+        },
+        {
+          "basin_id": "city-50m",
+          "start": "06:00",
+          "end": "22:00",
+          "access": "PublicSwim",
+          "access_params": {},
+          "weather": "any",
+          "open_at_query_time": true,
+          "eligible": true,
+          "reason_code": "public",
+          "price": {
+            "category": "adult",
+            "amount_chf": 8.0,
+            "display": "Erwachsene (ab 20 J.) Fr. 8.00",
+            "min_age": 20
+          }
+        }
+      ],
+      "statuses": [],
+      "warnings": []
+    },
+    {
+      "pool_id": "hallenbad-oerlikon",
+      "date": "2026-11-15",
+      "persona": "unspecified",
+      "gender": null,
+      "age": null,
+      "at": "12:00",
+      "options": [
+        {
+          "basin_id": "hallenbad-oerlikon-main",
+          "start": "06:00",
+          "end": "22:00",
+          "access": "PublicSwim",
+          "access_params": {},
+          "weather": "any",
+          "open_at_query_time": true,
+          "eligible": true,
+          "reason_code": "public",
+          "price": {
+            "category": "adult",
+            "amount_chf": 8.0,
+            "display": "Erwachsene (ab 20 J.) Fr. 8.00",
+            "min_age": 20
+          }
+        },
+        {
+          "basin_id": "oerlikon-50m",
+          "start": "06:00",
+          "end": "22:00",
+          "access": "PublicSwim",
+          "access_params": {},
+          "weather": "any",
+          "open_at_query_time": true,
+          "eligible": true,
+          "reason_code": "public",
+          "price": {
+            "category": "adult",
+            "amount_chf": 8.0,
+            "display": "Erwachsene (ab 20 J.) Fr. 8.00",
+            "min_age": 20
+          }
+        },
+        {
+          "basin_id": "oerlikon-sprungbecken",
+          "start": "06:00",
+          "end": "22:00",
+          "access": "PublicSwim",
+          "access_params": {},
+          "weather": "any",
+          "open_at_query_time": true,
+          "eligible": true,
+          "reason_code": "public",
+          "price": {
+            "category": "adult",
+            "amount_chf": 8.0,
+            "display": "Erwachsene (ab 20 J.) Fr. 8.00",
+            "min_age": 20
+          }
+        }
+      ],
+      "statuses": [],
+      "warnings": []
+    },
+    {
+      "pool_id": "schulschwimmanlage-aemtler",
+      "date": "2026-11-15",
+      "persona": "unspecified",
+      "gender": null,
+      "age": null,
+      "at": "12:00",
+      "options": [],
+      "statuses": [
+        {
+          "status": "closed",
+          "detail_code": "closed_reason",
+          "closure_code": "no_sessions",
+          "detail_params": {}
+        }
+      ],
+      "warnings": []
+    },
+    {
+      "pool_id": "hallenbad-city",
+      "date": "2026-11-15",
+      "persona": "woman-30",
+      "gender": "female",
+      "age": 30,
+      "at": "12:00",
+      "options": [
+        {
+          "basin_id": "hallenbad-city-main",
+          "start": "06:00",
+          "end": "22:00",
+          "access": "PublicSwim",
+          "access_params": {},
+          "weather": "any",
+          "open_at_query_time": true,
+          "eligible": true,
+          "reason_code": "public",
+          "price": {
+            "category": "adult",
+            "amount_chf": 8.0,
+            "display": "Erwachsene (ab 20 J.) Fr. 8.00",
+            "min_age": 20
+          }
+        },
+        {
+          "basin_id": "city-50m",
+          "start": "06:00",
+          "end": "22:00",
+          "access": "PublicSwim",
+          "access_params": {},
+          "weather": "any",
+          "open_at_query_time": true,
+          "eligible": true,
+          "reason_code": "public",
+          "price": {
+            "category": "adult",
+            "amount_chf": 8.0,
+            "display": "Erwachsene (ab 20 J.) Fr. 8.00",
+            "min_age": 20
+          }
+        }
+      ],
+      "statuses": [],
+      "warnings": []
+    },
+    {
+      "pool_id": "hallenbad-oerlikon",
+      "date": "2026-11-15",
+      "persona": "woman-30",
+      "gender": "female",
+      "age": 30,
+      "at": "12:00",
+      "options": [
+        {
+          "basin_id": "hallenbad-oerlikon-main",
+          "start": "06:00",
+          "end": "22:00",
+          "access": "PublicSwim",
+          "access_params": {},
+          "weather": "any",
+          "open_at_query_time": true,
+          "eligible": true,
+          "reason_code": "public",
+          "price": {
+            "category": "adult",
+            "amount_chf": 8.0,
+            "display": "Erwachsene (ab 20 J.) Fr. 8.00",
+            "min_age": 20
+          }
+        },
+        {
+          "basin_id": "oerlikon-50m",
+          "start": "06:00",
+          "end": "22:00",
+          "access": "PublicSwim",
+          "access_params": {},
+          "weather": "any",
+          "open_at_query_time": true,
+          "eligible": true,
+          "reason_code": "public",
+          "price": {
+            "category": "adult",
+            "amount_chf": 8.0,
+            "display": "Erwachsene (ab 20 J.) Fr. 8.00",
+            "min_age": 20
+          }
+        },
+        {
+          "basin_id": "oerlikon-sprungbecken",
+          "start": "06:00",
+          "end": "22:00",
+          "access": "PublicSwim",
+          "access_params": {},
+          "weather": "any",
+          "open_at_query_time": true,
+          "eligible": true,
+          "reason_code": "public",
+          "price": {
+            "category": "adult",
+            "amount_chf": 8.0,
+            "display": "Erwachsene (ab 20 J.) Fr. 8.00",
+            "min_age": 20
+          }
+        }
+      ],
+      "statuses": [],
+      "warnings": []
+    },
+    {
+      "pool_id": "schulschwimmanlage-aemtler",
+      "date": "2026-11-15",
+      "persona": "woman-30",
+      "gender": "female",
+      "age": 30,
+      "at": "12:00",
+      "options": [],
+      "statuses": [
+        {
+          "status": "closed",
+          "detail_code": "closed_reason",
+          "closure_code": "no_sessions",
+          "detail_params": {}
+        }
+      ],
+      "warnings": []
+    },
+    {
+      "pool_id": "hallenbad-city",
+      "date": "2026-11-15",
+      "persona": "boy-17",
+      "gender": "male",
+      "age": 17,
+      "at": "12:00",
+      "options": [
+        {
+          "basin_id": "hallenbad-city-main",
+          "start": "06:00",
+          "end": "22:00",
+          "access": "PublicSwim",
+          "access_params": {},
+          "weather": "any",
+          "open_at_query_time": true,
+          "eligible": true,
+          "reason_code": "public",
+          "price": {
+            "category": "youth",
+            "amount_chf": 6.0,
+            "display": "Jugendliche (ab 16 J.) Fr. 6.00",
+            "min_age": 16
+          }
+        },
+        {
+          "basin_id": "city-50m",
+          "start": "06:00",
+          "end": "22:00",
+          "access": "PublicSwim",
+          "access_params": {},
+          "weather": "any",
+          "open_at_query_time": true,
+          "eligible": true,
+          "reason_code": "public",
+          "price": {
+            "category": "youth",
+            "amount_chf": 6.0,
+            "display": "Jugendliche (ab 16 J.) Fr. 6.00",
+            "min_age": 16
+          }
+        }
+      ],
+      "statuses": [],
+      "warnings": []
+    },
+    {
+      "pool_id": "hallenbad-oerlikon",
+      "date": "2026-11-15",
+      "persona": "boy-17",
+      "gender": "male",
+      "age": 17,
+      "at": "12:00",
+      "options": [
+        {
+          "basin_id": "hallenbad-oerlikon-main",
+          "start": "06:00",
+          "end": "22:00",
+          "access": "PublicSwim",
+          "access_params": {},
+          "weather": "any",
+          "open_at_query_time": true,
+          "eligible": true,
+          "reason_code": "public",
+          "price": {
+            "category": "youth",
+            "amount_chf": 6.0,
+            "display": "Jugendliche (ab 16 J.) Fr. 6.00",
+            "min_age": 16
+          }
+        },
+        {
+          "basin_id": "oerlikon-50m",
+          "start": "06:00",
+          "end": "22:00",
+          "access": "PublicSwim",
+          "access_params": {},
+          "weather": "any",
+          "open_at_query_time": true,
+          "eligible": true,
+          "reason_code": "public",
+          "price": {
+            "category": "youth",
+            "amount_chf": 6.0,
+            "display": "Jugendliche (ab 16 J.) Fr. 6.00",
+            "min_age": 16
+          }
+        },
+        {
+          "basin_id": "oerlikon-sprungbecken",
+          "start": "06:00",
+          "end": "22:00",
+          "access": "PublicSwim",
+          "access_params": {},
+          "weather": "any",
+          "open_at_query_time": true,
+          "eligible": true,
+          "reason_code": "public",
+          "price": {
+            "category": "youth",
+            "amount_chf": 6.0,
+            "display": "Jugendliche (ab 16 J.) Fr. 6.00",
+            "min_age": 16
+          }
+        }
+      ],
+      "statuses": [],
+      "warnings": []
+    },
+    {
+      "pool_id": "schulschwimmanlage-aemtler",
+      "date": "2026-11-15",
+      "persona": "boy-17",
+      "gender": "male",
+      "age": 17,
+      "at": "12:00",
+      "options": [],
+      "statuses": [
+        {
+          "status": "closed",
+          "detail_code": "closed_reason",
+          "closure_code": "no_sessions",
+          "detail_params": {}
+        }
+      ],
+      "warnings": []
+    },
+    {
+      "pool_id": "hallenbad-city",
+      "date": "2026-12-25",
+      "persona": "unspecified",
+      "gender": null,
+      "age": null,
+      "at": "12:00",
+      "options": [
+        {
+          "basin_id": "hallenbad-city-main",
+          "start": "06:00",
+          "end": "22:00",
+          "access": "PublicSwim",
+          "access_params": {},
+          "weather": "any",
+          "open_at_query_time": true,
+          "eligible": true,
+          "reason_code": "public",
+          "price": {
+            "category": "adult",
+            "amount_chf": 8.0,
+            "display": "Erwachsene (ab 20 J.) Fr. 8.00",
+            "min_age": 20
+          }
+        },
+        {
+          "basin_id": "city-50m",
+          "start": "06:00",
+          "end": "22:00",
+          "access": "PublicSwim",
+          "access_params": {},
+          "weather": "any",
+          "open_at_query_time": true,
+          "eligible": true,
+          "reason_code": "public",
+          "price": {
+            "category": "adult",
+            "amount_chf": 8.0,
+            "display": "Erwachsene (ab 20 J.) Fr. 8.00",
+            "min_age": 20
+          }
+        }
+      ],
+      "statuses": [],
+      "warnings": [
+        "2026-12-25 is a public holiday and these pools do not publish their holiday hours; the times shown are their usual weekday hours and are unconfirmed: Hallenbad Altstetten, Hallenbad City, Hallenbad Oerlikon, Schulschwimmanlage Aemtler, Schulschwimmanlage Tannenrauch"
+      ]
+    },
+    {
+      "pool_id": "hallenbad-oerlikon",
+      "date": "2026-12-25",
+      "persona": "unspecified",
+      "gender": null,
+      "age": null,
+      "at": "12:00",
+      "options": [
+        {
+          "basin_id": "hallenbad-oerlikon-main",
+          "start": "06:00",
+          "end": "22:00",
+          "access": "PublicSwim",
+          "access_params": {},
+          "weather": "any",
+          "open_at_query_time": true,
+          "eligible": true,
+          "reason_code": "public",
+          "price": {
+            "category": "adult",
+            "amount_chf": 8.0,
+            "display": "Erwachsene (ab 20 J.) Fr. 8.00",
+            "min_age": 20
+          }
+        },
+        {
+          "basin_id": "oerlikon-50m",
+          "start": "06:00",
+          "end": "22:00",
+          "access": "PublicSwim",
+          "access_params": {},
+          "weather": "any",
+          "open_at_query_time": true,
+          "eligible": true,
+          "reason_code": "public",
+          "price": {
+            "category": "adult",
+            "amount_chf": 8.0,
+            "display": "Erwachsene (ab 20 J.) Fr. 8.00",
+            "min_age": 20
+          }
+        },
+        {
+          "basin_id": "oerlikon-sprungbecken",
+          "start": "06:00",
+          "end": "22:00",
+          "access": "PublicSwim",
+          "access_params": {},
+          "weather": "any",
+          "open_at_query_time": true,
+          "eligible": true,
+          "reason_code": "public",
+          "price": {
+            "category": "adult",
+            "amount_chf": 8.0,
+            "display": "Erwachsene (ab 20 J.) Fr. 8.00",
+            "min_age": 20
+          }
+        }
+      ],
+      "statuses": [],
+      "warnings": [
+        "2026-12-25 is a public holiday and these pools do not publish their holiday hours; the times shown are their usual weekday hours and are unconfirmed: Hallenbad Altstetten, Hallenbad City, Hallenbad Oerlikon, Schulschwimmanlage Aemtler, Schulschwimmanlage Tannenrauch"
+      ]
+    },
+    {
+      "pool_id": "schulschwimmanlage-aemtler",
+      "date": "2026-12-25",
+      "persona": "unspecified",
+      "gender": null,
+      "age": null,
+      "at": "12:00",
+      "options": [
+        {
+          "basin_id": "schulschwimmanlage-aemtler-main",
+          "start": "16:00",
+          "end": "19:00",
+          "access": "WomenOnly",
+          "access_params": {
+            "note": ""
+          },
+          "weather": "any",
+          "open_at_query_time": false,
+          "eligible": false,
+          "reason_code": "women_only_needs_gender",
+          "price": {
+            "category": "adult",
+            "amount_chf": 5.0,
+            "display": "Erwachsene (ab 20 J.) Fr. 5.00",
+            "min_age": 20
+          }
+        },
+        {
+          "basin_id": "schulschwimmanlage-aemtler-main",
+          "start": "19:00",
+          "end": "21:00",
+          "access": "WomenOnly",
+          "access_params": {
+            "note": ""
+          },
+          "weather": "any",
+          "open_at_query_time": false,
+          "eligible": false,
+          "reason_code": "women_only_needs_gender",
+          "price": {
+            "category": "adult",
+            "amount_chf": 5.0,
+            "display": "Erwachsene (ab 20 J.) Fr. 5.00",
+            "min_age": 20
+          }
+        }
+      ],
+      "statuses": [],
+      "warnings": [
+        "2026-12-25 is a public holiday and these pools do not publish their holiday hours; the times shown are their usual weekday hours and are unconfirmed: Hallenbad Altstetten, Hallenbad City, Hallenbad Oerlikon, Schulschwimmanlage Aemtler, Schulschwimmanlage Tannenrauch"
+      ]
+    },
+    {
+      "pool_id": "hallenbad-city",
+      "date": "2026-12-25",
+      "persona": "woman-30",
+      "gender": "female",
+      "age": 30,
+      "at": "12:00",
+      "options": [
+        {
+          "basin_id": "hallenbad-city-main",
+          "start": "06:00",
+          "end": "22:00",
+          "access": "PublicSwim",
+          "access_params": {},
+          "weather": "any",
+          "open_at_query_time": true,
+          "eligible": true,
+          "reason_code": "public",
+          "price": {
+            "category": "adult",
+            "amount_chf": 8.0,
+            "display": "Erwachsene (ab 20 J.) Fr. 8.00",
+            "min_age": 20
+          }
+        },
+        {
+          "basin_id": "city-50m",
+          "start": "06:00",
+          "end": "22:00",
+          "access": "PublicSwim",
+          "access_params": {},
+          "weather": "any",
+          "open_at_query_time": true,
+          "eligible": true,
+          "reason_code": "public",
+          "price": {
+            "category": "adult",
+            "amount_chf": 8.0,
+            "display": "Erwachsene (ab 20 J.) Fr. 8.00",
+            "min_age": 20
+          }
+        }
+      ],
+      "statuses": [],
+      "warnings": [
+        "2026-12-25 is a public holiday and these pools do not publish their holiday hours; the times shown are their usual weekday hours and are unconfirmed: Hallenbad Altstetten, Hallenbad City, Hallenbad Oerlikon, Schulschwimmanlage Aemtler, Schulschwimmanlage Tannenrauch"
+      ]
+    },
+    {
+      "pool_id": "hallenbad-oerlikon",
+      "date": "2026-12-25",
+      "persona": "woman-30",
+      "gender": "female",
+      "age": 30,
+      "at": "12:00",
+      "options": [
+        {
+          "basin_id": "hallenbad-oerlikon-main",
+          "start": "06:00",
+          "end": "22:00",
+          "access": "PublicSwim",
+          "access_params": {},
+          "weather": "any",
+          "open_at_query_time": true,
+          "eligible": true,
+          "reason_code": "public",
+          "price": {
+            "category": "adult",
+            "amount_chf": 8.0,
+            "display": "Erwachsene (ab 20 J.) Fr. 8.00",
+            "min_age": 20
+          }
+        },
+        {
+          "basin_id": "oerlikon-50m",
+          "start": "06:00",
+          "end": "22:00",
+          "access": "PublicSwim",
+          "access_params": {},
+          "weather": "any",
+          "open_at_query_time": true,
+          "eligible": true,
+          "reason_code": "public",
+          "price": {
+            "category": "adult",
+            "amount_chf": 8.0,
+            "display": "Erwachsene (ab 20 J.) Fr. 8.00",
+            "min_age": 20
+          }
+        },
+        {
+          "basin_id": "oerlikon-sprungbecken",
+          "start": "06:00",
+          "end": "22:00",
+          "access": "PublicSwim",
+          "access_params": {},
+          "weather": "any",
+          "open_at_query_time": true,
+          "eligible": true,
+          "reason_code": "public",
+          "price": {
+            "category": "adult",
+            "amount_chf": 8.0,
+            "display": "Erwachsene (ab 20 J.) Fr. 8.00",
+            "min_age": 20
+          }
+        }
+      ],
+      "statuses": [],
+      "warnings": [
+        "2026-12-25 is a public holiday and these pools do not publish their holiday hours; the times shown are their usual weekday hours and are unconfirmed: Hallenbad Altstetten, Hallenbad City, Hallenbad Oerlikon, Schulschwimmanlage Aemtler, Schulschwimmanlage Tannenrauch"
+      ]
+    },
+    {
+      "pool_id": "schulschwimmanlage-aemtler",
+      "date": "2026-12-25",
+      "persona": "woman-30",
+      "gender": "female",
+      "age": 30,
+      "at": "12:00",
+      "options": [
+        {
+          "basin_id": "schulschwimmanlage-aemtler-main",
+          "start": "16:00",
+          "end": "19:00",
+          "access": "WomenOnly",
+          "access_params": {
+            "note": ""
+          },
+          "weather": "any",
+          "open_at_query_time": false,
+          "eligible": true,
+          "reason_code": "women_only_welcome",
+          "price": {
+            "category": "adult",
+            "amount_chf": 5.0,
+            "display": "Erwachsene (ab 20 J.) Fr. 5.00",
+            "min_age": 20
+          }
+        },
+        {
+          "basin_id": "schulschwimmanlage-aemtler-main",
+          "start": "19:00",
+          "end": "21:00",
+          "access": "WomenOnly",
+          "access_params": {
+            "note": ""
+          },
+          "weather": "any",
+          "open_at_query_time": false,
+          "eligible": true,
+          "reason_code": "women_only_welcome",
+          "price": {
+            "category": "adult",
+            "amount_chf": 5.0,
+            "display": "Erwachsene (ab 20 J.) Fr. 5.00",
+            "min_age": 20
+          }
+        }
+      ],
+      "statuses": [],
+      "warnings": [
+        "2026-12-25 is a public holiday and these pools do not publish their holiday hours; the times shown are their usual weekday hours and are unconfirmed: Hallenbad Altstetten, Hallenbad City, Hallenbad Oerlikon, Schulschwimmanlage Aemtler, Schulschwimmanlage Tannenrauch"
+      ]
+    },
+    {
+      "pool_id": "hallenbad-city",
+      "date": "2026-12-25",
+      "persona": "boy-17",
+      "gender": "male",
+      "age": 17,
+      "at": "12:00",
+      "options": [
+        {
+          "basin_id": "hallenbad-city-main",
+          "start": "06:00",
+          "end": "22:00",
+          "access": "PublicSwim",
+          "access_params": {},
+          "weather": "any",
+          "open_at_query_time": true,
+          "eligible": true,
+          "reason_code": "public",
+          "price": {
+            "category": "youth",
+            "amount_chf": 6.0,
+            "display": "Jugendliche (ab 16 J.) Fr. 6.00",
+            "min_age": 16
+          }
+        },
+        {
+          "basin_id": "city-50m",
+          "start": "06:00",
+          "end": "22:00",
+          "access": "PublicSwim",
+          "access_params": {},
+          "weather": "any",
+          "open_at_query_time": true,
+          "eligible": true,
+          "reason_code": "public",
+          "price": {
+            "category": "youth",
+            "amount_chf": 6.0,
+            "display": "Jugendliche (ab 16 J.) Fr. 6.00",
+            "min_age": 16
+          }
+        }
+      ],
+      "statuses": [],
+      "warnings": [
+        "2026-12-25 is a public holiday and these pools do not publish their holiday hours; the times shown are their usual weekday hours and are unconfirmed: Hallenbad Altstetten, Hallenbad City, Hallenbad Oerlikon, Schulschwimmanlage Aemtler, Schulschwimmanlage Tannenrauch"
+      ]
+    },
+    {
+      "pool_id": "hallenbad-oerlikon",
+      "date": "2026-12-25",
+      "persona": "boy-17",
+      "gender": "male",
+      "age": 17,
+      "at": "12:00",
+      "options": [
+        {
+          "basin_id": "hallenbad-oerlikon-main",
+          "start": "06:00",
+          "end": "22:00",
+          "access": "PublicSwim",
+          "access_params": {},
+          "weather": "any",
+          "open_at_query_time": true,
+          "eligible": true,
+          "reason_code": "public",
+          "price": {
+            "category": "youth",
+            "amount_chf": 6.0,
+            "display": "Jugendliche (ab 16 J.) Fr. 6.00",
+            "min_age": 16
+          }
+        },
+        {
+          "basin_id": "oerlikon-50m",
+          "start": "06:00",
+          "end": "22:00",
+          "access": "PublicSwim",
+          "access_params": {},
+          "weather": "any",
+          "open_at_query_time": true,
+          "eligible": true,
+          "reason_code": "public",
+          "price": {
+            "category": "youth",
+            "amount_chf": 6.0,
+            "display": "Jugendliche (ab 16 J.) Fr. 6.00",
+            "min_age": 16
+          }
+        },
+        {
+          "basin_id": "oerlikon-sprungbecken",
+          "start": "06:00",
+          "end": "22:00",
+          "access": "PublicSwim",
+          "access_params": {},
+          "weather": "any",
+          "open_at_query_time": true,
+          "eligible": true,
+          "reason_code": "public",
+          "price": {
+            "category": "youth",
+            "amount_chf": 6.0,
+            "display": "Jugendliche (ab 16 J.) Fr. 6.00",
+            "min_age": 16
+          }
+        }
+      ],
+      "statuses": [],
+      "warnings": [
+        "2026-12-25 is a public holiday and these pools do not publish their holiday hours; the times shown are their usual weekday hours and are unconfirmed: Hallenbad Altstetten, Hallenbad City, Hallenbad Oerlikon, Schulschwimmanlage Aemtler, Schulschwimmanlage Tannenrauch"
+      ]
+    },
+    {
+      "pool_id": "schulschwimmanlage-aemtler",
+      "date": "2026-12-25",
+      "persona": "boy-17",
+      "gender": "male",
+      "age": 17,
+      "at": "12:00",
+      "options": [
+        {
+          "basin_id": "schulschwimmanlage-aemtler-main",
+          "start": "16:00",
+          "end": "19:00",
+          "access": "WomenOnly",
+          "access_params": {
+            "note": ""
+          },
+          "weather": "any",
+          "open_at_query_time": false,
+          "eligible": false,
+          "reason_code": "women_only_excluded",
+          "price": {
+            "category": "youth",
+            "amount_chf": 5.0,
+            "display": "Jugendliche (ab 16 J.) Fr. 5.00",
+            "min_age": 16
+          }
+        },
+        {
+          "basin_id": "schulschwimmanlage-aemtler-main",
+          "start": "19:00",
+          "end": "21:00",
+          "access": "WomenOnly",
+          "access_params": {
+            "note": ""
+          },
+          "weather": "any",
+          "open_at_query_time": false,
+          "eligible": false,
+          "reason_code": "women_only_excluded",
+          "price": {
+            "category": "youth",
+            "amount_chf": 5.0,
+            "display": "Jugendliche (ab 16 J.) Fr. 5.00",
+            "min_age": 16
+          }
+        }
+      ],
+      "statuses": [],
+      "warnings": [
+        "2026-12-25 is a public holiday and these pools do not publish their holiday hours; the times shown are their usual weekday hours and are unconfirmed: Hallenbad Altstetten, Hallenbad City, Hallenbad Oerlikon, Schulschwimmanlage Aemtler, Schulschwimmanlage Tannenrauch"
+      ]
+    },
+    {
+      "pool_id": "hallenbad-city",
+      "date": "2027-01-05",
+      "persona": "unspecified",
+      "gender": null,
+      "age": null,
+      "at": "12:00",
+      "options": [
+        {
+          "basin_id": "hallenbad-city-main",
+          "start": "06:00",
+          "end": "22:00",
+          "access": "PublicSwim",
+          "access_params": {},
+          "weather": "any",
+          "open_at_query_time": true,
+          "eligible": true,
+          "reason_code": "public",
+          "price": {
+            "category": "adult",
+            "amount_chf": 8.0,
+            "display": "Erwachsene (ab 20 J.) Fr. 8.00",
+            "min_age": 20
+          }
+        },
+        {
+          "basin_id": "city-50m",
+          "start": "06:00",
+          "end": "22:00",
+          "access": "PublicSwim",
+          "access_params": {},
+          "weather": "any",
+          "open_at_query_time": true,
+          "eligible": true,
+          "reason_code": "public",
+          "price": {
+            "category": "adult",
+            "amount_chf": 8.0,
+            "display": "Erwachsene (ab 20 J.) Fr. 8.00",
+            "min_age": 20
+          }
+        }
+      ],
+      "statuses": [],
+      "warnings": [
+        "calendar data not available for 2027; holiday-dependent schedules may be inaccurate"
+      ]
+    },
+    {
+      "pool_id": "hallenbad-oerlikon",
+      "date": "2027-01-05",
+      "persona": "unspecified",
+      "gender": null,
+      "age": null,
+      "at": "12:00",
+      "options": [
+        {
+          "basin_id": "hallenbad-oerlikon-main",
+          "start": "06:00",
+          "end": "20:00",
+          "access": "PublicSwim",
+          "access_params": {},
+          "weather": "any",
+          "open_at_query_time": true,
+          "eligible": true,
+          "reason_code": "public",
+          "price": {
+            "category": "adult",
+            "amount_chf": 8.0,
+            "display": "Erwachsene (ab 20 J.) Fr. 8.00",
+            "min_age": 20
+          }
+        },
+        {
+          "basin_id": "oerlikon-50m",
+          "start": "06:00",
+          "end": "20:00",
+          "access": "PublicSwim",
+          "access_params": {},
+          "weather": "any",
+          "open_at_query_time": true,
+          "eligible": true,
+          "reason_code": "public",
+          "price": {
+            "category": "adult",
+            "amount_chf": 8.0,
+            "display": "Erwachsene (ab 20 J.) Fr. 8.00",
+            "min_age": 20
+          }
+        },
+        {
+          "basin_id": "oerlikon-sprungbecken",
+          "start": "06:00",
+          "end": "20:00",
+          "access": "PublicSwim",
+          "access_params": {},
+          "weather": "any",
+          "open_at_query_time": true,
+          "eligible": true,
+          "reason_code": "public",
+          "price": {
+            "category": "adult",
+            "amount_chf": 8.0,
+            "display": "Erwachsene (ab 20 J.) Fr. 8.00",
+            "min_age": 20
+          }
+        }
+      ],
+      "statuses": [],
+      "warnings": [
+        "calendar data not available for 2027; holiday-dependent schedules may be inaccurate"
+      ]
+    },
+    {
+      "pool_id": "schulschwimmanlage-aemtler",
+      "date": "2027-01-05",
+      "persona": "unspecified",
+      "gender": null,
+      "age": null,
+      "at": "12:00",
+      "options": [],
+      "statuses": [
+        {
+          "status": "closed",
+          "detail_code": "closed_reason",
+          "closure_code": "no_sessions",
+          "detail_params": {}
+        }
+      ],
+      "warnings": [
+        "calendar data not available for 2027; holiday-dependent schedules may be inaccurate"
+      ]
+    },
+    {
+      "pool_id": "hallenbad-city",
+      "date": "2027-01-05",
+      "persona": "woman-30",
+      "gender": "female",
+      "age": 30,
+      "at": "12:00",
+      "options": [
+        {
+          "basin_id": "hallenbad-city-main",
+          "start": "06:00",
+          "end": "22:00",
+          "access": "PublicSwim",
+          "access_params": {},
+          "weather": "any",
+          "open_at_query_time": true,
+          "eligible": true,
+          "reason_code": "public",
+          "price": {
+            "category": "adult",
+            "amount_chf": 8.0,
+            "display": "Erwachsene (ab 20 J.) Fr. 8.00",
+            "min_age": 20
+          }
+        },
+        {
+          "basin_id": "city-50m",
+          "start": "06:00",
+          "end": "22:00",
+          "access": "PublicSwim",
+          "access_params": {},
+          "weather": "any",
+          "open_at_query_time": true,
+          "eligible": true,
+          "reason_code": "public",
+          "price": {
+            "category": "adult",
+            "amount_chf": 8.0,
+            "display": "Erwachsene (ab 20 J.) Fr. 8.00",
+            "min_age": 20
+          }
+        }
+      ],
+      "statuses": [],
+      "warnings": [
+        "calendar data not available for 2027; holiday-dependent schedules may be inaccurate"
+      ]
+    },
+    {
+      "pool_id": "hallenbad-oerlikon",
+      "date": "2027-01-05",
+      "persona": "woman-30",
+      "gender": "female",
+      "age": 30,
+      "at": "12:00",
+      "options": [
+        {
+          "basin_id": "hallenbad-oerlikon-main",
+          "start": "06:00",
+          "end": "20:00",
+          "access": "PublicSwim",
+          "access_params": {},
+          "weather": "any",
+          "open_at_query_time": true,
+          "eligible": true,
+          "reason_code": "public",
+          "price": {
+            "category": "adult",
+            "amount_chf": 8.0,
+            "display": "Erwachsene (ab 20 J.) Fr. 8.00",
+            "min_age": 20
+          }
+        },
+        {
+          "basin_id": "oerlikon-50m",
+          "start": "06:00",
+          "end": "20:00",
+          "access": "PublicSwim",
+          "access_params": {},
+          "weather": "any",
+          "open_at_query_time": true,
+          "eligible": true,
+          "reason_code": "public",
+          "price": {
+            "category": "adult",
+            "amount_chf": 8.0,
+            "display": "Erwachsene (ab 20 J.) Fr. 8.00",
+            "min_age": 20
+          }
+        },
+        {
+          "basin_id": "oerlikon-sprungbecken",
+          "start": "06:00",
+          "end": "20:00",
+          "access": "PublicSwim",
+          "access_params": {},
+          "weather": "any",
+          "open_at_query_time": true,
+          "eligible": true,
+          "reason_code": "public",
+          "price": {
+            "category": "adult",
+            "amount_chf": 8.0,
+            "display": "Erwachsene (ab 20 J.) Fr. 8.00",
+            "min_age": 20
+          }
+        }
+      ],
+      "statuses": [],
+      "warnings": [
+        "calendar data not available for 2027; holiday-dependent schedules may be inaccurate"
+      ]
+    },
+    {
+      "pool_id": "schulschwimmanlage-aemtler",
+      "date": "2027-01-05",
+      "persona": "woman-30",
+      "gender": "female",
+      "age": 30,
+      "at": "12:00",
+      "options": [],
+      "statuses": [
+        {
+          "status": "closed",
+          "detail_code": "closed_reason",
+          "closure_code": "no_sessions",
+          "detail_params": {}
+        }
+      ],
+      "warnings": [
+        "calendar data not available for 2027; holiday-dependent schedules may be inaccurate"
+      ]
+    },
+    {
+      "pool_id": "hallenbad-city",
+      "date": "2027-01-05",
+      "persona": "boy-17",
+      "gender": "male",
+      "age": 17,
+      "at": "12:00",
+      "options": [
+        {
+          "basin_id": "hallenbad-city-main",
+          "start": "06:00",
+          "end": "22:00",
+          "access": "PublicSwim",
+          "access_params": {},
+          "weather": "any",
+          "open_at_query_time": true,
+          "eligible": true,
+          "reason_code": "public",
+          "price": {
+            "category": "youth",
+            "amount_chf": 6.0,
+            "display": "Jugendliche (ab 16 J.) Fr. 6.00",
+            "min_age": 16
+          }
+        },
+        {
+          "basin_id": "city-50m",
+          "start": "06:00",
+          "end": "22:00",
+          "access": "PublicSwim",
+          "access_params": {},
+          "weather": "any",
+          "open_at_query_time": true,
+          "eligible": true,
+          "reason_code": "public",
+          "price": {
+            "category": "youth",
+            "amount_chf": 6.0,
+            "display": "Jugendliche (ab 16 J.) Fr. 6.00",
+            "min_age": 16
+          }
+        }
+      ],
+      "statuses": [],
+      "warnings": [
+        "calendar data not available for 2027; holiday-dependent schedules may be inaccurate"
+      ]
+    },
+    {
+      "pool_id": "hallenbad-oerlikon",
+      "date": "2027-01-05",
+      "persona": "boy-17",
+      "gender": "male",
+      "age": 17,
+      "at": "12:00",
+      "options": [
+        {
+          "basin_id": "hallenbad-oerlikon-main",
+          "start": "06:00",
+          "end": "20:00",
+          "access": "PublicSwim",
+          "access_params": {},
+          "weather": "any",
+          "open_at_query_time": true,
+          "eligible": true,
+          "reason_code": "public",
+          "price": {
+            "category": "youth",
+            "amount_chf": 6.0,
+            "display": "Jugendliche (ab 16 J.) Fr. 6.00",
+            "min_age": 16
+          }
+        },
+        {
+          "basin_id": "oerlikon-50m",
+          "start": "06:00",
+          "end": "20:00",
+          "access": "PublicSwim",
+          "access_params": {},
+          "weather": "any",
+          "open_at_query_time": true,
+          "eligible": true,
+          "reason_code": "public",
+          "price": {
+            "category": "youth",
+            "amount_chf": 6.0,
+            "display": "Jugendliche (ab 16 J.) Fr. 6.00",
+            "min_age": 16
+          }
+        },
+        {
+          "basin_id": "oerlikon-sprungbecken",
+          "start": "06:00",
+          "end": "20:00",
+          "access": "PublicSwim",
+          "access_params": {},
+          "weather": "any",
+          "open_at_query_time": true,
+          "eligible": true,
+          "reason_code": "public",
+          "price": {
+            "category": "youth",
+            "amount_chf": 6.0,
+            "display": "Jugendliche (ab 16 J.) Fr. 6.00",
+            "min_age": 16
+          }
+        }
+      ],
+      "statuses": [],
+      "warnings": [
+        "calendar data not available for 2027; holiday-dependent schedules may be inaccurate"
+      ]
+    },
+    {
+      "pool_id": "schulschwimmanlage-aemtler",
+      "date": "2027-01-05",
+      "persona": "boy-17",
+      "gender": "male",
+      "age": 17,
+      "at": "12:00",
+      "options": [],
+      "statuses": [
+        {
+          "status": "closed",
+          "detail_code": "closed_reason",
+          "closure_code": "no_sessions",
+          "detail_params": {}
+        }
+      ],
+      "warnings": [
+        "calendar data not available for 2027; holiday-dependent schedules may be inaccurate"
+      ]
+    }
+  ]
+}

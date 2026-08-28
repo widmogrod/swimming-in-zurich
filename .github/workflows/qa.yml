@@ -66,3 +66,103 @@ jobs:
       # CRAP reads the coverage vitest just wrote — must run AFTER test (mirrors pytest→crap).
       - name: CRAP gate (TS, formula-parity with scripts/crap.py)
         run: npm run crap
+
+  # The Swift chain. SEPARATE job and pinned to macOS: the `qa` job above is ubuntu-latest
+  # and cannot build SwiftUI at all. `swift format` ships with Xcode, so no third-party
+  # linter is installed. From S2b this job also runs `scripts/crap_swift.py`, which reads
+  # the coverage `swift test` writes — which is why the order below is fixed.
+  #
+  # Every step below RUNS A MAKEFILE TARGET rather than its own copy of the command. This job
+  # used to be a hand transcription of `make ios-qa`: it agreed step for step and nothing made
+  # it, so the simulator destination was written out here a third time and an edit to the
+  # Makefile could leave CI silently testing something else. The steps stay separate so a red
+  # run names the gate that failed; only the commands are shared.
+  ios-qa:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # The chain needs iOS 26 and Swift 6.2 (`isolated deinit`); the runner image ships
+      # several Xcodes and does not always default to the newest.
+      - name: Select Xcode
+        run: sudo xcode-select -s /Applications/Xcode_26.app || xcodebuild -version
+
+      # The CRAP gate below is Python — beside scripts/crap.py, one interpreter the repo
+      # already has, and no build of its own before the chain can run it — so this job
+      # needs uv too. The gate itself imports only the standard library.
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      # Node, for the ONE step below that needs it: the iOS string catalog is a projection of
+      # the web's TypeScript message catalogs, and the check that it is not stale has to import
+      # the compiled `dist/locales/*.js`. Without this the converter's pytest SKIPS on both
+      # runners — the ubuntu `qa` job never builds the TS either — and S4 acceptance 1 is
+      # unasserted in CI while looking enforced.
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install JS dependencies
+        working-directory: apps/web/static/js
+        run: npm ci
+
+      # Builds `dist/` and then CHECKS — it must not regenerate, or the check downstream would
+      # compare generator output against generator output. See the Makefile's own note.
+      - name: Locale catalog is not stale
+        run: make ios-locales-check
+
+      # `App` as well as the package: `swift build` below compiles only the package, so
+      # without it the SwiftUI layer — the one S3a grows most — would drift unchecked.
+      - name: Format lint (swift format, strict — package AND app)
+        run: make ios-lint
+
+      - name: Build the package
+        run: make ios-build
+
+      # SwiftPM only: no simulator, no network. This is where the rule layer is proved,
+      # including the replay of the generated eligibility contract and the golden answers.
+      # --enable-code-coverage is what the CRAP gate below reads; without it that gate has
+      # no input at all, which is why the two steps are adjacent and in this order.
+      - name: Test the package (with coverage)
+        run: make ios-test
+
+      # Order is load-bearing, exactly as pytest->crap.py and vitest->crap_ts.mjs: this
+      # reads the coverage the step above writes and is stale without it. It scores
+      # Sources/SwimZHKit only - the thin app target is excluded, because a SwiftUI view
+      # body reports inflated executable lines and cannot be unit-tested headlessly.
+      - name: CRAP gate (Swift)
+        run: make ios-crap
+
+      # The gate's OWN tests, and they run here rather than only in the ubuntu `qa` job
+      # because two of them - the CRAP offender path and the coverage join - skip without
+      # `apps/ios/.build`, which that job never has. Without this step they would be dead
+      # code in CI on every runner. After the CRAP step so the build directory and the
+      # coverage data exist; --no-cov because the coverage floor belongs to the Python
+      # chain alone and must not be computed from this partial selection.
+      - name: Gate self-tests (crap_swift + ios_budget)
+        run: make ios-gate-tests
+
+      # The simulator's WORLD, and it must be set before the tests rather than inside them.
+      # `BehaviourTests.testMyLocationChangesWhatNearestMeans` proves that the phone's own
+      # position is what "nearest first" now means, and an XCUITest cannot arrange that itself:
+      # it runs ON the simulator, so `Process` (macOS-only) is unavailable, and the permission
+      # alert belongs to SpringBoard rather than to the app.
+      #
+      # WITHOUT THIS STEP THAT TEST STILL PASSES LOCALLY AND STILL FAILS HERE, which is the
+      # worse half: the Makefile's `ios-qa` runs it, so a contributor would see green and CI
+      # red. The coordinates are load-bearing — Wollishofen is ~4 km from Zürich HB, which is
+      # what `Places.default` measures from, so a nearer point would leave both orderings
+      # identical and the test would pass while proving nothing.
+      - name: Boot the simulator and grant it a location
+        run: make ios-sim-world
+
+      # The app target cannot be imported by `swift test`, so the compile check and the
+      # app-hosted tests need a simulator. `-project` is required: with none, xcodebuild
+      # searches the cwd, which holds Package.swift and no .xcodeproj.
+      # Also where the size ratchet fires: scripts/ios_budget.py is the app target's last
+      # build phase, so a regression in app_minus_sqlite or sqlite fails this step.
+      - name: Build and test the app in the simulator
+        run: make ios-sim-test

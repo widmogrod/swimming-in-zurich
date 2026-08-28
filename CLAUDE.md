@@ -54,6 +54,12 @@ uv run python -m swimzh.cli build --db gold.sqlite
 uv run python -m swimzh.cli scrape-gold   --db gold.sqlite   # re-run the schedule/price phase
 uv run python -m swimzh.cli scrape-lanes  --db gold.sqlite   # re-run the Belegungsplan lane phase
 
+# 2c. DERIVED EXPORT for the iOS app — offline, reads gold only, never the network.
+#     Bakes every date in a fixed 400-day horizon into a pre-resolved SQLite the app embeds,
+#     so iOS runs no schedule logic. Finishes journal_mode=DELETE + VACUUM + ANALYZE: a
+#     WAL-mode file opens fine from a read-only bundle and fails on the FIRST query.
+uv run python -m swimzh.cli export-ios --db gold.sqlite --out ios.sqlite [--days 400]
+
 # 2b. Every network command caches responses to disk per-tier (see below). Force a refetch:
 uv run python -m swimzh.cli build --db gold.sqlite --refresh    # == SWIMZH_CACHE=refresh
 SWIMZH_CACHE=off uv run python -m swimzh.cli build --db gold.sqlite   # bypass the cache entirely
@@ -181,7 +187,16 @@ runtime + the `Intl` layer); the catalog itself is still a seed.
   `en → en-GB`, `de → de-CH`, `fr → fr-CH`, `it → it-CH`. Bare `en` means **en-US** and would flip
   every date to month-first. Two counter-intuitive facts pinned by tests: Polish takes a *genitive*
   month (`23 lipca`) and lowercases weekday/month names, so no lookup table can do it; and **de-CH
-  and it-CH use a DOT decimal separator**, unlike de-DE/it-IT — only fr-CH and pl use a comma.
+  and it-CH use a DOT decimal separator**, unlike de-DE/it-IT — in *node's* ICU, fr-CH and pl use
+  a comma.
+- **`fr-CH`'s decimal separator is NOT the same on both clients, and this is measured, not
+  assumed.** node's ICU gives fr-CH a **comma** (`2,5`); Apple's Foundation gives it a **dot**
+  (`2.5`). The web pins the comma (`datefmt.test.ts:85-93`) and iOS pins the dot
+  (`FormatTests.swissDecimalSeparators`, re-checked in the simulator by
+  `LocalizationDeviceTests.separatorsOnDevice`), so a French reader genuinely sees `2,5 km` in the
+  browser and `2.5 km` on the phone. **Do not "fix" either side by hand-formatting** — each is its
+  own platform's CLDR snapshot, and a hand-built separator is the bug both tests exist to prevent.
+  Only `pl` uses a comma on *both*.
 - **Never re-parse a formatted date.** Use `dayParts()` (`Intl.formatToParts`) and compose. The old
   `formatLabel(...).split(' ')` assumed three space-separated tokens and failed silently elsewhere.
 - **Units bypass the catalog**: `Intl.NumberFormat` with `style:'unit'` gets plurals and fractions

@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  The app's privacy manifest.
+
+  Three honest claims and one required-reason declaration:
+
+  * NSPrivacyTracking false and NSPrivacyTrackingDomains empty — the app makes NO network
+    requests at all. That is not a policy, it is structural: a SwimZHKit source lint fails
+    the build if URLSession, Network, NWConnection, CFSocket or CFStream appears in either
+    target. Everything it answers comes from the SQLite store in this bundle.
+  * NSPrivacyCollectedDataTypes empty — nothing leaves the device, because nothing can.
+    THE PHONE'S POSITION IS THE ONE THAT HAD TO BE RE-ASKED rather than assumed, since the
+    app now reads it (`LocationSource`). Apple's "collect" means transmitting off device, and
+    a fix here is turned into a `Place` in memory and never written anywhere — not to the
+    store, not to UserDefaults, not to a log. What IS persisted is a single Bool saying the
+    reader prefers their own position, which is a preference and not a position, and which
+    the UserDefaults declaration below already covers. So this array stays empty, and it stays
+    empty on purpose rather than by oversight.
+
+    Location is also NOT a required-reason API: `NSPrivacyAccessedAPITypes` lists four
+    categories (file timestamp, system boot time, disk space, active keyboard) plus User
+    Defaults, and Core Location is in none of them. It needs a purpose string, which is a
+    different mechanism — `NSLocationWhenInUseUsageDescription`, generated into the bundle in
+    all five languages from the web catalogs by `scripts/locales_to_xcstrings.mjs`.
+  * NSPrivacyAccessedAPITypes declares NSPrivacyAccessedAPICategoryUserDefaults with reason
+    CA92.1. S3a's local-only favourites are one string in UserDefaults.standard, and shipping
+    without the declaration is an ITMS-91055 upload rejection — a failure that only appears
+    at upload time, which is exactly why it is done now rather than at submission.
+
+  Reason code CA92.1, verbatim from Apple: "Declare this reason to access user defaults to
+  read and write information that is only accessible to the app itself. This reason does not
+  permit reading information that was written by other apps or the system, or writing
+  information that can be accessed by other apps." That is precisely this app's use: its own
+  defaults, in its own container. The other three User Defaults codes are all wrong here, and
+  each for its own reason: 1C8F.1 is for defaults shared with an App Group, C56D.1 may only
+  be declared by a third-party SDK wrapping UserDefaults, and AC6B.1 is MDM managed
+  configuration. This app has no App Group, is not an SDK, and is not managed.
+
+  Source, and why it is this one: Apple's RENDERED documentation page is client-side and
+  returns no body content to an automated read — it defeated two attempts and is exactly how
+  fabricated category names get into manifests. The codes above are taken from Apple's own
+  machine-readable payload behind that page,
+  https://developer.apple.com/tutorials/data/documentation/BundleResources/App-Privacy-Configuration/NSPrivacyAccessedAPITypes/NSPrivacyAccessedAPITypeReasons.json
+  retrieved 2026-08-24. A human should still eyeball CA92.1 in a browser before the first
+  upload, but this is documentation-verified, not merely corroborated.
+-->
+<plist version="1.0">
+<dict>
+	<key>NSPrivacyTracking</key>
+	<false/>
+	<key>NSPrivacyTrackingDomains</key>
+	<array/>
+	<key>NSPrivacyCollectedDataTypes</key>
+	<array/>
+	<key>NSPrivacyAccessedAPITypes</key>
+	<array>
+		<dict>
+			<key>NSPrivacyAccessedAPIType</key>
+			<string>NSPrivacyAccessedAPICategoryUserDefaults</string>
+			<key>NSPrivacyAccessedAPITypeReasons</key>
+			<array>
+				<string>CA92.1</string>
+			</array>
+		</dict>
+	</array>
+</dict>
+</plist>

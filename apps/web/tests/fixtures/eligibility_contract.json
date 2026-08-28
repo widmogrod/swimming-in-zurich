@@ -1,8 +1,9 @@
 {
-  "_note": "GENERATED from swimzh.domain.access.eligibility by apps/web/tests/test_eligibility_ui_contract.py — do NOT hand-edit. Replayed against apps/web/static/js/eligibility.js by apps/web/static/js/eligibility.test.js, so the browser badge and the server verdict cannot drift. Regenerate with SWIMZH_REGENERATE_ELIGIBILITY_CONTRACT=1.",
+  "_note": "GENERATED from swimzh.domain.access.eligibility by apps/web/tests/test_eligibility_ui_contract.py — do NOT hand-edit. Replayed against apps/web/static/js/eligibility.js by apps/web/static/js/eligibility.test.js AND against SwimZHKit by apps/ios/Tests/SwimZHKitTests/EligibilityContractTests.swift, so the browser badge, the iOS badge and the server verdict cannot drift. Each case carries the access arm's OWN fields (`access_params`), so a client must read the published bound rather than hardcode a default. Regenerate with SWIMZH_REGENERATE_ELIGIBILITY_CONTRACT=1.",
   "cases": [
     {
       "access": "PublicSwim",
+      "access_params": {},
       "gender": "",
       "age": null,
       "allowed": true,
@@ -11,6 +12,7 @@
     },
     {
       "access": "PublicSwim",
+      "access_params": {},
       "gender": "",
       "age": 8,
       "allowed": true,
@@ -19,6 +21,7 @@
     },
     {
       "access": "PublicSwim",
+      "access_params": {},
       "gender": "",
       "age": 15,
       "allowed": true,
@@ -27,6 +30,7 @@
     },
     {
       "access": "PublicSwim",
+      "access_params": {},
       "gender": "",
       "age": 16,
       "allowed": true,
@@ -35,6 +39,7 @@
     },
     {
       "access": "PublicSwim",
+      "access_params": {},
       "gender": "",
       "age": 17,
       "allowed": true,
@@ -43,6 +48,7 @@
     },
     {
       "access": "PublicSwim",
+      "access_params": {},
       "gender": "",
       "age": 18,
       "allowed": true,
@@ -51,6 +57,7 @@
     },
     {
       "access": "PublicSwim",
+      "access_params": {},
       "gender": "",
       "age": 40,
       "allowed": true,
@@ -59,6 +66,7 @@
     },
     {
       "access": "PublicSwim",
+      "access_params": {},
       "gender": "",
       "age": 59,
       "allowed": true,
@@ -67,6 +75,7 @@
     },
     {
       "access": "PublicSwim",
+      "access_params": {},
       "gender": "",
       "age": 60,
       "allowed": true,
@@ -75,6 +84,7 @@
     },
     {
       "access": "PublicSwim",
+      "access_params": {},
       "gender": "",
       "age": 65,
       "allowed": true,
@@ -83,6 +93,7 @@
     },
     {
       "access": "PublicSwim",
+      "access_params": {},
       "gender": "female",
       "age": null,
       "allowed": true,
@@ -91,6 +102,7 @@
     },
     {
       "access": "PublicSwim",
+      "access_params": {},
       "gender": "female",
       "age": 8,
       "allowed": true,
@@ -99,6 +111,7 @@
     },
     {
       "access": "PublicSwim",
+      "access_params": {},
       "gender": "female",
       "age": 15,
       "allowed": true,
@@ -107,6 +120,7 @@
     },
     {
       "access": "PublicSwim",
+      "access_params": {},
       "gender": "female",
       "age": 16,
       "allowed": true,
@@ -115,6 +129,7 @@
     },
     {
       "access": "PublicSwim",
+      "access_params": {},
       "gender": "female",
       "age": 17,
       "allowed": true,
@@ -123,6 +138,7 @@
     },
     {
       "access": "PublicSwim",
+      "access_params": {},
       "gender": "female",
       "age": 18,
       "allowed": true,
@@ -131,6 +147,7 @@
     },
     {
       "access": "PublicSwim",
+      "access_params": {},
       "gender": "female",
       "age": 40,
       "allowed": true,
@@ -139,6 +156,7 @@
     },
     {
       "access": "PublicSwim",
+      "access_params": {},
       "gender": "female",
       "age": 59,
       "allowed": true,
@@ -147,6 +165,7 @@
     },
     {
       "access": "PublicSwim",
+      "access_params": {},
       "gender": "female",
       "age": 60,
       "allowed": true,
@@ -155,6 +174,7 @@
     },
     {
       "access": "PublicSwim",
+      "access_params": {},
       "gender": "female",
       "age": 65,
       "allowed": true,
@@ -163,6 +183,7 @@
     },
     {
       "access": "PublicSwim",
+      "access_params": {},
       "gender": "male",
       "age": null,
       "allowed": true,
@@ -171,6 +192,7 @@
     },
     {
       "access": "PublicSwim",
+      "access_params": {},
       "gender": "male",
       "age": 8,
       "allowed": true,
@@ -179,6 +201,7 @@
     },
     {
       "access": "PublicSwim",
+      "access_params": {},
       "gender": "male",
       "age": 15,
       "allowed": true,
@@ -187,6 +210,7 @@
     },
     {
       "access": "PublicSwim",
+      "access_params": {},
       "gender": "male",
       "age": 16,
       "allowed": true,
@@ -195,6 +219,7 @@
     },
     {
       "access": "PublicSwim",
+      "access_params": {},
       "gender": "male",
       "age": 17,
       "allowed": true,
@@ -203,6 +228,7 @@
     },
     {
       "access": "PublicSwim",
+      "access_params": {},
       "gender": "male",
       "age": 18,
       "allowed": true,
@@ -211,6 +237,7 @@
     },
     {
       "access": "PublicSwim",
+      "access_params": {},
       "gender": "male",
       "age": 40,
       "allowed": true,
@@ -219,6 +246,7 @@
     },
     {
       "access": "PublicSwim",
+      "access_params": {},
       "gender": "male",
       "age": 59,
       "allowed": true,
@@ -227,6 +255,7 @@
     },
     {
       "access": "PublicSwim",
+      "access_params": {},
       "gender": "male",
       "age": 60,
       "allowed": true,
@@ -235,6 +264,7 @@
     },
     {
       "access": "PublicSwim",
+      "access_params": {},
       "gender": "male",
       "age": 65,
       "allowed": true,
@@ -243,6 +273,7 @@
     },
     {
       "access": "PublicSwim",
+      "access_params": {},
       "gender": "diverse",
       "age": null,
       "allowed": true,
@@ -251,6 +282,7 @@
     },
     {
       "access": "PublicSwim",
+      "access_params": {},
       "gender": "diverse",
       "age": 8,
       "allowed": true,
@@ -259,6 +291,7 @@
     },
     {
       "access": "PublicSwim",
+      "access_params": {},
       "gender": "diverse",
       "age": 15,
       "allowed": true,
@@ -267,6 +300,7 @@
     },
     {
       "access": "PublicSwim",
+      "access_params": {},
       "gender": "diverse",
       "age": 16,
       "allowed": true,
@@ -275,6 +309,7 @@
     },
     {
       "access": "PublicSwim",
+      "access_params": {},
       "gender": "diverse",
       "age": 17,
       "allowed": true,
@@ -283,6 +318,7 @@
     },
     {
       "access": "PublicSwim",
+      "access_params": {},
       "gender": "diverse",
       "age": 18,
       "allowed": true,
@@ -291,6 +327,7 @@
     },
     {
       "access": "PublicSwim",
+      "access_params": {},
       "gender": "diverse",
       "age": 40,
       "allowed": true,
@@ -299,6 +336,7 @@
     },
     {
       "access": "PublicSwim",
+      "access_params": {},
       "gender": "diverse",
       "age": 59,
       "allowed": true,
@@ -307,6 +345,7 @@
     },
     {
       "access": "PublicSwim",
+      "access_params": {},
       "gender": "diverse",
       "age": 60,
       "allowed": true,
@@ -315,6 +354,7 @@
     },
     {
       "access": "PublicSwim",
+      "access_params": {},
       "gender": "diverse",
       "age": 65,
       "allowed": true,
@@ -323,6 +363,9 @@
     },
     {
       "access": "LaneSwim",
+      "access_params": {
+        "note": ""
+      },
       "gender": "",
       "age": null,
       "allowed": true,
@@ -331,6 +374,9 @@
     },
     {
       "access": "LaneSwim",
+      "access_params": {
+        "note": ""
+      },
       "gender": "",
       "age": 8,
       "allowed": true,
@@ -339,6 +385,9 @@
     },
     {
       "access": "LaneSwim",
+      "access_params": {
+        "note": ""
+      },
       "gender": "",
       "age": 15,
       "allowed": true,
@@ -347,6 +396,9 @@
     },
     {
       "access": "LaneSwim",
+      "access_params": {
+        "note": ""
+      },
       "gender": "",
       "age": 16,
       "allowed": true,
@@ -355,6 +407,9 @@
     },
     {
       "access": "LaneSwim",
+      "access_params": {
+        "note": ""
+      },
       "gender": "",
       "age": 17,
       "allowed": true,
@@ -363,6 +418,9 @@
     },
     {
       "access": "LaneSwim",
+      "access_params": {
+        "note": ""
+      },
       "gender": "",
       "age": 18,
       "allowed": true,
@@ -371,6 +429,9 @@
     },
     {
       "access": "LaneSwim",
+      "access_params": {
+        "note": ""
+      },
       "gender": "",
       "age": 40,
       "allowed": true,
@@ -379,6 +440,9 @@
     },
     {
       "access": "LaneSwim",
+      "access_params": {
+        "note": ""
+      },
       "gender": "",
       "age": 59,
       "allowed": true,
@@ -387,6 +451,9 @@
     },
     {
       "access": "LaneSwim",
+      "access_params": {
+        "note": ""
+      },
       "gender": "",
       "age": 60,
       "allowed": true,
@@ -395,6 +462,9 @@
     },
     {
       "access": "LaneSwim",
+      "access_params": {
+        "note": ""
+      },
       "gender": "",
       "age": 65,
       "allowed": true,
@@ -403,6 +473,9 @@
     },
     {
       "access": "LaneSwim",
+      "access_params": {
+        "note": ""
+      },
       "gender": "female",
       "age": null,
       "allowed": true,
@@ -411,6 +484,9 @@
     },
     {
       "access": "LaneSwim",
+      "access_params": {
+        "note": ""
+      },
       "gender": "female",
       "age": 8,
       "allowed": true,
@@ -419,6 +495,9 @@
     },
     {
       "access": "LaneSwim",
+      "access_params": {
+        "note": ""
+      },
       "gender": "female",
       "age": 15,
       "allowed": true,
@@ -427,6 +506,9 @@
     },
     {
       "access": "LaneSwim",
+      "access_params": {
+        "note": ""
+      },
       "gender": "female",
       "age": 16,
       "allowed": true,
@@ -435,6 +517,9 @@
     },
     {
       "access": "LaneSwim",
+      "access_params": {
+        "note": ""
+      },
       "gender": "female",
       "age": 17,
       "allowed": true,
@@ -443,6 +528,9 @@
     },
     {
       "access": "LaneSwim",
+      "access_params": {
+        "note": ""
+      },
       "gender": "female",
       "age": 18,
       "allowed": true,
@@ -451,6 +539,9 @@
     },
     {
       "access": "LaneSwim",
+      "access_params": {
+        "note": ""
+      },
       "gender": "female",
       "age": 40,
       "allowed": true,
@@ -459,6 +550,9 @@
     },
     {
       "access": "LaneSwim",
+      "access_params": {
+        "note": ""
+      },
       "gender": "female",
       "age": 59,
       "allowed": true,
@@ -467,6 +561,9 @@
     },
     {
       "access": "LaneSwim",
+      "access_params": {
+        "note": ""
+      },
       "gender": "female",
       "age": 60,
       "allowed": true,
@@ -475,6 +572,9 @@
     },
     {
       "access": "LaneSwim",
+      "access_params": {
+        "note": ""
+      },
       "gender": "female",
       "age": 65,
       "allowed": true,
@@ -483,6 +583,9 @@
     },
     {
       "access": "LaneSwim",
+      "access_params": {
+        "note": ""
+      },
       "gender": "male",
       "age": null,
       "allowed": true,
@@ -491,6 +594,9 @@
     },
     {
       "access": "LaneSwim",
+      "access_params": {
+        "note": ""
+      },
       "gender": "male",
       "age": 8,
       "allowed": true,
@@ -499,6 +605,9 @@
     },
     {
       "access": "LaneSwim",
+      "access_params": {
+        "note": ""
+      },
       "gender": "male",
       "age": 15,
       "allowed": true,
@@ -507,6 +616,9 @@
     },
     {
       "access": "LaneSwim",
+      "access_params": {
+        "note": ""
+      },
       "gender": "male",
       "age": 16,
       "allowed": true,
@@ -515,6 +627,9 @@
     },
     {
       "access": "LaneSwim",
+      "access_params": {
+        "note": ""
+      },
       "gender": "male",
       "age": 17,
       "allowed": true,
@@ -523,6 +638,9 @@
     },
     {
       "access": "LaneSwim",
+      "access_params": {
+        "note": ""
+      },
       "gender": "male",
       "age": 18,
       "allowed": true,
@@ -531,6 +649,9 @@
     },
     {
       "access": "LaneSwim",
+      "access_params": {
+        "note": ""
+      },
       "gender": "male",
       "age": 40,
       "allowed": true,
@@ -539,6 +660,9 @@
     },
     {
       "access": "LaneSwim",
+      "access_params": {
+        "note": ""
+      },
       "gender": "male",
       "age": 59,
       "allowed": true,
@@ -547,6 +671,9 @@
     },
     {
       "access": "LaneSwim",
+      "access_params": {
+        "note": ""
+      },
       "gender": "male",
       "age": 60,
       "allowed": true,
@@ -555,6 +682,9 @@
     },
     {
       "access": "LaneSwim",
+      "access_params": {
+        "note": ""
+      },
       "gender": "male",
       "age": 65,
       "allowed": true,
@@ -563,6 +693,9 @@
     },
     {
       "access": "LaneSwim",
+      "access_params": {
+        "note": ""
+      },
       "gender": "diverse",
       "age": null,
       "allowed": true,
@@ -571,6 +704,9 @@
     },
     {
       "access": "LaneSwim",
+      "access_params": {
+        "note": ""
+      },
       "gender": "diverse",
       "age": 8,
       "allowed": true,
@@ -579,6 +715,9 @@
     },
     {
       "access": "LaneSwim",
+      "access_params": {
+        "note": ""
+      },
       "gender": "diverse",
       "age": 15,
       "allowed": true,
@@ -587,6 +726,9 @@
     },
     {
       "access": "LaneSwim",
+      "access_params": {
+        "note": ""
+      },
       "gender": "diverse",
       "age": 16,
       "allowed": true,
@@ -595,6 +737,9 @@
     },
     {
       "access": "LaneSwim",
+      "access_params": {
+        "note": ""
+      },
       "gender": "diverse",
       "age": 17,
       "allowed": true,
@@ -603,6 +748,9 @@
     },
     {
       "access": "LaneSwim",
+      "access_params": {
+        "note": ""
+      },
       "gender": "diverse",
       "age": 18,
       "allowed": true,
@@ -611,6 +759,9 @@
     },
     {
       "access": "LaneSwim",
+      "access_params": {
+        "note": ""
+      },
       "gender": "diverse",
       "age": 40,
       "allowed": true,
@@ -619,6 +770,9 @@
     },
     {
       "access": "LaneSwim",
+      "access_params": {
+        "note": ""
+      },
       "gender": "diverse",
       "age": 59,
       "allowed": true,
@@ -627,6 +781,9 @@
     },
     {
       "access": "LaneSwim",
+      "access_params": {
+        "note": ""
+      },
       "gender": "diverse",
       "age": 60,
       "allowed": true,
@@ -635,6 +792,9 @@
     },
     {
       "access": "LaneSwim",
+      "access_params": {
+        "note": ""
+      },
       "gender": "diverse",
       "age": 65,
       "allowed": true,
@@ -643,6 +803,9 @@
     },
     {
       "access": "FamilyTime",
+      "access_params": {
+        "note": ""
+      },
       "gender": "",
       "age": null,
       "allowed": true,
@@ -651,6 +814,9 @@
     },
     {
       "access": "FamilyTime",
+      "access_params": {
+        "note": ""
+      },
       "gender": "",
       "age": 8,
       "allowed": true,
@@ -659,6 +825,9 @@
     },
     {
       "access": "FamilyTime",
+      "access_params": {
+        "note": ""
+      },
       "gender": "",
       "age": 15,
       "allowed": true,
@@ -667,6 +836,9 @@
     },
     {
       "access": "FamilyTime",
+      "access_params": {
+        "note": ""
+      },
       "gender": "",
       "age": 16,
       "allowed": true,
@@ -675,6 +847,9 @@
     },
     {
       "access": "FamilyTime",
+      "access_params": {
+        "note": ""
+      },
       "gender": "",
       "age": 17,
       "allowed": true,
@@ -683,6 +858,9 @@
     },
     {
       "access": "FamilyTime",
+      "access_params": {
+        "note": ""
+      },
       "gender": "",
       "age": 18,
       "allowed": true,
@@ -691,6 +869,9 @@
     },
     {
       "access": "FamilyTime",
+      "access_params": {
+        "note": ""
+      },
       "gender": "",
       "age": 40,
       "allowed": true,
@@ -699,6 +880,9 @@
     },
     {
       "access": "FamilyTime",
+      "access_params": {
+        "note": ""
+      },
       "gender": "",
       "age": 59,
       "allowed": true,
@@ -707,6 +891,9 @@
     },
     {
       "access": "FamilyTime",
+      "access_params": {
+        "note": ""
+      },
       "gender": "",
       "age": 60,
       "allowed": true,
@@ -715,6 +902,9 @@
     },
     {
       "access": "FamilyTime",
+      "access_params": {
+        "note": ""
+      },
       "gender": "",
       "age": 65,
       "allowed": true,
@@ -723,6 +913,9 @@
     },
     {
       "access": "FamilyTime",
+      "access_params": {
+        "note": ""
+      },
       "gender": "female",
       "age": null,
       "allowed": true,
@@ -731,6 +924,9 @@
     },
     {
       "access": "FamilyTime",
+      "access_params": {
+        "note": ""
+      },
       "gender": "female",
       "age": 8,
       "allowed": true,
@@ -739,6 +935,9 @@
     },
     {
       "access": "FamilyTime",
+      "access_params": {
+        "note": ""
+      },
       "gender": "female",
       "age": 15,
       "allowed": true,
@@ -747,6 +946,9 @@
     },
     {
       "access": "FamilyTime",
+      "access_params": {
+        "note": ""
+      },
       "gender": "female",
       "age": 16,
       "allowed": true,
@@ -755,6 +957,9 @@
     },
     {
       "access": "FamilyTime",
+      "access_params": {
+        "note": ""
+      },
       "gender": "female",
       "age": 17,
       "allowed": true,
@@ -763,6 +968,9 @@
     },
     {
       "access": "FamilyTime",
+      "access_params": {
+        "note": ""
+      },
       "gender": "female",
       "age": 18,
       "allowed": true,
@@ -771,6 +979,9 @@
     },
     {
       "access": "FamilyTime",
+      "access_params": {
+        "note": ""
+      },
       "gender": "female",
       "age": 40,
       "allowed": true,
@@ -779,6 +990,9 @@
     },
     {
       "access": "FamilyTime",
+      "access_params": {
+        "note": ""
+      },
       "gender": "female",
       "age": 59,
       "allowed": true,
@@ -787,6 +1001,9 @@
     },
     {
       "access": "FamilyTime",
+      "access_params": {
+        "note": ""
+      },
       "gender": "female",
       "age": 60,
       "allowed": true,
@@ -795,6 +1012,9 @@
     },
     {
       "access": "FamilyTime",
+      "access_params": {
+        "note": ""
+      },
       "gender": "female",
       "age": 65,
       "allowed": true,
@@ -803,6 +1023,9 @@
     },
     {
       "access": "FamilyTime",
+      "access_params": {
+        "note": ""
+      },
       "gender": "male",
       "age": null,
       "allowed": true,
@@ -811,6 +1034,9 @@
     },
     {
       "access": "FamilyTime",
+      "access_params": {
+        "note": ""
+      },
       "gender": "male",
       "age": 8,
       "allowed": true,
@@ -819,6 +1045,9 @@
     },
     {
       "access": "FamilyTime",
+      "access_params": {
+        "note": ""
+      },
       "gender": "male",
       "age": 15,
       "allowed": true,
@@ -827,6 +1056,9 @@
     },
     {
       "access": "FamilyTime",
+      "access_params": {
+        "note": ""
+      },
       "gender": "male",
       "age": 16,
       "allowed": true,
@@ -835,6 +1067,9 @@
     },
     {
       "access": "FamilyTime",
+      "access_params": {
+        "note": ""
+      },
       "gender": "male",
       "age": 17,
       "allowed": true,
@@ -843,6 +1078,9 @@
     },
     {
       "access": "FamilyTime",
+      "access_params": {
+        "note": ""
+      },
       "gender": "male",
       "age": 18,
       "allowed": true,
@@ -851,6 +1089,9 @@
     },
     {
       "access": "FamilyTime",
+      "access_params": {
+        "note": ""
+      },
       "gender": "male",
       "age": 40,
       "allowed": true,
@@ -859,6 +1100,9 @@
     },
     {
       "access": "FamilyTime",
+      "access_params": {
+        "note": ""
+      },
       "gender": "male",
       "age": 59,
       "allowed": true,
@@ -867,6 +1111,9 @@
     },
     {
       "access": "FamilyTime",
+      "access_params": {
+        "note": ""
+      },
       "gender": "male",
       "age": 60,
       "allowed": true,
@@ -875,6 +1122,9 @@
     },
     {
       "access": "FamilyTime",
+      "access_params": {
+        "note": ""
+      },
       "gender": "male",
       "age": 65,
       "allowed": true,
@@ -883,6 +1133,9 @@
     },
     {
       "access": "FamilyTime",
+      "access_params": {
+        "note": ""
+      },
       "gender": "diverse",
       "age": null,
       "allowed": true,
@@ -891,6 +1144,9 @@
     },
     {
       "access": "FamilyTime",
+      "access_params": {
+        "note": ""
+      },
       "gender": "diverse",
       "age": 8,
       "allowed": true,
@@ -899,6 +1155,9 @@
     },
     {
       "access": "FamilyTime",
+      "access_params": {
+        "note": ""
+      },
       "gender": "diverse",
       "age": 15,
       "allowed": true,
@@ -907,6 +1166,9 @@
     },
     {
       "access": "FamilyTime",
+      "access_params": {
+        "note": ""
+      },
       "gender": "diverse",
       "age": 16,
       "allowed": true,
@@ -915,6 +1177,9 @@
     },
     {
       "access": "FamilyTime",
+      "access_params": {
+        "note": ""
+      },
       "gender": "diverse",
       "age": 17,
       "allowed": true,
@@ -923,6 +1188,9 @@
     },
     {
       "access": "FamilyTime",
+      "access_params": {
+        "note": ""
+      },
       "gender": "diverse",
       "age": 18,
       "allowed": true,
@@ -931,6 +1199,9 @@
     },
     {
       "access": "FamilyTime",
+      "access_params": {
+        "note": ""
+      },
       "gender": "diverse",
       "age": 40,
       "allowed": true,
@@ -939,6 +1210,9 @@
     },
     {
       "access": "FamilyTime",
+      "access_params": {
+        "note": ""
+      },
       "gender": "diverse",
       "age": 59,
       "allowed": true,
@@ -947,6 +1221,9 @@
     },
     {
       "access": "FamilyTime",
+      "access_params": {
+        "note": ""
+      },
       "gender": "diverse",
       "age": 60,
       "allowed": true,
@@ -955,6 +1232,9 @@
     },
     {
       "access": "FamilyTime",
+      "access_params": {
+        "note": ""
+      },
       "gender": "diverse",
       "age": 65,
       "allowed": true,
@@ -963,6 +1243,9 @@
     },
     {
       "access": "WomenOnly",
+      "access_params": {
+        "note": ""
+      },
       "gender": "",
       "age": null,
       "allowed": false,
@@ -971,6 +1254,9 @@
     },
     {
       "access": "WomenOnly",
+      "access_params": {
+        "note": ""
+      },
       "gender": "",
       "age": 8,
       "allowed": false,
@@ -979,6 +1265,9 @@
     },
     {
       "access": "WomenOnly",
+      "access_params": {
+        "note": ""
+      },
       "gender": "",
       "age": 15,
       "allowed": false,
@@ -987,6 +1276,9 @@
     },
     {
       "access": "WomenOnly",
+      "access_params": {
+        "note": ""
+      },
       "gender": "",
       "age": 16,
       "allowed": false,
@@ -995,6 +1287,9 @@
     },
     {
       "access": "WomenOnly",
+      "access_params": {
+        "note": ""
+      },
       "gender": "",
       "age": 17,
       "allowed": false,
@@ -1003,6 +1298,9 @@
     },
     {
       "access": "WomenOnly",
+      "access_params": {
+        "note": ""
+      },
       "gender": "",
       "age": 18,
       "allowed": false,
@@ -1011,6 +1309,9 @@
     },
     {
       "access": "WomenOnly",
+      "access_params": {
+        "note": ""
+      },
       "gender": "",
       "age": 40,
       "allowed": false,
@@ -1019,6 +1320,9 @@
     },
     {
       "access": "WomenOnly",
+      "access_params": {
+        "note": ""
+      },
       "gender": "",
       "age": 59,
       "allowed": false,
@@ -1027,6 +1331,9 @@
     },
     {
       "access": "WomenOnly",
+      "access_params": {
+        "note": ""
+      },
       "gender": "",
       "age": 60,
       "allowed": false,
@@ -1035,6 +1342,9 @@
     },
     {
       "access": "WomenOnly",
+      "access_params": {
+        "note": ""
+      },
       "gender": "",
       "age": 65,
       "allowed": false,
@@ -1043,6 +1353,9 @@
     },
     {
       "access": "WomenOnly",
+      "access_params": {
+        "note": ""
+      },
       "gender": "female",
       "age": null,
       "allowed": true,
@@ -1051,6 +1364,9 @@
     },
     {
       "access": "WomenOnly",
+      "access_params": {
+        "note": ""
+      },
       "gender": "female",
       "age": 8,
       "allowed": true,
@@ -1059,6 +1375,9 @@
     },
     {
       "access": "WomenOnly",
+      "access_params": {
+        "note": ""
+      },
       "gender": "female",
       "age": 15,
       "allowed": true,
@@ -1067,6 +1386,9 @@
     },
     {
       "access": "WomenOnly",
+      "access_params": {
+        "note": ""
+      },
       "gender": "female",
       "age": 16,
       "allowed": true,
@@ -1075,6 +1397,9 @@
     },
     {
       "access": "WomenOnly",
+      "access_params": {
+        "note": ""
+      },
       "gender": "female",
       "age": 17,
       "allowed": true,
@@ -1083,6 +1408,9 @@
     },
     {
       "access": "WomenOnly",
+      "access_params": {
+        "note": ""
+      },
       "gender": "female",
       "age": 18,
       "allowed": true,
@@ -1091,6 +1419,9 @@
     },
     {
       "access": "WomenOnly",
+      "access_params": {
+        "note": ""
+      },
       "gender": "female",
       "age": 40,
       "allowed": true,
@@ -1099,6 +1430,9 @@
     },
     {
       "access": "WomenOnly",
+      "access_params": {
+        "note": ""
+      },
       "gender": "female",
       "age": 59,
       "allowed": true,
@@ -1107,6 +1441,9 @@
     },
     {
       "access": "WomenOnly",
+      "access_params": {
+        "note": ""
+      },
       "gender": "female",
       "age": 60,
       "allowed": true,
@@ -1115,6 +1452,9 @@
     },
     {
       "access": "WomenOnly",
+      "access_params": {
+        "note": ""
+      },
       "gender": "female",
       "age": 65,
       "allowed": true,
@@ -1123,6 +1463,9 @@
     },
     {
       "access": "WomenOnly",
+      "access_params": {
+        "note": ""
+      },
       "gender": "male",
       "age": null,
       "allowed": false,
@@ -1131,6 +1474,9 @@
     },
     {
       "access": "WomenOnly",
+      "access_params": {
+        "note": ""
+      },
       "gender": "male",
       "age": 8,
       "allowed": false,
@@ -1139,6 +1485,9 @@
     },
     {
       "access": "WomenOnly",
+      "access_params": {
+        "note": ""
+      },
       "gender": "male",
       "age": 15,
       "allowed": false,
@@ -1147,6 +1496,9 @@
     },
     {
       "access": "WomenOnly",
+      "access_params": {
+        "note": ""
+      },
       "gender": "male",
       "age": 16,
       "allowed": false,
@@ -1155,6 +1507,9 @@
     },
     {
       "access": "WomenOnly",
+      "access_params": {
+        "note": ""
+      },
       "gender": "male",
       "age": 17,
       "allowed": false,
@@ -1163,6 +1518,9 @@
     },
     {
       "access": "WomenOnly",
+      "access_params": {
+        "note": ""
+      },
       "gender": "male",
       "age": 18,
       "allowed": false,
@@ -1171,6 +1529,9 @@
     },
     {
       "access": "WomenOnly",
+      "access_params": {
+        "note": ""
+      },
       "gender": "male",
       "age": 40,
       "allowed": false,
@@ -1179,6 +1540,9 @@
     },
     {
       "access": "WomenOnly",
+      "access_params": {
+        "note": ""
+      },
       "gender": "male",
       "age": 59,
       "allowed": false,
@@ -1187,6 +1551,9 @@
     },
     {
       "access": "WomenOnly",
+      "access_params": {
+        "note": ""
+      },
       "gender": "male",
       "age": 60,
       "allowed": false,
@@ -1195,6 +1562,9 @@
     },
     {
       "access": "WomenOnly",
+      "access_params": {
+        "note": ""
+      },
       "gender": "male",
       "age": 65,
       "allowed": false,
@@ -1203,6 +1573,9 @@
     },
     {
       "access": "WomenOnly",
+      "access_params": {
+        "note": ""
+      },
       "gender": "diverse",
       "age": null,
       "allowed": false,
@@ -1211,6 +1584,9 @@
     },
     {
       "access": "WomenOnly",
+      "access_params": {
+        "note": ""
+      },
       "gender": "diverse",
       "age": 8,
       "allowed": false,
@@ -1219,6 +1595,9 @@
     },
     {
       "access": "WomenOnly",
+      "access_params": {
+        "note": ""
+      },
       "gender": "diverse",
       "age": 15,
       "allowed": false,
@@ -1227,6 +1606,9 @@
     },
     {
       "access": "WomenOnly",
+      "access_params": {
+        "note": ""
+      },
       "gender": "diverse",
       "age": 16,
       "allowed": false,
@@ -1235,6 +1617,9 @@
     },
     {
       "access": "WomenOnly",
+      "access_params": {
+        "note": ""
+      },
       "gender": "diverse",
       "age": 17,
       "allowed": false,
@@ -1243,6 +1628,9 @@
     },
     {
       "access": "WomenOnly",
+      "access_params": {
+        "note": ""
+      },
       "gender": "diverse",
       "age": 18,
       "allowed": false,
@@ -1251,6 +1639,9 @@
     },
     {
       "access": "WomenOnly",
+      "access_params": {
+        "note": ""
+      },
       "gender": "diverse",
       "age": 40,
       "allowed": false,
@@ -1259,6 +1650,9 @@
     },
     {
       "access": "WomenOnly",
+      "access_params": {
+        "note": ""
+      },
       "gender": "diverse",
       "age": 59,
       "allowed": false,
@@ -1267,6 +1661,9 @@
     },
     {
       "access": "WomenOnly",
+      "access_params": {
+        "note": ""
+      },
       "gender": "diverse",
       "age": 60,
       "allowed": false,
@@ -1275,6 +1672,9 @@
     },
     {
       "access": "WomenOnly",
+      "access_params": {
+        "note": ""
+      },
       "gender": "diverse",
       "age": 65,
       "allowed": false,
@@ -1283,6 +1683,9 @@
     },
     {
       "access": "SeniorsOnly",
+      "access_params": {
+        "min_age": 60
+      },
       "gender": "",
       "age": null,
       "allowed": false,
@@ -1291,6 +1694,9 @@
     },
     {
       "access": "SeniorsOnly",
+      "access_params": {
+        "min_age": 60
+      },
       "gender": "",
       "age": 8,
       "allowed": false,
@@ -1299,6 +1705,9 @@
     },
     {
       "access": "SeniorsOnly",
+      "access_params": {
+        "min_age": 60
+      },
       "gender": "",
       "age": 15,
       "allowed": false,
@@ -1307,6 +1716,9 @@
     },
     {
       "access": "SeniorsOnly",
+      "access_params": {
+        "min_age": 60
+      },
       "gender": "",
       "age": 16,
       "allowed": false,
@@ -1315,6 +1727,9 @@
     },
     {
       "access": "SeniorsOnly",
+      "access_params": {
+        "min_age": 60
+      },
       "gender": "",
       "age": 17,
       "allowed": false,
@@ -1323,6 +1738,9 @@
     },
     {
       "access": "SeniorsOnly",
+      "access_params": {
+        "min_age": 60
+      },
       "gender": "",
       "age": 18,
       "allowed": false,
@@ -1331,6 +1749,9 @@
     },
     {
       "access": "SeniorsOnly",
+      "access_params": {
+        "min_age": 60
+      },
       "gender": "",
       "age": 40,
       "allowed": false,
@@ -1339,6 +1760,9 @@
     },
     {
       "access": "SeniorsOnly",
+      "access_params": {
+        "min_age": 60
+      },
       "gender": "",
       "age": 59,
       "allowed": false,
@@ -1347,6 +1771,9 @@
     },
     {
       "access": "SeniorsOnly",
+      "access_params": {
+        "min_age": 60
+      },
       "gender": "",
       "age": 60,
       "allowed": true,
@@ -1355,6 +1782,9 @@
     },
     {
       "access": "SeniorsOnly",
+      "access_params": {
+        "min_age": 60
+      },
       "gender": "",
       "age": 65,
       "allowed": true,
@@ -1363,6 +1793,9 @@
     },
     {
       "access": "SeniorsOnly",
+      "access_params": {
+        "min_age": 60
+      },
       "gender": "female",
       "age": null,
       "allowed": false,
@@ -1371,6 +1804,9 @@
     },
     {
       "access": "SeniorsOnly",
+      "access_params": {
+        "min_age": 60
+      },
       "gender": "female",
       "age": 8,
       "allowed": false,
@@ -1379,6 +1815,9 @@
     },
     {
       "access": "SeniorsOnly",
+      "access_params": {
+        "min_age": 60
+      },
       "gender": "female",
       "age": 15,
       "allowed": false,
@@ -1387,6 +1826,9 @@
     },
     {
       "access": "SeniorsOnly",
+      "access_params": {
+        "min_age": 60
+      },
       "gender": "female",
       "age": 16,
       "allowed": false,
@@ -1395,6 +1837,9 @@
     },
     {
       "access": "SeniorsOnly",
+      "access_params": {
+        "min_age": 60
+      },
       "gender": "female",
       "age": 17,
       "allowed": false,
@@ -1403,6 +1848,9 @@
     },
     {
       "access": "SeniorsOnly",
+      "access_params": {
+        "min_age": 60
+      },
       "gender": "female",
       "age": 18,
       "allowed": false,
@@ -1411,6 +1859,9 @@
     },
     {
       "access": "SeniorsOnly",
+      "access_params": {
+        "min_age": 60
+      },
       "gender": "female",
       "age": 40,
       "allowed": false,
@@ -1419,6 +1870,9 @@
     },
     {
       "access": "SeniorsOnly",
+      "access_params": {
+        "min_age": 60
+      },
       "gender": "female",
       "age": 59,
       "allowed": false,
@@ -1427,6 +1881,9 @@
     },
     {
       "access": "SeniorsOnly",
+      "access_params": {
+        "min_age": 60
+      },
       "gender": "female",
       "age": 60,
       "allowed": true,
@@ -1435,6 +1892,9 @@
     },
     {
       "access": "SeniorsOnly",
+      "access_params": {
+        "min_age": 60
+      },
       "gender": "female",
       "age": 65,
       "allowed": true,
@@ -1443,6 +1903,9 @@
     },
     {
       "access": "SeniorsOnly",
+      "access_params": {
+        "min_age": 60
+      },
       "gender": "male",
       "age": null,
       "allowed": false,
@@ -1451,6 +1914,9 @@
     },
     {
       "access": "SeniorsOnly",
+      "access_params": {
+        "min_age": 60
+      },
       "gender": "male",
       "age": 8,
       "allowed": false,
@@ -1459,6 +1925,9 @@
     },
     {
       "access": "SeniorsOnly",
+      "access_params": {
+        "min_age": 60
+      },
       "gender": "male",
       "age": 15,
       "allowed": false,
@@ -1467,6 +1936,9 @@
     },
     {
       "access": "SeniorsOnly",
+      "access_params": {
+        "min_age": 60
+      },
       "gender": "male",
       "age": 16,
       "allowed": false,
@@ -1475,6 +1947,9 @@
     },
     {
       "access": "SeniorsOnly",
+      "access_params": {
+        "min_age": 60
+      },
       "gender": "male",
       "age": 17,
       "allowed": false,
@@ -1483,6 +1958,9 @@
     },
     {
       "access": "SeniorsOnly",
+      "access_params": {
+        "min_age": 60
+      },
       "gender": "male",
       "age": 18,
       "allowed": false,
@@ -1491,6 +1969,9 @@
     },
     {
       "access": "SeniorsOnly",
+      "access_params": {
+        "min_age": 60
+      },
       "gender": "male",
       "age": 40,
       "allowed": false,
@@ -1499,6 +1980,9 @@
     },
     {
       "access": "SeniorsOnly",
+      "access_params": {
+        "min_age": 60
+      },
       "gender": "male",
       "age": 59,
       "allowed": false,
@@ -1507,6 +1991,9 @@
     },
     {
       "access": "SeniorsOnly",
+      "access_params": {
+        "min_age": 60
+      },
       "gender": "male",
       "age": 60,
       "allowed": true,
@@ -1515,6 +2002,9 @@
     },
     {
       "access": "SeniorsOnly",
+      "access_params": {
+        "min_age": 60
+      },
       "gender": "male",
       "age": 65,
       "allowed": true,
@@ -1523,6 +2013,9 @@
     },
     {
       "access": "SeniorsOnly",
+      "access_params": {
+        "min_age": 60
+      },
       "gender": "diverse",
       "age": null,
       "allowed": false,
@@ -1531,6 +2024,9 @@
     },
     {
       "access": "SeniorsOnly",
+      "access_params": {
+        "min_age": 60
+      },
       "gender": "diverse",
       "age": 8,
       "allowed": false,
@@ -1539,6 +2035,9 @@
     },
     {
       "access": "SeniorsOnly",
+      "access_params": {
+        "min_age": 60
+      },
       "gender": "diverse",
       "age": 15,
       "allowed": false,
@@ -1547,6 +2046,9 @@
     },
     {
       "access": "SeniorsOnly",
+      "access_params": {
+        "min_age": 60
+      },
       "gender": "diverse",
       "age": 16,
       "allowed": false,
@@ -1555,6 +2057,9 @@
     },
     {
       "access": "SeniorsOnly",
+      "access_params": {
+        "min_age": 60
+      },
       "gender": "diverse",
       "age": 17,
       "allowed": false,
@@ -1563,6 +2068,9 @@
     },
     {
       "access": "SeniorsOnly",
+      "access_params": {
+        "min_age": 60
+      },
       "gender": "diverse",
       "age": 18,
       "allowed": false,
@@ -1571,6 +2079,9 @@
     },
     {
       "access": "SeniorsOnly",
+      "access_params": {
+        "min_age": 60
+      },
       "gender": "diverse",
       "age": 40,
       "allowed": false,
@@ -1579,6 +2090,9 @@
     },
     {
       "access": "SeniorsOnly",
+      "access_params": {
+        "min_age": 60
+      },
       "gender": "diverse",
       "age": 59,
       "allowed": false,
@@ -1587,6 +2101,9 @@
     },
     {
       "access": "SeniorsOnly",
+      "access_params": {
+        "min_age": 60
+      },
       "gender": "diverse",
       "age": 60,
       "allowed": true,
@@ -1595,6 +2112,9 @@
     },
     {
       "access": "SeniorsOnly",
+      "access_params": {
+        "min_age": 60
+      },
       "gender": "diverse",
       "age": 65,
       "allowed": true,
@@ -1603,6 +2123,7 @@
     },
     {
       "access": "SchoolReserved",
+      "access_params": {},
       "gender": "",
       "age": null,
       "allowed": false,
@@ -1611,6 +2132,7 @@
     },
     {
       "access": "SchoolReserved",
+      "access_params": {},
       "gender": "",
       "age": 8,
       "allowed": false,
@@ -1619,6 +2141,7 @@
     },
     {
       "access": "SchoolReserved",
+      "access_params": {},
       "gender": "",
       "age": 15,
       "allowed": false,
@@ -1627,6 +2150,7 @@
     },
     {
       "access": "SchoolReserved",
+      "access_params": {},
       "gender": "",
       "age": 16,
       "allowed": false,
@@ -1635,6 +2159,7 @@
     },
     {
       "access": "SchoolReserved",
+      "access_params": {},
       "gender": "",
       "age": 17,
       "allowed": false,
@@ -1643,6 +2168,7 @@
     },
     {
       "access": "SchoolReserved",
+      "access_params": {},
       "gender": "",
       "age": 18,
       "allowed": false,
@@ -1651,6 +2177,7 @@
     },
     {
       "access": "SchoolReserved",
+      "access_params": {},
       "gender": "",
       "age": 40,
       "allowed": false,
@@ -1659,6 +2186,7 @@
     },
     {
       "access": "SchoolReserved",
+      "access_params": {},
       "gender": "",
       "age": 59,
       "allowed": false,
@@ -1667,6 +2195,7 @@
     },
     {
       "access": "SchoolReserved",
+      "access_params": {},
       "gender": "",
       "age": 60,
       "allowed": false,
@@ -1675,6 +2204,7 @@
     },
     {
       "access": "SchoolReserved",
+      "access_params": {},
       "gender": "",
       "age": 65,
       "allowed": false,
@@ -1683,6 +2213,7 @@
     },
     {
       "access": "SchoolReserved",
+      "access_params": {},
       "gender": "female",
       "age": null,
       "allowed": false,
@@ -1691,6 +2222,7 @@
     },
     {
       "access": "SchoolReserved",
+      "access_params": {},
       "gender": "female",
       "age": 8,
       "allowed": false,
@@ -1699,6 +2231,7 @@
     },
     {
       "access": "SchoolReserved",
+      "access_params": {},
       "gender": "female",
       "age": 15,
       "allowed": false,
@@ -1707,6 +2240,7 @@
     },
     {
       "access": "SchoolReserved",
+      "access_params": {},
       "gender": "female",
       "age": 16,
       "allowed": false,
@@ -1715,6 +2249,7 @@
     },
     {
       "access": "SchoolReserved",
+      "access_params": {},
       "gender": "female",
       "age": 17,
       "allowed": false,
@@ -1723,6 +2258,7 @@
     },
     {
       "access": "SchoolReserved",
+      "access_params": {},
       "gender": "female",
       "age": 18,
       "allowed": false,
@@ -1731,6 +2267,7 @@
     },
     {
       "access": "SchoolReserved",
+      "access_params": {},
       "gender": "female",
       "age": 40,
       "allowed": false,
@@ -1739,6 +2276,7 @@
     },
     {
       "access": "SchoolReserved",
+      "access_params": {},
       "gender": "female",
       "age": 59,
       "allowed": false,
@@ -1747,6 +2285,7 @@
     },
     {
       "access": "SchoolReserved",
+      "access_params": {},
       "gender": "female",
       "age": 60,
       "allowed": false,
@@ -1755,6 +2294,7 @@
     },
     {
       "access": "SchoolReserved",
+      "access_params": {},
       "gender": "female",
       "age": 65,
       "allowed": false,
@@ -1763,6 +2303,7 @@
     },
     {
       "access": "SchoolReserved",
+      "access_params": {},
       "gender": "male",
       "age": null,
       "allowed": false,
@@ -1771,6 +2312,7 @@
     },
     {
       "access": "SchoolReserved",
+      "access_params": {},
       "gender": "male",
       "age": 8,
       "allowed": false,
@@ -1779,6 +2321,7 @@
     },
     {
       "access": "SchoolReserved",
+      "access_params": {},
       "gender": "male",
       "age": 15,
       "allowed": false,
@@ -1787,6 +2330,7 @@
     },
     {
       "access": "SchoolReserved",
+      "access_params": {},
       "gender": "male",
       "age": 16,
       "allowed": false,
@@ -1795,6 +2339,7 @@
     },
     {
       "access": "SchoolReserved",
+      "access_params": {},
       "gender": "male",
       "age": 17,
       "allowed": false,
@@ -1803,6 +2348,7 @@
     },
     {
       "access": "SchoolReserved",
+      "access_params": {},
       "gender": "male",
       "age": 18,
       "allowed": false,
@@ -1811,6 +2357,7 @@
     },
     {
       "access": "SchoolReserved",
+      "access_params": {},
       "gender": "male",
       "age": 40,
       "allowed": false,
@@ -1819,6 +2366,7 @@
     },
     {
       "access": "SchoolReserved",
+      "access_params": {},
       "gender": "male",
       "age": 59,
       "allowed": false,
@@ -1827,6 +2375,7 @@
     },
     {
       "access": "SchoolReserved",
+      "access_params": {},
       "gender": "male",
       "age": 60,
       "allowed": false,
@@ -1835,6 +2384,7 @@
     },
     {
       "access": "SchoolReserved",
+      "access_params": {},
       "gender": "male",
       "age": 65,
       "allowed": false,
@@ -1843,6 +2393,7 @@
     },
     {
       "access": "SchoolReserved",
+      "access_params": {},
       "gender": "diverse",
       "age": null,
       "allowed": false,
@@ -1851,6 +2402,7 @@
     },
     {
       "access": "SchoolReserved",
+      "access_params": {},
       "gender": "diverse",
       "age": 8,
       "allowed": false,
@@ -1859,6 +2411,7 @@
     },
     {
       "access": "SchoolReserved",
+      "access_params": {},
       "gender": "diverse",
       "age": 15,
       "allowed": false,
@@ -1867,6 +2420,7 @@
     },
     {
       "access": "SchoolReserved",
+      "access_params": {},
       "gender": "diverse",
       "age": 16,
       "allowed": false,
@@ -1875,6 +2429,7 @@
     },
     {
       "access": "SchoolReserved",
+      "access_params": {},
       "gender": "diverse",
       "age": 17,
       "allowed": false,
@@ -1883,6 +2438,7 @@
     },
     {
       "access": "SchoolReserved",
+      "access_params": {},
       "gender": "diverse",
       "age": 18,
       "allowed": false,
@@ -1891,6 +2447,7 @@
     },
     {
       "access": "SchoolReserved",
+      "access_params": {},
       "gender": "diverse",
       "age": 40,
       "allowed": false,
@@ -1899,6 +2456,7 @@
     },
     {
       "access": "SchoolReserved",
+      "access_params": {},
       "gender": "diverse",
       "age": 59,
       "allowed": false,
@@ -1907,6 +2465,7 @@
     },
     {
       "access": "SchoolReserved",
+      "access_params": {},
       "gender": "diverse",
       "age": 60,
       "allowed": false,
@@ -1915,6 +2474,7 @@
     },
     {
       "access": "SchoolReserved",
+      "access_params": {},
       "gender": "diverse",
       "age": 65,
       "allowed": false,
@@ -1923,6 +2483,9 @@
     },
     {
       "access": "ClubReserved",
+      "access_params": {
+        "club": ""
+      },
       "gender": "",
       "age": null,
       "allowed": false,
@@ -1931,6 +2494,9 @@
     },
     {
       "access": "ClubReserved",
+      "access_params": {
+        "club": ""
+      },
       "gender": "",
       "age": 8,
       "allowed": false,
@@ -1939,6 +2505,9 @@
     },
     {
       "access": "ClubReserved",
+      "access_params": {
+        "club": ""
+      },
       "gender": "",
       "age": 15,
       "allowed": false,
@@ -1947,6 +2516,9 @@
     },
     {
       "access": "ClubReserved",
+      "access_params": {
+        "club": ""
+      },
       "gender": "",
       "age": 16,
       "allowed": false,
@@ -1955,6 +2527,9 @@
     },
     {
       "access": "ClubReserved",
+      "access_params": {
+        "club": ""
+      },
       "gender": "",
       "age": 17,
       "allowed": false,
@@ -1963,6 +2538,9 @@
     },
     {
       "access": "ClubReserved",
+      "access_params": {
+        "club": ""
+      },
       "gender": "",
       "age": 18,
       "allowed": false,
@@ -1971,6 +2549,9 @@
     },
     {
       "access": "ClubReserved",
+      "access_params": {
+        "club": ""
+      },
       "gender": "",
       "age": 40,
       "allowed": false,
@@ -1979,6 +2560,9 @@
     },
     {
       "access": "ClubReserved",
+      "access_params": {
+        "club": ""
+      },
       "gender": "",
       "age": 59,
       "allowed": false,
@@ -1987,6 +2571,9 @@
     },
     {
       "access": "ClubReserved",
+      "access_params": {
+        "club": ""
+      },
       "gender": "",
       "age": 60,
       "allowed": false,
@@ -1995,6 +2582,9 @@
     },
     {
       "access": "ClubReserved",
+      "access_params": {
+        "club": ""
+      },
       "gender": "",
       "age": 65,
       "allowed": false,
@@ -2003,6 +2593,9 @@
     },
     {
       "access": "ClubReserved",
+      "access_params": {
+        "club": ""
+      },
       "gender": "female",
       "age": null,
       "allowed": false,
@@ -2011,6 +2604,9 @@
     },
     {
       "access": "ClubReserved",
+      "access_params": {
+        "club": ""
+      },
       "gender": "female",
       "age": 8,
       "allowed": false,
@@ -2019,6 +2615,9 @@
     },
     {
       "access": "ClubReserved",
+      "access_params": {
+        "club": ""
+      },
       "gender": "female",
       "age": 15,
       "allowed": false,
@@ -2027,6 +2626,9 @@
     },
     {
       "access": "ClubReserved",
+      "access_params": {
+        "club": ""
+      },
       "gender": "female",
       "age": 16,
       "allowed": false,
@@ -2035,6 +2637,9 @@
     },
     {
       "access": "ClubReserved",
+      "access_params": {
+        "club": ""
+      },
       "gender": "female",
       "age": 17,
       "allowed": false,
@@ -2043,6 +2648,9 @@
     },
     {
       "access": "ClubReserved",
+      "access_params": {
+        "club": ""
+      },
       "gender": "female",
       "age": 18,
       "allowed": false,
@@ -2051,6 +2659,9 @@
     },
     {
       "access": "ClubReserved",
+      "access_params": {
+        "club": ""
+      },
       "gender": "female",
       "age": 40,
       "allowed": false,
@@ -2059,6 +2670,9 @@
     },
     {
       "access": "ClubReserved",
+      "access_params": {
+        "club": ""
+      },
       "gender": "female",
       "age": 59,
       "allowed": false,
@@ -2067,6 +2681,9 @@
     },
     {
       "access": "ClubReserved",
+      "access_params": {
+        "club": ""
+      },
       "gender": "female",
       "age": 60,
       "allowed": false,
@@ -2075,6 +2692,9 @@
     },
     {
       "access": "ClubReserved",
+      "access_params": {
+        "club": ""
+      },
       "gender": "female",
       "age": 65,
       "allowed": false,
@@ -2083,6 +2703,9 @@
     },
     {
       "access": "ClubReserved",
+      "access_params": {
+        "club": ""
+      },
       "gender": "male",
       "age": null,
       "allowed": false,
@@ -2091,6 +2714,9 @@
     },
     {
       "access": "ClubReserved",
+      "access_params": {
+        "club": ""
+      },
       "gender": "male",
       "age": 8,
       "allowed": false,
@@ -2099,6 +2725,9 @@
     },
     {
       "access": "ClubReserved",
+      "access_params": {
+        "club": ""
+      },
       "gender": "male",
       "age": 15,
       "allowed": false,
@@ -2107,6 +2736,9 @@
     },
     {
       "access": "ClubReserved",
+      "access_params": {
+        "club": ""
+      },
       "gender": "male",
       "age": 16,
       "allowed": false,
@@ -2115,6 +2747,9 @@
     },
     {
       "access": "ClubReserved",
+      "access_params": {
+        "club": ""
+      },
       "gender": "male",
       "age": 17,
       "allowed": false,
@@ -2123,6 +2758,9 @@
     },
     {
       "access": "ClubReserved",
+      "access_params": {
+        "club": ""
+      },
       "gender": "male",
       "age": 18,
       "allowed": false,
@@ -2131,6 +2769,9 @@
     },
     {
       "access": "ClubReserved",
+      "access_params": {
+        "club": ""
+      },
       "gender": "male",
       "age": 40,
       "allowed": false,
@@ -2139,6 +2780,9 @@
     },
     {
       "access": "ClubReserved",
+      "access_params": {
+        "club": ""
+      },
       "gender": "male",
       "age": 59,
       "allowed": false,
@@ -2147,6 +2791,9 @@
     },
     {
       "access": "ClubReserved",
+      "access_params": {
+        "club": ""
+      },
       "gender": "male",
       "age": 60,
       "allowed": false,
@@ -2155,6 +2802,9 @@
     },
     {
       "access": "ClubReserved",
+      "access_params": {
+        "club": ""
+      },
       "gender": "male",
       "age": 65,
       "allowed": false,
@@ -2163,6 +2813,9 @@
     },
     {
       "access": "ClubReserved",
+      "access_params": {
+        "club": ""
+      },
       "gender": "diverse",
       "age": null,
       "allowed": false,
@@ -2171,6 +2824,9 @@
     },
     {
       "access": "ClubReserved",
+      "access_params": {
+        "club": ""
+      },
       "gender": "diverse",
       "age": 8,
       "allowed": false,
@@ -2179,6 +2835,9 @@
     },
     {
       "access": "ClubReserved",
+      "access_params": {
+        "club": ""
+      },
       "gender": "diverse",
       "age": 15,
       "allowed": false,
@@ -2187,6 +2846,9 @@
     },
     {
       "access": "ClubReserved",
+      "access_params": {
+        "club": ""
+      },
       "gender": "diverse",
       "age": 16,
       "allowed": false,
@@ -2195,6 +2857,9 @@
     },
     {
       "access": "ClubReserved",
+      "access_params": {
+        "club": ""
+      },
       "gender": "diverse",
       "age": 17,
       "allowed": false,
@@ -2203,6 +2868,9 @@
     },
     {
       "access": "ClubReserved",
+      "access_params": {
+        "club": ""
+      },
       "gender": "diverse",
       "age": 18,
       "allowed": false,
@@ -2211,6 +2879,9 @@
     },
     {
       "access": "ClubReserved",
+      "access_params": {
+        "club": ""
+      },
       "gender": "diverse",
       "age": 40,
       "allowed": false,
@@ -2219,6 +2890,9 @@
     },
     {
       "access": "ClubReserved",
+      "access_params": {
+        "club": ""
+      },
       "gender": "diverse",
       "age": 59,
       "allowed": false,
@@ -2227,6 +2901,9 @@
     },
     {
       "access": "ClubReserved",
+      "access_params": {
+        "club": ""
+      },
       "gender": "diverse",
       "age": 60,
       "allowed": false,
@@ -2235,6 +2912,9 @@
     },
     {
       "access": "ClubReserved",
+      "access_params": {
+        "club": ""
+      },
       "gender": "diverse",
       "age": 65,
       "allowed": false,
@@ -2243,6 +2923,2530 @@
     },
     {
       "access": "AdultsOnly",
+      "access_params": {
+        "min_age": 18,
+        "note": ""
+      },
+      "gender": "",
+      "age": null,
+      "allowed": false,
+      "code": "adults_only_needs_age",
+      "ui": "chk"
+    },
+    {
+      "access": "AdultsOnly",
+      "access_params": {
+        "min_age": 18,
+        "note": ""
+      },
+      "gender": "",
+      "age": 8,
+      "allowed": false,
+      "code": "adults_only_too_young",
+      "ui": "no"
+    },
+    {
+      "access": "AdultsOnly",
+      "access_params": {
+        "min_age": 18,
+        "note": ""
+      },
+      "gender": "",
+      "age": 15,
+      "allowed": false,
+      "code": "adults_only_too_young",
+      "ui": "no"
+    },
+    {
+      "access": "AdultsOnly",
+      "access_params": {
+        "min_age": 18,
+        "note": ""
+      },
+      "gender": "",
+      "age": 16,
+      "allowed": false,
+      "code": "adults_only_too_young",
+      "ui": "no"
+    },
+    {
+      "access": "AdultsOnly",
+      "access_params": {
+        "min_age": 18,
+        "note": ""
+      },
+      "gender": "",
+      "age": 17,
+      "allowed": false,
+      "code": "adults_only_too_young",
+      "ui": "no"
+    },
+    {
+      "access": "AdultsOnly",
+      "access_params": {
+        "min_age": 18,
+        "note": ""
+      },
+      "gender": "",
+      "age": 18,
+      "allowed": true,
+      "code": "adults_only_welcome",
+      "ui": "in"
+    },
+    {
+      "access": "AdultsOnly",
+      "access_params": {
+        "min_age": 18,
+        "note": ""
+      },
+      "gender": "",
+      "age": 40,
+      "allowed": true,
+      "code": "adults_only_welcome",
+      "ui": "in"
+    },
+    {
+      "access": "AdultsOnly",
+      "access_params": {
+        "min_age": 18,
+        "note": ""
+      },
+      "gender": "",
+      "age": 59,
+      "allowed": true,
+      "code": "adults_only_welcome",
+      "ui": "in"
+    },
+    {
+      "access": "AdultsOnly",
+      "access_params": {
+        "min_age": 18,
+        "note": ""
+      },
+      "gender": "",
+      "age": 60,
+      "allowed": true,
+      "code": "adults_only_welcome",
+      "ui": "in"
+    },
+    {
+      "access": "AdultsOnly",
+      "access_params": {
+        "min_age": 18,
+        "note": ""
+      },
+      "gender": "",
+      "age": 65,
+      "allowed": true,
+      "code": "adults_only_welcome",
+      "ui": "in"
+    },
+    {
+      "access": "AdultsOnly",
+      "access_params": {
+        "min_age": 18,
+        "note": ""
+      },
+      "gender": "female",
+      "age": null,
+      "allowed": false,
+      "code": "adults_only_needs_age",
+      "ui": "chk"
+    },
+    {
+      "access": "AdultsOnly",
+      "access_params": {
+        "min_age": 18,
+        "note": ""
+      },
+      "gender": "female",
+      "age": 8,
+      "allowed": false,
+      "code": "adults_only_too_young",
+      "ui": "no"
+    },
+    {
+      "access": "AdultsOnly",
+      "access_params": {
+        "min_age": 18,
+        "note": ""
+      },
+      "gender": "female",
+      "age": 15,
+      "allowed": false,
+      "code": "adults_only_too_young",
+      "ui": "no"
+    },
+    {
+      "access": "AdultsOnly",
+      "access_params": {
+        "min_age": 18,
+        "note": ""
+      },
+      "gender": "female",
+      "age": 16,
+      "allowed": false,
+      "code": "adults_only_too_young",
+      "ui": "no"
+    },
+    {
+      "access": "AdultsOnly",
+      "access_params": {
+        "min_age": 18,
+        "note": ""
+      },
+      "gender": "female",
+      "age": 17,
+      "allowed": false,
+      "code": "adults_only_too_young",
+      "ui": "no"
+    },
+    {
+      "access": "AdultsOnly",
+      "access_params": {
+        "min_age": 18,
+        "note": ""
+      },
+      "gender": "female",
+      "age": 18,
+      "allowed": true,
+      "code": "adults_only_welcome",
+      "ui": "in"
+    },
+    {
+      "access": "AdultsOnly",
+      "access_params": {
+        "min_age": 18,
+        "note": ""
+      },
+      "gender": "female",
+      "age": 40,
+      "allowed": true,
+      "code": "adults_only_welcome",
+      "ui": "in"
+    },
+    {
+      "access": "AdultsOnly",
+      "access_params": {
+        "min_age": 18,
+        "note": ""
+      },
+      "gender": "female",
+      "age": 59,
+      "allowed": true,
+      "code": "adults_only_welcome",
+      "ui": "in"
+    },
+    {
+      "access": "AdultsOnly",
+      "access_params": {
+        "min_age": 18,
+        "note": ""
+      },
+      "gender": "female",
+      "age": 60,
+      "allowed": true,
+      "code": "adults_only_welcome",
+      "ui": "in"
+    },
+    {
+      "access": "AdultsOnly",
+      "access_params": {
+        "min_age": 18,
+        "note": ""
+      },
+      "gender": "female",
+      "age": 65,
+      "allowed": true,
+      "code": "adults_only_welcome",
+      "ui": "in"
+    },
+    {
+      "access": "AdultsOnly",
+      "access_params": {
+        "min_age": 18,
+        "note": ""
+      },
+      "gender": "male",
+      "age": null,
+      "allowed": false,
+      "code": "adults_only_needs_age",
+      "ui": "chk"
+    },
+    {
+      "access": "AdultsOnly",
+      "access_params": {
+        "min_age": 18,
+        "note": ""
+      },
+      "gender": "male",
+      "age": 8,
+      "allowed": false,
+      "code": "adults_only_too_young",
+      "ui": "no"
+    },
+    {
+      "access": "AdultsOnly",
+      "access_params": {
+        "min_age": 18,
+        "note": ""
+      },
+      "gender": "male",
+      "age": 15,
+      "allowed": false,
+      "code": "adults_only_too_young",
+      "ui": "no"
+    },
+    {
+      "access": "AdultsOnly",
+      "access_params": {
+        "min_age": 18,
+        "note": ""
+      },
+      "gender": "male",
+      "age": 16,
+      "allowed": false,
+      "code": "adults_only_too_young",
+      "ui": "no"
+    },
+    {
+      "access": "AdultsOnly",
+      "access_params": {
+        "min_age": 18,
+        "note": ""
+      },
+      "gender": "male",
+      "age": 17,
+      "allowed": false,
+      "code": "adults_only_too_young",
+      "ui": "no"
+    },
+    {
+      "access": "AdultsOnly",
+      "access_params": {
+        "min_age": 18,
+        "note": ""
+      },
+      "gender": "male",
+      "age": 18,
+      "allowed": true,
+      "code": "adults_only_welcome",
+      "ui": "in"
+    },
+    {
+      "access": "AdultsOnly",
+      "access_params": {
+        "min_age": 18,
+        "note": ""
+      },
+      "gender": "male",
+      "age": 40,
+      "allowed": true,
+      "code": "adults_only_welcome",
+      "ui": "in"
+    },
+    {
+      "access": "AdultsOnly",
+      "access_params": {
+        "min_age": 18,
+        "note": ""
+      },
+      "gender": "male",
+      "age": 59,
+      "allowed": true,
+      "code": "adults_only_welcome",
+      "ui": "in"
+    },
+    {
+      "access": "AdultsOnly",
+      "access_params": {
+        "min_age": 18,
+        "note": ""
+      },
+      "gender": "male",
+      "age": 60,
+      "allowed": true,
+      "code": "adults_only_welcome",
+      "ui": "in"
+    },
+    {
+      "access": "AdultsOnly",
+      "access_params": {
+        "min_age": 18,
+        "note": ""
+      },
+      "gender": "male",
+      "age": 65,
+      "allowed": true,
+      "code": "adults_only_welcome",
+      "ui": "in"
+    },
+    {
+      "access": "AdultsOnly",
+      "access_params": {
+        "min_age": 18,
+        "note": ""
+      },
+      "gender": "diverse",
+      "age": null,
+      "allowed": false,
+      "code": "adults_only_needs_age",
+      "ui": "chk"
+    },
+    {
+      "access": "AdultsOnly",
+      "access_params": {
+        "min_age": 18,
+        "note": ""
+      },
+      "gender": "diverse",
+      "age": 8,
+      "allowed": false,
+      "code": "adults_only_too_young",
+      "ui": "no"
+    },
+    {
+      "access": "AdultsOnly",
+      "access_params": {
+        "min_age": 18,
+        "note": ""
+      },
+      "gender": "diverse",
+      "age": 15,
+      "allowed": false,
+      "code": "adults_only_too_young",
+      "ui": "no"
+    },
+    {
+      "access": "AdultsOnly",
+      "access_params": {
+        "min_age": 18,
+        "note": ""
+      },
+      "gender": "diverse",
+      "age": 16,
+      "allowed": false,
+      "code": "adults_only_too_young",
+      "ui": "no"
+    },
+    {
+      "access": "AdultsOnly",
+      "access_params": {
+        "min_age": 18,
+        "note": ""
+      },
+      "gender": "diverse",
+      "age": 17,
+      "allowed": false,
+      "code": "adults_only_too_young",
+      "ui": "no"
+    },
+    {
+      "access": "AdultsOnly",
+      "access_params": {
+        "min_age": 18,
+        "note": ""
+      },
+      "gender": "diverse",
+      "age": 18,
+      "allowed": true,
+      "code": "adults_only_welcome",
+      "ui": "in"
+    },
+    {
+      "access": "AdultsOnly",
+      "access_params": {
+        "min_age": 18,
+        "note": ""
+      },
+      "gender": "diverse",
+      "age": 40,
+      "allowed": true,
+      "code": "adults_only_welcome",
+      "ui": "in"
+    },
+    {
+      "access": "AdultsOnly",
+      "access_params": {
+        "min_age": 18,
+        "note": ""
+      },
+      "gender": "diverse",
+      "age": 59,
+      "allowed": true,
+      "code": "adults_only_welcome",
+      "ui": "in"
+    },
+    {
+      "access": "AdultsOnly",
+      "access_params": {
+        "min_age": 18,
+        "note": ""
+      },
+      "gender": "diverse",
+      "age": 60,
+      "allowed": true,
+      "code": "adults_only_welcome",
+      "ui": "in"
+    },
+    {
+      "access": "AdultsOnly",
+      "access_params": {
+        "min_age": 18,
+        "note": ""
+      },
+      "gender": "diverse",
+      "age": 65,
+      "allowed": true,
+      "code": "adults_only_welcome",
+      "ui": "in"
+    },
+    {
+      "access": "GirlsOnly",
+      "access_params": {},
+      "gender": "",
+      "age": null,
+      "allowed": false,
+      "code": "girls_only_needs_gender",
+      "ui": "chk"
+    },
+    {
+      "access": "GirlsOnly",
+      "access_params": {},
+      "gender": "",
+      "age": 8,
+      "allowed": false,
+      "code": "girls_only_needs_gender",
+      "ui": "chk"
+    },
+    {
+      "access": "GirlsOnly",
+      "access_params": {},
+      "gender": "",
+      "age": 15,
+      "allowed": false,
+      "code": "girls_only_needs_gender",
+      "ui": "chk"
+    },
+    {
+      "access": "GirlsOnly",
+      "access_params": {},
+      "gender": "",
+      "age": 16,
+      "allowed": false,
+      "code": "girls_only_needs_gender",
+      "ui": "chk"
+    },
+    {
+      "access": "GirlsOnly",
+      "access_params": {},
+      "gender": "",
+      "age": 17,
+      "allowed": false,
+      "code": "girls_only_needs_gender",
+      "ui": "chk"
+    },
+    {
+      "access": "GirlsOnly",
+      "access_params": {},
+      "gender": "",
+      "age": 18,
+      "allowed": false,
+      "code": "girls_only_needs_gender",
+      "ui": "chk"
+    },
+    {
+      "access": "GirlsOnly",
+      "access_params": {},
+      "gender": "",
+      "age": 40,
+      "allowed": false,
+      "code": "girls_only_needs_gender",
+      "ui": "chk"
+    },
+    {
+      "access": "GirlsOnly",
+      "access_params": {},
+      "gender": "",
+      "age": 59,
+      "allowed": false,
+      "code": "girls_only_needs_gender",
+      "ui": "chk"
+    },
+    {
+      "access": "GirlsOnly",
+      "access_params": {},
+      "gender": "",
+      "age": 60,
+      "allowed": false,
+      "code": "girls_only_needs_gender",
+      "ui": "chk"
+    },
+    {
+      "access": "GirlsOnly",
+      "access_params": {},
+      "gender": "",
+      "age": 65,
+      "allowed": false,
+      "code": "girls_only_needs_gender",
+      "ui": "chk"
+    },
+    {
+      "access": "GirlsOnly",
+      "access_params": {},
+      "gender": "female",
+      "age": null,
+      "allowed": false,
+      "code": "girls_only_confirm",
+      "ui": "chk"
+    },
+    {
+      "access": "GirlsOnly",
+      "access_params": {},
+      "gender": "female",
+      "age": 8,
+      "allowed": false,
+      "code": "girls_only_confirm",
+      "ui": "chk"
+    },
+    {
+      "access": "GirlsOnly",
+      "access_params": {},
+      "gender": "female",
+      "age": 15,
+      "allowed": false,
+      "code": "girls_only_confirm",
+      "ui": "chk"
+    },
+    {
+      "access": "GirlsOnly",
+      "access_params": {},
+      "gender": "female",
+      "age": 16,
+      "allowed": false,
+      "code": "girls_only_confirm",
+      "ui": "chk"
+    },
+    {
+      "access": "GirlsOnly",
+      "access_params": {},
+      "gender": "female",
+      "age": 17,
+      "allowed": false,
+      "code": "girls_only_confirm",
+      "ui": "chk"
+    },
+    {
+      "access": "GirlsOnly",
+      "access_params": {},
+      "gender": "female",
+      "age": 18,
+      "allowed": false,
+      "code": "girls_only_confirm",
+      "ui": "chk"
+    },
+    {
+      "access": "GirlsOnly",
+      "access_params": {},
+      "gender": "female",
+      "age": 40,
+      "allowed": false,
+      "code": "girls_only_confirm",
+      "ui": "chk"
+    },
+    {
+      "access": "GirlsOnly",
+      "access_params": {},
+      "gender": "female",
+      "age": 59,
+      "allowed": false,
+      "code": "girls_only_confirm",
+      "ui": "chk"
+    },
+    {
+      "access": "GirlsOnly",
+      "access_params": {},
+      "gender": "female",
+      "age": 60,
+      "allowed": false,
+      "code": "girls_only_confirm",
+      "ui": "chk"
+    },
+    {
+      "access": "GirlsOnly",
+      "access_params": {},
+      "gender": "female",
+      "age": 65,
+      "allowed": false,
+      "code": "girls_only_confirm",
+      "ui": "chk"
+    },
+    {
+      "access": "GirlsOnly",
+      "access_params": {},
+      "gender": "male",
+      "age": null,
+      "allowed": false,
+      "code": "girls_only_excluded",
+      "ui": "no"
+    },
+    {
+      "access": "GirlsOnly",
+      "access_params": {},
+      "gender": "male",
+      "age": 8,
+      "allowed": false,
+      "code": "girls_only_excluded",
+      "ui": "no"
+    },
+    {
+      "access": "GirlsOnly",
+      "access_params": {},
+      "gender": "male",
+      "age": 15,
+      "allowed": false,
+      "code": "girls_only_excluded",
+      "ui": "no"
+    },
+    {
+      "access": "GirlsOnly",
+      "access_params": {},
+      "gender": "male",
+      "age": 16,
+      "allowed": false,
+      "code": "girls_only_excluded",
+      "ui": "no"
+    },
+    {
+      "access": "GirlsOnly",
+      "access_params": {},
+      "gender": "male",
+      "age": 17,
+      "allowed": false,
+      "code": "girls_only_excluded",
+      "ui": "no"
+    },
+    {
+      "access": "GirlsOnly",
+      "access_params": {},
+      "gender": "male",
+      "age": 18,
+      "allowed": false,
+      "code": "girls_only_excluded",
+      "ui": "no"
+    },
+    {
+      "access": "GirlsOnly",
+      "access_params": {},
+      "gender": "male",
+      "age": 40,
+      "allowed": false,
+      "code": "girls_only_excluded",
+      "ui": "no"
+    },
+    {
+      "access": "GirlsOnly",
+      "access_params": {},
+      "gender": "male",
+      "age": 59,
+      "allowed": false,
+      "code": "girls_only_excluded",
+      "ui": "no"
+    },
+    {
+      "access": "GirlsOnly",
+      "access_params": {},
+      "gender": "male",
+      "age": 60,
+      "allowed": false,
+      "code": "girls_only_excluded",
+      "ui": "no"
+    },
+    {
+      "access": "GirlsOnly",
+      "access_params": {},
+      "gender": "male",
+      "age": 65,
+      "allowed": false,
+      "code": "girls_only_excluded",
+      "ui": "no"
+    },
+    {
+      "access": "GirlsOnly",
+      "access_params": {},
+      "gender": "diverse",
+      "age": null,
+      "allowed": false,
+      "code": "girls_only_excluded",
+      "ui": "no"
+    },
+    {
+      "access": "GirlsOnly",
+      "access_params": {},
+      "gender": "diverse",
+      "age": 8,
+      "allowed": false,
+      "code": "girls_only_excluded",
+      "ui": "no"
+    },
+    {
+      "access": "GirlsOnly",
+      "access_params": {},
+      "gender": "diverse",
+      "age": 15,
+      "allowed": false,
+      "code": "girls_only_excluded",
+      "ui": "no"
+    },
+    {
+      "access": "GirlsOnly",
+      "access_params": {},
+      "gender": "diverse",
+      "age": 16,
+      "allowed": false,
+      "code": "girls_only_excluded",
+      "ui": "no"
+    },
+    {
+      "access": "GirlsOnly",
+      "access_params": {},
+      "gender": "diverse",
+      "age": 17,
+      "allowed": false,
+      "code": "girls_only_excluded",
+      "ui": "no"
+    },
+    {
+      "access": "GirlsOnly",
+      "access_params": {},
+      "gender": "diverse",
+      "age": 18,
+      "allowed": false,
+      "code": "girls_only_excluded",
+      "ui": "no"
+    },
+    {
+      "access": "GirlsOnly",
+      "access_params": {},
+      "gender": "diverse",
+      "age": 40,
+      "allowed": false,
+      "code": "girls_only_excluded",
+      "ui": "no"
+    },
+    {
+      "access": "GirlsOnly",
+      "access_params": {},
+      "gender": "diverse",
+      "age": 59,
+      "allowed": false,
+      "code": "girls_only_excluded",
+      "ui": "no"
+    },
+    {
+      "access": "GirlsOnly",
+      "access_params": {},
+      "gender": "diverse",
+      "age": 60,
+      "allowed": false,
+      "code": "girls_only_excluded",
+      "ui": "no"
+    },
+    {
+      "access": "GirlsOnly",
+      "access_params": {},
+      "gender": "diverse",
+      "age": 65,
+      "allowed": false,
+      "code": "girls_only_excluded",
+      "ui": "no"
+    },
+    {
+      "access": "GenderDiverse",
+      "access_params": {
+        "min_age": 16
+      },
+      "gender": "",
+      "age": null,
+      "allowed": false,
+      "code": "gender_diverse_confirm",
+      "ui": "chk"
+    },
+    {
+      "access": "GenderDiverse",
+      "access_params": {
+        "min_age": 16
+      },
+      "gender": "",
+      "age": 8,
+      "allowed": false,
+      "code": "gender_diverse_too_young",
+      "ui": "no"
+    },
+    {
+      "access": "GenderDiverse",
+      "access_params": {
+        "min_age": 16
+      },
+      "gender": "",
+      "age": 15,
+      "allowed": false,
+      "code": "gender_diverse_too_young",
+      "ui": "no"
+    },
+    {
+      "access": "GenderDiverse",
+      "access_params": {
+        "min_age": 16
+      },
+      "gender": "",
+      "age": 16,
+      "allowed": false,
+      "code": "gender_diverse_confirm",
+      "ui": "chk"
+    },
+    {
+      "access": "GenderDiverse",
+      "access_params": {
+        "min_age": 16
+      },
+      "gender": "",
+      "age": 17,
+      "allowed": false,
+      "code": "gender_diverse_confirm",
+      "ui": "chk"
+    },
+    {
+      "access": "GenderDiverse",
+      "access_params": {
+        "min_age": 16
+      },
+      "gender": "",
+      "age": 18,
+      "allowed": false,
+      "code": "gender_diverse_confirm",
+      "ui": "chk"
+    },
+    {
+      "access": "GenderDiverse",
+      "access_params": {
+        "min_age": 16
+      },
+      "gender": "",
+      "age": 40,
+      "allowed": false,
+      "code": "gender_diverse_confirm",
+      "ui": "chk"
+    },
+    {
+      "access": "GenderDiverse",
+      "access_params": {
+        "min_age": 16
+      },
+      "gender": "",
+      "age": 59,
+      "allowed": false,
+      "code": "gender_diverse_confirm",
+      "ui": "chk"
+    },
+    {
+      "access": "GenderDiverse",
+      "access_params": {
+        "min_age": 16
+      },
+      "gender": "",
+      "age": 60,
+      "allowed": false,
+      "code": "gender_diverse_confirm",
+      "ui": "chk"
+    },
+    {
+      "access": "GenderDiverse",
+      "access_params": {
+        "min_age": 16
+      },
+      "gender": "",
+      "age": 65,
+      "allowed": false,
+      "code": "gender_diverse_confirm",
+      "ui": "chk"
+    },
+    {
+      "access": "GenderDiverse",
+      "access_params": {
+        "min_age": 16
+      },
+      "gender": "female",
+      "age": null,
+      "allowed": false,
+      "code": "gender_diverse_confirm",
+      "ui": "chk"
+    },
+    {
+      "access": "GenderDiverse",
+      "access_params": {
+        "min_age": 16
+      },
+      "gender": "female",
+      "age": 8,
+      "allowed": false,
+      "code": "gender_diverse_too_young",
+      "ui": "no"
+    },
+    {
+      "access": "GenderDiverse",
+      "access_params": {
+        "min_age": 16
+      },
+      "gender": "female",
+      "age": 15,
+      "allowed": false,
+      "code": "gender_diverse_too_young",
+      "ui": "no"
+    },
+    {
+      "access": "GenderDiverse",
+      "access_params": {
+        "min_age": 16
+      },
+      "gender": "female",
+      "age": 16,
+      "allowed": false,
+      "code": "gender_diverse_confirm",
+      "ui": "chk"
+    },
+    {
+      "access": "GenderDiverse",
+      "access_params": {
+        "min_age": 16
+      },
+      "gender": "female",
+      "age": 17,
+      "allowed": false,
+      "code": "gender_diverse_confirm",
+      "ui": "chk"
+    },
+    {
+      "access": "GenderDiverse",
+      "access_params": {
+        "min_age": 16
+      },
+      "gender": "female",
+      "age": 18,
+      "allowed": false,
+      "code": "gender_diverse_confirm",
+      "ui": "chk"
+    },
+    {
+      "access": "GenderDiverse",
+      "access_params": {
+        "min_age": 16
+      },
+      "gender": "female",
+      "age": 40,
+      "allowed": false,
+      "code": "gender_diverse_confirm",
+      "ui": "chk"
+    },
+    {
+      "access": "GenderDiverse",
+      "access_params": {
+        "min_age": 16
+      },
+      "gender": "female",
+      "age": 59,
+      "allowed": false,
+      "code": "gender_diverse_confirm",
+      "ui": "chk"
+    },
+    {
+      "access": "GenderDiverse",
+      "access_params": {
+        "min_age": 16
+      },
+      "gender": "female",
+      "age": 60,
+      "allowed": false,
+      "code": "gender_diverse_confirm",
+      "ui": "chk"
+    },
+    {
+      "access": "GenderDiverse",
+      "access_params": {
+        "min_age": 16
+      },
+      "gender": "female",
+      "age": 65,
+      "allowed": false,
+      "code": "gender_diverse_confirm",
+      "ui": "chk"
+    },
+    {
+      "access": "GenderDiverse",
+      "access_params": {
+        "min_age": 16
+      },
+      "gender": "male",
+      "age": null,
+      "allowed": false,
+      "code": "gender_diverse_confirm",
+      "ui": "chk"
+    },
+    {
+      "access": "GenderDiverse",
+      "access_params": {
+        "min_age": 16
+      },
+      "gender": "male",
+      "age": 8,
+      "allowed": false,
+      "code": "gender_diverse_too_young",
+      "ui": "no"
+    },
+    {
+      "access": "GenderDiverse",
+      "access_params": {
+        "min_age": 16
+      },
+      "gender": "male",
+      "age": 15,
+      "allowed": false,
+      "code": "gender_diverse_too_young",
+      "ui": "no"
+    },
+    {
+      "access": "GenderDiverse",
+      "access_params": {
+        "min_age": 16
+      },
+      "gender": "male",
+      "age": 16,
+      "allowed": false,
+      "code": "gender_diverse_confirm",
+      "ui": "chk"
+    },
+    {
+      "access": "GenderDiverse",
+      "access_params": {
+        "min_age": 16
+      },
+      "gender": "male",
+      "age": 17,
+      "allowed": false,
+      "code": "gender_diverse_confirm",
+      "ui": "chk"
+    },
+    {
+      "access": "GenderDiverse",
+      "access_params": {
+        "min_age": 16
+      },
+      "gender": "male",
+      "age": 18,
+      "allowed": false,
+      "code": "gender_diverse_confirm",
+      "ui": "chk"
+    },
+    {
+      "access": "GenderDiverse",
+      "access_params": {
+        "min_age": 16
+      },
+      "gender": "male",
+      "age": 40,
+      "allowed": false,
+      "code": "gender_diverse_confirm",
+      "ui": "chk"
+    },
+    {
+      "access": "GenderDiverse",
+      "access_params": {
+        "min_age": 16
+      },
+      "gender": "male",
+      "age": 59,
+      "allowed": false,
+      "code": "gender_diverse_confirm",
+      "ui": "chk"
+    },
+    {
+      "access": "GenderDiverse",
+      "access_params": {
+        "min_age": 16
+      },
+      "gender": "male",
+      "age": 60,
+      "allowed": false,
+      "code": "gender_diverse_confirm",
+      "ui": "chk"
+    },
+    {
+      "access": "GenderDiverse",
+      "access_params": {
+        "min_age": 16
+      },
+      "gender": "male",
+      "age": 65,
+      "allowed": false,
+      "code": "gender_diverse_confirm",
+      "ui": "chk"
+    },
+    {
+      "access": "GenderDiverse",
+      "access_params": {
+        "min_age": 16
+      },
+      "gender": "diverse",
+      "age": null,
+      "allowed": false,
+      "code": "gender_diverse_confirm",
+      "ui": "chk"
+    },
+    {
+      "access": "GenderDiverse",
+      "access_params": {
+        "min_age": 16
+      },
+      "gender": "diverse",
+      "age": 8,
+      "allowed": false,
+      "code": "gender_diverse_too_young",
+      "ui": "no"
+    },
+    {
+      "access": "GenderDiverse",
+      "access_params": {
+        "min_age": 16
+      },
+      "gender": "diverse",
+      "age": 15,
+      "allowed": false,
+      "code": "gender_diverse_too_young",
+      "ui": "no"
+    },
+    {
+      "access": "GenderDiverse",
+      "access_params": {
+        "min_age": 16
+      },
+      "gender": "diverse",
+      "age": 16,
+      "allowed": false,
+      "code": "gender_diverse_confirm",
+      "ui": "chk"
+    },
+    {
+      "access": "GenderDiverse",
+      "access_params": {
+        "min_age": 16
+      },
+      "gender": "diverse",
+      "age": 17,
+      "allowed": false,
+      "code": "gender_diverse_confirm",
+      "ui": "chk"
+    },
+    {
+      "access": "GenderDiverse",
+      "access_params": {
+        "min_age": 16
+      },
+      "gender": "diverse",
+      "age": 18,
+      "allowed": false,
+      "code": "gender_diverse_confirm",
+      "ui": "chk"
+    },
+    {
+      "access": "GenderDiverse",
+      "access_params": {
+        "min_age": 16
+      },
+      "gender": "diverse",
+      "age": 40,
+      "allowed": false,
+      "code": "gender_diverse_confirm",
+      "ui": "chk"
+    },
+    {
+      "access": "GenderDiverse",
+      "access_params": {
+        "min_age": 16
+      },
+      "gender": "diverse",
+      "age": 59,
+      "allowed": false,
+      "code": "gender_diverse_confirm",
+      "ui": "chk"
+    },
+    {
+      "access": "GenderDiverse",
+      "access_params": {
+        "min_age": 16
+      },
+      "gender": "diverse",
+      "age": 60,
+      "allowed": false,
+      "code": "gender_diverse_confirm",
+      "ui": "chk"
+    },
+    {
+      "access": "GenderDiverse",
+      "access_params": {
+        "min_age": 16
+      },
+      "gender": "diverse",
+      "age": 65,
+      "allowed": false,
+      "code": "gender_diverse_confirm",
+      "ui": "chk"
+    },
+    {
+      "access": "AccompaniedChildren",
+      "access_params": {},
+      "gender": "",
+      "age": null,
+      "allowed": false,
+      "code": "accompanied_children_confirm",
+      "ui": "chk"
+    },
+    {
+      "access": "AccompaniedChildren",
+      "access_params": {},
+      "gender": "",
+      "age": 8,
+      "allowed": false,
+      "code": "accompanied_children_confirm",
+      "ui": "chk"
+    },
+    {
+      "access": "AccompaniedChildren",
+      "access_params": {},
+      "gender": "",
+      "age": 15,
+      "allowed": false,
+      "code": "accompanied_children_confirm",
+      "ui": "chk"
+    },
+    {
+      "access": "AccompaniedChildren",
+      "access_params": {},
+      "gender": "",
+      "age": 16,
+      "allowed": false,
+      "code": "accompanied_children_confirm",
+      "ui": "chk"
+    },
+    {
+      "access": "AccompaniedChildren",
+      "access_params": {},
+      "gender": "",
+      "age": 17,
+      "allowed": false,
+      "code": "accompanied_children_confirm",
+      "ui": "chk"
+    },
+    {
+      "access": "AccompaniedChildren",
+      "access_params": {},
+      "gender": "",
+      "age": 18,
+      "allowed": false,
+      "code": "accompanied_children_confirm",
+      "ui": "chk"
+    },
+    {
+      "access": "AccompaniedChildren",
+      "access_params": {},
+      "gender": "",
+      "age": 40,
+      "allowed": false,
+      "code": "accompanied_children_confirm",
+      "ui": "chk"
+    },
+    {
+      "access": "AccompaniedChildren",
+      "access_params": {},
+      "gender": "",
+      "age": 59,
+      "allowed": false,
+      "code": "accompanied_children_confirm",
+      "ui": "chk"
+    },
+    {
+      "access": "AccompaniedChildren",
+      "access_params": {},
+      "gender": "",
+      "age": 60,
+      "allowed": false,
+      "code": "accompanied_children_confirm",
+      "ui": "chk"
+    },
+    {
+      "access": "AccompaniedChildren",
+      "access_params": {},
+      "gender": "",
+      "age": 65,
+      "allowed": false,
+      "code": "accompanied_children_confirm",
+      "ui": "chk"
+    },
+    {
+      "access": "AccompaniedChildren",
+      "access_params": {},
+      "gender": "female",
+      "age": null,
+      "allowed": false,
+      "code": "accompanied_children_confirm",
+      "ui": "chk"
+    },
+    {
+      "access": "AccompaniedChildren",
+      "access_params": {},
+      "gender": "female",
+      "age": 8,
+      "allowed": false,
+      "code": "accompanied_children_confirm",
+      "ui": "chk"
+    },
+    {
+      "access": "AccompaniedChildren",
+      "access_params": {},
+      "gender": "female",
+      "age": 15,
+      "allowed": false,
+      "code": "accompanied_children_confirm",
+      "ui": "chk"
+    },
+    {
+      "access": "AccompaniedChildren",
+      "access_params": {},
+      "gender": "female",
+      "age": 16,
+      "allowed": false,
+      "code": "accompanied_children_confirm",
+      "ui": "chk"
+    },
+    {
+      "access": "AccompaniedChildren",
+      "access_params": {},
+      "gender": "female",
+      "age": 17,
+      "allowed": false,
+      "code": "accompanied_children_confirm",
+      "ui": "chk"
+    },
+    {
+      "access": "AccompaniedChildren",
+      "access_params": {},
+      "gender": "female",
+      "age": 18,
+      "allowed": false,
+      "code": "accompanied_children_confirm",
+      "ui": "chk"
+    },
+    {
+      "access": "AccompaniedChildren",
+      "access_params": {},
+      "gender": "female",
+      "age": 40,
+      "allowed": false,
+      "code": "accompanied_children_confirm",
+      "ui": "chk"
+    },
+    {
+      "access": "AccompaniedChildren",
+      "access_params": {},
+      "gender": "female",
+      "age": 59,
+      "allowed": false,
+      "code": "accompanied_children_confirm",
+      "ui": "chk"
+    },
+    {
+      "access": "AccompaniedChildren",
+      "access_params": {},
+      "gender": "female",
+      "age": 60,
+      "allowed": false,
+      "code": "accompanied_children_confirm",
+      "ui": "chk"
+    },
+    {
+      "access": "AccompaniedChildren",
+      "access_params": {},
+      "gender": "female",
+      "age": 65,
+      "allowed": false,
+      "code": "accompanied_children_confirm",
+      "ui": "chk"
+    },
+    {
+      "access": "AccompaniedChildren",
+      "access_params": {},
+      "gender": "male",
+      "age": null,
+      "allowed": false,
+      "code": "accompanied_children_confirm",
+      "ui": "chk"
+    },
+    {
+      "access": "AccompaniedChildren",
+      "access_params": {},
+      "gender": "male",
+      "age": 8,
+      "allowed": false,
+      "code": "accompanied_children_confirm",
+      "ui": "chk"
+    },
+    {
+      "access": "AccompaniedChildren",
+      "access_params": {},
+      "gender": "male",
+      "age": 15,
+      "allowed": false,
+      "code": "accompanied_children_confirm",
+      "ui": "chk"
+    },
+    {
+      "access": "AccompaniedChildren",
+      "access_params": {},
+      "gender": "male",
+      "age": 16,
+      "allowed": false,
+      "code": "accompanied_children_confirm",
+      "ui": "chk"
+    },
+    {
+      "access": "AccompaniedChildren",
+      "access_params": {},
+      "gender": "male",
+      "age": 17,
+      "allowed": false,
+      "code": "accompanied_children_confirm",
+      "ui": "chk"
+    },
+    {
+      "access": "AccompaniedChildren",
+      "access_params": {},
+      "gender": "male",
+      "age": 18,
+      "allowed": false,
+      "code": "accompanied_children_confirm",
+      "ui": "chk"
+    },
+    {
+      "access": "AccompaniedChildren",
+      "access_params": {},
+      "gender": "male",
+      "age": 40,
+      "allowed": false,
+      "code": "accompanied_children_confirm",
+      "ui": "chk"
+    },
+    {
+      "access": "AccompaniedChildren",
+      "access_params": {},
+      "gender": "male",
+      "age": 59,
+      "allowed": false,
+      "code": "accompanied_children_confirm",
+      "ui": "chk"
+    },
+    {
+      "access": "AccompaniedChildren",
+      "access_params": {},
+      "gender": "male",
+      "age": 60,
+      "allowed": false,
+      "code": "accompanied_children_confirm",
+      "ui": "chk"
+    },
+    {
+      "access": "AccompaniedChildren",
+      "access_params": {},
+      "gender": "male",
+      "age": 65,
+      "allowed": false,
+      "code": "accompanied_children_confirm",
+      "ui": "chk"
+    },
+    {
+      "access": "AccompaniedChildren",
+      "access_params": {},
+      "gender": "diverse",
+      "age": null,
+      "allowed": false,
+      "code": "accompanied_children_confirm",
+      "ui": "chk"
+    },
+    {
+      "access": "AccompaniedChildren",
+      "access_params": {},
+      "gender": "diverse",
+      "age": 8,
+      "allowed": false,
+      "code": "accompanied_children_confirm",
+      "ui": "chk"
+    },
+    {
+      "access": "AccompaniedChildren",
+      "access_params": {},
+      "gender": "diverse",
+      "age": 15,
+      "allowed": false,
+      "code": "accompanied_children_confirm",
+      "ui": "chk"
+    },
+    {
+      "access": "AccompaniedChildren",
+      "access_params": {},
+      "gender": "diverse",
+      "age": 16,
+      "allowed": false,
+      "code": "accompanied_children_confirm",
+      "ui": "chk"
+    },
+    {
+      "access": "AccompaniedChildren",
+      "access_params": {},
+      "gender": "diverse",
+      "age": 17,
+      "allowed": false,
+      "code": "accompanied_children_confirm",
+      "ui": "chk"
+    },
+    {
+      "access": "AccompaniedChildren",
+      "access_params": {},
+      "gender": "diverse",
+      "age": 18,
+      "allowed": false,
+      "code": "accompanied_children_confirm",
+      "ui": "chk"
+    },
+    {
+      "access": "AccompaniedChildren",
+      "access_params": {},
+      "gender": "diverse",
+      "age": 40,
+      "allowed": false,
+      "code": "accompanied_children_confirm",
+      "ui": "chk"
+    },
+    {
+      "access": "AccompaniedChildren",
+      "access_params": {},
+      "gender": "diverse",
+      "age": 59,
+      "allowed": false,
+      "code": "accompanied_children_confirm",
+      "ui": "chk"
+    },
+    {
+      "access": "AccompaniedChildren",
+      "access_params": {},
+      "gender": "diverse",
+      "age": 60,
+      "allowed": false,
+      "code": "accompanied_children_confirm",
+      "ui": "chk"
+    },
+    {
+      "access": "AccompaniedChildren",
+      "access_params": {},
+      "gender": "diverse",
+      "age": 65,
+      "allowed": false,
+      "code": "accompanied_children_confirm",
+      "ui": "chk"
+    },
+    {
+      "access": "SeniorsOnly",
+      "access_params": {
+        "min_age": 59
+      },
+      "gender": "",
+      "age": null,
+      "allowed": false,
+      "code": "seniors_only_needs_age",
+      "ui": "chk"
+    },
+    {
+      "access": "SeniorsOnly",
+      "access_params": {
+        "min_age": 59
+      },
+      "gender": "",
+      "age": 8,
+      "allowed": false,
+      "code": "seniors_only_too_young",
+      "ui": "no"
+    },
+    {
+      "access": "SeniorsOnly",
+      "access_params": {
+        "min_age": 59
+      },
+      "gender": "",
+      "age": 15,
+      "allowed": false,
+      "code": "seniors_only_too_young",
+      "ui": "no"
+    },
+    {
+      "access": "SeniorsOnly",
+      "access_params": {
+        "min_age": 59
+      },
+      "gender": "",
+      "age": 16,
+      "allowed": false,
+      "code": "seniors_only_too_young",
+      "ui": "no"
+    },
+    {
+      "access": "SeniorsOnly",
+      "access_params": {
+        "min_age": 59
+      },
+      "gender": "",
+      "age": 17,
+      "allowed": false,
+      "code": "seniors_only_too_young",
+      "ui": "no"
+    },
+    {
+      "access": "SeniorsOnly",
+      "access_params": {
+        "min_age": 59
+      },
+      "gender": "",
+      "age": 18,
+      "allowed": false,
+      "code": "seniors_only_too_young",
+      "ui": "no"
+    },
+    {
+      "access": "SeniorsOnly",
+      "access_params": {
+        "min_age": 59
+      },
+      "gender": "",
+      "age": 40,
+      "allowed": false,
+      "code": "seniors_only_too_young",
+      "ui": "no"
+    },
+    {
+      "access": "SeniorsOnly",
+      "access_params": {
+        "min_age": 59
+      },
+      "gender": "",
+      "age": 59,
+      "allowed": true,
+      "code": "seniors_only_welcome",
+      "ui": "in"
+    },
+    {
+      "access": "SeniorsOnly",
+      "access_params": {
+        "min_age": 59
+      },
+      "gender": "",
+      "age": 60,
+      "allowed": true,
+      "code": "seniors_only_welcome",
+      "ui": "in"
+    },
+    {
+      "access": "SeniorsOnly",
+      "access_params": {
+        "min_age": 59
+      },
+      "gender": "",
+      "age": 65,
+      "allowed": true,
+      "code": "seniors_only_welcome",
+      "ui": "in"
+    },
+    {
+      "access": "SeniorsOnly",
+      "access_params": {
+        "min_age": 59
+      },
+      "gender": "female",
+      "age": null,
+      "allowed": false,
+      "code": "seniors_only_needs_age",
+      "ui": "chk"
+    },
+    {
+      "access": "SeniorsOnly",
+      "access_params": {
+        "min_age": 59
+      },
+      "gender": "female",
+      "age": 8,
+      "allowed": false,
+      "code": "seniors_only_too_young",
+      "ui": "no"
+    },
+    {
+      "access": "SeniorsOnly",
+      "access_params": {
+        "min_age": 59
+      },
+      "gender": "female",
+      "age": 15,
+      "allowed": false,
+      "code": "seniors_only_too_young",
+      "ui": "no"
+    },
+    {
+      "access": "SeniorsOnly",
+      "access_params": {
+        "min_age": 59
+      },
+      "gender": "female",
+      "age": 16,
+      "allowed": false,
+      "code": "seniors_only_too_young",
+      "ui": "no"
+    },
+    {
+      "access": "SeniorsOnly",
+      "access_params": {
+        "min_age": 59
+      },
+      "gender": "female",
+      "age": 17,
+      "allowed": false,
+      "code": "seniors_only_too_young",
+      "ui": "no"
+    },
+    {
+      "access": "SeniorsOnly",
+      "access_params": {
+        "min_age": 59
+      },
+      "gender": "female",
+      "age": 18,
+      "allowed": false,
+      "code": "seniors_only_too_young",
+      "ui": "no"
+    },
+    {
+      "access": "SeniorsOnly",
+      "access_params": {
+        "min_age": 59
+      },
+      "gender": "female",
+      "age": 40,
+      "allowed": false,
+      "code": "seniors_only_too_young",
+      "ui": "no"
+    },
+    {
+      "access": "SeniorsOnly",
+      "access_params": {
+        "min_age": 59
+      },
+      "gender": "female",
+      "age": 59,
+      "allowed": true,
+      "code": "seniors_only_welcome",
+      "ui": "in"
+    },
+    {
+      "access": "SeniorsOnly",
+      "access_params": {
+        "min_age": 59
+      },
+      "gender": "female",
+      "age": 60,
+      "allowed": true,
+      "code": "seniors_only_welcome",
+      "ui": "in"
+    },
+    {
+      "access": "SeniorsOnly",
+      "access_params": {
+        "min_age": 59
+      },
+      "gender": "female",
+      "age": 65,
+      "allowed": true,
+      "code": "seniors_only_welcome",
+      "ui": "in"
+    },
+    {
+      "access": "SeniorsOnly",
+      "access_params": {
+        "min_age": 59
+      },
+      "gender": "male",
+      "age": null,
+      "allowed": false,
+      "code": "seniors_only_needs_age",
+      "ui": "chk"
+    },
+    {
+      "access": "SeniorsOnly",
+      "access_params": {
+        "min_age": 59
+      },
+      "gender": "male",
+      "age": 8,
+      "allowed": false,
+      "code": "seniors_only_too_young",
+      "ui": "no"
+    },
+    {
+      "access": "SeniorsOnly",
+      "access_params": {
+        "min_age": 59
+      },
+      "gender": "male",
+      "age": 15,
+      "allowed": false,
+      "code": "seniors_only_too_young",
+      "ui": "no"
+    },
+    {
+      "access": "SeniorsOnly",
+      "access_params": {
+        "min_age": 59
+      },
+      "gender": "male",
+      "age": 16,
+      "allowed": false,
+      "code": "seniors_only_too_young",
+      "ui": "no"
+    },
+    {
+      "access": "SeniorsOnly",
+      "access_params": {
+        "min_age": 59
+      },
+      "gender": "male",
+      "age": 17,
+      "allowed": false,
+      "code": "seniors_only_too_young",
+      "ui": "no"
+    },
+    {
+      "access": "SeniorsOnly",
+      "access_params": {
+        "min_age": 59
+      },
+      "gender": "male",
+      "age": 18,
+      "allowed": false,
+      "code": "seniors_only_too_young",
+      "ui": "no"
+    },
+    {
+      "access": "SeniorsOnly",
+      "access_params": {
+        "min_age": 59
+      },
+      "gender": "male",
+      "age": 40,
+      "allowed": false,
+      "code": "seniors_only_too_young",
+      "ui": "no"
+    },
+    {
+      "access": "SeniorsOnly",
+      "access_params": {
+        "min_age": 59
+      },
+      "gender": "male",
+      "age": 59,
+      "allowed": true,
+      "code": "seniors_only_welcome",
+      "ui": "in"
+    },
+    {
+      "access": "SeniorsOnly",
+      "access_params": {
+        "min_age": 59
+      },
+      "gender": "male",
+      "age": 60,
+      "allowed": true,
+      "code": "seniors_only_welcome",
+      "ui": "in"
+    },
+    {
+      "access": "SeniorsOnly",
+      "access_params": {
+        "min_age": 59
+      },
+      "gender": "male",
+      "age": 65,
+      "allowed": true,
+      "code": "seniors_only_welcome",
+      "ui": "in"
+    },
+    {
+      "access": "SeniorsOnly",
+      "access_params": {
+        "min_age": 59
+      },
+      "gender": "diverse",
+      "age": null,
+      "allowed": false,
+      "code": "seniors_only_needs_age",
+      "ui": "chk"
+    },
+    {
+      "access": "SeniorsOnly",
+      "access_params": {
+        "min_age": 59
+      },
+      "gender": "diverse",
+      "age": 8,
+      "allowed": false,
+      "code": "seniors_only_too_young",
+      "ui": "no"
+    },
+    {
+      "access": "SeniorsOnly",
+      "access_params": {
+        "min_age": 59
+      },
+      "gender": "diverse",
+      "age": 15,
+      "allowed": false,
+      "code": "seniors_only_too_young",
+      "ui": "no"
+    },
+    {
+      "access": "SeniorsOnly",
+      "access_params": {
+        "min_age": 59
+      },
+      "gender": "diverse",
+      "age": 16,
+      "allowed": false,
+      "code": "seniors_only_too_young",
+      "ui": "no"
+    },
+    {
+      "access": "SeniorsOnly",
+      "access_params": {
+        "min_age": 59
+      },
+      "gender": "diverse",
+      "age": 17,
+      "allowed": false,
+      "code": "seniors_only_too_young",
+      "ui": "no"
+    },
+    {
+      "access": "SeniorsOnly",
+      "access_params": {
+        "min_age": 59
+      },
+      "gender": "diverse",
+      "age": 18,
+      "allowed": false,
+      "code": "seniors_only_too_young",
+      "ui": "no"
+    },
+    {
+      "access": "SeniorsOnly",
+      "access_params": {
+        "min_age": 59
+      },
+      "gender": "diverse",
+      "age": 40,
+      "allowed": false,
+      "code": "seniors_only_too_young",
+      "ui": "no"
+    },
+    {
+      "access": "SeniorsOnly",
+      "access_params": {
+        "min_age": 59
+      },
+      "gender": "diverse",
+      "age": 59,
+      "allowed": true,
+      "code": "seniors_only_welcome",
+      "ui": "in"
+    },
+    {
+      "access": "SeniorsOnly",
+      "access_params": {
+        "min_age": 59
+      },
+      "gender": "diverse",
+      "age": 60,
+      "allowed": true,
+      "code": "seniors_only_welcome",
+      "ui": "in"
+    },
+    {
+      "access": "SeniorsOnly",
+      "access_params": {
+        "min_age": 59
+      },
+      "gender": "diverse",
+      "age": 65,
+      "allowed": true,
+      "code": "seniors_only_welcome",
+      "ui": "in"
+    },
+    {
+      "access": "SeniorsOnly",
+      "access_params": {
+        "min_age": 61
+      },
+      "gender": "",
+      "age": null,
+      "allowed": false,
+      "code": "seniors_only_needs_age",
+      "ui": "chk"
+    },
+    {
+      "access": "SeniorsOnly",
+      "access_params": {
+        "min_age": 61
+      },
+      "gender": "",
+      "age": 8,
+      "allowed": false,
+      "code": "seniors_only_too_young",
+      "ui": "no"
+    },
+    {
+      "access": "SeniorsOnly",
+      "access_params": {
+        "min_age": 61
+      },
+      "gender": "",
+      "age": 15,
+      "allowed": false,
+      "code": "seniors_only_too_young",
+      "ui": "no"
+    },
+    {
+      "access": "SeniorsOnly",
+      "access_params": {
+        "min_age": 61
+      },
+      "gender": "",
+      "age": 16,
+      "allowed": false,
+      "code": "seniors_only_too_young",
+      "ui": "no"
+    },
+    {
+      "access": "SeniorsOnly",
+      "access_params": {
+        "min_age": 61
+      },
+      "gender": "",
+      "age": 17,
+      "allowed": false,
+      "code": "seniors_only_too_young",
+      "ui": "no"
+    },
+    {
+      "access": "SeniorsOnly",
+      "access_params": {
+        "min_age": 61
+      },
+      "gender": "",
+      "age": 18,
+      "allowed": false,
+      "code": "seniors_only_too_young",
+      "ui": "no"
+    },
+    {
+      "access": "SeniorsOnly",
+      "access_params": {
+        "min_age": 61
+      },
+      "gender": "",
+      "age": 40,
+      "allowed": false,
+      "code": "seniors_only_too_young",
+      "ui": "no"
+    },
+    {
+      "access": "SeniorsOnly",
+      "access_params": {
+        "min_age": 61
+      },
+      "gender": "",
+      "age": 59,
+      "allowed": false,
+      "code": "seniors_only_too_young",
+      "ui": "no"
+    },
+    {
+      "access": "SeniorsOnly",
+      "access_params": {
+        "min_age": 61
+      },
+      "gender": "",
+      "age": 60,
+      "allowed": false,
+      "code": "seniors_only_too_young",
+      "ui": "no"
+    },
+    {
+      "access": "SeniorsOnly",
+      "access_params": {
+        "min_age": 61
+      },
+      "gender": "",
+      "age": 65,
+      "allowed": true,
+      "code": "seniors_only_welcome",
+      "ui": "in"
+    },
+    {
+      "access": "SeniorsOnly",
+      "access_params": {
+        "min_age": 61
+      },
+      "gender": "female",
+      "age": null,
+      "allowed": false,
+      "code": "seniors_only_needs_age",
+      "ui": "chk"
+    },
+    {
+      "access": "SeniorsOnly",
+      "access_params": {
+        "min_age": 61
+      },
+      "gender": "female",
+      "age": 8,
+      "allowed": false,
+      "code": "seniors_only_too_young",
+      "ui": "no"
+    },
+    {
+      "access": "SeniorsOnly",
+      "access_params": {
+        "min_age": 61
+      },
+      "gender": "female",
+      "age": 15,
+      "allowed": false,
+      "code": "seniors_only_too_young",
+      "ui": "no"
+    },
+    {
+      "access": "SeniorsOnly",
+      "access_params": {
+        "min_age": 61
+      },
+      "gender": "female",
+      "age": 16,
+      "allowed": false,
+      "code": "seniors_only_too_young",
+      "ui": "no"
+    },
+    {
+      "access": "SeniorsOnly",
+      "access_params": {
+        "min_age": 61
+      },
+      "gender": "female",
+      "age": 17,
+      "allowed": false,
+      "code": "seniors_only_too_young",
+      "ui": "no"
+    },
+    {
+      "access": "SeniorsOnly",
+      "access_params": {
+        "min_age": 61
+      },
+      "gender": "female",
+      "age": 18,
+      "allowed": false,
+      "code": "seniors_only_too_young",
+      "ui": "no"
+    },
+    {
+      "access": "SeniorsOnly",
+      "access_params": {
+        "min_age": 61
+      },
+      "gender": "female",
+      "age": 40,
+      "allowed": false,
+      "code": "seniors_only_too_young",
+      "ui": "no"
+    },
+    {
+      "access": "SeniorsOnly",
+      "access_params": {
+        "min_age": 61
+      },
+      "gender": "female",
+      "age": 59,
+      "allowed": false,
+      "code": "seniors_only_too_young",
+      "ui": "no"
+    },
+    {
+      "access": "SeniorsOnly",
+      "access_params": {
+        "min_age": 61
+      },
+      "gender": "female",
+      "age": 60,
+      "allowed": false,
+      "code": "seniors_only_too_young",
+      "ui": "no"
+    },
+    {
+      "access": "SeniorsOnly",
+      "access_params": {
+        "min_age": 61
+      },
+      "gender": "female",
+      "age": 65,
+      "allowed": true,
+      "code": "seniors_only_welcome",
+      "ui": "in"
+    },
+    {
+      "access": "SeniorsOnly",
+      "access_params": {
+        "min_age": 61
+      },
+      "gender": "male",
+      "age": null,
+      "allowed": false,
+      "code": "seniors_only_needs_age",
+      "ui": "chk"
+    },
+    {
+      "access": "SeniorsOnly",
+      "access_params": {
+        "min_age": 61
+      },
+      "gender": "male",
+      "age": 8,
+      "allowed": false,
+      "code": "seniors_only_too_young",
+      "ui": "no"
+    },
+    {
+      "access": "SeniorsOnly",
+      "access_params": {
+        "min_age": 61
+      },
+      "gender": "male",
+      "age": 15,
+      "allowed": false,
+      "code": "seniors_only_too_young",
+      "ui": "no"
+    },
+    {
+      "access": "SeniorsOnly",
+      "access_params": {
+        "min_age": 61
+      },
+      "gender": "male",
+      "age": 16,
+      "allowed": false,
+      "code": "seniors_only_too_young",
+      "ui": "no"
+    },
+    {
+      "access": "SeniorsOnly",
+      "access_params": {
+        "min_age": 61
+      },
+      "gender": "male",
+      "age": 17,
+      "allowed": false,
+      "code": "seniors_only_too_young",
+      "ui": "no"
+    },
+    {
+      "access": "SeniorsOnly",
+      "access_params": {
+        "min_age": 61
+      },
+      "gender": "male",
+      "age": 18,
+      "allowed": false,
+      "code": "seniors_only_too_young",
+      "ui": "no"
+    },
+    {
+      "access": "SeniorsOnly",
+      "access_params": {
+        "min_age": 61
+      },
+      "gender": "male",
+      "age": 40,
+      "allowed": false,
+      "code": "seniors_only_too_young",
+      "ui": "no"
+    },
+    {
+      "access": "SeniorsOnly",
+      "access_params": {
+        "min_age": 61
+      },
+      "gender": "male",
+      "age": 59,
+      "allowed": false,
+      "code": "seniors_only_too_young",
+      "ui": "no"
+    },
+    {
+      "access": "SeniorsOnly",
+      "access_params": {
+        "min_age": 61
+      },
+      "gender": "male",
+      "age": 60,
+      "allowed": false,
+      "code": "seniors_only_too_young",
+      "ui": "no"
+    },
+    {
+      "access": "SeniorsOnly",
+      "access_params": {
+        "min_age": 61
+      },
+      "gender": "male",
+      "age": 65,
+      "allowed": true,
+      "code": "seniors_only_welcome",
+      "ui": "in"
+    },
+    {
+      "access": "SeniorsOnly",
+      "access_params": {
+        "min_age": 61
+      },
+      "gender": "diverse",
+      "age": null,
+      "allowed": false,
+      "code": "seniors_only_needs_age",
+      "ui": "chk"
+    },
+    {
+      "access": "SeniorsOnly",
+      "access_params": {
+        "min_age": 61
+      },
+      "gender": "diverse",
+      "age": 8,
+      "allowed": false,
+      "code": "seniors_only_too_young",
+      "ui": "no"
+    },
+    {
+      "access": "SeniorsOnly",
+      "access_params": {
+        "min_age": 61
+      },
+      "gender": "diverse",
+      "age": 15,
+      "allowed": false,
+      "code": "seniors_only_too_young",
+      "ui": "no"
+    },
+    {
+      "access": "SeniorsOnly",
+      "access_params": {
+        "min_age": 61
+      },
+      "gender": "diverse",
+      "age": 16,
+      "allowed": false,
+      "code": "seniors_only_too_young",
+      "ui": "no"
+    },
+    {
+      "access": "SeniorsOnly",
+      "access_params": {
+        "min_age": 61
+      },
+      "gender": "diverse",
+      "age": 17,
+      "allowed": false,
+      "code": "seniors_only_too_young",
+      "ui": "no"
+    },
+    {
+      "access": "SeniorsOnly",
+      "access_params": {
+        "min_age": 61
+      },
+      "gender": "diverse",
+      "age": 18,
+      "allowed": false,
+      "code": "seniors_only_too_young",
+      "ui": "no"
+    },
+    {
+      "access": "SeniorsOnly",
+      "access_params": {
+        "min_age": 61
+      },
+      "gender": "diverse",
+      "age": 40,
+      "allowed": false,
+      "code": "seniors_only_too_young",
+      "ui": "no"
+    },
+    {
+      "access": "SeniorsOnly",
+      "access_params": {
+        "min_age": 61
+      },
+      "gender": "diverse",
+      "age": 59,
+      "allowed": false,
+      "code": "seniors_only_too_young",
+      "ui": "no"
+    },
+    {
+      "access": "SeniorsOnly",
+      "access_params": {
+        "min_age": 61
+      },
+      "gender": "diverse",
+      "age": 60,
+      "allowed": false,
+      "code": "seniors_only_too_young",
+      "ui": "no"
+    },
+    {
+      "access": "SeniorsOnly",
+      "access_params": {
+        "min_age": 61
+      },
+      "gender": "diverse",
+      "age": 65,
+      "allowed": true,
+      "code": "seniors_only_welcome",
+      "ui": "in"
+    },
+    {
+      "access": "AdultsOnly",
+      "access_params": {
+        "min_age": 17,
+        "note": ""
+      },
       "gender": "",
       "age": null,
       "allowed": false,
@@ -2251,6 +5455,10 @@
     },
     {
       "access": "AdultsOnly",
+      "access_params": {
+        "min_age": 17,
+        "note": ""
+      },
       "gender": "",
       "age": 8,
       "allowed": false,
@@ -2259,6 +5467,10 @@
     },
     {
       "access": "AdultsOnly",
+      "access_params": {
+        "min_age": 17,
+        "note": ""
+      },
       "gender": "",
       "age": 15,
       "allowed": false,
@@ -2267,6 +5479,10 @@
     },
     {
       "access": "AdultsOnly",
+      "access_params": {
+        "min_age": 17,
+        "note": ""
+      },
       "gender": "",
       "age": 16,
       "allowed": false,
@@ -2275,14 +5491,22 @@
     },
     {
       "access": "AdultsOnly",
+      "access_params": {
+        "min_age": 17,
+        "note": ""
+      },
       "gender": "",
       "age": 17,
-      "allowed": false,
-      "code": "adults_only_too_young",
-      "ui": "no"
+      "allowed": true,
+      "code": "adults_only_welcome",
+      "ui": "in"
     },
     {
       "access": "AdultsOnly",
+      "access_params": {
+        "min_age": 17,
+        "note": ""
+      },
       "gender": "",
       "age": 18,
       "allowed": true,
@@ -2291,6 +5515,10 @@
     },
     {
       "access": "AdultsOnly",
+      "access_params": {
+        "min_age": 17,
+        "note": ""
+      },
       "gender": "",
       "age": 40,
       "allowed": true,
@@ -2299,6 +5527,10 @@
     },
     {
       "access": "AdultsOnly",
+      "access_params": {
+        "min_age": 17,
+        "note": ""
+      },
       "gender": "",
       "age": 59,
       "allowed": true,
@@ -2307,6 +5539,10 @@
     },
     {
       "access": "AdultsOnly",
+      "access_params": {
+        "min_age": 17,
+        "note": ""
+      },
       "gender": "",
       "age": 60,
       "allowed": true,
@@ -2315,6 +5551,10 @@
     },
     {
       "access": "AdultsOnly",
+      "access_params": {
+        "min_age": 17,
+        "note": ""
+      },
       "gender": "",
       "age": 65,
       "allowed": true,
@@ -2323,6 +5563,10 @@
     },
     {
       "access": "AdultsOnly",
+      "access_params": {
+        "min_age": 17,
+        "note": ""
+      },
       "gender": "female",
       "age": null,
       "allowed": false,
@@ -2331,6 +5575,10 @@
     },
     {
       "access": "AdultsOnly",
+      "access_params": {
+        "min_age": 17,
+        "note": ""
+      },
       "gender": "female",
       "age": 8,
       "allowed": false,
@@ -2339,6 +5587,10 @@
     },
     {
       "access": "AdultsOnly",
+      "access_params": {
+        "min_age": 17,
+        "note": ""
+      },
       "gender": "female",
       "age": 15,
       "allowed": false,
@@ -2347,6 +5599,10 @@
     },
     {
       "access": "AdultsOnly",
+      "access_params": {
+        "min_age": 17,
+        "note": ""
+      },
       "gender": "female",
       "age": 16,
       "allowed": false,
@@ -2355,14 +5611,22 @@
     },
     {
       "access": "AdultsOnly",
+      "access_params": {
+        "min_age": 17,
+        "note": ""
+      },
       "gender": "female",
       "age": 17,
-      "allowed": false,
-      "code": "adults_only_too_young",
-      "ui": "no"
+      "allowed": true,
+      "code": "adults_only_welcome",
+      "ui": "in"
     },
     {
       "access": "AdultsOnly",
+      "access_params": {
+        "min_age": 17,
+        "note": ""
+      },
       "gender": "female",
       "age": 18,
       "allowed": true,
@@ -2371,6 +5635,10 @@
     },
     {
       "access": "AdultsOnly",
+      "access_params": {
+        "min_age": 17,
+        "note": ""
+      },
       "gender": "female",
       "age": 40,
       "allowed": true,
@@ -2379,6 +5647,10 @@
     },
     {
       "access": "AdultsOnly",
+      "access_params": {
+        "min_age": 17,
+        "note": ""
+      },
       "gender": "female",
       "age": 59,
       "allowed": true,
@@ -2387,6 +5659,10 @@
     },
     {
       "access": "AdultsOnly",
+      "access_params": {
+        "min_age": 17,
+        "note": ""
+      },
       "gender": "female",
       "age": 60,
       "allowed": true,
@@ -2395,6 +5671,10 @@
     },
     {
       "access": "AdultsOnly",
+      "access_params": {
+        "min_age": 17,
+        "note": ""
+      },
       "gender": "female",
       "age": 65,
       "allowed": true,
@@ -2403,6 +5683,10 @@
     },
     {
       "access": "AdultsOnly",
+      "access_params": {
+        "min_age": 17,
+        "note": ""
+      },
       "gender": "male",
       "age": null,
       "allowed": false,
@@ -2411,6 +5695,10 @@
     },
     {
       "access": "AdultsOnly",
+      "access_params": {
+        "min_age": 17,
+        "note": ""
+      },
       "gender": "male",
       "age": 8,
       "allowed": false,
@@ -2419,6 +5707,10 @@
     },
     {
       "access": "AdultsOnly",
+      "access_params": {
+        "min_age": 17,
+        "note": ""
+      },
       "gender": "male",
       "age": 15,
       "allowed": false,
@@ -2427,6 +5719,10 @@
     },
     {
       "access": "AdultsOnly",
+      "access_params": {
+        "min_age": 17,
+        "note": ""
+      },
       "gender": "male",
       "age": 16,
       "allowed": false,
@@ -2435,14 +5731,22 @@
     },
     {
       "access": "AdultsOnly",
+      "access_params": {
+        "min_age": 17,
+        "note": ""
+      },
       "gender": "male",
       "age": 17,
-      "allowed": false,
-      "code": "adults_only_too_young",
-      "ui": "no"
+      "allowed": true,
+      "code": "adults_only_welcome",
+      "ui": "in"
     },
     {
       "access": "AdultsOnly",
+      "access_params": {
+        "min_age": 17,
+        "note": ""
+      },
       "gender": "male",
       "age": 18,
       "allowed": true,
@@ -2451,6 +5755,10 @@
     },
     {
       "access": "AdultsOnly",
+      "access_params": {
+        "min_age": 17,
+        "note": ""
+      },
       "gender": "male",
       "age": 40,
       "allowed": true,
@@ -2459,6 +5767,10 @@
     },
     {
       "access": "AdultsOnly",
+      "access_params": {
+        "min_age": 17,
+        "note": ""
+      },
       "gender": "male",
       "age": 59,
       "allowed": true,
@@ -2467,6 +5779,10 @@
     },
     {
       "access": "AdultsOnly",
+      "access_params": {
+        "min_age": 17,
+        "note": ""
+      },
       "gender": "male",
       "age": 60,
       "allowed": true,
@@ -2475,6 +5791,10 @@
     },
     {
       "access": "AdultsOnly",
+      "access_params": {
+        "min_age": 17,
+        "note": ""
+      },
       "gender": "male",
       "age": 65,
       "allowed": true,
@@ -2483,6 +5803,10 @@
     },
     {
       "access": "AdultsOnly",
+      "access_params": {
+        "min_age": 17,
+        "note": ""
+      },
       "gender": "diverse",
       "age": null,
       "allowed": false,
@@ -2491,6 +5815,10 @@
     },
     {
       "access": "AdultsOnly",
+      "access_params": {
+        "min_age": 17,
+        "note": ""
+      },
       "gender": "diverse",
       "age": 8,
       "allowed": false,
@@ -2499,6 +5827,10 @@
     },
     {
       "access": "AdultsOnly",
+      "access_params": {
+        "min_age": 17,
+        "note": ""
+      },
       "gender": "diverse",
       "age": 15,
       "allowed": false,
@@ -2507,6 +5839,10 @@
     },
     {
       "access": "AdultsOnly",
+      "access_params": {
+        "min_age": 17,
+        "note": ""
+      },
       "gender": "diverse",
       "age": 16,
       "allowed": false,
@@ -2515,6 +5851,490 @@
     },
     {
       "access": "AdultsOnly",
+      "access_params": {
+        "min_age": 17,
+        "note": ""
+      },
+      "gender": "diverse",
+      "age": 17,
+      "allowed": true,
+      "code": "adults_only_welcome",
+      "ui": "in"
+    },
+    {
+      "access": "AdultsOnly",
+      "access_params": {
+        "min_age": 17,
+        "note": ""
+      },
+      "gender": "diverse",
+      "age": 18,
+      "allowed": true,
+      "code": "adults_only_welcome",
+      "ui": "in"
+    },
+    {
+      "access": "AdultsOnly",
+      "access_params": {
+        "min_age": 17,
+        "note": ""
+      },
+      "gender": "diverse",
+      "age": 40,
+      "allowed": true,
+      "code": "adults_only_welcome",
+      "ui": "in"
+    },
+    {
+      "access": "AdultsOnly",
+      "access_params": {
+        "min_age": 17,
+        "note": ""
+      },
+      "gender": "diverse",
+      "age": 59,
+      "allowed": true,
+      "code": "adults_only_welcome",
+      "ui": "in"
+    },
+    {
+      "access": "AdultsOnly",
+      "access_params": {
+        "min_age": 17,
+        "note": ""
+      },
+      "gender": "diverse",
+      "age": 60,
+      "allowed": true,
+      "code": "adults_only_welcome",
+      "ui": "in"
+    },
+    {
+      "access": "AdultsOnly",
+      "access_params": {
+        "min_age": 17,
+        "note": ""
+      },
+      "gender": "diverse",
+      "age": 65,
+      "allowed": true,
+      "code": "adults_only_welcome",
+      "ui": "in"
+    },
+    {
+      "access": "AdultsOnly",
+      "access_params": {
+        "min_age": 19,
+        "note": ""
+      },
+      "gender": "",
+      "age": null,
+      "allowed": false,
+      "code": "adults_only_needs_age",
+      "ui": "chk"
+    },
+    {
+      "access": "AdultsOnly",
+      "access_params": {
+        "min_age": 19,
+        "note": ""
+      },
+      "gender": "",
+      "age": 8,
+      "allowed": false,
+      "code": "adults_only_too_young",
+      "ui": "no"
+    },
+    {
+      "access": "AdultsOnly",
+      "access_params": {
+        "min_age": 19,
+        "note": ""
+      },
+      "gender": "",
+      "age": 15,
+      "allowed": false,
+      "code": "adults_only_too_young",
+      "ui": "no"
+    },
+    {
+      "access": "AdultsOnly",
+      "access_params": {
+        "min_age": 19,
+        "note": ""
+      },
+      "gender": "",
+      "age": 16,
+      "allowed": false,
+      "code": "adults_only_too_young",
+      "ui": "no"
+    },
+    {
+      "access": "AdultsOnly",
+      "access_params": {
+        "min_age": 19,
+        "note": ""
+      },
+      "gender": "",
+      "age": 17,
+      "allowed": false,
+      "code": "adults_only_too_young",
+      "ui": "no"
+    },
+    {
+      "access": "AdultsOnly",
+      "access_params": {
+        "min_age": 19,
+        "note": ""
+      },
+      "gender": "",
+      "age": 18,
+      "allowed": false,
+      "code": "adults_only_too_young",
+      "ui": "no"
+    },
+    {
+      "access": "AdultsOnly",
+      "access_params": {
+        "min_age": 19,
+        "note": ""
+      },
+      "gender": "",
+      "age": 40,
+      "allowed": true,
+      "code": "adults_only_welcome",
+      "ui": "in"
+    },
+    {
+      "access": "AdultsOnly",
+      "access_params": {
+        "min_age": 19,
+        "note": ""
+      },
+      "gender": "",
+      "age": 59,
+      "allowed": true,
+      "code": "adults_only_welcome",
+      "ui": "in"
+    },
+    {
+      "access": "AdultsOnly",
+      "access_params": {
+        "min_age": 19,
+        "note": ""
+      },
+      "gender": "",
+      "age": 60,
+      "allowed": true,
+      "code": "adults_only_welcome",
+      "ui": "in"
+    },
+    {
+      "access": "AdultsOnly",
+      "access_params": {
+        "min_age": 19,
+        "note": ""
+      },
+      "gender": "",
+      "age": 65,
+      "allowed": true,
+      "code": "adults_only_welcome",
+      "ui": "in"
+    },
+    {
+      "access": "AdultsOnly",
+      "access_params": {
+        "min_age": 19,
+        "note": ""
+      },
+      "gender": "female",
+      "age": null,
+      "allowed": false,
+      "code": "adults_only_needs_age",
+      "ui": "chk"
+    },
+    {
+      "access": "AdultsOnly",
+      "access_params": {
+        "min_age": 19,
+        "note": ""
+      },
+      "gender": "female",
+      "age": 8,
+      "allowed": false,
+      "code": "adults_only_too_young",
+      "ui": "no"
+    },
+    {
+      "access": "AdultsOnly",
+      "access_params": {
+        "min_age": 19,
+        "note": ""
+      },
+      "gender": "female",
+      "age": 15,
+      "allowed": false,
+      "code": "adults_only_too_young",
+      "ui": "no"
+    },
+    {
+      "access": "AdultsOnly",
+      "access_params": {
+        "min_age": 19,
+        "note": ""
+      },
+      "gender": "female",
+      "age": 16,
+      "allowed": false,
+      "code": "adults_only_too_young",
+      "ui": "no"
+    },
+    {
+      "access": "AdultsOnly",
+      "access_params": {
+        "min_age": 19,
+        "note": ""
+      },
+      "gender": "female",
+      "age": 17,
+      "allowed": false,
+      "code": "adults_only_too_young",
+      "ui": "no"
+    },
+    {
+      "access": "AdultsOnly",
+      "access_params": {
+        "min_age": 19,
+        "note": ""
+      },
+      "gender": "female",
+      "age": 18,
+      "allowed": false,
+      "code": "adults_only_too_young",
+      "ui": "no"
+    },
+    {
+      "access": "AdultsOnly",
+      "access_params": {
+        "min_age": 19,
+        "note": ""
+      },
+      "gender": "female",
+      "age": 40,
+      "allowed": true,
+      "code": "adults_only_welcome",
+      "ui": "in"
+    },
+    {
+      "access": "AdultsOnly",
+      "access_params": {
+        "min_age": 19,
+        "note": ""
+      },
+      "gender": "female",
+      "age": 59,
+      "allowed": true,
+      "code": "adults_only_welcome",
+      "ui": "in"
+    },
+    {
+      "access": "AdultsOnly",
+      "access_params": {
+        "min_age": 19,
+        "note": ""
+      },
+      "gender": "female",
+      "age": 60,
+      "allowed": true,
+      "code": "adults_only_welcome",
+      "ui": "in"
+    },
+    {
+      "access": "AdultsOnly",
+      "access_params": {
+        "min_age": 19,
+        "note": ""
+      },
+      "gender": "female",
+      "age": 65,
+      "allowed": true,
+      "code": "adults_only_welcome",
+      "ui": "in"
+    },
+    {
+      "access": "AdultsOnly",
+      "access_params": {
+        "min_age": 19,
+        "note": ""
+      },
+      "gender": "male",
+      "age": null,
+      "allowed": false,
+      "code": "adults_only_needs_age",
+      "ui": "chk"
+    },
+    {
+      "access": "AdultsOnly",
+      "access_params": {
+        "min_age": 19,
+        "note": ""
+      },
+      "gender": "male",
+      "age": 8,
+      "allowed": false,
+      "code": "adults_only_too_young",
+      "ui": "no"
+    },
+    {
+      "access": "AdultsOnly",
+      "access_params": {
+        "min_age": 19,
+        "note": ""
+      },
+      "gender": "male",
+      "age": 15,
+      "allowed": false,
+      "code": "adults_only_too_young",
+      "ui": "no"
+    },
+    {
+      "access": "AdultsOnly",
+      "access_params": {
+        "min_age": 19,
+        "note": ""
+      },
+      "gender": "male",
+      "age": 16,
+      "allowed": false,
+      "code": "adults_only_too_young",
+      "ui": "no"
+    },
+    {
+      "access": "AdultsOnly",
+      "access_params": {
+        "min_age": 19,
+        "note": ""
+      },
+      "gender": "male",
+      "age": 17,
+      "allowed": false,
+      "code": "adults_only_too_young",
+      "ui": "no"
+    },
+    {
+      "access": "AdultsOnly",
+      "access_params": {
+        "min_age": 19,
+        "note": ""
+      },
+      "gender": "male",
+      "age": 18,
+      "allowed": false,
+      "code": "adults_only_too_young",
+      "ui": "no"
+    },
+    {
+      "access": "AdultsOnly",
+      "access_params": {
+        "min_age": 19,
+        "note": ""
+      },
+      "gender": "male",
+      "age": 40,
+      "allowed": true,
+      "code": "adults_only_welcome",
+      "ui": "in"
+    },
+    {
+      "access": "AdultsOnly",
+      "access_params": {
+        "min_age": 19,
+        "note": ""
+      },
+      "gender": "male",
+      "age": 59,
+      "allowed": true,
+      "code": "adults_only_welcome",
+      "ui": "in"
+    },
+    {
+      "access": "AdultsOnly",
+      "access_params": {
+        "min_age": 19,
+        "note": ""
+      },
+      "gender": "male",
+      "age": 60,
+      "allowed": true,
+      "code": "adults_only_welcome",
+      "ui": "in"
+    },
+    {
+      "access": "AdultsOnly",
+      "access_params": {
+        "min_age": 19,
+        "note": ""
+      },
+      "gender": "male",
+      "age": 65,
+      "allowed": true,
+      "code": "adults_only_welcome",
+      "ui": "in"
+    },
+    {
+      "access": "AdultsOnly",
+      "access_params": {
+        "min_age": 19,
+        "note": ""
+      },
+      "gender": "diverse",
+      "age": null,
+      "allowed": false,
+      "code": "adults_only_needs_age",
+      "ui": "chk"
+    },
+    {
+      "access": "AdultsOnly",
+      "access_params": {
+        "min_age": 19,
+        "note": ""
+      },
+      "gender": "diverse",
+      "age": 8,
+      "allowed": false,
+      "code": "adults_only_too_young",
+      "ui": "no"
+    },
+    {
+      "access": "AdultsOnly",
+      "access_params": {
+        "min_age": 19,
+        "note": ""
+      },
+      "gender": "diverse",
+      "age": 15,
+      "allowed": false,
+      "code": "adults_only_too_young",
+      "ui": "no"
+    },
+    {
+      "access": "AdultsOnly",
+      "access_params": {
+        "min_age": 19,
+        "note": ""
+      },
+      "gender": "diverse",
+      "age": 16,
+      "allowed": false,
+      "code": "adults_only_too_young",
+      "ui": "no"
+    },
+    {
+      "access": "AdultsOnly",
+      "access_params": {
+        "min_age": 19,
+        "note": ""
+      },
       "gender": "diverse",
       "age": 17,
       "allowed": false,
@@ -2523,22 +6343,34 @@
     },
     {
       "access": "AdultsOnly",
+      "access_params": {
+        "min_age": 19,
+        "note": ""
+      },
       "gender": "diverse",
       "age": 18,
+      "allowed": false,
+      "code": "adults_only_too_young",
+      "ui": "no"
+    },
+    {
+      "access": "AdultsOnly",
+      "access_params": {
+        "min_age": 19,
+        "note": ""
+      },
+      "gender": "diverse",
+      "age": 40,
       "allowed": true,
       "code": "adults_only_welcome",
       "ui": "in"
     },
     {
       "access": "AdultsOnly",
-      "gender": "diverse",
-      "age": 40,
-      "allowed": true,
-      "code": "adults_only_welcome",
-      "ui": "in"
-    },
-    {
-      "access": "AdultsOnly",
+      "access_params": {
+        "min_age": 19,
+        "note": ""
+      },
       "gender": "diverse",
       "age": 59,
       "allowed": true,
@@ -2547,6 +6379,10 @@
     },
     {
       "access": "AdultsOnly",
+      "access_params": {
+        "min_age": 19,
+        "note": ""
+      },
       "gender": "diverse",
       "age": 60,
       "allowed": true,
@@ -2555,6 +6391,10 @@
     },
     {
       "access": "AdultsOnly",
+      "access_params": {
+        "min_age": 19,
+        "note": ""
+      },
       "gender": "diverse",
       "age": 65,
       "allowed": true,
@@ -2562,327 +6402,10 @@
       "ui": "in"
     },
     {
-      "access": "GirlsOnly",
-      "gender": "",
-      "age": null,
-      "allowed": false,
-      "code": "girls_only_needs_gender",
-      "ui": "chk"
-    },
-    {
-      "access": "GirlsOnly",
-      "gender": "",
-      "age": 8,
-      "allowed": false,
-      "code": "girls_only_needs_gender",
-      "ui": "chk"
-    },
-    {
-      "access": "GirlsOnly",
-      "gender": "",
-      "age": 15,
-      "allowed": false,
-      "code": "girls_only_needs_gender",
-      "ui": "chk"
-    },
-    {
-      "access": "GirlsOnly",
-      "gender": "",
-      "age": 16,
-      "allowed": false,
-      "code": "girls_only_needs_gender",
-      "ui": "chk"
-    },
-    {
-      "access": "GirlsOnly",
-      "gender": "",
-      "age": 17,
-      "allowed": false,
-      "code": "girls_only_needs_gender",
-      "ui": "chk"
-    },
-    {
-      "access": "GirlsOnly",
-      "gender": "",
-      "age": 18,
-      "allowed": false,
-      "code": "girls_only_needs_gender",
-      "ui": "chk"
-    },
-    {
-      "access": "GirlsOnly",
-      "gender": "",
-      "age": 40,
-      "allowed": false,
-      "code": "girls_only_needs_gender",
-      "ui": "chk"
-    },
-    {
-      "access": "GirlsOnly",
-      "gender": "",
-      "age": 59,
-      "allowed": false,
-      "code": "girls_only_needs_gender",
-      "ui": "chk"
-    },
-    {
-      "access": "GirlsOnly",
-      "gender": "",
-      "age": 60,
-      "allowed": false,
-      "code": "girls_only_needs_gender",
-      "ui": "chk"
-    },
-    {
-      "access": "GirlsOnly",
-      "gender": "",
-      "age": 65,
-      "allowed": false,
-      "code": "girls_only_needs_gender",
-      "ui": "chk"
-    },
-    {
-      "access": "GirlsOnly",
-      "gender": "female",
-      "age": null,
-      "allowed": false,
-      "code": "girls_only_confirm",
-      "ui": "chk"
-    },
-    {
-      "access": "GirlsOnly",
-      "gender": "female",
-      "age": 8,
-      "allowed": false,
-      "code": "girls_only_confirm",
-      "ui": "chk"
-    },
-    {
-      "access": "GirlsOnly",
-      "gender": "female",
-      "age": 15,
-      "allowed": false,
-      "code": "girls_only_confirm",
-      "ui": "chk"
-    },
-    {
-      "access": "GirlsOnly",
-      "gender": "female",
-      "age": 16,
-      "allowed": false,
-      "code": "girls_only_confirm",
-      "ui": "chk"
-    },
-    {
-      "access": "GirlsOnly",
-      "gender": "female",
-      "age": 17,
-      "allowed": false,
-      "code": "girls_only_confirm",
-      "ui": "chk"
-    },
-    {
-      "access": "GirlsOnly",
-      "gender": "female",
-      "age": 18,
-      "allowed": false,
-      "code": "girls_only_confirm",
-      "ui": "chk"
-    },
-    {
-      "access": "GirlsOnly",
-      "gender": "female",
-      "age": 40,
-      "allowed": false,
-      "code": "girls_only_confirm",
-      "ui": "chk"
-    },
-    {
-      "access": "GirlsOnly",
-      "gender": "female",
-      "age": 59,
-      "allowed": false,
-      "code": "girls_only_confirm",
-      "ui": "chk"
-    },
-    {
-      "access": "GirlsOnly",
-      "gender": "female",
-      "age": 60,
-      "allowed": false,
-      "code": "girls_only_confirm",
-      "ui": "chk"
-    },
-    {
-      "access": "GirlsOnly",
-      "gender": "female",
-      "age": 65,
-      "allowed": false,
-      "code": "girls_only_confirm",
-      "ui": "chk"
-    },
-    {
-      "access": "GirlsOnly",
-      "gender": "male",
-      "age": null,
-      "allowed": false,
-      "code": "girls_only_excluded",
-      "ui": "no"
-    },
-    {
-      "access": "GirlsOnly",
-      "gender": "male",
-      "age": 8,
-      "allowed": false,
-      "code": "girls_only_excluded",
-      "ui": "no"
-    },
-    {
-      "access": "GirlsOnly",
-      "gender": "male",
-      "age": 15,
-      "allowed": false,
-      "code": "girls_only_excluded",
-      "ui": "no"
-    },
-    {
-      "access": "GirlsOnly",
-      "gender": "male",
-      "age": 16,
-      "allowed": false,
-      "code": "girls_only_excluded",
-      "ui": "no"
-    },
-    {
-      "access": "GirlsOnly",
-      "gender": "male",
-      "age": 17,
-      "allowed": false,
-      "code": "girls_only_excluded",
-      "ui": "no"
-    },
-    {
-      "access": "GirlsOnly",
-      "gender": "male",
-      "age": 18,
-      "allowed": false,
-      "code": "girls_only_excluded",
-      "ui": "no"
-    },
-    {
-      "access": "GirlsOnly",
-      "gender": "male",
-      "age": 40,
-      "allowed": false,
-      "code": "girls_only_excluded",
-      "ui": "no"
-    },
-    {
-      "access": "GirlsOnly",
-      "gender": "male",
-      "age": 59,
-      "allowed": false,
-      "code": "girls_only_excluded",
-      "ui": "no"
-    },
-    {
-      "access": "GirlsOnly",
-      "gender": "male",
-      "age": 60,
-      "allowed": false,
-      "code": "girls_only_excluded",
-      "ui": "no"
-    },
-    {
-      "access": "GirlsOnly",
-      "gender": "male",
-      "age": 65,
-      "allowed": false,
-      "code": "girls_only_excluded",
-      "ui": "no"
-    },
-    {
-      "access": "GirlsOnly",
-      "gender": "diverse",
-      "age": null,
-      "allowed": false,
-      "code": "girls_only_excluded",
-      "ui": "no"
-    },
-    {
-      "access": "GirlsOnly",
-      "gender": "diverse",
-      "age": 8,
-      "allowed": false,
-      "code": "girls_only_excluded",
-      "ui": "no"
-    },
-    {
-      "access": "GirlsOnly",
-      "gender": "diverse",
-      "age": 15,
-      "allowed": false,
-      "code": "girls_only_excluded",
-      "ui": "no"
-    },
-    {
-      "access": "GirlsOnly",
-      "gender": "diverse",
-      "age": 16,
-      "allowed": false,
-      "code": "girls_only_excluded",
-      "ui": "no"
-    },
-    {
-      "access": "GirlsOnly",
-      "gender": "diverse",
-      "age": 17,
-      "allowed": false,
-      "code": "girls_only_excluded",
-      "ui": "no"
-    },
-    {
-      "access": "GirlsOnly",
-      "gender": "diverse",
-      "age": 18,
-      "allowed": false,
-      "code": "girls_only_excluded",
-      "ui": "no"
-    },
-    {
-      "access": "GirlsOnly",
-      "gender": "diverse",
-      "age": 40,
-      "allowed": false,
-      "code": "girls_only_excluded",
-      "ui": "no"
-    },
-    {
-      "access": "GirlsOnly",
-      "gender": "diverse",
-      "age": 59,
-      "allowed": false,
-      "code": "girls_only_excluded",
-      "ui": "no"
-    },
-    {
-      "access": "GirlsOnly",
-      "gender": "diverse",
-      "age": 60,
-      "allowed": false,
-      "code": "girls_only_excluded",
-      "ui": "no"
-    },
-    {
-      "access": "GirlsOnly",
-      "gender": "diverse",
-      "age": 65,
-      "allowed": false,
-      "code": "girls_only_excluded",
-      "ui": "no"
-    },
-    {
       "access": "GenderDiverse",
+      "access_params": {
+        "min_age": 15
+      },
       "gender": "",
       "age": null,
       "allowed": false,
@@ -2891,6 +6414,9 @@
     },
     {
       "access": "GenderDiverse",
+      "access_params": {
+        "min_age": 15
+      },
       "gender": "",
       "age": 8,
       "allowed": false,
@@ -2899,14 +6425,20 @@
     },
     {
       "access": "GenderDiverse",
+      "access_params": {
+        "min_age": 15
+      },
       "gender": "",
       "age": 15,
       "allowed": false,
-      "code": "gender_diverse_too_young",
-      "ui": "no"
+      "code": "gender_diverse_confirm",
+      "ui": "chk"
     },
     {
       "access": "GenderDiverse",
+      "access_params": {
+        "min_age": 15
+      },
       "gender": "",
       "age": 16,
       "allowed": false,
@@ -2915,6 +6447,9 @@
     },
     {
       "access": "GenderDiverse",
+      "access_params": {
+        "min_age": 15
+      },
       "gender": "",
       "age": 17,
       "allowed": false,
@@ -2923,6 +6458,9 @@
     },
     {
       "access": "GenderDiverse",
+      "access_params": {
+        "min_age": 15
+      },
       "gender": "",
       "age": 18,
       "allowed": false,
@@ -2931,6 +6469,9 @@
     },
     {
       "access": "GenderDiverse",
+      "access_params": {
+        "min_age": 15
+      },
       "gender": "",
       "age": 40,
       "allowed": false,
@@ -2939,6 +6480,9 @@
     },
     {
       "access": "GenderDiverse",
+      "access_params": {
+        "min_age": 15
+      },
       "gender": "",
       "age": 59,
       "allowed": false,
@@ -2947,6 +6491,9 @@
     },
     {
       "access": "GenderDiverse",
+      "access_params": {
+        "min_age": 15
+      },
       "gender": "",
       "age": 60,
       "allowed": false,
@@ -2955,6 +6502,9 @@
     },
     {
       "access": "GenderDiverse",
+      "access_params": {
+        "min_age": 15
+      },
       "gender": "",
       "age": 65,
       "allowed": false,
@@ -2963,6 +6513,9 @@
     },
     {
       "access": "GenderDiverse",
+      "access_params": {
+        "min_age": 15
+      },
       "gender": "female",
       "age": null,
       "allowed": false,
@@ -2971,6 +6524,9 @@
     },
     {
       "access": "GenderDiverse",
+      "access_params": {
+        "min_age": 15
+      },
       "gender": "female",
       "age": 8,
       "allowed": false,
@@ -2979,14 +6535,20 @@
     },
     {
       "access": "GenderDiverse",
+      "access_params": {
+        "min_age": 15
+      },
       "gender": "female",
       "age": 15,
       "allowed": false,
-      "code": "gender_diverse_too_young",
-      "ui": "no"
+      "code": "gender_diverse_confirm",
+      "ui": "chk"
     },
     {
       "access": "GenderDiverse",
+      "access_params": {
+        "min_age": 15
+      },
       "gender": "female",
       "age": 16,
       "allowed": false,
@@ -2995,6 +6557,9 @@
     },
     {
       "access": "GenderDiverse",
+      "access_params": {
+        "min_age": 15
+      },
       "gender": "female",
       "age": 17,
       "allowed": false,
@@ -3003,6 +6568,9 @@
     },
     {
       "access": "GenderDiverse",
+      "access_params": {
+        "min_age": 15
+      },
       "gender": "female",
       "age": 18,
       "allowed": false,
@@ -3011,6 +6579,9 @@
     },
     {
       "access": "GenderDiverse",
+      "access_params": {
+        "min_age": 15
+      },
       "gender": "female",
       "age": 40,
       "allowed": false,
@@ -3019,6 +6590,9 @@
     },
     {
       "access": "GenderDiverse",
+      "access_params": {
+        "min_age": 15
+      },
       "gender": "female",
       "age": 59,
       "allowed": false,
@@ -3027,6 +6601,9 @@
     },
     {
       "access": "GenderDiverse",
+      "access_params": {
+        "min_age": 15
+      },
       "gender": "female",
       "age": 60,
       "allowed": false,
@@ -3035,6 +6612,9 @@
     },
     {
       "access": "GenderDiverse",
+      "access_params": {
+        "min_age": 15
+      },
       "gender": "female",
       "age": 65,
       "allowed": false,
@@ -3043,6 +6623,9 @@
     },
     {
       "access": "GenderDiverse",
+      "access_params": {
+        "min_age": 15
+      },
       "gender": "male",
       "age": null,
       "allowed": false,
@@ -3051,6 +6634,9 @@
     },
     {
       "access": "GenderDiverse",
+      "access_params": {
+        "min_age": 15
+      },
       "gender": "male",
       "age": 8,
       "allowed": false,
@@ -3059,14 +6645,20 @@
     },
     {
       "access": "GenderDiverse",
+      "access_params": {
+        "min_age": 15
+      },
       "gender": "male",
       "age": 15,
       "allowed": false,
-      "code": "gender_diverse_too_young",
-      "ui": "no"
+      "code": "gender_diverse_confirm",
+      "ui": "chk"
     },
     {
       "access": "GenderDiverse",
+      "access_params": {
+        "min_age": 15
+      },
       "gender": "male",
       "age": 16,
       "allowed": false,
@@ -3075,6 +6667,9 @@
     },
     {
       "access": "GenderDiverse",
+      "access_params": {
+        "min_age": 15
+      },
       "gender": "male",
       "age": 17,
       "allowed": false,
@@ -3083,6 +6678,9 @@
     },
     {
       "access": "GenderDiverse",
+      "access_params": {
+        "min_age": 15
+      },
       "gender": "male",
       "age": 18,
       "allowed": false,
@@ -3091,6 +6689,9 @@
     },
     {
       "access": "GenderDiverse",
+      "access_params": {
+        "min_age": 15
+      },
       "gender": "male",
       "age": 40,
       "allowed": false,
@@ -3099,6 +6700,9 @@
     },
     {
       "access": "GenderDiverse",
+      "access_params": {
+        "min_age": 15
+      },
       "gender": "male",
       "age": 59,
       "allowed": false,
@@ -3107,6 +6711,9 @@
     },
     {
       "access": "GenderDiverse",
+      "access_params": {
+        "min_age": 15
+      },
       "gender": "male",
       "age": 60,
       "allowed": false,
@@ -3115,6 +6722,9 @@
     },
     {
       "access": "GenderDiverse",
+      "access_params": {
+        "min_age": 15
+      },
       "gender": "male",
       "age": 65,
       "allowed": false,
@@ -3123,6 +6733,9 @@
     },
     {
       "access": "GenderDiverse",
+      "access_params": {
+        "min_age": 15
+      },
       "gender": "diverse",
       "age": null,
       "allowed": false,
@@ -3131,6 +6744,9 @@
     },
     {
       "access": "GenderDiverse",
+      "access_params": {
+        "min_age": 15
+      },
       "gender": "diverse",
       "age": 8,
       "allowed": false,
@@ -3139,6 +6755,449 @@
     },
     {
       "access": "GenderDiverse",
+      "access_params": {
+        "min_age": 15
+      },
+      "gender": "diverse",
+      "age": 15,
+      "allowed": false,
+      "code": "gender_diverse_confirm",
+      "ui": "chk"
+    },
+    {
+      "access": "GenderDiverse",
+      "access_params": {
+        "min_age": 15
+      },
+      "gender": "diverse",
+      "age": 16,
+      "allowed": false,
+      "code": "gender_diverse_confirm",
+      "ui": "chk"
+    },
+    {
+      "access": "GenderDiverse",
+      "access_params": {
+        "min_age": 15
+      },
+      "gender": "diverse",
+      "age": 17,
+      "allowed": false,
+      "code": "gender_diverse_confirm",
+      "ui": "chk"
+    },
+    {
+      "access": "GenderDiverse",
+      "access_params": {
+        "min_age": 15
+      },
+      "gender": "diverse",
+      "age": 18,
+      "allowed": false,
+      "code": "gender_diverse_confirm",
+      "ui": "chk"
+    },
+    {
+      "access": "GenderDiverse",
+      "access_params": {
+        "min_age": 15
+      },
+      "gender": "diverse",
+      "age": 40,
+      "allowed": false,
+      "code": "gender_diverse_confirm",
+      "ui": "chk"
+    },
+    {
+      "access": "GenderDiverse",
+      "access_params": {
+        "min_age": 15
+      },
+      "gender": "diverse",
+      "age": 59,
+      "allowed": false,
+      "code": "gender_diverse_confirm",
+      "ui": "chk"
+    },
+    {
+      "access": "GenderDiverse",
+      "access_params": {
+        "min_age": 15
+      },
+      "gender": "diverse",
+      "age": 60,
+      "allowed": false,
+      "code": "gender_diverse_confirm",
+      "ui": "chk"
+    },
+    {
+      "access": "GenderDiverse",
+      "access_params": {
+        "min_age": 15
+      },
+      "gender": "diverse",
+      "age": 65,
+      "allowed": false,
+      "code": "gender_diverse_confirm",
+      "ui": "chk"
+    },
+    {
+      "access": "GenderDiverse",
+      "access_params": {
+        "min_age": 17
+      },
+      "gender": "",
+      "age": null,
+      "allowed": false,
+      "code": "gender_diverse_confirm",
+      "ui": "chk"
+    },
+    {
+      "access": "GenderDiverse",
+      "access_params": {
+        "min_age": 17
+      },
+      "gender": "",
+      "age": 8,
+      "allowed": false,
+      "code": "gender_diverse_too_young",
+      "ui": "no"
+    },
+    {
+      "access": "GenderDiverse",
+      "access_params": {
+        "min_age": 17
+      },
+      "gender": "",
+      "age": 15,
+      "allowed": false,
+      "code": "gender_diverse_too_young",
+      "ui": "no"
+    },
+    {
+      "access": "GenderDiverse",
+      "access_params": {
+        "min_age": 17
+      },
+      "gender": "",
+      "age": 16,
+      "allowed": false,
+      "code": "gender_diverse_too_young",
+      "ui": "no"
+    },
+    {
+      "access": "GenderDiverse",
+      "access_params": {
+        "min_age": 17
+      },
+      "gender": "",
+      "age": 17,
+      "allowed": false,
+      "code": "gender_diverse_confirm",
+      "ui": "chk"
+    },
+    {
+      "access": "GenderDiverse",
+      "access_params": {
+        "min_age": 17
+      },
+      "gender": "",
+      "age": 18,
+      "allowed": false,
+      "code": "gender_diverse_confirm",
+      "ui": "chk"
+    },
+    {
+      "access": "GenderDiverse",
+      "access_params": {
+        "min_age": 17
+      },
+      "gender": "",
+      "age": 40,
+      "allowed": false,
+      "code": "gender_diverse_confirm",
+      "ui": "chk"
+    },
+    {
+      "access": "GenderDiverse",
+      "access_params": {
+        "min_age": 17
+      },
+      "gender": "",
+      "age": 59,
+      "allowed": false,
+      "code": "gender_diverse_confirm",
+      "ui": "chk"
+    },
+    {
+      "access": "GenderDiverse",
+      "access_params": {
+        "min_age": 17
+      },
+      "gender": "",
+      "age": 60,
+      "allowed": false,
+      "code": "gender_diverse_confirm",
+      "ui": "chk"
+    },
+    {
+      "access": "GenderDiverse",
+      "access_params": {
+        "min_age": 17
+      },
+      "gender": "",
+      "age": 65,
+      "allowed": false,
+      "code": "gender_diverse_confirm",
+      "ui": "chk"
+    },
+    {
+      "access": "GenderDiverse",
+      "access_params": {
+        "min_age": 17
+      },
+      "gender": "female",
+      "age": null,
+      "allowed": false,
+      "code": "gender_diverse_confirm",
+      "ui": "chk"
+    },
+    {
+      "access": "GenderDiverse",
+      "access_params": {
+        "min_age": 17
+      },
+      "gender": "female",
+      "age": 8,
+      "allowed": false,
+      "code": "gender_diverse_too_young",
+      "ui": "no"
+    },
+    {
+      "access": "GenderDiverse",
+      "access_params": {
+        "min_age": 17
+      },
+      "gender": "female",
+      "age": 15,
+      "allowed": false,
+      "code": "gender_diverse_too_young",
+      "ui": "no"
+    },
+    {
+      "access": "GenderDiverse",
+      "access_params": {
+        "min_age": 17
+      },
+      "gender": "female",
+      "age": 16,
+      "allowed": false,
+      "code": "gender_diverse_too_young",
+      "ui": "no"
+    },
+    {
+      "access": "GenderDiverse",
+      "access_params": {
+        "min_age": 17
+      },
+      "gender": "female",
+      "age": 17,
+      "allowed": false,
+      "code": "gender_diverse_confirm",
+      "ui": "chk"
+    },
+    {
+      "access": "GenderDiverse",
+      "access_params": {
+        "min_age": 17
+      },
+      "gender": "female",
+      "age": 18,
+      "allowed": false,
+      "code": "gender_diverse_confirm",
+      "ui": "chk"
+    },
+    {
+      "access": "GenderDiverse",
+      "access_params": {
+        "min_age": 17
+      },
+      "gender": "female",
+      "age": 40,
+      "allowed": false,
+      "code": "gender_diverse_confirm",
+      "ui": "chk"
+    },
+    {
+      "access": "GenderDiverse",
+      "access_params": {
+        "min_age": 17
+      },
+      "gender": "female",
+      "age": 59,
+      "allowed": false,
+      "code": "gender_diverse_confirm",
+      "ui": "chk"
+    },
+    {
+      "access": "GenderDiverse",
+      "access_params": {
+        "min_age": 17
+      },
+      "gender": "female",
+      "age": 60,
+      "allowed": false,
+      "code": "gender_diverse_confirm",
+      "ui": "chk"
+    },
+    {
+      "access": "GenderDiverse",
+      "access_params": {
+        "min_age": 17
+      },
+      "gender": "female",
+      "age": 65,
+      "allowed": false,
+      "code": "gender_diverse_confirm",
+      "ui": "chk"
+    },
+    {
+      "access": "GenderDiverse",
+      "access_params": {
+        "min_age": 17
+      },
+      "gender": "male",
+      "age": null,
+      "allowed": false,
+      "code": "gender_diverse_confirm",
+      "ui": "chk"
+    },
+    {
+      "access": "GenderDiverse",
+      "access_params": {
+        "min_age": 17
+      },
+      "gender": "male",
+      "age": 8,
+      "allowed": false,
+      "code": "gender_diverse_too_young",
+      "ui": "no"
+    },
+    {
+      "access": "GenderDiverse",
+      "access_params": {
+        "min_age": 17
+      },
+      "gender": "male",
+      "age": 15,
+      "allowed": false,
+      "code": "gender_diverse_too_young",
+      "ui": "no"
+    },
+    {
+      "access": "GenderDiverse",
+      "access_params": {
+        "min_age": 17
+      },
+      "gender": "male",
+      "age": 16,
+      "allowed": false,
+      "code": "gender_diverse_too_young",
+      "ui": "no"
+    },
+    {
+      "access": "GenderDiverse",
+      "access_params": {
+        "min_age": 17
+      },
+      "gender": "male",
+      "age": 17,
+      "allowed": false,
+      "code": "gender_diverse_confirm",
+      "ui": "chk"
+    },
+    {
+      "access": "GenderDiverse",
+      "access_params": {
+        "min_age": 17
+      },
+      "gender": "male",
+      "age": 18,
+      "allowed": false,
+      "code": "gender_diverse_confirm",
+      "ui": "chk"
+    },
+    {
+      "access": "GenderDiverse",
+      "access_params": {
+        "min_age": 17
+      },
+      "gender": "male",
+      "age": 40,
+      "allowed": false,
+      "code": "gender_diverse_confirm",
+      "ui": "chk"
+    },
+    {
+      "access": "GenderDiverse",
+      "access_params": {
+        "min_age": 17
+      },
+      "gender": "male",
+      "age": 59,
+      "allowed": false,
+      "code": "gender_diverse_confirm",
+      "ui": "chk"
+    },
+    {
+      "access": "GenderDiverse",
+      "access_params": {
+        "min_age": 17
+      },
+      "gender": "male",
+      "age": 60,
+      "allowed": false,
+      "code": "gender_diverse_confirm",
+      "ui": "chk"
+    },
+    {
+      "access": "GenderDiverse",
+      "access_params": {
+        "min_age": 17
+      },
+      "gender": "male",
+      "age": 65,
+      "allowed": false,
+      "code": "gender_diverse_confirm",
+      "ui": "chk"
+    },
+    {
+      "access": "GenderDiverse",
+      "access_params": {
+        "min_age": 17
+      },
+      "gender": "diverse",
+      "age": null,
+      "allowed": false,
+      "code": "gender_diverse_confirm",
+      "ui": "chk"
+    },
+    {
+      "access": "GenderDiverse",
+      "access_params": {
+        "min_age": 17
+      },
+      "gender": "diverse",
+      "age": 8,
+      "allowed": false,
+      "code": "gender_diverse_too_young",
+      "ui": "no"
+    },
+    {
+      "access": "GenderDiverse",
+      "access_params": {
+        "min_age": 17
+      },
       "gender": "diverse",
       "age": 15,
       "allowed": false,
@@ -3147,14 +7206,20 @@
     },
     {
       "access": "GenderDiverse",
+      "access_params": {
+        "min_age": 17
+      },
       "gender": "diverse",
       "age": 16,
       "allowed": false,
-      "code": "gender_diverse_confirm",
-      "ui": "chk"
+      "code": "gender_diverse_too_young",
+      "ui": "no"
     },
     {
       "access": "GenderDiverse",
+      "access_params": {
+        "min_age": 17
+      },
       "gender": "diverse",
       "age": 17,
       "allowed": false,
@@ -3163,6 +7228,9 @@
     },
     {
       "access": "GenderDiverse",
+      "access_params": {
+        "min_age": 17
+      },
       "gender": "diverse",
       "age": 18,
       "allowed": false,
@@ -3171,6 +7239,9 @@
     },
     {
       "access": "GenderDiverse",
+      "access_params": {
+        "min_age": 17
+      },
       "gender": "diverse",
       "age": 40,
       "allowed": false,
@@ -3179,6 +7250,9 @@
     },
     {
       "access": "GenderDiverse",
+      "access_params": {
+        "min_age": 17
+      },
       "gender": "diverse",
       "age": 59,
       "allowed": false,
@@ -3187,6 +7261,9 @@
     },
     {
       "access": "GenderDiverse",
+      "access_params": {
+        "min_age": 17
+      },
       "gender": "diverse",
       "age": 60,
       "allowed": false,
@@ -3195,330 +7272,13 @@
     },
     {
       "access": "GenderDiverse",
+      "access_params": {
+        "min_age": 17
+      },
       "gender": "diverse",
       "age": 65,
       "allowed": false,
       "code": "gender_diverse_confirm",
-      "ui": "chk"
-    },
-    {
-      "access": "AccompaniedChildren",
-      "gender": "",
-      "age": null,
-      "allowed": false,
-      "code": "accompanied_children_confirm",
-      "ui": "chk"
-    },
-    {
-      "access": "AccompaniedChildren",
-      "gender": "",
-      "age": 8,
-      "allowed": false,
-      "code": "accompanied_children_confirm",
-      "ui": "chk"
-    },
-    {
-      "access": "AccompaniedChildren",
-      "gender": "",
-      "age": 15,
-      "allowed": false,
-      "code": "accompanied_children_confirm",
-      "ui": "chk"
-    },
-    {
-      "access": "AccompaniedChildren",
-      "gender": "",
-      "age": 16,
-      "allowed": false,
-      "code": "accompanied_children_confirm",
-      "ui": "chk"
-    },
-    {
-      "access": "AccompaniedChildren",
-      "gender": "",
-      "age": 17,
-      "allowed": false,
-      "code": "accompanied_children_confirm",
-      "ui": "chk"
-    },
-    {
-      "access": "AccompaniedChildren",
-      "gender": "",
-      "age": 18,
-      "allowed": false,
-      "code": "accompanied_children_confirm",
-      "ui": "chk"
-    },
-    {
-      "access": "AccompaniedChildren",
-      "gender": "",
-      "age": 40,
-      "allowed": false,
-      "code": "accompanied_children_confirm",
-      "ui": "chk"
-    },
-    {
-      "access": "AccompaniedChildren",
-      "gender": "",
-      "age": 59,
-      "allowed": false,
-      "code": "accompanied_children_confirm",
-      "ui": "chk"
-    },
-    {
-      "access": "AccompaniedChildren",
-      "gender": "",
-      "age": 60,
-      "allowed": false,
-      "code": "accompanied_children_confirm",
-      "ui": "chk"
-    },
-    {
-      "access": "AccompaniedChildren",
-      "gender": "",
-      "age": 65,
-      "allowed": false,
-      "code": "accompanied_children_confirm",
-      "ui": "chk"
-    },
-    {
-      "access": "AccompaniedChildren",
-      "gender": "female",
-      "age": null,
-      "allowed": false,
-      "code": "accompanied_children_confirm",
-      "ui": "chk"
-    },
-    {
-      "access": "AccompaniedChildren",
-      "gender": "female",
-      "age": 8,
-      "allowed": false,
-      "code": "accompanied_children_confirm",
-      "ui": "chk"
-    },
-    {
-      "access": "AccompaniedChildren",
-      "gender": "female",
-      "age": 15,
-      "allowed": false,
-      "code": "accompanied_children_confirm",
-      "ui": "chk"
-    },
-    {
-      "access": "AccompaniedChildren",
-      "gender": "female",
-      "age": 16,
-      "allowed": false,
-      "code": "accompanied_children_confirm",
-      "ui": "chk"
-    },
-    {
-      "access": "AccompaniedChildren",
-      "gender": "female",
-      "age": 17,
-      "allowed": false,
-      "code": "accompanied_children_confirm",
-      "ui": "chk"
-    },
-    {
-      "access": "AccompaniedChildren",
-      "gender": "female",
-      "age": 18,
-      "allowed": false,
-      "code": "accompanied_children_confirm",
-      "ui": "chk"
-    },
-    {
-      "access": "AccompaniedChildren",
-      "gender": "female",
-      "age": 40,
-      "allowed": false,
-      "code": "accompanied_children_confirm",
-      "ui": "chk"
-    },
-    {
-      "access": "AccompaniedChildren",
-      "gender": "female",
-      "age": 59,
-      "allowed": false,
-      "code": "accompanied_children_confirm",
-      "ui": "chk"
-    },
-    {
-      "access": "AccompaniedChildren",
-      "gender": "female",
-      "age": 60,
-      "allowed": false,
-      "code": "accompanied_children_confirm",
-      "ui": "chk"
-    },
-    {
-      "access": "AccompaniedChildren",
-      "gender": "female",
-      "age": 65,
-      "allowed": false,
-      "code": "accompanied_children_confirm",
-      "ui": "chk"
-    },
-    {
-      "access": "AccompaniedChildren",
-      "gender": "male",
-      "age": null,
-      "allowed": false,
-      "code": "accompanied_children_confirm",
-      "ui": "chk"
-    },
-    {
-      "access": "AccompaniedChildren",
-      "gender": "male",
-      "age": 8,
-      "allowed": false,
-      "code": "accompanied_children_confirm",
-      "ui": "chk"
-    },
-    {
-      "access": "AccompaniedChildren",
-      "gender": "male",
-      "age": 15,
-      "allowed": false,
-      "code": "accompanied_children_confirm",
-      "ui": "chk"
-    },
-    {
-      "access": "AccompaniedChildren",
-      "gender": "male",
-      "age": 16,
-      "allowed": false,
-      "code": "accompanied_children_confirm",
-      "ui": "chk"
-    },
-    {
-      "access": "AccompaniedChildren",
-      "gender": "male",
-      "age": 17,
-      "allowed": false,
-      "code": "accompanied_children_confirm",
-      "ui": "chk"
-    },
-    {
-      "access": "AccompaniedChildren",
-      "gender": "male",
-      "age": 18,
-      "allowed": false,
-      "code": "accompanied_children_confirm",
-      "ui": "chk"
-    },
-    {
-      "access": "AccompaniedChildren",
-      "gender": "male",
-      "age": 40,
-      "allowed": false,
-      "code": "accompanied_children_confirm",
-      "ui": "chk"
-    },
-    {
-      "access": "AccompaniedChildren",
-      "gender": "male",
-      "age": 59,
-      "allowed": false,
-      "code": "accompanied_children_confirm",
-      "ui": "chk"
-    },
-    {
-      "access": "AccompaniedChildren",
-      "gender": "male",
-      "age": 60,
-      "allowed": false,
-      "code": "accompanied_children_confirm",
-      "ui": "chk"
-    },
-    {
-      "access": "AccompaniedChildren",
-      "gender": "male",
-      "age": 65,
-      "allowed": false,
-      "code": "accompanied_children_confirm",
-      "ui": "chk"
-    },
-    {
-      "access": "AccompaniedChildren",
-      "gender": "diverse",
-      "age": null,
-      "allowed": false,
-      "code": "accompanied_children_confirm",
-      "ui": "chk"
-    },
-    {
-      "access": "AccompaniedChildren",
-      "gender": "diverse",
-      "age": 8,
-      "allowed": false,
-      "code": "accompanied_children_confirm",
-      "ui": "chk"
-    },
-    {
-      "access": "AccompaniedChildren",
-      "gender": "diverse",
-      "age": 15,
-      "allowed": false,
-      "code": "accompanied_children_confirm",
-      "ui": "chk"
-    },
-    {
-      "access": "AccompaniedChildren",
-      "gender": "diverse",
-      "age": 16,
-      "allowed": false,
-      "code": "accompanied_children_confirm",
-      "ui": "chk"
-    },
-    {
-      "access": "AccompaniedChildren",
-      "gender": "diverse",
-      "age": 17,
-      "allowed": false,
-      "code": "accompanied_children_confirm",
-      "ui": "chk"
-    },
-    {
-      "access": "AccompaniedChildren",
-      "gender": "diverse",
-      "age": 18,
-      "allowed": false,
-      "code": "accompanied_children_confirm",
-      "ui": "chk"
-    },
-    {
-      "access": "AccompaniedChildren",
-      "gender": "diverse",
-      "age": 40,
-      "allowed": false,
-      "code": "accompanied_children_confirm",
-      "ui": "chk"
-    },
-    {
-      "access": "AccompaniedChildren",
-      "gender": "diverse",
-      "age": 59,
-      "allowed": false,
-      "code": "accompanied_children_confirm",
-      "ui": "chk"
-    },
-    {
-      "access": "AccompaniedChildren",
-      "gender": "diverse",
-      "age": 60,
-      "allowed": false,
-      "code": "accompanied_children_confirm",
-      "ui": "chk"
-    },
-    {
-      "access": "AccompaniedChildren",
-      "gender": "diverse",
-      "age": 65,
-      "allowed": false,
-      "code": "accompanied_children_confirm",
       "ui": "chk"
     }
   ]
