@@ -280,8 +280,7 @@ final class BehaviourTests: XCTestCase {
     // The complaint this answers was "I can't switch views nicely, ie list, map". The contract
     // is that switching is a MODE, not a journey: one tap out, one tap back, no push, and the
     // day strip still there because the day is still the question.
-    modeSegment(1).tap()
-    XCTAssertTrue(find("poolMap").waitForExistence(timeout: 10), "the map mode drew no map")
+    showTheMap()
     XCTAssertTrue(find("dayStrip").exists, "switching to the map took the day picker away")
 
     let pin = find("mapPin")
@@ -301,8 +300,7 @@ final class BehaviourTests: XCTestCase {
     // the screen — the first version was one brown mass you could not read and could not
     // reliably tap. The contract is that the map opens GROUPED, and that tapping a group is a
     // way IN to the pools inside it rather than a dead end.
-    modeSegment(1).tap()
-    XCTAssertTrue(find("poolMap").waitForExistence(timeout: 10), "the map mode drew no map")
+    showTheMap()
 
     let group = find("mapCluster")
     XCTAssertTrue(
@@ -330,8 +328,7 @@ final class BehaviourTests: XCTestCase {
   }
 
   func testTheModeSwitchGoesBothWays() {
-    modeSegment(1).tap()
-    XCTAssertTrue(find("poolMap").waitForExistence(timeout: 10), "no map after switching to it")
+    showTheMap()
     modeSegment(0).tap()
     XCTAssertTrue(find("poolRow").waitForExistence(timeout: 10), "no way back to the list")
     XCTAssertTrue(waitForDisappearance(of: find("poolMap")), "the map stayed under the list")
@@ -491,5 +488,39 @@ final class BehaviourTests: XCTestCase {
   private func waitForDisappearance(of element: XCUIElement) -> Bool {
     let gone = expectation(for: NSPredicate(format: "exists == false"), evaluatedWith: element)
     return XCTWaiter().wait(for: [gone], timeout: 8) == .completed
+  }
+
+  /// Switch to map mode and wait for the map itself. Three tests began with this and each
+  /// carried its own copy, so a flake had to be fixed three times or not at all.
+  ///
+  /// TWO THINGS IT DOES THAT A BARE `tap()` DID NOT, both of which failed a merge with
+  /// "the map mode drew no map" while the SAME COMMIT passed in a parallel run:
+  ///
+  /// 1. It waits for the segment to be HITTABLE, not merely to exist. A tap on an element that
+  ///    exists but is still laying out is delivered nowhere, and the symptom is indistinguishable
+  ///    from a map that never drew — the test blames the map for a tap that never landed.
+  ///
+  /// 2. It waits 60 seconds for the map rather than 10. That is not padding a real failure into
+  ///    passing: MapKit's FIRST map in a process initialises a renderer and fetches tiles, and on
+  ///    a loaded CI runner that has genuinely taken longer than ten seconds. The old number was a
+  ///    guess about somebody else's framework. A long ceiling costs nothing when things are well
+  ///    — `waitForExistence` returns the instant the element appears — and a map that truly never
+  ///    draws still fails, just a minute later.
+  ///
+  /// `file`/`line` default to the CALLER's, so a failure still points at the test that asked.
+  private func showTheMap(file: StaticString = #filePath, line: UInt = #line) {
+    let segment = modeSegment(1)
+    XCTAssertTrue(
+      segment.waitForExistence(timeout: 15), "no view-mode picker to switch with",
+      file: file, line: line)
+    let hittable = expectation(
+      for: NSPredicate(format: "isHittable == true"), evaluatedWith: segment)
+    XCTAssertEqual(
+      XCTWaiter().wait(for: [hittable], timeout: 15), .completed,
+      "the map segment never became tappable", file: file, line: line)
+    segment.tap()
+    XCTAssertTrue(
+      find("poolMap").waitForExistence(timeout: 60), "the map mode drew no map",
+      file: file, line: line)
   }
 }
