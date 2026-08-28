@@ -176,13 +176,39 @@ jobs:
           security find-identity -v -p codesigning "$KEYCHAIN"
 
       # `-allowProvisioningUpdates` needs the API key ON DISK, in a directory it searches.
+      #
+      # ACCEPTS THE KEY IN EITHER FORM, and checks it before anything slow runs. The secret is
+      # meant to be the `.p8` base64-encoded, because a PEM's real newlines do not always
+      # survive being pasted into a secret — but pasting the PEM itself is the obvious mistake,
+      # and it is one this workflow can simply absorb. It did happen: a raw PEM was
+      # base64-DECODED into gibberish here and surfaced twenty minutes later, inside the
+      # archive, as `CryptoKit.CryptoKitASN1Error.invalidPEMDocument` — an error naming neither
+      # the secret nor the step that wrote it.
+      #
+      # So: a value that already looks like a PEM is written through unchanged, anything else is
+      # decoded, and either way the RESULT is checked for the PEM header. A bad key now fails
+      # here, in seconds, saying which secret to fix.
       - name: Place the App Store Connect API key
         env:
           ASC_PRIVATE_KEY: ${{ secrets.ASC_PRIVATE_KEY }}
         run: |
           mkdir -p "$RUNNER_TEMP/private_keys"
-          echo "$ASC_PRIVATE_KEY" | base64 --decode \
-            > "$RUNNER_TEMP/private_keys/AuthKey_${{ secrets.ASC_KEY_ID }}.p8"
+          key="$RUNNER_TEMP/private_keys/AuthKey_${{ secrets.ASC_KEY_ID }}.p8"
+          if printf '%s' "$ASC_PRIVATE_KEY" | head -c 27 | grep -q -- "-----BEGIN"; then
+            printf '%s\n' "$ASC_PRIVATE_KEY" > "$key"
+          else
+            printf '%s' "$ASC_PRIVATE_KEY" | base64 --decode > "$key" || {
+              echo "ASC_PRIVATE_KEY is neither a PEM nor valid base64 of one."
+              echo "Re-set it with: base64 -i AuthKey_XXXXXXXXXX.p8 | gh secret set ASC_PRIVATE_KEY"
+              exit 1; }
+          fi
+          if ! head -1 "$key" | grep -q -- "-----BEGIN .*PRIVATE KEY-----"; then
+            echo "ASC_PRIVATE_KEY did not resolve to a private key. First line was:"
+            head -c 40 "$key"; echo
+            echo "Re-set it with: base64 -i AuthKey_XXXXXXXXXX.p8 | gh secret set ASC_PRIVATE_KEY"
+            exit 1
+          fi
+          echo "API key placed for key id ${{ secrets.ASC_KEY_ID }}"
 
       # Every signing setting is an OVERRIDE, because the checked-in project deliberately has
       # CODE_SIGNING_ALLOWED = NO — that is what lets the qa.yml simulator job build with no
