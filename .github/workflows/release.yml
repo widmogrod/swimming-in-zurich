@@ -191,6 +191,13 @@ jobs:
       # SWIMZHStoreManifestURL is injected the same way and for the same reason: the shipped
       # default is NO manifest (AppCorrectnessTests asserts it), so the weekly refresh is
       # turned on here, in the one build that has somewhere to refresh FROM.
+      #
+      # NO `CODE_SIGN_IDENTITY` HERE, deliberately. Naming "Apple Distribution" beside
+      # CODE_SIGN_STYLE=Automatic is a CONFLICT rather than a hint, and Xcode refuses all
+      # three targets with "automatically signed for development, but a conflicting code
+      # signing identity Apple Distribution has been manually specified" — which is how the
+      # first dry run ended. Automatic signing already picks the distribution identity for an
+      # `archive` action: the identity follows the ACTION, so naming it can only disagree.
       - name: Archive
         env:
           TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
@@ -209,7 +216,6 @@ jobs:
             -authenticationKeyIssuerID '${{ secrets.ASC_ISSUER_ID }}' \
             DEVELOPMENT_TEAM="$TEAM_ID" \
             CODE_SIGN_STYLE=Automatic \
-            CODE_SIGN_IDENTITY="Apple Distribution" \
             CODE_SIGNING_ALLOWED=YES \
             CODE_SIGNING_REQUIRED=YES \
             MARKETING_VERSION='${{ steps.version.outputs.marketing }}' \
