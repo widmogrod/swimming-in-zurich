@@ -1,0 +1,83 @@
+# Build the gold store from the live network and publish it to Pages.
+#
+# EXTRACTED, NOT COPIED. Two callers need exactly this — `release.yml`, before it signs an app
+# around the store, and `refresh.yml`, weekly, which needs nothing else — and a second hand
+# transcription of it would be the trap `qa.yml` already names: two copies that agree step for
+# step, until one is edited and the other silently keeps publishing something else. The App
+# Store artefact and the weekly refresh must produce a BYTE-IDENTICAL kind of store, because the
+# app validates a downloaded one against the same schema it was built with; the surest way to
+# keep that true is for there to be one procedure.
+#
+# Callers must grant `pages: write` and `id-token: write`, and set the `IOS_STORE_URL` variable.
+name: publish-store
+
+on:
+  workflow_call:
+    outputs:
+      page_url:
+        description: "The Pages URL the store was published to"
+        value: ${{ jobs.pages.outputs.page_url }}
+
+jobs:
+  store:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Sync environment
+        run: uv sync
+
+      # NETWORK-DEPENDENT and the slowest step here: WFS roster + every page scraper. The build
+      # is atomic — any provider failure aborts non-zero and nothing downstream runs, which is
+      # exactly what we want before an App Store submission.
+      - name: Build the gold store
+        run: uv run python -m swimzh.cli build --db gold.sqlite
+
+      # Projects gold into the pre-resolved iOS store AND writes manifest.json, whose `url`
+      # field is IOS_STORE_URL. That URL must be where `pages` below publishes it, or an
+      # installed app downloads a 404 forever.
+      - name: Export the release store + manifest
+        run: make ios-release IOS_STORE_URL='${{ vars.IOS_STORE_URL }}'
+
+      - name: Report what shipped
+        run: ls -l dist/ios && cat dist/ios/manifest.json
+
+      # For `release.yml`'s app job, which needs the same bytes the manifest hashed. Harmless
+      # for the weekly refresh, which simply never downloads it.
+      - name: Upload the store for the app job
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-store
+          path: dist/ios
+          retention-days: 7
+
+      # The App Store listing must name a reachable privacy policy, and Pages is already
+      # publishing from this directory — so the page ships beside the store rather than
+      # needing a second host. `docs/pages/` is the whole published site apart from the store.
+      - name: Add the static pages beside the store
+        run: cp -R docs/pages/. dist/ios/
+
+      - name: Upload the store for Pages
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist/ios
+
+  # Publishing BEFORE an app is submitted is the safe order: the store is validated by the
+  # client (bytes -> sha256 -> not-WAL -> integrity_check -> schema_version -> sqlite_stat1)
+  # and a schema it cannot read is ignored, so an early publish can never brick an old build.
+  pages:
+    needs: store
+    runs-on: ubuntu-latest
+    outputs:
+      page_url: ${{ steps.deploy.outputs.page_url }}
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - id: deploy
+        uses: actions/deploy-pages@v4

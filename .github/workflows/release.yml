@@ -3,10 +3,17 @@
 # store from the live network (minutes, and it can fail on somebody else's website), it burns an
 # App Store build number, and it submits to Apple review. None of those belong on a branch push.
 #
-# Three jobs, in order, because they need three different things:
-#   store — ubuntu, network, python: builds gold.sqlite and projects the release store.
-#   pages — deploys that store + manifest.json, so the URL in the app's Info.plist resolves.
-#   app   — macOS, Xcode, signing: archives, uploads, submits.
+# Two jobs. `publish` IS `publish-store.yml`, shared verbatim with the weekly `refresh.yml`: it
+# builds gold.sqlite from the live network, projects the iOS store and its manifest, and deploys
+# both to Pages so the URL in the app's Info.plist resolves. `app` then archives, signs, uploads
+# and submits, on macOS.
+#
+# WHAT `dry_run` CANNOT TELL YOU, which cost four failed releases to learn: it SKIPS the Ruby and
+# upload steps — the two that talk to Apple — and it runs from a BRANCH where a release runs from
+# a TAG. So a green dry run has never meant a green release. Both halves of that gap have bitten:
+# the Pages environment allowed `main` and not `v*`, so a tag could not deploy at all; and the
+# committed Gemfile.lock named a bundler the runner's Ruby could not load. A dry run proves the
+# build and the signing. The first real tag is still the first test of everything after them.
 name: release
 
 on:
@@ -32,71 +39,19 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  # ---------------------------------------------------------------------------------------
-  store:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@v5
-        with:
-          enable-cache: true
-
-      - name: Sync environment
-        run: uv sync
-
-      # NETWORK-DEPENDENT and the slowest step here: WFS roster + every page scraper. The build
-      # is atomic — any provider failure aborts non-zero and nothing downstream runs, which is
-      # exactly what we want before an App Store submission.
-      - name: Build the gold store
-        run: uv run python -m swimzh.cli build --db gold.sqlite
-
-      # Projects gold into the pre-resolved iOS store AND writes manifest.json, whose `url`
-      # field is IOS_STORE_URL. That URL must be where `pages` below publishes it, or an
-      # installed app downloads a 404 forever.
-      - name: Export the release store + manifest
-        run: make ios-release IOS_STORE_URL='${{ vars.IOS_STORE_URL }}'
-
-      - name: Report what shipped
-        run: ls -l dist/ios && cat dist/ios/manifest.json
-
-      # For the `app` job, which needs the same bytes the manifest hashed.
-      - name: Upload the store for the app job
-        uses: actions/upload-artifact@v4
-        with:
-          name: ios-store
-          path: dist/ios
-          retention-days: 7
-
-      # The App Store listing must name a reachable privacy policy, and Pages is already
-      # publishing from this directory — so the page ships beside the store rather than
-      # needing a second host. `docs/pages/` is the whole published site apart from the store.
-      - name: Add the static pages beside the store
-        run: cp -R docs/pages/. dist/ios/
-
-      - name: Upload the store for Pages
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: dist/ios
-
-  # ---------------------------------------------------------------------------------------
-  # Publishing BEFORE the app is submitted is the safe order: the store is validated by the
-  # client (bytes -> sha256 -> not-WAL -> integrity_check -> schema_version -> sqlite_stat1)
-  # and a schema it cannot read is ignored, so an early publish can never brick an old build.
-  pages:
-    needs: store
-    runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deploy.outputs.page_url }}
-    steps:
-      - id: deploy
-        uses: actions/deploy-pages@v4
+  # The gold store, built from the live network and published to Pages. Shared verbatim with
+  # `refresh.yml`, which runs the SAME workflow weekly and stops there — see publish-store.yml
+  # for why this is a call rather than a second copy of the steps.
+  publish:
+    uses: ./.github/workflows/publish-store.yml
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
 
   # ---------------------------------------------------------------------------------------
   app:
-    needs: [store, pages]
+    needs: publish
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
