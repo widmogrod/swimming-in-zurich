@@ -235,10 +235,13 @@ ios-screenshots:  ## Capture the App Store screenshot set into dist/screenshots/
 	# but unsellable headline "Nothing open to you now", which is how the first run of this
 	# target ended. Refusing beats uploading it: the App Store shows the first screenshot
 	# before anything else, and nobody re-reads a set they believe they already took.
+	# The window is the POOLS' hours, not office hours: Hallenbad City runs 06:00-22:00, so a
+	# 19:00 capture still says "N pools open to you now". 21:00 is the first hour at which
+	# little enough is left that the set stops selling the app.
 	@hour=$$(date +%H); \
-	if [ "$$hour" -lt 09 ] || [ "$$hour" -ge 19 ]; then \
-		echo "make ios-screenshots: it is $$hour:00 — the pools are shut, so the first"; \
-		echo "screenshot would read \"Nothing open to you now\". Run between 09:00 and 19:00."; \
+	if [ "$$hour" -lt 09 ] || [ "$$hour" -ge 21 ]; then \
+		echo "make ios-screenshots: it is $$hour:00 — too little is open, so the first"; \
+		echo "screenshot would read \"Nothing open to you now\". Run between 09:00 and 21:00."; \
 		exit 2; \
 	fi
 	-xcrun simctl boot "$(IOS_SHOT_SIM)"

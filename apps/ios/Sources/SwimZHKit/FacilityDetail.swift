@@ -177,15 +177,25 @@ public struct DetailRow: Equatable, Sendable, Identifiable {
   /// visual register as this morning's measurement. The web draws the same distinction
   /// (`detailpanel.ts`'s `muted`/`stale`).
   public let muted: Bool
+  /// Whether this row's value is PROSE — a paragraph — rather than a fact of a few words.
+  ///
+  /// A fact sits opposite its label and reads right-aligned, which is what a `LabeledContent`
+  /// gives for free and what an address or a phone number wants. A paragraph in that same slot
+  /// wraps to four or five lines with a RAGGED LEFT EDGE, which is what shipped: the pool's
+  /// own blurb rendered against the right margin like a column of poetry. The row says which
+  /// kind it is; the view decides what to do about it.
+  public let isProse: Bool
 
   public init(
-    id: String, label: Wording, value: Wording, caveat: Wording? = nil, muted: Bool = false
+    id: String, label: Wording, value: Wording, caveat: Wording? = nil, muted: Bool = false,
+    isProse: Bool = false
   ) {
     self.id = id
     self.label = label
     self.value = value
     self.caveat = caveat
     self.muted = muted
+    self.isProse = isProse
   }
 }
 
@@ -255,9 +265,11 @@ private func whereRows(_ detail: FacilityDetail) -> [DetailRow] {
   }
   if let description = detail.description, !description.isEmpty {
     // The pool's own blurb, in the pool's own language. Untranslated by policy, like a notice.
+    // The ONLY prose row this sheet has: every other value is a few words wide.
     rows.append(
       DetailRow(
-        id: "description", label: .key("detail.fact.about"), value: .verbatim(description)))
+        id: "description", label: .key("detail.fact.about"), value: .verbatim(description),
+        isProse: true))
   }
   rows.append(
     DetailRow(

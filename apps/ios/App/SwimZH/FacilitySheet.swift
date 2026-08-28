@@ -164,6 +164,22 @@ struct DetailRowView: View {
           Text(row.label, localized)
         }
       }
+    } else if row.isProse {
+      // A PARAGRAPH, so the label goes ABOVE it and the text runs left-to-right across the
+      // whole row. In a `LabeledContent` it would sit in the trailing slot and wrap against
+      // the right margin, giving a ragged left edge — which is exactly how the pool blurb
+      // shipped, and what the first App Store screenshot caught. `isProse` is the kit's
+      // rule, not a length guess here: a short blurb is still prose, and a long address is
+      // still a fact.
+      VStack(alignment: .leading, spacing: Design.Space.hair) {
+        Text(row.label, localized)
+        Text(verbatim: rendered)
+          .foregroundStyle(.secondary)
+          // Without this a wrapped `Text` inside a row can still be given one line's height
+          // and truncate, which loses the end of the very paragraph this branch exists for.
+          .fixedSize(horizontal: false, vertical: true)
+      }
+      .frame(maxWidth: .infinity, alignment: .leading)
     } else {
       LabeledContent {
         Text(verbatim: rendered)

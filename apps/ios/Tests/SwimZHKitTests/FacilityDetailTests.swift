@@ -74,6 +74,7 @@ struct FacilityDetailTests {
 
   static func detail(
     admission: Admission = .unknown,
+    description: String? = nil,
     basins: [BasinDetail] = [],
     lockers: [LockerDetail] = [],
     rentals: [RentalDetail] = [],
@@ -88,7 +89,8 @@ struct FacilityDetailTests {
   ) -> FacilityDetail {
     FacilityDetail(
       poolID: "p", name: "Hallenbad Test", kind: "indoor", address: "Teststrasse 1",
-      description: nil, phone: nil, url: nil, freshness: freshness, admission: admission,
+      description: description, phone: nil, url: nil, freshness: freshness,
+      admission: admission,
       basins: basins, lockers: lockers, rentals: rentals, features: features,
       operatingSeason: season, lastAdmissionBeforeSeconds: lastAdmission,
       provenance: provenance,
@@ -603,5 +605,29 @@ struct FacilityDetailTests {
     // because the whole sheet collapsed.
     #expect(rows.contains { $0.id == "curated" })
     #expect(rows.contains { $0.id == "source" })
+  }
+
+  @Test("the pool's own blurb is prose; the facts beside it are not")
+  func onlyTheBlurbIsProse() {
+    // WHY THIS IS A RULE AND NOT A LENGTH GUESS. A `LabeledContent` puts a value in the
+    // trailing slot, which reads correctly for a fact of a few words and turns a paragraph
+    // into a right-aligned column with a ragged left edge — how the blurb shipped, and what
+    // the first App Store screenshot caught. The view needs to know which kind each row is,
+    // and only the row can say: a two-word blurb is still prose, a long address is still a
+    // fact, so neither character count nor line count can decide it.
+    let rows = Self.rows(
+      Self.detail(description: "Schwimmerbecken 50 x 15 m (6 Bahnen) 28°C, Sauna 8 - 22 Uhr."))
+
+    let blurb = rows.first { $0.id == "description" }
+    #expect(blurb != nil, "a pool with a description shows no About row")
+    #expect(blurb?.isProse == true, "the blurb is not marked prose, so it renders right-aligned")
+
+    // And nothing else is. The address sits opposite its label precisely because it is short;
+    // marking it prose would move every fact in the sheet onto its own line.
+    let others = rows.filter { $0.id != "description" }
+    #expect(!others.isEmpty, "the sheet produced no other rows, so this proves nothing")
+    #expect(
+      others.allSatisfy { !$0.isProse },
+      "a fact row is marked prose: \(others.filter(\.isProse).map(\.id))")
   }
 }
