@@ -1,0 +1,50 @@
+# The weekly data refresh — the whole reason the app can download a store at all.
+#
+# WITHOUT THIS, the refresh machinery is dead weight. The app checks `manifest.json` and adopts
+# a newer store, but that file only changed when somebody cut a release, so pool hours went
+# stale between App Store versions and every installed copy sat on the store baked into its
+# binary. This publishes a fresh one on a schedule instead, and installed apps pick it up on
+# their own: no submission, no review, no user action.
+#
+# It runs `publish-store.yml` and STOPS THERE. No archive, no signing, no App Store — new data
+# is not a new app, and a weekly build number would be noise in App Store Connect.
+#
+# WEEKLY, matching the sources rather than the calendar: `core/cache_tiers.py` puts
+# `page_provider` and `price_scraper` at 7 days because the city's pages move about that often,
+# and the volatile facts (a live water temperature) are fetched by the phone at read time and
+# were never in this store. Daily would ask somebody else's servers seven times for the same
+# answer.
+#
+# A scraper failure fails this workflow, which is the point: `swimzh build` is atomic, so a
+# broken source aborts before anything is published and the previously published store keeps
+# serving. The red run is the notification.
+name: refresh
+
+on:
+  schedule:
+    # 03:00 UTC Monday — 04:00 Zürich in winter, 05:00 in summer. Deliberately not on the hour
+    # GitHub's scheduler is busiest, and long before anyone is deciding where to swim.
+    - cron: "0 3 * * 1"
+  # So a refresh can be forced after a source changes, without cutting a release.
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# The SAME group as `release.yml`. A refresh and a release both deploy to Pages, and the loser
+# of a race would publish its store over the other's — most damagingly a refresh overwriting the
+# manifest a release just wrote for a build in review. Queue, never cancel: a half-finished
+# publish is the one outcome worse than a slow one.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    uses: ./.github/workflows/publish-store.yml
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
