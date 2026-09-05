@@ -40,7 +40,6 @@ struct PoolRowView: View {
   /// claim about a day nobody is in, which is the bug class this app has already shipped twice.
   let isToday: Bool
   let isExpanded: Bool
-  let namespace: Namespace.ID
   let onToggleFavourite: () -> Void
   let onToggleExpanded: () -> Void
 
@@ -105,7 +104,10 @@ struct PoolRowView: View {
       .contentShape(Rectangle())
     }
     .buttonStyle(.plain)
-    .matchedTransitionSource(id: row.poolID, in: namespace)
+    // NO zoom transition source any more. The pool screen is a map with a draggable drawer, and
+    // a zoom-pushed screen's drag-to-dismiss hijacked every downward drag on that drawer (and
+    // hid the bar while it did). The plain push keeps the system's edge swipe and leaves the
+    // drawer its gesture. See `PoolPanel`.
     // The four clauses, on the ONE element that both reads them and navigates.
     .accessibilityLabel(Text(verbatim: accessibilityLabel))
     // The swipe action, said out loud. VoiceOver surfaces swipe actions on a plain row; this

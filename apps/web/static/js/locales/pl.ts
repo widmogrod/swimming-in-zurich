@@ -570,6 +570,7 @@ export const pl = {
   "action.directions": "Trasa",
   "action.call": "Zadzwoń",
   "action.openInMaps": "Otwórz w Mapach",
+  "action.backToPool": "Wróć do basenu",
   "nav.allPools": "Wszystkie baseny",
   "nav.accessTypes": "Co oznaczają etykiety",
   "nav.browse": "Przeglądaj",

@@ -528,6 +528,7 @@ export const fr = {
   "action.directions": "Itinéraire",
   "action.call": "Appeler",
   "action.openInMaps": "Ouvrir dans Plans",
+  "action.backToPool": "Revenir à la piscine",
   "nav.allPools": "Toutes les piscines",
   "nav.accessTypes": "Ce que signifient les libellés",
   "nav.browse": "Parcourir",

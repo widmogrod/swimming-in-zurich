@@ -375,28 +375,48 @@ final class BehaviourTests: XCTestCase {
     XCTAssertTrue(waitForDisappearance(of: find("poolMap")), "the map stayed under the list")
   }
 
-  // MARK: - The pool screen: not a table
+  // MARK: - The pool screen: a map, with the facts in a panel
 
-  func testThePoolScreenOpensOnThePoolAndNotOnATable() {
+  func testThePoolScreenOpensOnTheMapWithTheFactsInAPanel() {
     // "When I click on a pool I'm shown a table." It was true — the screen opened on a `List`
-    // whose first row was a label/value pair for the address. It opens on the pool now: where
-    // it is, what it is called, what the answer was, and what you can DO about it.
+    // whose first row was a label/value pair for the address. Then it opened on a picture of
+    // the map over that list. It opens on the MAP now: full screen, the pool's facts in a
+    // panel over it, and what you can DO about it reachable from the panel.
     find("poolRow").tap()
     XCTAssertTrue(
-      find("heroMap").waitForExistence(timeout: 10),
+      find("poolStage").waitForExistence(timeout: 10),
       "the pool screen does not open on a map of the pool")
+    let panel = find("poolPanel")
+    XCTAssertTrue(panel.waitForExistence(timeout: 5), "the facts are not in a panel")
+    XCTAssertGreaterThan(
+      panel.frame.height, app.frame.height / 5, "the panel is too small to hold the facts")
     XCTAssertTrue(
-      find("directionsButton").exists,
+      find("directionsButton").waitForExistence(timeout: 5),
       "the pool screen offers no way to get to the pool")
+    // The recentre control is a BAR item: the system's glass, at the back button's height and
+    // size, on the opposite side. Floated over the map it sat lower and larger than the back
+    // button beside it, which is what the owner saw first.
+    let recentre = find("poolStageRecentre")
+    XCTAssertTrue(recentre.exists, "no way back to the pool once panned")
+    // Its LEVEL is asserted, not its height: the element behind the identifier is the glyph's
+    // button inside the bar item, and the glass capsule the system draws around it is the
+    // back button's — the screenshot shows the two the same size, the tree does not.
+    let back = app.navigationBars.firstMatch.buttons.firstMatch
+    XCTAssertEqual(
+      recentre.frame.midY, back.frame.midY, accuracy: 1,
+      "the pin button is not at the back button's height")
+    XCTAssertGreaterThan(recentre.frame.minX, back.frame.maxX, "the pin button is not opposite")
+    recentre.tap()
+    XCTAssertTrue(panel.exists, "recentring the map lost the panel")
   }
 
   func testThePoolScreenSaysItsNameOnceAtATime() {
-    // The screen opened with the pool's name in the navigation bar AND at `heroTitle` six
-    // points under it — the same word twice. Neither copy could simply be deleted: the hero is
-    // what makes the push continuous with the row you tapped, and an empty bar on a scrolled
-    // screen leaves a chevron with nothing to say what you are looking at.
+    // The screen once opened with the pool's name in the navigation bar AND at `heroTitle`
+    // six points under it — the same word twice. The panel says it now, and the bar over the
+    // map says nothing: with the panel always present the name never scrolls away, so a bar
+    // title would be the duplication back.
     find("poolRow").tap()
-    XCTAssertTrue(find("heroMap").waitForExistence(timeout: 10), "the pool screen never opened")
+    XCTAssertTrue(find("poolPanel").waitForExistence(timeout: 10), "the pool screen never opened")
 
     let bar = app.navigationBars.firstMatch
     XCTAssertTrue(bar.waitForExistence(timeout: 5), "the pool screen has no navigation bar")
@@ -405,16 +425,84 @@ final class BehaviourTests: XCTestCase {
     // is drawn. What the reader can actually see is the label.
     XCTAssertEqual(
       bar.staticTexts.count, 0,
-      "the bar is stating the name while the hero is still showing it — that is twice")
+      "the bar is stating the name while the panel is showing it — that is twice")
+    // ...and the back button is still there and still works with the panel up, or the map is
+    // a screen with no way out.
+    let back = bar.buttons.firstMatch
+    XCTAssertTrue(back.exists, "the map screen has no way back")
+    back.tap()
+    XCTAssertTrue(find("poolRow").waitForExistence(timeout: 10), "back did not return to the list")
+  }
 
-    // ...and it must take the name over once the hero has gone, or the screen names no pool.
-    app.swipeUp()
-    app.swipeUp()
-    let named = expectation(
-      for: NSPredicate(format: "count > 0"), evaluatedWith: bar.staticTexts)
-    XCTAssertEqual(
-      XCTWaiter().wait(for: [named], timeout: 8), .completed,
-      "scrolling past the hero left the bar empty — nothing on screen names the pool")
+  func testSwipingFromTheLeadingEdgeGoesBack() {
+    // The map takes every pan it is given, and with the map edge to edge that included the
+    // system's swipe-back — the only way out was the button. `FacilitySheet.backSwipeEdge`
+    // keeps a strip of the leading edge free of the map so the swipe works again.
+    find("poolRow").tap()
+    XCTAssertTrue(find("poolStage").waitForExistence(timeout: 10), "the pool screen never opened")
+    let edge = app.coordinate(withNormalizedOffset: CGVector(dx: 0.005, dy: 0.4))
+    edge.press(forDuration: 0.05, thenDragTo: edge.withOffset(CGVector(dx: 320, dy: 0)))
+    XCTAssertTrue(
+      find("poolRow").waitForExistence(timeout: 8), "a swipe from the leading edge did not go back")
+  }
+
+  func testDraggingTheDrawerAnywhereMovesItAndDoesNotLeaveTheScreen() {
+    // THE GESTURE THE OWNER ASKED FOR, first half: a drag anywhere on the drawer — not only its
+    // handle — moves the drawer between its sizes and stays on the pool screen. With the zoom
+    // push this screen used to have, the same drag shrank the whole screen back toward the
+    // list and hid the bar on the way.
+    find("poolRow").tap()
+    let panel = find("poolPanel")
+    XCTAssertTrue(panel.waitForExistence(timeout: 10), "the pool screen never opened")
+    let restingTop = panel.frame.minY
+    // Up, from the middle of the drawer's body.
+    let body = panel.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.6))
+    body.press(
+      forDuration: 0.05, thenDragTo: body.withOffset(CGVector(dx: 0, dy: -260)),
+      withVelocity: .slow, thenHoldForDuration: 0.1)
+    XCTAssertTrue(
+      waitFor { panel.frame.minY < restingTop - 100 }, "the drawer did not rise when dragged")
+    XCTAssertTrue(find("poolStage").exists, "dragging the drawer up left the pool screen")
+    // ...and a LONG pull down from up there, on the header: all the way back to the smallest
+    // size and no further — two pulls to leave, never one. (A 260-point pull was tried first
+    // and stepped it down exactly one size, which is the rule working, not failing.)
+    let raised = panel.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.1))
+    raised.press(
+      forDuration: 0.05, thenDragTo: raised.withOffset(CGVector(dx: 0, dy: 600)),
+      withVelocity: .slow, thenHoldForDuration: 0.1)
+    XCTAssertTrue(
+      waitFor { abs(panel.frame.minY - restingTop) < 20 },
+      "the drawer did not come back down to its smallest size: rest \(restingTop), now "
+        + "\(panel.frame.minY), on the pool screen: \(find("poolStage").exists)")
+    XCTAssertTrue(find("poolStage").exists, "a moderate pull down left the pool screen")
+    XCTAssertTrue(find("directionsButton").exists, "the drawer lost its actions on the way")
+  }
+
+  func testPullingTheDrawerPastItsSmallestSizeGoesBack() {
+    // Second half: from its smallest size, pulling the drawer on down and letting go is the way
+    // out — back to the list, the way a place card in Maps goes.
+    find("poolRow").tap()
+    let panel = find("poolPanel")
+    XCTAssertTrue(panel.waitForExistence(timeout: 10), "the pool screen never opened")
+    let grab = panel.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.3))
+    grab.press(
+      forDuration: 0.05, thenDragTo: grab.withOffset(CGVector(dx: 0, dy: 500)),
+      withVelocity: .slow, thenHoldForDuration: 0.1)
+    XCTAssertTrue(
+      find("poolRow").waitForExistence(timeout: 8),
+      "pulling the drawer past its smallest size did not go back to the list")
+  }
+
+  func testSwipingFromTheLeadingEdgeOverTheDrawerGoesBack() {
+    // The edge swipe must work where the finger lands on the DRAWER too, not only on the map:
+    // the drawer's own drag took those swipes until the edge strip was raised above it.
+    find("poolRow").tap()
+    XCTAssertTrue(find("poolPanel").waitForExistence(timeout: 10), "the pool screen never opened")
+    let edge = app.coordinate(withNormalizedOffset: CGVector(dx: 0.005, dy: 0.85))
+    edge.press(forDuration: 0.05, thenDragTo: edge.withOffset(CGVector(dx: 320, dy: 0)))
+    XCTAssertTrue(
+      find("poolRow").waitForExistence(timeout: 8),
+      "a swipe from the leading edge over the drawer did not go back")
   }
 
   func testThePoolScreenActionsAreRealControls() {

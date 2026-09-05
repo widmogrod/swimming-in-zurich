@@ -89,6 +89,7 @@ extension Catalog {
     "access.women.desc": Entry(parameters: [], isPlural: false),
     "accessTypes.footer": Entry(parameters: [], isPlural: false),
     "accessTypes.title": Entry(parameters: [], isPlural: false),
+    "action.backToPool": Entry(parameters: [], isPlural: false),
     "action.call": Entry(parameters: [], isPlural: false),
     "action.directions": Entry(parameters: [], isPlural: false),
     "action.done": Entry(parameters: [], isPlural: false),

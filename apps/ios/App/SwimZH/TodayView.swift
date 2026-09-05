@@ -58,10 +58,6 @@ enum ViewMode: Hashable {
 struct TodayView: View {
   @Environment(\.localized) private var localized
   @State private var model = TodayModel()
-  /// The zoom transition's namespace. BOTH halves are required and neither works alone: the row
-  /// carries `matchedTransitionSource(id:in:)`, the destination carries
-  /// `navigationTransition(.zoom(sourceID:in:))`, and they meet on this namespace.
-  @Namespace private var zoom
 
   /// Foregrounding is the only moment a refresh is worth attempting beyond launch: the store is
   /// republished weekly, so anything more eager would be a wakeup that learns nothing.
@@ -121,6 +117,10 @@ struct TodayView: View {
       // `TodayModel.locateIfChosenBefore`. After the answer, for the same reason the store
       // refresh is: the app's promise is an answer the moment it opens.
       await model.locateIfChosenBefore()
+      // MapKit's first map in a process costs a few hundred milliseconds of framework and GPU
+      // set-up, and the first pool tapped used to pay it as a frozen push. Paid here instead,
+      // off the answer's critical path — see `MapWarmup`.
+      await MapWarmup.warm()
       // AFTER the screen has answered. The refresh is a background nicety; making the first
       // answer wait on a network round trip would trade the app's whole premise — an answer
       // with no network — for a store that is at most seven days fresher.
@@ -183,7 +183,11 @@ struct TodayView: View {
     switch route {
     case .pool(let poolID):
       FacilitySheetLoader(
-        poolID: poolID, day: model.filters.day, person: model.filters.person,
+        poolID: poolID,
+        // The name from the answer's row when there is one, else from the roster — both are
+        // already in memory, which is what lets the screen say the name before its facts load.
+        name: model.row(poolID)?.poolName ?? model.pools.first { $0.id == poolID }?.name ?? "",
+        day: model.filters.day, person: model.filters.person,
         // The row the user tapped, the pool's place, and whether the answer is for today —
         // the three things that turn a table of published facts into a screen about a pool.
         // See `PoolHeader`.
@@ -191,7 +195,9 @@ struct TodayView: View {
         load: { await model.facility($0) },
         live: { await model.liveTemperature(poiid: $0) }
       )
-      .navigationTransition(.zoom(sourceID: poolID, in: zoom))
+    // A PLAIN push, deliberately: the zoom transition this route had gives the pushed screen
+    // a drag-to-dismiss on every downward pan, which hijacked the drawer's own drag and hid
+    // the bar while it did (see `PoolPanel`). The plain push keeps the edge swipe.
     case .allPools:
       PoolsBrowser(pools: model.pools)
     case .legend:
@@ -422,7 +428,6 @@ struct TodayView: View {
               isFavourite: model.isFavourite(row.poolID),
               isToday: list.isToday,
               isExpanded: model.isExpanded(row.poolID),
-              namespace: zoom,
               onToggleFavourite: { model.toggleFavourite(row.poolID) },
               onToggleExpanded: { model.toggleExpanded(row.poolID) }
             )

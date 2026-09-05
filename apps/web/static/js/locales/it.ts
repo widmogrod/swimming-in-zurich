@@ -524,6 +524,7 @@ export const it = {
   "action.directions": "Indicazioni",
   "action.call": "Chiama",
   "action.openInMaps": "Apri in Mappe",
+  "action.backToPool": "Torna alla piscina",
   "nav.allPools": "Tutte le piscine",
   "nav.accessTypes": "Cosa significano le etichette",
   "nav.browse": "Sfoglia",

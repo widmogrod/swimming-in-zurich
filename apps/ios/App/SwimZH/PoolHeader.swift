@@ -1,29 +1,29 @@
-// PoolHeader.swift — the top of a pool's screen, and the reason it stopped being a table.
+// PoolHeader.swift — the top of a pool's panel, and the reason the screen stopped being a table.
 //
 // "When I click on a pool I'm shown a table." That was literally true: the screen opened on a
 // `List` of label/value pairs, whose first row was the address. Nothing on it connected to the
 // row that had just been tapped, nothing on it could be acted on, and the pool's own answer —
 // the sentence the list had spent a row saying — was not there at all.
 //
-// So the screen opens on the pool instead. Four things, in the order a swimmer wants them:
+// So the panel opens on the pool instead. Three things, in the order a swimmer wants them:
 //
-//  1. WHERE IT IS, as a picture. A map, not the string "Mythenquai 95" — the address is still
-//     below in the facts, where a string belongs.
-//  2. WHAT IT IS CALLED, at the size a screen about one thing can afford, with the pool's own
+//  1. WHAT IT IS CALLED, at the size a screen about one thing can afford, with the pool's own
 //     answer under it — the SAME `Verdict` the list row drew, so the push is continuous rather
 //     than a change of subject. This is what the zoom transition was always animating towards
 //     and never arriving at.
-//  3. WHEN, as the same ribbon the row drew, for the same reason: it is the one part of the
+//  2. WHEN, as the same ribbon the row drew, for the same reason: it is the one part of the
 //     answer a table genuinely cannot say.
-//  4. WHAT TO DO ABOUT IT. Directions, phone, website. A swimmer reading a pool's screen is
+//  3. WHAT TO DO ABOUT IT. Directions, phone, website. A swimmer reading a pool's screen is
 //     usually about to go there, and none of the three was reachable as an action.
 //
-// The rest of the screen — every published fact, every caveat — is unchanged below it, still
+// WHERE IT IS is the screen itself: `PoolStage`, the map this panel rides over. A picture of
+// the map used to be the header's first item; it grew into the whole screen and the picture
+// went (see `PoolStage`). The address is still below in the facts, where a string belongs.
+//
+// The rest of the panel — every published fact, every caveat — is unchanged below it, still
 // built by `SwimZHKit.detailSections` and still covered by `FieldCoverageTests`. Nothing was
-// removed to make room; the header does not repeat a single row that follows it, which is why
-// the address is a map here and a string there.
+// removed to make room; the header does not repeat a single row that follows it.
 
-import MapKit
 import SwiftUI
 import SwimZHKit
 
@@ -34,84 +34,20 @@ struct PoolHeader: View {
   /// browser, which pushes the same screen from the roster — see `SwimZHKit.findRow`. The
   /// verdict and the ribbon are then omitted rather than invented.
   let row: PoolRow?
+  /// Where the pool is, for the Directions action. The map itself is the screen, not this view.
   let point: GeoPoint?
   let isToday: Bool
-  /// How much of the hero sits UNDER the bar when it extends — the top safe area, measured by
-  /// `FacilitySheet` outside the list. Added to the map's height so the picture keeps its full
-  /// 150 points below the bar rather than losing two thirds of itself behind the glass. Zero
-  /// when the hero does not extend.
-  var heroTopInset: Double = 0
-
-  /// `Lab.heroExtends`: the map is a full-bleed hero that extends under the navigation bar.
-  /// `FacilitySheet` reads the same key for the row's insets; this side decides what the map
-  /// itself looks like and where the gutters go when the row no longer supplies them.
-  @AppStorage(Lab.heroExtends) private var heroExtends = true
 
   var body: some View {
     VStack(alignment: .leading, spacing: Design.Space.gutter) {
-      map
-      VStack(alignment: .leading, spacing: Design.Space.gutter) {
-        VStack(alignment: .leading, spacing: Design.Space.snug) {
-          title
-          verdict
-        }
-        ribbon
-        PoolActions(detail: detail, point: point)
+      VStack(alignment: .leading, spacing: Design.Space.snug) {
+        title
+        verdict
       }
-      // The words keep their margin whether or not the picture has one. Zero here when the
-      // row still insets itself, so the two paths cannot add up to a double gutter.
-      .padding(.horizontal, heroExtends ? Design.Space.gutter : 0)
+      ribbon
+      PoolActions(detail: detail, point: point)
     }
     .padding(.bottom, Design.Space.row)
-  }
-
-  /// The pool, on a map, at a span the kit chooses. `.allowsHitTesting(false)` on purpose: this
-  /// is a picture of where the pool is, and a map that panned under a finger scrolling the
-  /// facts below would fight the screen it is part of. Getting to a real map is the Directions
-  /// action, which hands the whole job to Maps.
-  ///
-  /// EXTENDED, it is a hero rather than a picture: no rounded clip, edge to edge (the row's
-  /// insets are zero, see `FacilitySheet.heroInsets`), and `.backgroundExtensionEffect()` so
-  /// the water appears to continue up under the glass navigation bar, with the back button
-  /// floating over it — the iOS 26 idiom for a screen that opens on an image. The map stays
-  /// inert and hidden from VoiceOver either way; only its frame changes.
-  @ViewBuilder
-  private var map: some View {
-    // `picture` unwraps the point itself; this only decides whether the frame exists at all.
-    if point != nil {
-      picture
-        .frame(height: heroMapHeight + heroTopInset)
-        .clipShape(.rect(cornerRadius: heroExtends ? 0 : Design.Radius.control))
-        .backgroundExtensionEffect(isEnabled: heroExtends)
-        .allowsHitTesting(false)
-        .accessibilityHidden(true)
-        .accessibilityIdentifier("heroMap")
-    }
-  }
-
-  @ViewBuilder
-  private var picture: some View {
-    if let point {
-      Map(
-        initialPosition: .region(
-          MKCoordinateRegion(
-            center: CLLocationCoordinate2D(latitude: point.lat, longitude: point.lon),
-            latitudinalMeters: poolMapSpanMetres, longitudinalMeters: poolMapSpanMetres)),
-        interactionModes: []
-      ) {
-        Annotation(
-          detail.name,
-          coordinate: CLLocationCoordinate2D(
-            latitude: point.lat, longitude: point.lon)
-        ) {
-          Image(systemName: Icon.pin)
-            .font(.heroTitle)
-            .foregroundStyle(.tint)
-            .accessibilityHidden(true)
-        }
-        .annotationTitles(.hidden)
-      }
-    }
   }
 
   private var title: some View {
@@ -179,10 +115,6 @@ struct PoolHeader: View {
     }
   }
 }
-
-/// How tall the header's map is. Not a `Design.Space` — those are the rhythm between two pieces
-/// of text, and this is the size of a picture.
-let heroMapHeight: Double = 150
 
 /// The three things a swimmer standing outside a pool actually does.
 ///

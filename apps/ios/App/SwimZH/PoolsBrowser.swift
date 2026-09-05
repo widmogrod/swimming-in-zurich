@@ -212,6 +212,9 @@ struct PoolBrowserRow: View {
 /// would spend the memory budget the list model has already half spent.
 struct FacilitySheetLoader: View {
   let poolID: String
+  /// The pool's name, from the roster — known before its facts are, so the screen can say it
+  /// while they load.
+  let name: String
   let day: String
   let person: Person
   /// The answer's row for this pool, when the screen was reached from an answer. Nil from the
@@ -272,14 +275,12 @@ struct FacilitySheetLoader: View {
     asOf = Date()
   }
 
-  @ViewBuilder
+  /// The screen, at once. The map and the pool's name come from the roster and need no read;
+  /// the facts fill the panel when `detail` lands. A spinner where the screen should be is
+  /// what this used to show for the first few hundred milliseconds of every pool.
   private var content: some View {
-    if let detail {
-      FacilitySheet(
-        detail: detail, day: day, person: person, live: reading, asOf: asOf, row: row,
-        point: point, isToday: isToday)
-    } else {
-      ProgressView()
-    }
+    FacilitySheet(
+      detail: detail, name: name, day: day, person: person, live: reading, asOf: asOf, row: row,
+      point: point, isToday: isToday)
   }
 }

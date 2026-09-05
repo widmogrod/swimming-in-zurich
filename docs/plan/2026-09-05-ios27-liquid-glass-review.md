@@ -41,7 +41,7 @@ API name above as "check the SDK before writing it".
 | Hidden nav bar on the find screen | `.toolbarVisibility(.hidden, for: .navigationBar)` | Chrome that earned nothing is gone; correct |
 | Scroll edge effect hidden on the day strip | `.scrollEdgeEffectHidden(for: .horizontal)` | Follows "edge effects are not decorative" |
 | Bars attach to the scrolling view | lint `filterBarUsesSafeAreaBar` + no `VStack` wrapper | Edge effect and title collapse work |
-| Zoom push, haptics, numeric roll | `matchedTransitionSource`, `.sensoryFeedback`, `.numericText()` | Good iOS 26 delight, all declarative |
+| Haptics, numeric roll | `.sensoryFeedback`, `.numericText()` | Good iOS 26 delight, all declarative. The zoom push the pool route had was REMOVED on 2026-09-06: a zoom-pushed screen owns a drag-to-dismiss on every downward pan, which hijacked the drawer's drag and hid the bar (see "The pool screen is a map") |
 | Deployment target | `IPHONEOS_DEPLOYMENT_TARGET = 26.0`, Swift 6 | Nothing blocks iOS 27 APIs behind `#available` |
 
 ## Findings, ranked by delight per hour
@@ -160,8 +160,87 @@ screenshot set was pixel-identical to the new one for exactly that reason.
 | --- | --- | --- | --- |
 | Glass day strip | `lab.glassStrip` | chips in a `GlassEffectContainer`; the selected tint is a separate glass view with one `glassEffectID`, so it morphs chip to chip | flat tinted chips |
 | Glass map card | `lab.glassCard` | `.glassEffect(.regular.interactive())`, `.materialize` transition, no shadow | `.regularMaterial` + shadow |
-| Hero map under the bar | `lab.heroExtends` | full-bleed map; the list ignores the top safe area so the map sits under the status bar and the glass back button; title handover threshold subtracts the measured bar height | 150 pt rounded map inside the row |
 | Symbol motion | `lab.symbolMotion` | heart draws on/off, filter glyph replace + bounce | plain swaps |
+
+### The pool screen is a map (decided the same evening; two switches deleted)
+
+The ask: make the pool screen's map "interactive and delightful — maybe pulling down expands
+it, clicking makes the detail a panel that changes size". Three shapes were driven on a phone
+in one evening, and the owner chose the last:
+
+1. **Picture + list** (the `lab.heroExtends` variant above, then behind a switch): a 150 pt map
+   over the facts, full-bleed under the bar.
+2. **Picture that opens** (`lab.heroStage`): tap the picture or its glass button and it grew to
+   fill the screen, the facts slid into a resizable panel, close brought the picture back.
+3. **The map IS the screen** — what shipped. `PoolStage.swift`: a full-screen pannable map
+   under the glass back button, the pool's pin, the reader's dot when permitted, transit stops
+   and car parks (every other point-of-interest category is hidden as clutter), and one
+   recentre button as a `topBarTrailing` toolbar item — the system's own glass, at the back
+   button's height and size on the opposite side. It was a `.buttonStyle(.glass)` button
+   floated over the map first, and sat visibly lower and larger than the back button beside
+   it. `PoolStage.swift` paints no `.glassEffect` and is not in the glass allowlist.
+   `PoolPanel.swift` is the facts card over it — a glass card that is PART OF THE VIEW, with
+   three rests (`SwimZHKit.PanelDetent`: 0.32 / 0.55 / 0.9 of the screen), dragged between them
+   with a soft quarter-rate overdrag at either end and velocity-projected landing
+   (`panelVisibleHeight`, `panelDetent(from:)`, tested in `PanelLayoutTests`). It is laid out
+   once at its tallest height and SLID by an offset, so a drag is a transform and nothing under
+   the finger re-measures; the facts list scrolls only at the tallest rest. It holds
+   `PoolHeader` (name, verdict, ribbon, actions) and the same `facts` `ForEach` a
+   no-coordinates pool gets as a plain list. `detail` is optional: the map and the panel with
+   the pool's name (from the roster) appear the moment the row is tapped, and the facts fill
+   in when the store's six reads land — the screen no longer opens on a spinner.
+   The bar carries NO title: the panel always shows the name, so `poolTitleShows` and its
+   scroll handover are deleted along with both switches, their `Settings.bundle` rows and the
+   old-look branches — a decided switch left behind is an unmeasured second code path.
+
+   It was a system `.sheet` with detents first, and the phone said no three times: dismissed
+   with the screen, the sheet lingered over the list for the length of its own animation after
+   the pop; at `.large` it stopped being glass and went opaque (black, in dark mode); and it
+   could not be presented until there was a detail to present. A view in the hierarchy pops
+   with its screen, is glass at every height, and can stand on the map with only a name.
+   `FacilitySheet.backSwipeEdge` keeps a 22 pt strip of the leading edge free of the map's own
+   pan — and, topmost in the stack, of the drawer's — so the system's swipe-back works from
+   either (`testSwipingFromTheLeadingEdgeGoesBack`, `…OverTheDrawerGoesBack`).
+
+   **The drawer's gesture (2026-09-06, after a phone session).** The drawer has two slots: the
+   header (name, verdict, ribbon, actions) is fixed under the handle and never scrolls; the
+   facts list below scrolls only at the tallest rest. So a drag ANYWHERE on the drawer moves it
+   at the two smaller rests, and on the header at every rest; at the tallest rest a deliberate
+   pull past the list's top (`panelCollapses(listPull:)`, 60 pt) steps it down to half. Pulled
+   down FROM its smallest size and let go past `panelDismissBeyond` (120 pt of finger), the
+   screen goes back to the list (`panelRelease(from:)` → `.dismiss`); from any higher rest even
+   a whole-screen flick only lands on the smallest size — two pulls to leave, never one, so a
+   reader closing the facts cannot overshoot out of the screen (a driven test caught exactly
+   that overshoot in the first version). The owner's ask:
+   "pull drawer to minimal size, then go to main list when user pulls down further". A drag
+   that starts sideways is not the drawer's, so the edge swipe keeps it.
+   **The zoom push is gone** to make that possible: a zoom-pushed screen owns a drag-to-dismiss
+   on every downward pan, and driven, every drag on the drawer's body shrank the whole screen
+   toward the list and hid the bar while it did. The pool route is a plain push now; the row's
+   `matchedTransitionSource` and the lint that demanded both halves are replaced by a lint
+   that bans them. **MapKit is warmed at launch** (`MapWarmup`, one throwaway `MKMapView` 600 ms
+   after the answer is on screen): the first pool tapped used to pay MapKit's first-map cost as
+   a push that froze for a beat, which is what the owner saw first.
+
+Two things the driven app found that reading the code did not:
+
+- **Pull to open is impossible on this screen.** Version 2 also opened on a pull past the top
+  (a stretch, a glass hint, a haptic at a tested threshold, `onScrollPhaseChange`). The test's
+  own video attachment showed the whole screen shrinking back into the list row instead: the
+  screen arrives by a ZOOM transition, and iOS gives a zoom-pushed screen drag-to-dismiss on
+  overscroll, so the system consumed the pull before any scroll callback saw it. Not fought.
+- **Never animate a `Map`'s frame.** Version 2's grow animation made MapKit rebuild its Metal
+  drawable on every frame of the spring — "Failed to acquire drawable" per frame, a broken
+  MapKit layout guide, and under Metal API validation (Xcode's debug default) an assertion in
+  `MTLDebugDevice`. Version 3 has nothing to animate: the map is laid out once at the size of
+  the screen.
+
+Words: `action.backToPool` in all five catalogs (the open/close words came and went with
+version 2). Glyph: `Icon.backToPool`. Driven by `testThePoolScreenOpensOnTheMapWithTheFactsInAPanel`
+(map, panel taller than a fifth of the screen, directions reachable, recentre ≥ 44 pt and
+harmless), `testThePoolScreenSaysItsNameOnceAtATime` (no bar title, back works with the panel
+up) and `testThePanelCannotBeDraggedAway`. `ScreenshotTests`' `04-pool` is the map with the
+panel.
 
 Not behind a switch:
 - **The app icon** is now `App/SwimZH/AppIcon.icon` (Icon Composer document: gradient fill,

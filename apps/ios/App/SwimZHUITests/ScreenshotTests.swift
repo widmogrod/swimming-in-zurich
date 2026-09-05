@@ -40,7 +40,7 @@ final class ScreenshotTests: XCTestCase {
   /// variable expanded from a build setting — produced "old look" sets that were pixel for
   /// pixel the new one; a marker attachment proved the variable never reached this process.
   /// The argument path is the one `-swimzh.useMyLocation NO` already proves on every run.
-  private let labKeys = ["lab.glassStrip", "lab.glassCard", "lab.heroExtends", "lab.symbolMotion"]
+  private let labKeys = ["lab.glassStrip", "lab.glassCard", "lab.symbolMotion"]
 
   private func launch() {
     app.launch()
@@ -119,8 +119,12 @@ final class ScreenshotTests: XCTestCase {
     // `testTheWholeRowOpensThePool` pins; the name at the top was once the only part that
     // navigated, so tapping the middle would photograph a path a reader may not have.
     find("poolRow").coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.9)).tap()
-    XCTAssertTrue(find("heroMap").waitForExistence(timeout: 15), "the pool never opened")
+    XCTAssertTrue(find("poolStage").waitForExistence(timeout: 15), "the pool never opened")
+    // Let the map's tiles and the panel settle before the frame is taken.
+    _ = find("poolPanel").waitForExistence(timeout: 5)
+    sleep(2)
     capture("04-pool")
+
     closeSheet()
 
     // 5 — the map. Segment 1 by position, because a `Picker` gives its options no identifiers

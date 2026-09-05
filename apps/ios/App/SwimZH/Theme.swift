@@ -46,6 +46,9 @@ enum Design {
     static let control: Double = 12
     static let swatch: Double = 4
     static let mark: Double = 2
+    /// A card that floats over a whole screen — the facts panel over the pool's map. The
+    /// system's own floating sheet wears this order of curve, and the panel replaces one.
+    static let panel: Double = 28
   }
 
   /// The HIG's minimum comfortable target. Every control the app draws itself is at least this
@@ -143,6 +146,8 @@ enum Icon {
   static let website = "safari.fill"
   /// A pool, on a map.
   static let pin = "mappin.circle.fill"
+  /// The pool screen's one map control: bring a panned map back to the pool.
+  static let backToPool = "mappin.and.ellipse"
 }
 
 /// The day strip's own colours, kept here with the rest.

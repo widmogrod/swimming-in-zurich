@@ -535,6 +535,7 @@ export const de = {
   "action.directions": "Route",
   "action.call": "Anrufen",
   "action.openInMaps": "In Karten öffnen",
+  "action.backToPool": "Zurück zum Bad",
   "nav.allPools": "Alle Bäder",
   "nav.accessTypes": "Was die Angaben bedeuten",
   "nav.browse": "Stöbern",

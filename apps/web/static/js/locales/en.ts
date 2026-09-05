@@ -647,6 +647,7 @@ export const en = {
   "action.directions": "Directions",
   "action.call": "Call",
   "action.openInMaps": "Open in Maps",
+  "action.backToPool": "Back to the pool",
   "nav.allPools": "All pools",
   "nav.accessTypes": "What the labels mean",
   "nav.browse": "Browse",

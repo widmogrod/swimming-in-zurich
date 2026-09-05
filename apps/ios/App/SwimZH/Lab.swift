@@ -18,12 +18,15 @@ enum Lab {
   static let glassStrip = "lab.glassStrip"
   /// The map's pin card is Liquid Glass rather than a material.
   static let glassCard = "lab.glassCard"
-  /// The pool screen's hero map runs edge to edge and extends under the navigation bar.
-  static let heroExtends = "lab.heroExtends"
   /// SF Symbol motion: the favourite heart bounces, the filter glyph bounces when narrowed.
   static let symbolMotion = "lab.symbolMotion"
 
-  static let keys = [glassStrip, glassCard, heroExtends, symbolMotion]
+  // DECIDED, and deleted as the header says a decided switch must be: `lab.heroExtends` (the
+  // pool screen's hero map under the bar) and `lab.heroStage` (that map opening to fill the
+  // screen). The owner chose the open map as the pool screen itself — see `PoolStage` — so
+  // there is no picture left for either switch to compare.
+
+  static let keys = [glassStrip, glassCard, symbolMotion]
 
   /// Make a launch argument count. `-lab.glassStrip NO` lands in the defaults' ARGUMENT domain
   /// as the STRING "NO", and `@AppStorage<Bool>` reads an object that is not a `Bool` as

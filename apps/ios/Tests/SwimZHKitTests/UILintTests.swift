@@ -200,12 +200,19 @@ struct UILintTests {
 
   // MARK: - The zoom transition, and the sheet's rendered identity
 
-  @Test("the zoom transition has BOTH halves — neither works alone")
-  func zoomTransitionIsComplete() throws {
-    let row = try #require(try Self.appFiles().first { $0.name == "PoolRowView.swift" })
-    #expect(Self.code(row.text).contains(".matchedTransitionSource(id:"))
-    let view = try #require(try Self.appFiles().first { $0.name == "TodayView.swift" })
-    #expect(Self.code(view.text).contains(".navigationTransition(.zoom(sourceID:"))
+  @Test("the pool screen is pushed plainly — a zoom's drag-to-dismiss fought the drawer")
+  func poolPushIsNotAZoom() throws {
+    // This lint used to demand BOTH halves of a zoom transition. The pool screen is a map with
+    // a draggable drawer now, and a zoom-pushed screen owns a drag-to-dismiss on every downward
+    // pan: driven, every drag on the drawer's body shrank the whole screen toward the list and
+    // hid the bar on the way. Neither half may come back without that fight being settled.
+    for file in try Self.appFiles() {
+      let code = Self.code(file.text)
+      #expect(
+        !code.contains(".navigationTransition(.zoom("),
+        "\(file.name) zoom-pushes a screen; the drawer's drag cannot survive it")
+      #expect(!code.contains(".matchedTransitionSource(id:"), "\(file.name) has a zoom source")
+    }
   }
 
   @Test("the detail sheet renders the pool's NAME, which is why its id stays omitted")
@@ -214,28 +221,21 @@ struct UILintTests {
     // heading — so this lint is its evidence, and the reason `facility_id` is deliberately NOT
     // claimed rendered (see `FieldCoverage.deliberatelyOmitted`).
     //
-    // IT USED TO PIN THE NAVIGATION TITLE, and that stopped being the whole truth: the name is
-    // rendered at `heroTitle` in `PoolHeader` and the bar states it only once that has scrolled
-    // away, so a lint demanding an unconditional `.navigationTitle(Text(verbatim: detail.name))`
-    // would now be demanding the duplication back. Both halves are checked instead — the hero
-    // is where the reader meets the name, the bar is what keeps it after that — because either
-    // one alone leaves a screen that can be looking at a pool without ever naming it.
+    // IT USED TO PIN THE NAVIGATION TITLE, then a conditional one that took over once a hero
+    // had scrolled away. The screen is a map now with the facts in a panel that never scrolls
+    // away, so the name lives in ONE place: `PoolHeader`, at `heroTitle`, inside the panel the
+    // sheet presents. The bar over the map carries no title — a title there would be the same
+    // word twice, six points apart, which is the duplication two earlier versions fought.
     let sheet = try #require(try Self.appFiles().first { $0.name == "FacilitySheet.swift" })
     let code = Self.code(sheet.text)
-    #expect(
-      code.contains("showsTitle ? Text(verbatim: detail.name)"),
-      "the bar never takes the name over, so a scrolled screen names no pool")
+    #expect(!code.contains(".navigationTitle("), "the bar names the pool the panel already names")
     #expect(!code.contains("Text(detail.poolID)"))
+    #expect(code.contains("PoolHeader(detail: detail"), "the panel does not open on the header")
 
     let header = try #require(try Self.appFiles().first { $0.name == "PoolHeader.swift" })
     let hero = Self.code(header.text)
     #expect(
       hero.contains("Text(verbatim: detail.name)"), "the pool screen no longer opens on a name")
-    // ...and the bar's copy is CONDITIONAL. Without this the two could quietly both be
-    // unconditional again, which is the defect the pair exists to prevent rather than describe.
-    #expect(
-      code.contains("poolTitleShows("),
-      "the bar states the name unconditionally again — that is the same word twice")
   }
 
   @Test("the sheet asks for a live reading, and hands it to the rule that words it")
@@ -934,10 +934,18 @@ struct UILintTests {
   ///    so "glass cannot sample glass" does not apply, and a material there was the one surface
   ///    on that screen that ignores the reader's iOS 27 Liquid Glass slider.
   ///
-  /// Rows, sheets, forms and the pool screen stay banned: they are the content layer.
-  static let glassFiles: Set<String> = ["DayStrip.swift", "PoolMapView.swift"]
+  ///  * `PoolPanel.swift` — the facts panel floats over the pool screen's map, the same case
+  ///    as the pin card. It replaced a system sheet that was glass at every height but the
+  ///    last; its rows are opaque grouped cells, so the glass carries only the card's margins
+  ///    and the header the name sits in.
+  ///
+  /// `PoolStage.swift` floats a control over that map and is NOT here: it is
+  /// `.buttonStyle(.glass)`, the system's own glass button, which paints no surface of ours.
+  ///
+  /// Rows, sheets and forms stay banned: they are the content layer.
+  static let glassFiles: Set<String> = ["DayStrip.swift", "PoolMapView.swift", "PoolPanel.swift"]
 
-  @Test("`.glassEffect()` is applied only in the two navigation-layer files that may")
+  @Test("`.glassEffect()` is applied only in the navigation-layer files that may")
   func nothingPaintsItsOwnGlass() throws {
     // The HIG: "Don't use Liquid Glass in the content layer", and "glass can not sample other
     // glass" — so a second glass surface renders inconsistently against the first. The system

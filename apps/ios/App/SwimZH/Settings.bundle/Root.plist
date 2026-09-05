@@ -43,16 +43,6 @@
 			<key>Type</key>
 			<string>PSToggleSwitchSpecifier</string>
 			<key>Title</key>
-			<string>Hero map under the bar</string>
-			<key>Key</key>
-			<string>lab.heroExtends</string>
-			<key>DefaultValue</key>
-			<true/>
-		</dict>
-		<dict>
-			<key>Type</key>
-			<string>PSToggleSwitchSpecifier</string>
-			<key>Title</key>
 			<string>Symbol motion</string>
 			<key>Key</key>
 			<string>lab.symbolMotion</string>
