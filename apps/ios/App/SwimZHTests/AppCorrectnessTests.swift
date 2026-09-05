@@ -12,6 +12,7 @@
 // why the checks live in the app-hosted target — `swift test` never builds an app bundle.
 
 import Foundation
+import SwiftUI
 import Testing
 
 import SwimZHKit
@@ -94,5 +95,25 @@ struct AppCorrectnessTests {
     // the TEST RUNNER's plist, which is nobody's app.
     #expect(Self.info[RefreshConfiguration.infoKey] == nil)
     #expect(RefreshConfiguration.manifestURL(Self.info) == nil)
+  }
+}
+
+@Suite("Lab switches read their launch arguments")
+struct LabSwitchTests {
+  @Test("a `-lab.key NO` launch argument reaches @AppStorage as false")
+  func launchArgumentTurnsASwitchOff() {
+    // The argument domain holds STRINGS. `Lab.typeLaunchArguments` retypes them so that
+    // `@AppStorage<Bool>` — which ignores a value that is not a Bool — sees the switch.
+    let defaults = UserDefaults.standard
+    let before = defaults.volatileDomain(forName: UserDefaults.argumentDomain)
+    defer { defaults.setVolatileDomain(before, forName: UserDefaults.argumentDomain) }
+    var arguments = before
+    arguments[Lab.glassCard] = "NO"
+    defaults.setVolatileDomain(arguments, forName: UserDefaults.argumentDomain)
+    Lab.typeLaunchArguments(in: defaults)
+    let typed = defaults.volatileDomain(forName: UserDefaults.argumentDomain)[Lab.glassCard]
+    #expect(typed as? Bool == false)
+    #expect(AppStorage(wrappedValue: true, Lab.glassCard).wrappedValue == false)
+    #expect(AppStorage(wrappedValue: true, Lab.glassStrip).wrappedValue == true)
   }
 }

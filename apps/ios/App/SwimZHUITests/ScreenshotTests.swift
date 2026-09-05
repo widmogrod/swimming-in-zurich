@@ -28,6 +28,21 @@ final class ScreenshotTests: XCTestCase {
     // A screenshot set that silently changes its pool ORDER between runs is one nobody can
     // review by looking at it.
     app.launchArguments += ["-swimzh.useMyLocation", "NO"]
+    // NOT launched here: each test below launches, because one of them adds arguments first.
+  }
+
+  /// The Lab switches, spelled out for the same reason the location key is: this target links
+  /// no app code. `Lab.swift` keeps every iOS 27 experiment behind one of these, defaulting to
+  /// the new look; `-key NO` at launch is how a test asks for the previous one.
+  ///
+  /// A LAUNCH ARGUMENT, and never an environment variable. Two attempts to switch the old look
+  /// on from the `xcodebuild test` line — `TEST_RUNNER_SWIMZH_LAB_OFF=1`, then a scheme
+  /// variable expanded from a build setting — produced "old look" sets that were pixel for
+  /// pixel the new one; a marker attachment proved the variable never reached this process.
+  /// The argument path is the one `-swimzh.useMyLocation NO` already proves on every run.
+  private let labKeys = ["lab.glassStrip", "lab.glassCard", "lab.heroExtends", "lab.symbolMotion"]
+
+  private func launch() {
     app.launch()
     XCTAssertTrue(
       find("poolRow").waitForExistence(timeout: 30), "the list never showed a pool row")
@@ -58,6 +73,23 @@ final class ScreenshotTests: XCTestCase {
   /// five walks back to the same place — and any per-test ordering surprise would show up as a
   /// screenshot of the wrong screen rather than as a failure. One walk, in listing order.
   func testCaptureTheAppStoreSet() throws {
+    launch()
+    try walk(prefix: "")
+  }
+
+  /// The same walk with every Lab switch off — the look the app shipped before the iOS 27
+  /// experiments — so the two sets can be put side by side. Files are prefixed `old-`.
+  /// Select it alone with `-only-testing:SwimZHUITests/ScreenshotTests/testCaptureThePreviousLookSet`.
+  func testCaptureThePreviousLookSet() throws {
+    for key in labKeys {
+      app.launchArguments += ["-\(key)", "NO"]
+    }
+    launch()
+    try walk(prefix: "old-")
+  }
+
+  private func walk(prefix: String) throws {
+    func capture(_ name: String) { self.capture(prefix + name) }
     // 1 — the answer the app exists to give: every pool, nearest first, for today.
     capture("01-find")
 
@@ -97,6 +129,19 @@ final class ScreenshotTests: XCTestCase {
     app.segmentedControls.firstMatch.buttons.element(boundBy: 1).tap()
     XCTAssertTrue(find("poolMap").waitForExistence(timeout: 15), "the map never appeared")
     capture("05-map")
+
+    // 6 — a pin's card, the surface `Lab.glassCard` is about. The gesture is the one
+    // `testTheMapDrawsTheAnswerAndOpensAPool` pins: a single pin raises a card, a group only
+    // zooms. Whether a single pin is on screen at the opening zoom depends on the answer and on
+    // where the pools overlap, so a map showing only groups is a shot we skip, not a failure —
+    // the behaviour test already owns the assertion that a pin raises a card.
+    let pin = find("mapPin")
+    if pin.waitForExistence(timeout: 10) {
+      pin.tap()
+      if find("pinCard").waitForExistence(timeout: 5) {
+        capture("06-map-card")
+      }
+    }
   }
 
   /// Leave whatever is on top, by its navigation bar's leading button.

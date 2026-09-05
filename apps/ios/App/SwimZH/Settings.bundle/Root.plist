@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  The Lab switches, shown by the SYSTEM Settings app under SwimZH. See `Lab.swift`: each key
+  is read through `@AppStorage`, so flipping one here re-renders the app live. English only,
+  deliberately: these toggles exist until one variant of each is chosen, and are then deleted.
+-->
+<plist version="1.0">
+<dict>
+	<key>StringsTable</key>
+	<string>Root</string>
+	<key>PreferenceSpecifiers</key>
+	<array>
+		<dict>
+			<key>Type</key>
+			<string>PSGroupSpecifier</string>
+			<key>Title</key>
+			<string>Lab: iOS 27 Liquid Glass</string>
+			<key>FooterText</key>
+			<string>Experiments under review. Each switch is a proposed look; off is the previous look. Changes apply immediately.</string>
+		</dict>
+		<dict>
+			<key>Type</key>
+			<string>PSToggleSwitchSpecifier</string>
+			<key>Title</key>
+			<string>Glass day strip</string>
+			<key>Key</key>
+			<string>lab.glassStrip</string>
+			<key>DefaultValue</key>
+			<true/>
+		</dict>
+		<dict>
+			<key>Type</key>
+			<string>PSToggleSwitchSpecifier</string>
+			<key>Title</key>
+			<string>Glass map card</string>
+			<key>Key</key>
+			<string>lab.glassCard</string>
+			<key>DefaultValue</key>
+			<true/>
+		</dict>
+		<dict>
+			<key>Type</key>
+			<string>PSToggleSwitchSpecifier</string>
+			<key>Title</key>
+			<string>Hero map under the bar</string>
+			<key>Key</key>
+			<string>lab.heroExtends</string>
+			<key>DefaultValue</key>
+			<true/>
+		</dict>
+		<dict>
+			<key>Type</key>
+			<string>PSToggleSwitchSpecifier</string>
+			<key>Title</key>
+			<string>Symbol motion</string>
+			<key>Key</key>
+			<string>lab.symbolMotion</string>
+			<key>DefaultValue</key>
+			<true/>
+		</dict>
+	</array>
+</dict>
+</plist>

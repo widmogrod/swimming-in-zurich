@@ -17,6 +17,8 @@ struct SwimZHApp: App {
     // outside it. `LaunchSignpost` extends the measurement over it; `TodayView` closes it
     // when real data is on screen. See `Sources/SwimZHKit/LaunchSignpost.swift`.
     LaunchSignpost.shared.start()
+    // Before any view reads a switch. See `Lab.typeLaunchArguments`.
+    Lab.typeLaunchArguments()
   }
 
   /// The reader's language and regional formatting, resolved ONCE from the system's preference
