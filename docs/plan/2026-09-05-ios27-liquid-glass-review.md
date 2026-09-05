@@ -158,7 +158,8 @@ screenshot set was pixel-identical to the new one for exactly that reason.
 
 | Switch | Key | On | Off |
 | --- | --- | --- | --- |
-| Glass day strip | `lab.glassStrip` | chips in a `GlassEffectContainer`; the selected tint is a separate glass view with one `glassEffectID`, so it morphs chip to chip | flat tinted chips |
+| Day strip | `lab.stripStyle` (picker) | `morph`: chips in a `GlassEffectContainer`, the selected tint a separate glass view with one `glassEffectID` that morphs chip to chip — but each tap also swaps the tapped chip's own glass off, three glass transitions at once, and the press lens never shows on the selected chip; `tint` (default): one interactive glass per chip always, selection is a tint cross-fade, the lens works; `button`: the system `GlassButtonStyle`, same tint rule | `flat`: tinted chips |
+| Bottom bar | `lab.bottomBar` (picker) | `toggle`: the same toolbar with list/map as ONE glyph-swapping glass button, so every control presses alike; `tabs`: a system `TabView` — Find, Map, All pools, `Tab(role: .search)` — whose selection is the tab bar's own draggable glass lens, the filter as `tabViewBottomAccessory`, `tabBarMinimizeBehavior(.onScrollDown)` | `toolbar`: bottom toolbar with a segmented list/map picker (a flat thumb inside the bar's glass — the one control with no lens) |
 | Glass map card | `lab.glassCard` | `.glassEffect(.regular.interactive())`, `.materialize` transition, no shadow | `.regularMaterial` + shadow |
 | Symbol motion | `lab.symbolMotion` | heart draws on/off, filter glyph replace + bounce | plain swaps |
 

@@ -98,7 +98,7 @@ struct AppCorrectnessTests {
   }
 }
 
-@Suite("Lab switches read their launch arguments")
+@Suite("Lab switches read their launch arguments", .serialized)
 struct LabSwitchTests {
   @Test("a `-lab.key NO` launch argument reaches @AppStorage as false")
   func launchArgumentTurnsASwitchOff() {
@@ -114,6 +114,23 @@ struct LabSwitchTests {
     let typed = defaults.volatileDomain(forName: UserDefaults.argumentDomain)[Lab.glassCard]
     #expect(typed as? Bool == false)
     #expect(AppStorage(wrappedValue: true, Lab.glassCard).wrappedValue == false)
-    #expect(AppStorage(wrappedValue: true, Lab.glassStrip).wrappedValue == true)
+    #expect(AppStorage(wrappedValue: true, Lab.symbolMotion).wrappedValue == true)
+  }
+
+  @Test("a `-lab.stripStyle flat` launch argument reaches @AppStorage as the named style")
+  func launchArgumentPicksAStripStyle() {
+    // A STRING key, and deliberately not retyped: `("flat" as NSString).boolValue` is `false`,
+    // so had `stripStyle` been in `Lab.keys` every named style would have read as a Bool.
+    let defaults = UserDefaults.standard
+    let before = defaults.volatileDomain(forName: UserDefaults.argumentDomain)
+    defer { defaults.setVolatileDomain(before, forName: UserDefaults.argumentDomain) }
+    var arguments = before
+    arguments[Lab.stripStyle] = "flat"
+    defaults.setVolatileDomain(arguments, forName: UserDefaults.argumentDomain)
+    Lab.typeLaunchArguments(in: defaults)
+    #expect(
+      AppStorage(wrappedValue: Lab.StripStyle.default, Lab.stripStyle).wrappedValue == .flat)
+    #expect(Lab.StripStyle.default.isGlass)
+    #expect(!Lab.keys.contains(Lab.stripStyle))
   }
 }

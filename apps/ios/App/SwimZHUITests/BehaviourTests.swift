@@ -236,15 +236,51 @@ final class BehaviourTests: XCTestCase {
     XCTAssertTrue(find("dayStrip").exists, "the day strip is not on the find screen")
   }
 
-  func testTheDayStripSelectsADayWithTheGlassSwitchOff() throws {
-    // `Lab.glassStrip` defaults ON, so every other test here drives the glass chips. This one
-    // relaunches with the switch OFF — the flat chips the app shipped before — and proves the
-    // old path still selects: a chip is a button, and the chosen one carries `.isSelected`.
-    app.terminate()
-    app.launchArguments += ["-lab.glassStrip", "NO"]
+  func testTheDayStripSelectsADayInEveryStripStyle() throws {
+    // `Lab.stripStyle` defaults to one glass style, so every other test here drives that one.
+    // This one relaunches with EACH of the other styles — the flat chips the app shipped
+    // before and the two other glass behaviours — and proves each still selects: a chip is a
+    // button, and the chosen one carries `.isSelected`.
+    for style in ["flat", "morph", "button"] {
+      try selectsADay(stripStyle: style)
+    }
+  }
+
+  func testTheOtherBottomBarsStillSwitchToTheMapAndOpenTheFilters() {
+    // `Lab.bottomBar` defaults to the toolbar every other test drives. The two alternatives
+    // must still do the bar's two jobs: switch to the map, and open the filters.
+    for bar in ["toggle", "tabs"] {
+      app.terminate()
+      relaunch(withLab: "lab.bottomBar", value: bar)
+      if bar == "tabs" {
+        // The tab bar's second tab; list-then-map is the order `tabShell` declares.
+        app.tabBars.firstMatch.buttons.element(boundBy: 1).tap()
+      } else {
+        find("viewMode").tap()
+      }
+      XCTAssertTrue(find("poolMap").waitForExistence(timeout: 10), "\(bar): no map after switching")
+      XCTAssertTrue(find("dayStrip").exists, "\(bar): the map took the day strip away")
+      find("filterButton").tap()
+      let measureFrom = find("measureFrom")
+      XCTAssertTrue(measureFrom.waitForExistence(timeout: 5), "\(bar): the filters never opened")
+    }
+  }
+
+  /// Relaunch with one Lab key set — replacing, not appending, an earlier value of the same
+  /// key, so a loop over values leaves exactly one on the line.
+  private func relaunch(withLab key: String, value: String) {
+    if let previous = app.launchArguments.firstIndex(of: "-" + key) {
+      app.launchArguments.removeSubrange(previous...(previous + 1))
+    }
+    app.launchArguments += ["-" + key, value]
     app.launch()
     XCTAssertTrue(
       find("poolRow").waitForExistence(timeout: 30), "the list never showed a pool row")
+  }
+
+  private func selectsADay(stripStyle: String) throws {
+    app.terminate()
+    relaunch(withLab: "lab.stripStyle", value: stripStyle)
 
     let strip = find("dayStrip")
     XCTAssertTrue(strip.waitForExistence(timeout: 5), "the day strip is not on the find screen")

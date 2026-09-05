@@ -72,6 +72,16 @@ struct TodayView: View {
   /// different question from the one it is for.
   @State private var mode: ViewMode = .list
 
+  /// `Lab.bottomBar`: which of the three bottom bars this screen wears. See `Lab.BottomBar`.
+  @AppStorage(Lab.bottomBar) private var bottomBar = Lab.BottomBar.default
+
+  /// The tab bar's pages, for the `tabs` variant only. Not `ViewMode`: the tab bar has two
+  /// pages the picker never had (the roster, and search as a tab of its own).
+  enum TabPage: Hashable {
+    case list, map, allPools, search
+  }
+  @State private var tab: TabPage = .list
+
   /// The reader's text size, for one purpose only: how tall the strip is, which is what sets
   /// the gap between the two thresholds that hide and show it. Read the same way `DayStrip`
   /// reads it, through the same bridge.
@@ -82,6 +92,41 @@ struct TodayView: View {
   }
 
   var body: some View {
+    shell
+      .task {
+        await model.load()
+        // A fix for a reader who already chose one, and never a prompt — see
+        // `TodayModel.locateIfChosenBefore`. After the answer, for the same reason the store
+        // refresh is: the app's promise is an answer the moment it opens.
+        await model.locateIfChosenBefore()
+        // MapKit's first map in a process costs a few hundred milliseconds of framework and GPU
+        // set-up, and the first pool tapped used to pay it as a frozen push. Paid here instead,
+        // off the answer's critical path — see `MapWarmup`.
+        await MapWarmup.warm()
+        // AFTER the screen has answered. The refresh is a background nicety; making the first
+        // answer wait on a network round trip would trade the app's whole premise — an answer
+        // with no network — for a store that is at most seven days fresher.
+        await model.refreshStore()
+      }
+      .onChange(of: scenePhase) { _, phase in
+        guard phase == .active else { return }
+        Task { await model.refreshStore() }
+        Task { await model.refreshLocation() }
+      }
+  }
+
+  /// The screen's frame: one navigation stack with a bottom toolbar, or a tab bar of stacks.
+  @ViewBuilder
+  private var shell: some View {
+    switch bottomBar {
+    case .toolbar, .toggle:
+      stackShell
+    case .tabs:
+      tabShell
+    }
+  }
+
+  private var stackShell: some View {
     NavigationStack {
       content
         // NO NAVIGATION BAR ON THIS SCREEN, and the two halves of that arrived together.
@@ -111,25 +156,78 @@ struct TodayView: View {
         .searchToolbarBehavior(.minimize)
         .navigationDestination(for: Route.self, destination: screen)
     }
-    .task {
-      await model.load()
-      // A fix for a reader who already chose one, and never a prompt — see
-      // `TodayModel.locateIfChosenBefore`. After the answer, for the same reason the store
-      // refresh is: the app's promise is an answer the moment it opens.
-      await model.locateIfChosenBefore()
-      // MapKit's first map in a process costs a few hundred milliseconds of framework and GPU
-      // set-up, and the first pool tapped used to pay it as a frozen push. Paid here instead,
-      // off the answer's critical path — see `MapWarmup`.
-      await MapWarmup.warm()
-      // AFTER the screen has answered. The refresh is a background nicety; making the first
-      // answer wait on a network round trip would trade the app's whole premise — an answer
-      // with no network — for a store that is at most seven days fresher.
-      await model.refreshStore()
+  }
+
+  /// The `tabs` bar: Find, Map, All pools, Search — each its own stack, so a push on one page
+  /// does not move another. The selection is the tab bar's own glass lens; the filter is the
+  /// bottom accessory above it (the Music mini-player's slot); the bar minimises as the list
+  /// scrolls down, which is the same instinct the day strip's yielding follows.
+  private var tabShell: some View {
+    TabView(selection: $tab) {
+      Tab(value: TabPage.list) {
+        NavigationStack { findPage(searchable: false) }
+      } label: {
+        Label(Message("nav.list"), systemImage: Icon.list, localized)
+      }
+      Tab(value: TabPage.map) {
+        NavigationStack {
+          ready { list, _ in
+            PoolMapView(pins: poolPins(list.sections, geo: model.geoByPool))
+              // ALWAYS up on the map: there is no scroll there to yield it to.
+              .safeAreaBar(edge: .top) {
+                DayStrip(chips: model.chips, selection: $model.filters.day)
+              }
+          }
+          .toolbarVisibility(.hidden, for: .navigationBar)
+          .navigationDestination(for: Route.self, destination: screen)
+        }
+      } label: {
+        Label(Message("nav.map"), systemImage: Icon.map, localized)
+      }
+      Tab(value: TabPage.allPools) {
+        NavigationStack {
+          PoolsBrowser(pools: model.pools)
+            .navigationDestination(for: Route.self, destination: screen)
+        }
+      } label: {
+        Label(Message("nav.allPools"), systemImage: Icon.allPools, localized)
+      }
+      Tab(value: TabPage.search, role: .search) {
+        NavigationStack { findPage(searchable: true) }
+      }
     }
-    .onChange(of: scenePhase) { _, phase in
-      guard phase == .active else { return }
-      Task { await model.refreshStore() }
-      Task { await model.refreshLocation() }
+    .tabBarMinimizeBehavior(.onScrollDown)
+    .tabViewBottomAccessory {
+      FilterButton(
+        filters: $model.filters, kinds: model.kinds, location: model.location,
+        onUseMyLocation: { await model.useMyLocation() },
+        onUseNamedPlace: { model.useNamedPlace($0) }
+      )
+      .frame(maxWidth: .infinity)
+    }
+    .sensoryFeedback(.selection, trigger: tab)
+  }
+
+  /// The find page as a tab: the list under the day strip. The search tab is the same page
+  /// made searchable — with `Tab(role: .search)` the tab bar itself becomes the field.
+  @ViewBuilder
+  private func findPage(searchable: Bool) -> some View {
+    let page =
+      ready { list, metadata in
+        listDrawn(list, metadata)
+          .safeAreaBar(edge: .top) {
+            stripIfShown
+              .animation(.snappy(duration: 0.22), value: showsStrip)
+          }
+      }
+      .toolbarVisibility(.hidden, for: .navigationBar)
+      .navigationDestination(for: Route.self, destination: screen)
+    if searchable {
+      page.searchable(
+        text: $model.filters.search,
+        prompt: Text(Message("nav.findAPool"), localized))
+    } else {
+      page
     }
   }
 
@@ -140,6 +238,32 @@ struct TodayView: View {
   /// complaint it answers: a button whose glyph changes cannot say whether it shows where you
   /// are or where you would go. Two segments, one of them lit, says it without a word — and the
   /// words are there anyway for VoiceOver.
+  @ViewBuilder
+  private var modeControl: some View {
+    switch bottomBar {
+    case .toolbar, .tabs:
+      modePicker
+    case .toggle:
+      modeToggle
+    }
+  }
+
+  /// `Lab.BottomBar.toggle`: ONE button that swaps its glyph, the Maps pattern, so every
+  /// control in the bar is the same kind of glass button with the same press.
+  private var modeToggle: some View {
+    Button {
+      mode = mode == .list ? .map : .list
+    } label: {
+      if mode == .list {
+        Label(Message("nav.map"), systemImage: Icon.map, localized)
+      } else {
+        Label(Message("nav.list"), systemImage: Icon.list, localized)
+      }
+    }
+    .contentTransition(.symbolEffect(.replace))
+    .accessibilityIdentifier("viewMode")
+  }
+
   private var modePicker: some View {
     Picker(selection: $mode) {
       Label(Message("nav.list"), systemImage: Icon.list, localized).tag(ViewMode.list)
@@ -205,8 +329,16 @@ struct TodayView: View {
     }
   }
 
-  @ViewBuilder
   private var content: some View {
+    ready { list, metadata in screen(list, metadata) }
+  }
+
+  /// The three states of the store, with the READY one drawn by the caller — the toolbar
+  /// shell and each tab draw a ready store differently, and the other two states the same.
+  @ViewBuilder
+  private func ready<Drawn: View>(
+    @ViewBuilder _ draw: (ListModel, StoreMetadata) -> Drawn
+  ) -> some View {
     switch model.state {
     case .loading:
       // THE SAME COLOUR THE LAUNCH SCREEN IS, and this is a flicker rather than a nicety.
@@ -247,7 +379,7 @@ struct TodayView: View {
       // rather than showing up as a slow one.
       .onAppear { LaunchSignpost.shared.dataOnScreen() }
     case .ready(let list, let metadata):
-      screen(list, metadata)
+      draw(list, metadata)
         // Here, and nowhere earlier: this is the first moment REAL data is on screen. The
         // `.loading` spinner above is a frame the user cannot read, and closing the
         // measurement there would report an excellent launch and a false one.
@@ -294,7 +426,7 @@ struct TodayView: View {
         DefaultToolbarItem(kind: .search, placement: .bottomBar)
         // Spacer BETWEEN them: search at the leading edge, the filter at the trailing one.
         ToolbarSpacer(.flexible, placement: .bottomBar)
-        ToolbarItem(placement: .bottomBar) { modePicker }
+        ToolbarItem(placement: .bottomBar) { modeControl }
         ToolbarSpacer(.flexible, placement: .bottomBar)
         ToolbarItem(placement: .bottomBar) { allPoolsButton }
         ToolbarItem(placement: .bottomBar) {
@@ -334,16 +466,7 @@ struct TodayView: View {
   private func drawn(_ list: ListModel, _ metadata: StoreMetadata) -> some View {
     switch mode {
     case .list:
-      listOrEmpty(list, metadata)
-        // Measured from the TOP OF THE CONTENT, not from the scroll view's own offset: hiding
-        // the strip shrinks the top inset by its whole height and moves the raw offset by the
-        // same amount, which is a jump in exactly the direction that would re-show it. See
-        // `stripShouldShow`.
-        .onScrollGeometryChange(for: Double.self) { geometry in
-          geometry.contentOffset.y + geometry.contentInsets.top
-        } action: { _, scrolled in
-          strip(scrolledTo: scrolled)
-        }
+      listDrawn(list, metadata)
         .transition(.opacity)
     case .map:
       // The SAME sections the list is drawing, pinned by the roster's coordinates. See
@@ -351,6 +474,20 @@ struct TodayView: View {
       PoolMapView(pins: poolPins(list.sections, geo: model.geoByPool))
         .transition(.opacity)
     }
+  }
+
+  /// The list, reporting its scroll so the strip can yield to it.
+  private func listDrawn(_ list: ListModel, _ metadata: StoreMetadata) -> some View {
+    listOrEmpty(list, metadata)
+      // Measured from the TOP OF THE CONTENT, not from the scroll view's own offset: hiding
+      // the strip shrinks the top inset by its whole height and moves the raw offset by the
+      // same amount, which is a jump in exactly the direction that would re-show it. See
+      // `stripShouldShow`.
+      .onScrollGeometryChange(for: Double.self) { geometry in
+        geometry.contentOffset.y + geometry.contentInsets.top
+      } action: { _, scrolled in
+        strip(scrolledTo: scrolled)
+      }
   }
 
   @ViewBuilder

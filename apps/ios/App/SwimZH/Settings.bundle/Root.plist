@@ -21,13 +21,49 @@
 		</dict>
 		<dict>
 			<key>Type</key>
-			<string>PSToggleSwitchSpecifier</string>
+			<string>PSMultiValueSpecifier</string>
 			<key>Title</key>
-			<string>Glass day strip</string>
+			<string>Day strip</string>
 			<key>Key</key>
-			<string>lab.glassStrip</string>
+			<string>lab.stripStyle</string>
 			<key>DefaultValue</key>
-			<true/>
+			<string>tint</string>
+			<key>Titles</key>
+			<array>
+				<string>Flat (previous look)</string>
+				<string>Glass, morphing selection</string>
+				<string>Glass, tinted selection (lens on press)</string>
+				<string>Glass, system button style</string>
+			</array>
+			<key>Values</key>
+			<array>
+				<string>flat</string>
+				<string>morph</string>
+				<string>tint</string>
+				<string>button</string>
+			</array>
+		</dict>
+		<dict>
+			<key>Type</key>
+			<string>PSMultiValueSpecifier</string>
+			<key>Title</key>
+			<string>Bottom bar</string>
+			<key>Key</key>
+			<string>lab.bottomBar</string>
+			<key>DefaultValue</key>
+			<string>toolbar</string>
+			<key>Titles</key>
+			<array>
+				<string>Toolbar, list/map segments (previous look)</string>
+				<string>Toolbar, one list/map toggle button</string>
+				<string>Tab bar (sliding lens) + filter pill</string>
+			</array>
+			<key>Values</key>
+			<array>
+				<string>toolbar</string>
+				<string>toggle</string>
+				<string>tabs</string>
+			</array>
 		</dict>
 		<dict>
 			<key>Type</key>

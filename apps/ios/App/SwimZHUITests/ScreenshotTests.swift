@@ -40,7 +40,7 @@ final class ScreenshotTests: XCTestCase {
   /// variable expanded from a build setting — produced "old look" sets that were pixel for
   /// pixel the new one; a marker attachment proved the variable never reached this process.
   /// The argument path is the one `-swimzh.useMyLocation NO` already proves on every run.
-  private let labKeys = ["lab.glassStrip", "lab.glassCard", "lab.symbolMotion"]
+  private let labKeys = ["lab.glassCard", "lab.symbolMotion"]
 
   private func launch() {
     app.launch()
@@ -84,6 +84,8 @@ final class ScreenshotTests: XCTestCase {
     for key in labKeys {
       app.launchArguments += ["-\(key)", "NO"]
     }
+    // The strip is a picker, not a switch: its previous look is the named `flat` style.
+    app.launchArguments += ["-lab.stripStyle", "flat"]
     launch()
     try walk(prefix: "old-")
   }
