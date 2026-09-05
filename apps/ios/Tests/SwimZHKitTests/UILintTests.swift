@@ -923,19 +923,36 @@ struct UILintTests {
       "the tapped block's own sentence is not rendered — the tap is dead again")
   }
 
-  @Test("`.glassEffect()` is applied nowhere; the system paints the bar")
+  /// The files allowed to paint glass, each for a stated reason. Both are the NAVIGATION
+  /// layer's own floating controls, which is exactly what the HIG says glass is for:
+  ///
+  ///  * `DayStrip.swift` — the strip rides a top `safeAreaBar` and changes the QUESTION, not
+  ///    the answer. Its chips are chrome, beside a bottom bar the system already draws in glass;
+  ///    flat tinted rectangles above glass controls were the one surface a version behind.
+  ///  * `PoolMapView.swift` — the pin card floats over a map, next to `MapUserLocationButton`,
+  ///    which IS glass. The card never overlaps the bottom bar (it sits inside the safe area),
+  ///    so "glass cannot sample glass" does not apply, and a material there was the one surface
+  ///    on that screen that ignores the reader's iOS 27 Liquid Glass slider.
+  ///
+  /// Rows, sheets, forms and the pool screen stay banned: they are the content layer.
+  static let glassFiles: Set<String> = ["DayStrip.swift", "PoolMapView.swift"]
+
+  @Test("`.glassEffect()` is applied only in the two navigation-layer files that may")
   func nothingPaintsItsOwnGlass() throws {
     // The HIG: "Don't use Liquid Glass in the content layer", and "glass can not sample other
-    // glass" — so a second glass surface renders inconsistently against the first. The filter
-    // bar is the app's one bar, and it is the only place this may appear.
-    // Stronger than it used to be. This once permitted ONE hand-painted glass surface — the
-    // custom filter bar — and banned the rest. That bar is gone: the filter control is a
-    // toolbar item, so the SYSTEM paints its glass, in its own bar, with the scroll edge
-    // effect that comes with it. The app now paints none at all, which is the whole lesson of
-    // the iOS 26 guidance: you do not apply the material, you use the chrome that already has
-    // it. A `.glassEffect(` reappearing here means something is being hand-built again.
-    for file in try Self.appFiles() where Self.code(file.text).contains(".glassEffect(") {
-      Issue.record("\(file.name) paints its own glass; the system paints the toolbar's")
+    // glass" — so a second glass surface renders inconsistently against the first. The system
+    // paints the bars; the app may paint glass only on the two floating controls named in
+    // `glassFiles`, and a `.glassEffect(` anywhere else means something is being hand-built.
+    for file in try Self.appFiles()
+    where Self.code(file.text).contains(".glassEffect(") && !Self.glassFiles.contains(file.name) {
+      Issue.record("\(file.name) paints its own glass; only \(Self.glassFiles.sorted()) may")
+    }
+    // ...and the allowlist cannot rot into exemptions for code that no longer paints anything.
+    for name in Self.glassFiles {
+      let file = try #require(try Self.appFiles().first { $0.name == name })
+      #expect(
+        Self.code(file.text).contains(".glassEffect("),
+        "\(name) is allowlisted for glass and paints none — drop it from `glassFiles`")
     }
   }
 

@@ -352,9 +352,36 @@ struct ClusterMark: View {
 /// genuinely sits above content rather than beside it.
 struct PinCard: View {
   @Environment(\.localized) private var localized
+  /// `Lab.glassCard`: Liquid Glass under the card, or the material it shipped with.
+  @AppStorage(Lab.glassCard) private var glassCard = true
   let pin: PoolPin
 
+  /// GLASS, and the comment that used to sit here said the opposite. It claimed the card
+  /// floated directly above the system's bottom bar, which is glass, and that glass cannot
+  /// sample glass. The card never overlaps that bar: it is padded inside the safe area, above
+  /// it, and the one other control on this screen — `MapUserLocationButton`, in the same corner
+  /// — is already glass. So a material here was the one floating surface on the map that
+  /// ignored the reader's iOS 27 Liquid Glass slider; `.glassEffect` follows it. No shadow:
+  /// glass carries its own edge. The material branch is the previous look, kept exactly, for
+  /// the comparison the flag exists to allow.
+  @ViewBuilder
   var body: some View {
+    if glassCard {
+      link
+        .glassEffect(.regular.interactive(), in: .rect(cornerRadius: Design.Radius.control))
+        .glassEffectTransition(.materialize)
+        .accessibilityIdentifier("pinCard")
+    } else {
+      link
+        .background(
+          .regularMaterial, in: RoundedRectangle(cornerRadius: Design.Radius.control)
+        )
+        .shadow(radius: 10, y: 4)
+        .accessibilityIdentifier("pinCard")
+    }
+  }
+
+  private var link: some View {
     NavigationLink(value: Route.pool(pin.poolID)) {
       HStack(spacing: Design.Space.gutter) {
         VStack(alignment: .leading, spacing: Design.Space.hair) {
@@ -371,15 +398,6 @@ struct PinCard: View {
       .contentShape(Rectangle())
     }
     .buttonStyle(.plain)
-    // A MATERIAL, not `.glassEffect`, and the lint that bans the second is right about this
-    // one too: the card floats directly above the system's bottom bar, which IS glass, and
-    // glass cannot sample glass. `.regularMaterial` is the surface Apple's own map card uses
-    // and it composites correctly against the toolbar under it.
-    .background(
-      .regularMaterial, in: RoundedRectangle(cornerRadius: Design.Radius.control)
-    )
-    .shadow(radius: 10, y: 4)
-    .accessibilityIdentifier("pinCard")
   }
 
   private var verdict: some View {
