@@ -1,6 +1,8 @@
 """Command-line entry point.
 
-  swimzh build         --db gold.sqlite     # ONE atomic pipeline: WFS roster -> curated assemble
+  swimzh build         --db gold.sqlite     # ONE atomic pipeline, through the lake (`--lake .lake`)
+  swimzh lake pull     <dir-or-url>         # step 0: seed the lake's silver from the last publish
+  swimzh lake export   --out dist/ios/lake  # ship the silver beside the store for the next run
                                             #   -> schedule scrape -> lane scrape -> compose
   swimzh build-catalog --out data/catalog.json  # full pool catalog from the WFS (committed)
   swimzh scrape-gold   --db gold.sqlite     # thin re-layer: re-run just the schedule phase
@@ -39,17 +41,18 @@ import argparse
 import os
 import sqlite3
 import sys
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import date, datetime
 from pathlib import Path
-from typing import Final, assert_never
+from tempfile import mkdtemp
+from typing import Any, Final, assert_never
 from zoneinfo import ZoneInfo
 
 import httpx
 
-from swimzh.build.compose import carry_lane_plans, compose
-from swimzh.build.reconcile import crosswalk_from_rows, resolve_all
+from swimzh.build.compose import carry_lane_plans, compose_facilities, scraped_facility
+from swimzh.build.reconcile import Crosswalk, crosswalk_from_rows, resolve_all
 from swimzh.core.errors import ProviderError, SchemaMismatch, describe
 from swimzh.core.http import HttpClient, RetryPolicy
 from swimzh.core.httpcache import (
@@ -58,7 +61,7 @@ from swimzh.core.httpcache import (
     CacheStore,
     DiskCacheTransport,
 )
-from swimzh.core.result import Err, Ok
+from swimzh.core.result import Err, Ok, Result
 from swimzh.domain.catalog import PoolCatalogEntry
 from swimzh.domain.lane_plan import LanePlan
 from swimzh.domain.models import Facility, PoolId
@@ -70,14 +73,28 @@ from swimzh.etl.lane_plans import (
     scrape_lane_plans,
     undiscovered_authored,
 )
+from swimzh.etl.refresh import Refreshed, refresh_source
 from swimzh.etl.roster import fetch_roster
 from swimzh.etl.scrape import ScrapeReport, scrape_declared_sources, scrape_shared_sources
 from swimzh.etl.silver import LanePlanAttachment, attach_lane_plans
+from swimzh.etl.silver_codec import (
+    ScrapedLanePlans,
+    ScrapedSchedules,
+    decode_lane_plans,
+    decode_prices,
+    decode_roster,
+    decode_schedules,
+    encode_lane_plans,
+    encode_prices,
+    encode_roster,
+    encode_schedules,
+)
 from swimzh.providers import geo_sport
 from swimzh.providers.page_provider import DiscoveryReport, discover_pages
-from swimzh.providers.price_scraper import scrape_prices
+from swimzh.providers.price_scraper import CityTariffs, scrape_prices
 from swimzh.storage import catalog_json
 from swimzh.storage.atomic import atomic_swap
+from swimzh.storage.lake import DEFAULT_LAKE_ROOT, Lake
 from swimzh.storage.sqlite_repo import (
     GoldRepository,
     load_alias_rows,
@@ -85,6 +102,7 @@ from swimzh.storage.sqlite_repo import (
     load_xref_rows,
     open_db,
     write_schedules,
+    write_source_freshness,
 )
 
 _ZURICH = ZoneInfo("Europe/Zurich")
@@ -269,7 +287,126 @@ class _PhaseResult:
     fatal: bool
 
 
-# ── Phase: schedule scrape → reconcile → compose ────────────────────────────────────────────────
+# ── Fetch: schedules (+ the shared city price) ──────────────────────────────────────────────────
+#
+# Each phase is split in two since the lake exists: a FETCH half that reaches the network and
+# returns the phase's typed silver value (or the typed cause), and a WRITE half that composes
+# that value onto an open staging store. `build` runs the fetch half through the refresh policy
+# (`etl/refresh`) so a stale silver can stand in; the thin re-layer commands run both halves
+# back to back, exactly as before.
+
+
+def _fetch_prices(client: HttpClient, on: date) -> Result[CityTariffs, ProviderError]:
+    """The shared city tariff page. Its failure is a provider failure, not "26 pools unknown"."""
+    return scrape_prices(client, on)
+
+
+def _fetch_schedules(
+    client: HttpClient,
+    *,
+    catalog: tuple[PoolCatalogEntry, ...],
+    tariffs: CityTariffs,
+    crosswalk: Crosswalk,
+    fetched_at: datetime,
+) -> Result[ScrapedSchedules, ProviderError]:
+    """Scrape every declared + shared pool page and reconcile each extract to its `PoolId`.
+
+    Returns the scraped-side facilities (`compose.scraped_facility`) — the silver form — plus the
+    honest audit: `unresolved` names (a benign miss, reported at write time) and provider notes.
+    Fail-fast stays: a declared source that fails to fetch/parse is the typed `Err` (the refresh
+    policy decides whether a kept silver may stand in for a *transient* one), an empty scrape is
+    a `SchemaMismatch`, and an ambiguous reconcile aborts whole — never a silent wrong-pool write.
+    """
+    declared = scrape_declared_sources(client, catalog, fetched_at, tariffs=tariffs)
+    # The shared-source fan-out (sharedsource-fanout S3) rides the SAME phase, report shape,
+    # and temp-DB swap: one fetch per registered shared page (the Planschbecken overview), one
+    # extract per member on Ok, ONE failure for the whole set on Err — so the fail-fast abort,
+    # reconcile, and compose below need no second path. Same client: the overview is a
+    # stadt-zuerich pool page, on the schedule scraper's volatility clock.
+    shared = scrape_shared_sources(client, catalog, fetched_at)
+    report = ScrapeReport(
+        extracts=declared.extracts + shared.extracts,
+        failures=declared.failures + shared.failures,
+        notes=declared.notes + shared.notes,
+    )
+    if report.failures:
+        failure = report.failures[0]
+        print(
+            f"schedule scrape aborted: declared source {failure.name} ({failure.url}) failed: "
+            f"{describe(failure.cause)}",
+            file=sys.stderr,
+        )
+        return Err(failure.cause)
+    if not report.extracts:
+        return Err(
+            SchemaMismatch(source="schedule_scraper", detail="no schedules could be scraped")
+        )
+    match resolve_all(report.extracts, crosswalk):
+        case Err(error):
+            # The ambiguous batch aborts whole — never a silent wrong-pool write.
+            print(f"scrape reconcile failed: {describe(error)}", file=sys.stderr)
+            return Err(error)
+        case Ok(outcome):
+            return Ok(
+                ScrapedSchedules(
+                    facilities=tuple(
+                        scraped_facility(pool_id, aspects) for pool_id, aspects in outcome.resolved
+                    ),
+                    unresolved=tuple(sorted(outcome.unresolved)),
+                    notes=report.notes,
+                )
+            )
+        case _ as unreachable:  # pragma: no cover - exhaustiveness guard
+            assert_never(unreachable)
+
+
+def _write_scraped_schedules(
+    conn: sqlite3.Connection,
+    *,
+    curated: tuple[Facility, ...],
+    scraped: ScrapedSchedules,
+) -> _PhaseResult:
+    """Compose the scraped-side facilities onto the curated tier and write them. OFFLINE.
+
+    **`curated` is an ARGUMENT, not a read of `conn`** — invariant S-1: `compose` is never called
+    with its own output as an input. The caller supplies the curated tier assembled from `data/` +
+    the roster (`etl.build.assemble_curated`); reading the store here instead made the previous
+    fold's own output the curated side, so every aspect won against itself and a re-layer refreshed
+    nothing (`docs/2026-08-10-scrape-gold-recompose-defect.md`).
+
+    Writes the composed facilities through the single ``write_schedules`` door — **only for the
+    pools this scrape resolved an extract for**. A pool the curated tier names but the scrape did
+    not reach keeps whatever the store holds; a phase writes only the facts it owns, so it can
+    never delete another phase's. An `unresolved` name (a scraped pool in no alias) is a benign
+    partial success — the resolved pools are written and the phase exits 1 with the miss named
+    (``fatal=False``), not a data hole.
+    """
+    for note in scraped.notes:
+        # Non-fatal audit: a declared source whose page states no city tariff (free or privately
+        # run) ships unpriced ON PURPOSE. Printed, never counted as a failure — but printed, so a
+        # WFS url drift that silently unprices a pool leaves a trace in the build output.
+        print(note, file=sys.stderr)
+    composition = compose_facilities(curated, scraped.facilities)
+    scraped_ids = {str(f.identity.facility_id) for f in scraped.facilities}
+    write_schedules(
+        conn,
+        tuple(
+            (f.identity.facility_id, f)
+            for f in composition.facilities
+            if str(f.identity.facility_id) in scraped_ids
+        ),
+    )
+    msg = f"scraped {len(scraped.facilities)} source extracts"
+    for note in composition.notes:
+        msg += f"; {note}"
+    print(msg)
+    if scraped.unresolved:
+        print(
+            f"unresolved (no pool matched): {', '.join(scraped.unresolved)}",
+            file=sys.stderr,
+        )
+        return _PhaseResult(code=1, fatal=False)
+    return _PhaseResult(code=0, fatal=False)
 
 
 def _compose_schedules(
@@ -281,122 +418,35 @@ def _compose_schedules(
     price_client: HttpClient,
     fetched_at: datetime,
 ) -> _PhaseResult:
-    """Scrape indoor-pool schedules (+ the shared city price + the shared-page fan-out) and
-    compose them onto the store.
-
-    **`curated` is an ARGUMENT, not a read of `conn`** — invariant S-1: `compose` is never called
-    with its own output as an input. The caller supplies the curated tier assembled from `data/` +
-    the roster (`etl.build.assemble_curated`); reading the store here instead made the previous
-    fold's own output the curated side, so every aspect won against itself and a re-layer refreshed
-    nothing (`docs/2026-08-10-scrape-gold-recompose-defect.md`). `conn` still supplies the identity
-    crosswalk and receives the writes.
+    """The thin re-layer's schedule phase: fetch (prices, then the pages) and write, no lake.
 
     **Two clients, not one**: the tariff page moves a few times a year (`price_scraper`, 7d) while
     a pool timetable is re-cut per season (`schedule_scraper`, 12h). They are different sources at
     different cadences, so each provider call gets the client whose cache tier matches it.
-
-    Runs the ONE builder path: scrape emits identity-free ``(SourceRef, aspects)`` extracts;
-    ``resolve_all`` resolves each ``SourceRef`` to a canonical id against the store's spine (an
-    unreconcilable name is a loud typed ``Err``, never a silent wrong-pool write); ``compose``
-    folds the scraped aspects onto the curated pool (curated-wins per aspect). Writes the composed
-    facilities through the single ``write_schedules`` door — **only for the pools this run resolved
-    an extract for**. A pool the curated tier names but this run did not scrape keeps whatever the
-    store holds; a phase writes only the facts it owns, so it can never delete another phase's.
-
-    A declared source whose page states no city tariff is neither priced nor a failure: it emits
-    one ``ScrapeReport.notes`` line on stderr and the phase still exits 0 — four of those pools are
-    published free and one is privately run.
-
-    Fail-fast: the shared city tariff page is itself a declared source — a failed `scrape_prices`
-    aborts the phase (``fatal``) naming the typed cause, never a run that exits 0 with all 21
-    tariffed pools silently unpriced. Likewise a declared source
-    (`etl.scrape.declared_sources`) whose page fails to fetch or parse aborts the phase
-    (``fatal``) carrying the typed cause. An unresolved WFS name (a scraped pool in no alias) is
-    a benign partial success — the resolved pools are written and the phase exits 1 with the miss
-    named (``fatal=False``), not a data hole.
     """
-    tariffs_result = scrape_prices(price_client, fetched_at.date())
+    tariffs_result = _fetch_prices(price_client, fetched_at.date())
     if isinstance(tariffs_result, Err):
-        # The tariff page failing wholesale is a provider failure, not "26 pools are Unknown":
-        # abort the phase so no build exits 0 with the city tariff silently missing.
         print(
             f"schedule scrape aborted: city tariff page failed: {describe(tariffs_result.error)}",
             file=sys.stderr,
         )
         return _PhaseResult(code=1, fatal=True)
-    tariffs = tariffs_result.value
-    declared = scrape_declared_sources(schedule_client, catalog, fetched_at, tariffs=tariffs)
-    # The shared-source fan-out (sharedsource-fanout S3) rides the SAME phase, report shape,
-    # and temp-DB swap: one fetch per registered shared page (the Planschbecken overview), one
-    # extract per member on Ok, ONE failure for the whole set on Err — so the fail-fast abort,
-    # reconcile, and compose below need no second path. Same client: the overview is a
-    # stadt-zuerich pool page, on the schedule scraper's volatility clock.
-    shared = scrape_shared_sources(schedule_client, catalog, fetched_at)
-    report = ScrapeReport(
-        extracts=declared.extracts + shared.extracts,
-        failures=declared.failures + shared.failures,
-        notes=declared.notes + shared.notes,
-    )
-    if report.failures:
-        # A declared source failed to fetch/parse: abort, surfacing the typed cause.
-        failure = report.failures[0]
-        print(
-            f"schedule scrape aborted: declared source {failure.name} ({failure.url}) failed: "
-            f"{describe(failure.cause)}",
-            file=sys.stderr,
-        )
-        return _PhaseResult(code=1, fatal=True)
-    if not report.extracts:
-        print("no schedules could be scraped", file=sys.stderr)
-        return _PhaseResult(code=1, fatal=True)
-    for note in report.notes:
-        # Non-fatal audit: a declared source whose page states no city tariff (free or privately
-        # run) ships unpriced ON PURPOSE. Printed, never counted as a failure — but printed, so a
-        # WFS url drift that silently unprices a pool leaves a trace in the build output.
-        print(note, file=sys.stderr)
-
     crosswalk = crosswalk_from_rows(load_alias_rows(conn), load_xref_rows(conn))
-    match resolve_all(report.extracts, crosswalk):
-        case Err(error):
-            # The ambiguous batch aborts whole — never a silent wrong-pool write.
-            print(f"scrape reconcile failed: {describe(error)}", file=sys.stderr)
-            return _PhaseResult(code=1, fatal=True)
-        case Ok(outcome):
-            composition = compose(curated, outcome.resolved)
-            # A PHASE WRITES ONLY THE FACTS IT OWNS. `compose` emits one facility per pool on
-            # EITHER side, so a pool the curated tier names but this run produced no extract for
-            # comes out curated-only — and writing that would overwrite the scraped basins, prices
-            # and season a previous run stored, non-fatally and with no stderr line naming the pool.
-            # That is a real input class, not a hypothetical: `scrape-gold` reads the COMMITTED
-            # catalog while `build` uses the LIVE WFS roster, and a catalog entry can be named yet
-            # unscrapeable (no url, a url shared with another entry, an unparseable operator page,
-            # a non-scrapeable kind) — so drift silently deletes. Restricting the write to the
-            # pools this run resolved an extract for leaves every other blob byte-identical.
-            scraped_ids = {str(pool_id) for pool_id, _ in outcome.resolved}
-            write_schedules(
-                conn,
-                tuple(
-                    (f.identity.facility_id, f)
-                    for f in composition.facilities
-                    if str(f.identity.facility_id) in scraped_ids
-                ),
-            )
-            msg = f"scraped {len(outcome.resolved)} source extracts"
-            for note in composition.notes:
-                msg += f"; {note}"
-            print(msg)
-            if outcome.unresolved:
-                print(
-                    f"unresolved (no pool matched): {', '.join(sorted(outcome.unresolved))}",
-                    file=sys.stderr,
-                )
-                return _PhaseResult(code=1, fatal=False)
-            return _PhaseResult(code=0, fatal=False)
-        case _ as unreachable:  # pragma: no cover - exhaustiveness guard
-            assert_never(unreachable)
+    scraped = _fetch_schedules(
+        schedule_client,
+        catalog=catalog,
+        tariffs=tariffs_result.value,
+        crosswalk=crosswalk,
+        fetched_at=fetched_at,
+    )
+    if isinstance(scraped, Err):
+        if isinstance(scraped.error, SchemaMismatch) and scraped.error.source == "schedule_scraper":
+            print("no schedules could be scraped", file=sys.stderr)
+        return _PhaseResult(code=1, fatal=True)
+    return _write_scraped_schedules(conn, curated=curated, scraped=scraped.value)
 
 
-# ── Phase: lane-plan discovery → fetch → attach ─────────────────────────────────────────────────
+# ── Fetch: lane-plan discovery → sheets ─────────────────────────────────────────────────────────
 
 
 def _report_lane_audit(attachment: LanePlanAttachment) -> int:
@@ -442,42 +492,36 @@ def _undiscovered_error(source: UndiscoveredSource, discovery: DiscoveryReport) 
     )
 
 
-def _attach_lanes(
-    conn: sqlite3.Connection,
-    *,
-    page_client: HttpClient,
-    lane_client: HttpClient,
-    fetched_at: datetime,
-) -> _PhaseResult:
-    """Discover each pool page's Belegungsplan links, fetch those DISCOVERED PDFs, and attach the
-    parsed plans onto the basin that owns each URL — a deterministic URL-keyed join. The fetch-set
-    is a projection of the links `page_provider` discovers on the pool pages.
-
-    **Two clients, not one**: the discovery hop reads the pool pages (`page_provider`, 7d — the
-    link set changes far more slowly than the timetable on the same page) while the sheets
-    themselves are `belegungsplan` (3d). Each provider call gets its own source's client.
-
-    Fail-fast (all aborts are ``fatal`` so the atomic swap discards, prior gold content-unchanged):
-      * an empty store — nothing to attach to;
-      * an authored `lane_plan_source.url` its pool page fails to advertise (`authored −
-        discovered` non-empty) is a HARD abort carrying the typed cause, never a silent drop;
-      * a discovered lane source that fails to fetch/parse is a HARD abort carrying its typed
-        `ProviderError`, never a persisted `LanePlanUnavailable`.
-    Prints an honest audit to stderr (un-fetchable pages, `unbound` sections, `unmatched section`).
-    """
-    facilities = GoldRepository(conn).load_all()
-    if not facilities:
-        print("gold store is empty; build it first", file=sys.stderr)
-        return _PhaseResult(code=1, fatal=True)
-
-    # The discovery hop: fetch each pool's official page and collect the Belegungsplan links it
-    # advertises, stamped with the owning PoolId. The pool page URL is the roster's `url`.
+def _page_urls(
+    conn: sqlite3.Connection, facilities: tuple[Facility, ...]
+) -> list[tuple[PoolId, str]]:
+    """Each stored pool's official page URL (the roster's `url`), for the discovery hop."""
     page_url = {entry.entry.pool_id: entry.entry.url for entry in load_roster(conn)}
     pages: list[tuple[PoolId, str]] = []
     for facility in facilities:
         url = page_url.get(str(facility.identity.facility_id))
         if url is not None:
             pages.append((facility.identity.facility_id, url))
+    return pages
+
+
+def _fetch_lane_plans(
+    *,
+    page_client: HttpClient,
+    lane_client: HttpClient,
+    facilities: tuple[Facility, ...],
+    pages: list[tuple[PoolId, str]],
+) -> Result[ScrapedLanePlans, ProviderError]:
+    """Discover each pool page's Belegungsplan links, then fetch those DISCOVERED PDFs.
+
+    **Two clients, not one**: the discovery hop reads the pool pages (`page_provider`, 7d — the
+    link set changes far more slowly than the timetable on the same page) while the sheets
+    themselves are `belegungsplan` (3d). Each provider call gets its own source's client.
+
+    Fail-fast, as typed `Err`s: an authored `lane_plan_source.url` its pool page fails to advertise
+    (`authored − discovered` non-empty) is a HARD abort carrying the typed cause, never a silent
+    drop; a discovered lane source that fails to fetch/parse aborts carrying its `ProviderError`.
+    """
     discovery = discover_pages(page_client, pages)
     # A page fetch failure is audited; it only ABORTS if it stranded an authored source (caught by
     # `authored − discovered` below). A page dropping no declared fact stays a non-fatal audit line.
@@ -487,31 +531,37 @@ def _attach_lanes(
             f"{describe(page_miss.cause)}",
             file=sys.stderr,
         )
-
-    # Fail-fast: an authored source its page no longer advertises is a declared fact gone missing.
     undiscovered = undiscovered_authored(facilities, discovery.links)
     if undiscovered:
         source = undiscovered[0]
+        cause = _undiscovered_error(source, discovery)
         print(
             f"lane scrape aborted: authored lane source not discovered on its page "
-            f"({source.pool_id} <- {source.url}): "
-            f"{describe(_undiscovered_error(source, discovery))}",
+            f"({source.pool_id} <- {source.url}): {describe(cause)}",
             file=sys.stderr,
         )
-        return _PhaseResult(code=1, fatal=True)
-
+        return Err(cause)
     report = scrape_lane_plans(lane_client, discovery.links)
-    # Fail-fast: a discovered lane source that failed to fetch/parse aborts carrying its typed
-    # cause.
     if report.misses:
         miss = report.misses[0]
         print(
             f"lane scrape aborted: lane source {miss.source_url} failed: {describe(miss.cause)}",
             file=sys.stderr,
         )
-        return _PhaseResult(code=1, fatal=True)
+        return Err(miss.cause)
+    return Ok(ScrapedLanePlans(links=discovery.links, plans=report.plans))
 
-    match attach_lane_plans(facilities, report.plans, fetched_at):
+
+def _write_lane_plans(
+    conn: sqlite3.Connection,
+    *,
+    facilities: tuple[Facility, ...],
+    scraped: ScrapedLanePlans,
+    fetched_at: datetime,
+) -> _PhaseResult:
+    """Attach the parsed plans onto the basin that owns each URL — a deterministic URL-keyed join —
+    and write. OFFLINE. Prints the honest audit (`unbound` sections, `unmatched section`)."""
+    match attach_lane_plans(facilities, scraped.plans, fetched_at):
         case Err(error):
             print(f"lane-plan reconcile failed: {describe(error)}", file=sys.stderr)
             return _PhaseResult(code=1, fatal=True)
@@ -530,69 +580,188 @@ def _attach_lanes(
             assert_never(unreachable)
 
 
+def _attach_lanes(
+    conn: sqlite3.Connection,
+    *,
+    page_client: HttpClient,
+    lane_client: HttpClient,
+    fetched_at: datetime,
+) -> _PhaseResult:
+    """The thin re-layer's lane phase: discover + fetch, then attach and write, no lake.
+
+    Fail-fast (all aborts are ``fatal`` so the atomic swap discards, prior gold content-unchanged):
+    an empty store — nothing to attach to — plus every typed cause `_fetch_lane_plans` names.
+    """
+    facilities = GoldRepository(conn).load_all()
+    if not facilities:
+        print("gold store is empty; build it first", file=sys.stderr)
+        return _PhaseResult(code=1, fatal=True)
+    scraped = _fetch_lane_plans(
+        page_client=page_client,
+        lane_client=lane_client,
+        facilities=facilities,
+        pages=_page_urls(conn, facilities),
+    )
+    if isinstance(scraped, Err):
+        return _PhaseResult(code=1, fatal=True)
+    return _write_lane_plans(
+        conn, facilities=facilities, scraped=scraped.value, fetched_at=fetched_at
+    )
+
+
 # ── Commands ────────────────────────────────────────────────────────────────────────────────────
 
 
-def build(*, db_path: Path, data_dir: Path, clients: ProviderClients) -> int:
-    """Assemble a COMPLETE gold store in ONE atomic pipeline. Returns a process exit code.
+#: `build`'s exit code when the store was written but at least one source is a KEPT STALE silver.
+EXIT_BUILT_STALE: Final = 2
 
-    Order: WFS roster (`fetch_roster`) → assemble curated facilities + calendar + crosswalk
-    (`assemble_curated` → `write_curated_store`) → schedule scrape + price + reconcile + compose
-    (`_compose_schedules`, handed that SAME assembled curated tier) → lane discovery + fetch +
-    attach (`_attach_lanes`). The store-writing chain runs inside ONE temp-DB + `os.replace` swap
-    (`storage/atomic.py`): the store is committed ONLY if every phase completed, so a mid-chain
-    provider failure aborts non-zero and leaves the prior gold DB **content-unchanged** (never a
-    partial/half-written store). This makes `build` network-dependent (already true for the WFS
-    roster since the parent refactor's S3).
 
-    The roster fetch and the curated assemble both happen BEFORE the temp DB exists — neither
-    writes anything, so their failure paths leave the prior store untouched by construction.
-
-    A benign non-fatal miss (e.g. an unresolved extra scrape name) keeps the store but exits 1.
-    """
-    roster_result = fetch_roster(clients.roster)
-    if isinstance(roster_result, Err):
-        print(
-            f"build failed: WFS roster unavailable: {describe(roster_result.error)}",
-            file=sys.stderr,
+def _freshness_line(refreshed: Sequence[Refreshed[Any]]) -> str:
+    """One stdout line naming, per source, where this build's facts came from and how old."""
+    parts: list[str] = []
+    for item in refreshed:
+        how = "fetched" if item.fetched else "reused"
+        parts.append(
+            f"{item.header.source} {item.header.status.value} "
+            f"({how}, fetched_at {item.header.fetched_at.isoformat(timespec='minutes')})"
         )
+    return "sources: " + "; ".join(parts)
+
+
+def build(
+    *,
+    db_path: Path,
+    data_dir: Path,
+    clients: ProviderClients,
+    lake: Lake | None = None,
+    now: datetime | None = None,
+    force: bool = False,
+) -> int:
+    """Assemble a COMPLETE gold store from the LAKE in ONE atomic pipeline. Returns an exit code:
+    `0` every source fetched or reused fresh, `EXIT_BUILT_STALE` (2) the store was written but a
+    source was kept stale, `1` aborted (or a benign non-fatal miss, as before).
+
+    Order, each source through the refresh policy (`etl/refresh.refresh_source`): roster (WFS) →
+    assemble curated facilities + calendar + crosswalk (`assemble_curated` → `write_curated_store`)
+    → prices → schedules (scrape + reconcile, silver = scraped-side facilities) → compose onto the
+    curated tier → lane plans (discover + fetch, silver = links + parsed sheets) → attach → the
+    `source_freshness` rows. The store-writing chain runs inside ONE temp-DB + `os.replace` swap
+    (`storage/atomic.py`): the store is committed ONLY if every phase completed, so an abort leaves
+    the prior gold DB **content-unchanged** (never a partial/half-written store). A stale keep is
+    NOT a partial store: every phase completed, one of them on last time's silver, and the store
+    says which.
+
+    `lake=None` builds against a throwaway lake (every source must fetch — the pre-lake
+    behaviour), so the lake is opt-in per call site and the default for the CLI (`--lake`).
+    `force` refetches every source regardless of TTL (`--refresh`).
+    """
+    now = now if now is not None else _now()
+    lake = lake if lake is not None else Lake(Path(mkdtemp(prefix="swimzh-lake-")))
+    refreshed: list[Refreshed[Any]] = []
+
+    roster = refresh_source(
+        lake,
+        "roster",
+        now=now,
+        force=force,
+        fetch=lambda: fetch_roster(clients.roster),
+        encode=lambda entries: encode_roster(entries, now),
+        decode=decode_roster,
+    )
+    if isinstance(roster, Err):
+        print(f"build aborted: WFS roster unavailable: {roster.error.describe()}", file=sys.stderr)
         return 1
-    roster = roster_result.value
-    assembly_result = assemble_curated(data_dir, roster)
+    refreshed.append(roster.value)
+    assembly_result = assemble_curated(data_dir, roster.value.value)
     if isinstance(assembly_result, Err):
         print(f"build failed: {describe(assembly_result.error)}", file=sys.stderr)
         return 1
     assembly = assembly_result.value
 
-    now = _now()
+    prices = refresh_source(
+        lake,
+        "prices",
+        now=now,
+        force=force,
+        fetch=lambda: _fetch_prices(clients.prices, now.date()),
+        encode=encode_prices,
+        decode=decode_prices,
+    )
+    if isinstance(prices, Err):
+        print(f"build aborted: city tariff page: {prices.error.describe()}", file=sys.stderr)
+        return 1
+    refreshed.append(prices.value)
+
     with atomic_swap(db_path) as staging:
         write_curated_store(assembly, staging.path)
         conn = open_db(staging.path)
-        schedules = _compose_schedules(
-            conn,
-            curated=assembly.facilities,
-            catalog=roster,
-            schedule_client=clients.schedules,
-            price_client=clients.prices,
-            fetched_at=now,
+        crosswalk = crosswalk_from_rows(load_alias_rows(conn), load_xref_rows(conn))
+        schedules = refresh_source(
+            lake,
+            "schedules",
+            now=now,
+            force=force,
+            fetch=lambda: _fetch_schedules(
+                clients.schedules,
+                catalog=roster.value.value,
+                tariffs=prices.value.value,
+                crosswalk=crosswalk,
+                fetched_at=now,
+            ),
+            encode=encode_schedules,
+            decode=decode_schedules,
         )
-        if schedules.fatal:
+        if isinstance(schedules, Err):
+            print(f"build aborted: schedules: {schedules.error.describe()}", file=sys.stderr)
             return 1  # no commit -> prior gold content-unchanged
-        lanes = _attach_lanes(
-            conn,
-            page_client=clients.pages,
-            lane_client=clients.lanes,
-            fetched_at=now,
+        refreshed.append(schedules.value)
+        written = _write_scraped_schedules(
+            conn, curated=assembly.facilities, scraped=schedules.value.value
         )
-        if lanes.fatal:
+        if written.fatal:
+            return 1
+
+        facilities = GoldRepository(conn).load_all()
+        pages = _page_urls(conn, facilities)
+        lanes = refresh_source(
+            lake,
+            "lane_plans",
+            now=now,
+            force=force,
+            fetch=lambda: _fetch_lane_plans(
+                page_client=clients.pages,
+                lane_client=clients.lanes,
+                facilities=facilities,
+                pages=pages,
+            ),
+            encode=encode_lane_plans,
+            decode=decode_lane_plans,
+        )
+        if isinstance(lanes, Err):
+            print(f"build aborted: lane plans: {lanes.error.describe()}", file=sys.stderr)
             return 1  # no commit -> prior gold content-unchanged
+        refreshed.append(lanes.value)
+        attached = _write_lane_plans(
+            conn,
+            facilities=facilities,
+            scraped=lanes.value.value,
+            fetched_at=lanes.value.header.fetched_at,
+        )
+        if attached.fatal:
+            return 1  # no commit -> prior gold content-unchanged
+
+        write_source_freshness(conn, tuple(r.header for r in refreshed), built_at=now)
         # Read the count from the staging store BEFORE the swap: `commit()` only marks the temp
         # good; the `os.replace` fires at context exit, so `db_path` is not yet the new store here.
         count = GoldRepository(conn).count()
         conn.close()  # release the staging handle before the atomic rename
         staging.commit()
         print(f"gold store built at {db_path} ({count} facilities)")
-        return max(schedules.code, lanes.code)
+        print(_freshness_line(refreshed))
+        code = max(written.code, attached.code)
+        if code == 0 and any(r.stale for r in refreshed):
+            return EXIT_BUILT_STALE
+        return code
 
 
 def build_catalog_file(*, out: Path, client: HttpClient, generated_at: datetime) -> int:
@@ -783,6 +952,22 @@ def export_ios_store(
         conn.close()
 
 
+def lake_command(args: argparse.Namespace) -> int:
+    """`swimzh lake pull|export`: the two runtime seams of the lake. Exit code.
+
+    `pull` is best-effort and loud (see `Lake.pull`): a missing origin makes the next build a
+    first run, which the build itself then reports. `export` copies what is present.
+    """
+    lake = Lake(Path(args.lake))
+    if args.lake_command == "pull":
+        pulled = lake.pull(args.origin)
+        print(f"lake pulled from {args.origin} into {lake.root}: {', '.join(pulled) or 'nothing'}")
+        return 0
+    copied = lake.export(Path(args.out))
+    print(f"lake exported to {args.out}: {', '.join(copied) or 'nothing'}")
+    return 0
+
+
 def main(argv: list[str] | None = None, *, clients: ProviderClients | None = None) -> int:
     """Parse argv and dispatch. `clients` is injectable so the WFS-sourced atomic `build` (and the
     other network commands) can be driven from recorded HTTP in tests; when None the live
@@ -811,6 +996,31 @@ def main(argv: list[str] | None = None, *, clients: ProviderClients | None = Non
     roster_build.add_argument(
         "--data", default="data", help="curated data directory (default: data)"
     )
+    roster_build.add_argument(
+        "--lake",
+        default=str(DEFAULT_LAKE_ROOT),
+        help=(
+            "the lake directory (silver per source; the previous run's facts stand in for an "
+            f"unreachable source within its max_stale) (default: {DEFAULT_LAKE_ROOT})"
+        ),
+    )
+
+    # The lake's two runtime seams — where the previous silver comes from, where this one goes.
+    # OFFLINE except `pull` reading an http(s) origin; neither touches a provider.
+    lake_cmd = subparsers.add_parser(
+        "lake", help="pull a previous publish into the lake, or export the lake for publishing"
+    )
+    lake_sub = lake_cmd.add_subparsers(dest="lake_command", required=True)
+    lake_pull = lake_sub.add_parser(
+        "pull", help="seed the lake's silver from a directory or an http(s) base (best effort)"
+    )
+    lake_pull.add_argument("origin", help="a directory or URL serving silver/<source>.json")
+    lake_pull.add_argument("--lake", default=str(DEFAULT_LAKE_ROOT), help="the lake directory")
+    lake_export = lake_sub.add_parser(
+        "export", help="copy the lake's silver documents to <out>/silver/ for publishing"
+    )
+    lake_export.add_argument("--out", required=True, help="directory to export into")
+    lake_export.add_argument("--lake", default=str(DEFAULT_LAKE_ROOT), help="the lake directory")
 
     catalog = subparsers.add_parser(
         "build-catalog", parents=[cache_flags], help="build the pool catalog from the WFS"
@@ -858,6 +1068,8 @@ def main(argv: list[str] | None = None, *, clients: ProviderClients | None = Non
 
     args = parser.parse_args(argv)
     now = _now()
+    if args.command == "lake":
+        return lake_command(args)
     if args.command == "export-ios":
         # Dispatched BEFORE any client is built: the export is offline, and building live
         # clients for it would open a connection pool nothing uses.
@@ -902,7 +1114,14 @@ def _dispatch_live(args: argparse.Namespace, *, now: datetime) -> int:
 def _dispatch(args: argparse.Namespace, *, clients: ProviderClients, now: datetime) -> int:
     """Route a parsed command to its handler with the resolved per-source HTTP clients."""
     if args.command == "build":
-        return build(db_path=Path(args.db), data_dir=Path(args.data), clients=clients)
+        return build(
+            db_path=Path(args.db),
+            data_dir=Path(args.data),
+            clients=clients,
+            lake=Lake(Path(args.lake)),
+            now=now,
+            force=bool(args.refresh),
+        )
     if args.command == "scrape-gold":
         return scrape_gold(
             db_path=Path(args.db),

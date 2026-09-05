@@ -110,6 +110,21 @@ cassettes stay the checked-in contract). Caveat: passing an explicit transport d
 proxy mounts, so `HTTP(S)_PROXY` is no longer honoured. See
 [[2026-07-31-provider-http-disk-cache-plan]].
 
+**The lake — raw → silver → gold, owned by the code, not the host.** `swimzh build --lake .lake`
+runs every source through the refresh policy in `etl/refresh.py`: a source younger than its TTL is
+reused without the network; a due source is fetched; a due source that is DOWN (timeout, refused,
+5xx) keeps last time's silver marked **stale** while it is younger than its `max_stale`
+(`core/cache_tiers.py`, second column of the one table) and the build exits **2**; a 200 that will
+not parse, a too-old silver, or a first run still **aborts** with the prior gold content-unchanged.
+Silver is `.lake/silver/<source>.json` (`roster`, `prices`, `schedules`, `lane_plans`), our typed
+facts under a `{source, fetched_at, status, content_sha}` header (`storage/lake.py`,
+`etl/silver_codec.py`). Gold carries `source_freshness`; `/health` and the iOS manifest
+(`freshness[]`) read it back. The runtime contract is three commands — `swimzh lake pull
+<dir-or-url>` → `build` → `swimzh lake export --out dist/ios/lake` — so the last publish is the
+next run's input on a laptop, on GitHub, or anywhere else. Raw (the HTTP cache) is the city's own
+bytes and is never published; silver is ours and ships beside the store. See
+`docs/concepts/lake-silver-layer.md`.
+
 **Curation model — three-state `ScheduleFreshness`, not a boolean.** A pool's schedule state is
 derived at read from its `facility_doc` blob (`storage/codec.schedule_freshness`, replacing the old
 `is_curated` boolean): **`scraped`** (≥1 basin carries a rule), **`awaiting_scrape`** (scrapeable —

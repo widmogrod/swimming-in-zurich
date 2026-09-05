@@ -357,10 +357,30 @@ def compose(
     present in only one source passes through. Output is ordered by canonical id so a re-run
     yields equal rows.
     """
+    return compose_facilities(
+        curated, (_scraped_facility(pool_id, aspects) for pool_id, aspects in scraped)
+    )
+
+
+def scraped_facility(pool_id: PoolId, aspects: ScrapedAspects) -> Facility:
+    """The scraped-side ``Facility`` for one reconciled extract — the SILVER form of a schedule
+    scrape. It is what ``compose`` folds, so storing it (via the gold codec) and folding it later
+    is the same computation as folding the aspects directly."""
+    return _scraped_facility(pool_id, aspects)
+
+
+def compose_facilities(
+    curated: Iterable[Facility],
+    scraped: Iterable[Facility],
+) -> Composition:
+    """Fold curated facilities + scraped-side facilities (``scraped_facility``) per pool.
+
+    The scraped side is keyed by its own ``identity.facility_id`` — already a reconciled
+    ``PoolId``. This is the compose entry the lake-backed build uses: the scraped facilities
+    come back out of the silver document rather than straight from the scraper.
+    """
     curated_by_id: dict[str, Facility] = {str(f.identity.facility_id): f for f in curated}
-    scraped_by_id: dict[str, tuple[PoolId, ScrapedAspects]] = {}
-    for pool_id, aspects in scraped:
-        scraped_by_id[str(pool_id)] = (pool_id, aspects)
+    scraped_by_id: dict[str, Facility] = {str(f.identity.facility_id): f for f in scraped}
 
     facilities: list[Facility] = []
     notes: list[str] = []
@@ -369,8 +389,7 @@ def compose(
         if pool_key in curated_by_id:
             by_source[Source.CURATED] = curated_by_id[pool_key]
         if pool_key in scraped_by_id:
-            pool_id, aspects = scraped_by_id[pool_key]
-            by_source[Source.SCRAPED] = _scraped_facility(pool_id, aspects)
+            by_source[Source.SCRAPED] = scraped_by_id[pool_key]
         merged, pool_notes = _fold(by_source)
         facilities.append(merged)
         notes.extend(pool_notes)

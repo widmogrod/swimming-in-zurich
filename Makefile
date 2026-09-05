@@ -216,6 +216,9 @@ ios-release:  ## Build the release store + manifest.json (IOS_STORE_URL=https://
 		--out $(IOS_RELEASE_DIR)/ios.sqlite \
 		--manifest $(IOS_RELEASE_DIR)/manifest.json \
 		--url '$(IOS_STORE_URL)'
+	# The lake's silver ships beside the store: it is the NEXT build's input (`swimzh lake pull`)
+	# wherever that build runs, and the public record of which source each fact came from.
+	uv run python -m swimzh.cli lake export --out $(IOS_RELEASE_DIR)/lake
 
 .PHONY: ios-screenshots
 
