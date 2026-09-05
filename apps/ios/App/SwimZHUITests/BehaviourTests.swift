@@ -236,6 +236,44 @@ final class BehaviourTests: XCTestCase {
     XCTAssertTrue(find("dayStrip").exists, "the day strip is not on the find screen")
   }
 
+  func testTheDayStripSelectsADayWithTheGlassSwitchOff() throws {
+    // `Lab.glassStrip` defaults ON, so every other test here drives the glass chips. This one
+    // relaunches with the switch OFF — the flat chips the app shipped before — and proves the
+    // old path still selects: a chip is a button, and the chosen one carries `.isSelected`.
+    app.terminate()
+    app.launchArguments += ["-lab.glassStrip", "NO"]
+    app.launch()
+    XCTAssertTrue(
+      find("poolRow").waitForExistence(timeout: 30), "the list never showed a pool row")
+
+    let strip = find("dayStrip")
+    XCTAssertTrue(strip.waitForExistence(timeout: 5), "the day strip is not on the find screen")
+    // The chip AFTER the selected one, not the strip's second: the strip opens centred on the
+    // selected day, so on a store older than a screen of days the first chips are scrolled off
+    // to the left and cannot be hit. The neighbour of the selected chip is always on screen.
+    let chips = strip.buttons
+    XCTAssertGreaterThan(chips.count, 1, "the strip has fewer than two chips to choose between")
+    let selectedIndex = (0..<chips.count).first { chips.element(boundBy: $0).isSelected }
+    let current = try XCTUnwrap(selectedIndex, "no chip is selected on the find screen")
+    XCTAssertLessThan(current + 1, chips.count, "the selected day is the last chip")
+    let next = chips.element(boundBy: current + 1)
+    XCTAssertFalse(next.isSelected, "the next chip is selected before anything was tapped")
+    // BY THE LABEL READ OFF THE CHIP, not by index. The strip is a LAZY stack that scrolls to
+    // centre the new selection, so after the tap a different set of chips is materialised and
+    // `boundBy:` names a different day — a hierarchy dump showed the tapped day selected while
+    // the index-based query said it was not. The label is whatever the running language
+    // rendered, so this is still not a test that knows any sentence.
+    let previousLabel = chips.element(boundBy: current).label
+    let nextLabel = next.label
+    next.tap()
+    func chip(_ label: String) -> XCUIElement {
+      strip.buttons.matching(NSPredicate(format: "label == %@", label)).firstMatch
+    }
+    XCTAssertTrue(
+      waitFor { chip(nextLabel).isSelected }, "tapping the next chip did not select it")
+    XCTAssertFalse(chip(previousLabel).isSelected, "the previous chip is still selected too")
+  }
+
   // MARK: - The two screens that filter
 
   func testTheFilterButtonOpensASheetOnBothScreens() {
