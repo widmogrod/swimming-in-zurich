@@ -50,6 +50,9 @@ struct PoolRowView: View {
   /// therefore what made the tap dead. `block(at:)` already returns the whole thing, sentence
   /// included, from the same axis the ribbon was painted with.
   @State private var selectedBlock: A11yBlock?
+  /// `Lab.symbolMotion`: the heart draws itself on and off, so the glyph agrees with the haptic
+  /// that already fires for the same switch.
+  @AppStorage(Lab.symbolMotion) private var symbolMotion = true
 
   var body: some View {
     // ONE container. See the header. Everything the row can grow into — its day tail and its
@@ -128,6 +131,10 @@ struct PoolRowView: View {
         .fixedSize(horizontal: false, vertical: true)
       Spacer(minLength: Design.Space.tight)
       favouriteMark
+        // The transition below only runs inside an animated transaction, and the toggle
+        // arrives from a swipe action that starts none — so the mark's own change is the
+        // thing animated, and only when the switch is on.
+        .animation(symbolMotion ? .default : nil, value: isFavourite)
       Image(systemName: row.mark.symbol)
         .foregroundStyle(row.mark.accent)
         .accessibilityLabel(Text(row.mark.voiceOverLabel, localized))
@@ -214,12 +221,24 @@ struct PoolRowView: View {
   @ViewBuilder
   private var favouriteMark: some View {
     if isFavourite {
-      Image(systemName: Icon.favouriteMark)
+      favouriteGlyph
         .font(.rowFact)
         // The app's TINT, not the row's tier colour: a heart is not a time of day, and tier
         // colour is the vocabulary that says when a session runs.
         .foregroundStyle(.tint)
         .accessibilityLabel(Text(Message("action.favourite"), localized))
+    }
+  }
+
+  /// The heart, drawn on when it arrives and off when it goes — a symbol transition rather
+  /// than the default fade, so the mark moves the way the haptic says it does. Off the switch,
+  /// the plain image, exactly as before.
+  @ViewBuilder
+  private var favouriteGlyph: some View {
+    if symbolMotion {
+      Image(systemName: Icon.favouriteMark).transition(.symbolEffect(.drawOn))
+    } else {
+      Image(systemName: Icon.favouriteMark)
     }
   }
 

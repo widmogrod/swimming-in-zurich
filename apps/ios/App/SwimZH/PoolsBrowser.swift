@@ -43,6 +43,8 @@ struct PoolsBrowser: View {
   @State private var kind: String?
   @State private var search = ""
   @State private var showingFilters = false
+  /// `Lab.symbolMotion`: the same replace-and-bounce the find screen's button makes.
+  @AppStorage(Lab.symbolMotion) private var symbolMotion = true
 
   var body: some View {
     listOrEmpty
@@ -70,11 +72,26 @@ struct PoolsBrowser: View {
       Label {
         Text(Message("mobile.filters"), localized)
       } icon: {
-        Image(systemName: kind == nil ? Icon.filter : Icon.filterActive)
+        filterGlyph
       }
     }
     .accessibilityValue(Text(selectedKind, localized))
     .accessibilityIdentifier("filterButton")
+  }
+
+  /// Filled when narrowed. With the switch on the fill replaces and the glyph bounces once —
+  /// the same motion as `FilterButton`, because it is the same control; off, the plain swap.
+  @ViewBuilder
+  private var filterGlyph: some View {
+    let image = Image(systemName: kind == nil ? Icon.filter : Icon.filterActive)
+    if symbolMotion {
+      image
+        .contentTransition(.symbolEffect(.replace))
+        .symbolEffect(.bounce, value: kind != nil)
+        .animation(.default, value: kind != nil)
+    } else {
+      image
+    }
   }
 
   /// What the filter is narrowed to, for the reader who cannot see the filled glyph. The VALUE,

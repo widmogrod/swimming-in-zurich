@@ -39,6 +39,9 @@ struct FilterButton: View {
 
   @Environment(\.localized) private var localized
   @State private var showingFilters = false
+  /// `Lab.symbolMotion`: the glyph fills with a symbol replace and bounces when the list is
+  /// narrowed, rather than swapping between two frames.
+  @AppStorage(Lab.symbolMotion) private var symbolMotion = true
 
   var body: some View {
     Button {
@@ -47,7 +50,7 @@ struct FilterButton: View {
       Label {
         Text(Message("mobile.filters"), localized)
       } icon: {
-        Image(systemName: filters.isNarrowed ? Icon.filterActive : Icon.filter)
+        glyph
       }
     }
     // The value, not the label, is what changes — so a reader who has narrowed the list hears
@@ -58,6 +61,22 @@ struct FilterButton: View {
       FilterSheet(
         filters: $filters, kinds: kinds, location: location,
         onUseMyLocation: onUseMyLocation, onUseNamedPlace: onUseNamedPlace)
+    }
+  }
+
+  /// The one filter glyph, filled when something is narrowed. With the switch on the fill
+  /// REPLACES rather than swaps and the glyph bounces once, so the change is seen rather than
+  /// inferred; off, the plain two-frame swap this button has always made.
+  @ViewBuilder
+  private var glyph: some View {
+    let image = Image(systemName: filters.isNarrowed ? Icon.filterActive : Icon.filter)
+    if symbolMotion {
+      image
+        .contentTransition(.symbolEffect(.replace))
+        .symbolEffect(.bounce, value: filters.isNarrowed)
+        .animation(.default, value: filters.isNarrowed)
+    } else {
+      image
     }
   }
 }
