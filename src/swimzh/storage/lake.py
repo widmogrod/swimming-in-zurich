@@ -43,6 +43,11 @@ SILVER_SOURCES: Final[tuple[str, ...]] = ("roster", "prices", "schedules", "lane
 
 DEFAULT_LAKE_ROOT: Final = Path(".lake")
 
+#: The silver envelope's schema. Bump when a payload codec changes what it carries: a document
+#: written under another schema is treated as ABSENT (a first run for that source), never decoded
+#: with today's codec — the 2026-09-06 audit found a roster silver that silently lacked `poi_id`.
+SILVER_SCHEMA: Final = 2
+
 _SILVER_DIR: Final = "silver"
 _PULL_TIMEOUT_S: Final = 30.0
 
@@ -63,9 +68,11 @@ class SilverHeader:
     fetched_at: datetime
     status: SilverStatus
     content_sha: str
+    schema: int = SILVER_SCHEMA
 
-    def to_json_obj(self) -> dict[str, str]:
+    def to_json_obj(self) -> dict[str, str | int]:
         return {
+            "schema": self.schema,
             "source": self.source,
             "fetched_at": self.fetched_at.isoformat(),
             "status": self.status.value,
@@ -82,6 +89,7 @@ class SilverHeader:
             fetched_at=fetched_at,
             status=SilverStatus(str(obj["status"])),
             content_sha=str(obj["content_sha"]),
+            schema=int(obj.get("schema", 0)),
         )
 
 
@@ -93,8 +101,26 @@ class SilverDoc:
     payload: dict[str, Any]
 
 
+#: Keys that name WHEN a payload was produced rather than WHAT it says (`valid_as_of` is the
+#: scrape date stamped onto prices and provenance, not a fact from any page — a plan's own
+#: `valid_from` IS a fact and is kept). The content hash skips them at any depth, so a re-fetch of
+#: unchanged facts hashes the same and a changed sha means the facts changed — the only reading
+#: that makes `content_sha` worth publishing.
+_RUN_STAMP_KEYS: Final = frozenset({"fetched_at", "generated_at", "valid_as_of"})
+
+
+def _without_run_stamps(value: Any) -> Any:
+    if isinstance(value, dict):
+        return {k: _without_run_stamps(v) for k, v in value.items() if k not in _RUN_STAMP_KEYS}
+    if isinstance(value, list):
+        return [_without_run_stamps(v) for v in value]
+    return value
+
+
 def _payload_sha(payload: dict[str, Any]) -> str:
-    canonical = json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+    canonical = json.dumps(
+        _without_run_stamps(payload), sort_keys=True, separators=(",", ":"), ensure_ascii=False
+    )
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
 
@@ -127,6 +153,13 @@ class Lake:
             raise TypeError(f"silver payload for {source} is not an object")
         if header.source != source:
             raise ValueError(f"silver file {path} claims source {header.source!r}")
+        if header.schema != SILVER_SCHEMA:
+            print(
+                f"lake: ignoring {path} (silver schema {header.schema}, this build writes "
+                f"{SILVER_SCHEMA}); {source} will be fetched as a first run",
+                file=sys.stderr,
+            )
+            return None
         return SilverDoc(header=header, payload=payload)
 
     def write(self, source: str, payload: dict[str, Any], *, fetched_at: datetime) -> SilverDoc:
@@ -150,6 +183,7 @@ class Lake:
             fetched_at=previous.header.fetched_at,
             status=SilverStatus.STALE,
             content_sha=previous.header.content_sha,
+            schema=previous.header.schema,
         )
         return self._store(SilverDoc(header=header, payload=previous.payload))
 
@@ -220,6 +254,8 @@ def _decode_document(text: str, source: str) -> SilverDoc | None:
     except (ValueError, KeyError, TypeError):
         return None
     if header.source != source or not isinstance(payload, dict):
+        return None
+    if header.schema != SILVER_SCHEMA:
         return None
     return SilverDoc(header=header, payload=payload)
 

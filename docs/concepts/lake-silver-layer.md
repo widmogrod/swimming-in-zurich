@@ -26,7 +26,9 @@ pipeline in `swimzh build`.
 
 Silver sources, in pipeline order: `roster`, `prices`, `schedules`, `lane_plans`
 (`SILVER_SOURCES`). Each document is `{"silver": header, "payload": object}` where the header is
-`source`, `fetched_at`, `status ∈ {fresh, stale}`, `content_sha`. Payload codecs
+`schema`, `source`, `fetched_at`, `status ∈ {fresh, stale}`, `content_sha`. A document under another
+`schema` reads as absent (a first run), never as input to today's codec. `content_sha` skips the
+run stamps (`fetched_at`, `generated_at`, `valid_as_of`), so it changes only when the facts do. Payload codecs
 (`etl/silver_codec.py`) reuse the codecs gold already trusts — the catalog codec, the boundary
 price/lane-plan DTOs, and the gold facility blob for the scraped-side facilities — so nothing can
 survive gold and not survive silver.
@@ -79,3 +81,13 @@ three lines against a local folder. `--refresh` forces every source to refetch r
   re-layer's roster double); the lake's `roster.json` is the build's own.
 * The thin re-layer commands (`scrape-gold`, `scrape-lanes`) run their fetch + write halves back
   to back without the lake, as before.
+
+## Verified 2026-09-06, live
+
+Old code (main) and new code built from the live sites minutes apart: the gold stores were
+identical row for row except `fetched_at` and the new `source_freshness` table; the iOS exports
+had the same `content_hash`. The audit caught one regression — the roster silver dropped the WFS
+`poi_id`, so a lake-warm build nulled `geo_sport_id` and lost 25 xrefs — fixed the same day
+(`catalog_json` now carries `poi_id`; the silver `schema` guards against a pre-fix document).
+Timings on one laptop: old cold 13.1 s, old warm HTTP cache 1.2 s, new cold 9.4 s, new warm lake
+0.2 s with the network off. The lake adds about 0.05 s to a live build.

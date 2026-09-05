@@ -11,7 +11,7 @@ from zoneinfo import ZoneInfo
 import httpx
 import pytest
 
-from swimzh.storage.lake import SILVER_SOURCES, Lake, SilverHeader, SilverStatus
+from swimzh.storage.lake import SILVER_SCHEMA, SILVER_SOURCES, Lake, SilverHeader, SilverStatus
 
 _ZURICH = ZoneInfo("Europe/Zurich")
 _T0 = datetime(2026, 8, 31, 5, 0, tzinfo=_ZURICH)
@@ -68,7 +68,8 @@ def test_the_file_on_disk_is_the_documented_envelope(tmp_path: Path) -> None:
     lake.write("roster", {"entries": []}, fetched_at=_T0)
     obj = json.loads(lake.path_for("roster").read_text(encoding="utf-8"))
     assert set(obj) == {"silver", "payload"}
-    assert set(obj["silver"]) == {"source", "fetched_at", "status", "content_sha"}
+    assert set(obj["silver"]) == {"schema", "source", "fetched_at", "status", "content_sha"}
+    assert obj["silver"]["schema"] == SILVER_SCHEMA
     assert obj["silver"]["fetched_at"] == _T0.isoformat()
 
 
@@ -76,6 +77,7 @@ def test_a_naive_fetched_at_is_refused(tmp_path: Path) -> None:
     with pytest.raises(ValueError, match="timezone-aware"):
         SilverHeader.from_json_obj(
             {
+                "schema": SILVER_SCHEMA,
                 "source": "roster",
                 "fetched_at": "2026-08-31T05:00:00",
                 "status": "fresh",
@@ -154,3 +156,23 @@ def test_pull_over_http_reports_a_transport_error_and_continues(
     with httpx.Client(transport=httpx.MockTransport(refuse)) as client:
         assert target.pull("http://down.test", client=client) == ()
     assert capsys.readouterr().err.count("skipping") == len(SILVER_SOURCES)
+
+
+def test_a_document_under_another_schema_is_absent_not_decoded(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A silver written by an older codec (the pre-fix roster without `poi_id`) must never be
+    decoded with today's codec: it reads as a first run, and `pull` will not adopt it either."""
+    lake = Lake(tmp_path / "lake")
+    lake.write("roster", {"entries": []}, fetched_at=_T0)
+    obj = json.loads(lake.path_for("roster").read_text(encoding="utf-8"))
+    obj["silver"]["schema"] = SILVER_SCHEMA - 1
+    lake.path_for("roster").write_text(json.dumps(obj), encoding="utf-8")
+    assert lake.read("roster") is None
+    assert "silver schema" in capsys.readouterr().err
+    other = Lake(tmp_path / "other")
+    assert other.pull(str(tmp_path / "lake")) == ()
+    # No `schema` key at all (a hand-made file) is schema 0: absent too.
+    del obj["silver"]["schema"]
+    lake.path_for("roster").write_text(json.dumps(obj), encoding="utf-8")
+    assert lake.read("roster") is None

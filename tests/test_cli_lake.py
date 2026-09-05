@@ -100,6 +100,58 @@ def test_inside_the_ttl_a_rerun_reuses_the_lake_and_never_touches_the_network(
     assert GoldRepository(open_db(db)).count() == 57
 
 
+def _xrefs(db: Path) -> set[tuple[str, str, str]]:
+    conn = sqlite3.connect(db)
+    try:
+        return set(conn.execute("SELECT pool_id, namespace, ext_id FROM pool_xref").fetchall())
+    finally:
+        conn.close()
+
+
+def _geo_sport_ids(db: Path) -> dict[str, str | None]:
+    return {
+        str(f.identity.facility_id): f.identity.geo_sport_id
+        for f in GoldRepository(open_db(db)).load_all()
+    }
+
+
+def test_a_lake_warm_rebuild_keeps_every_spine_fact_of_the_cold_build(tmp_path: Path) -> None:
+    """Regression: the roster silver once dropped the WFS `poi_id`, so a warm rebuild silently
+    lost every `geo_sport` xref and nulled `geo_sport_id` on all 57 pools (2026-09-06 audit)."""
+    db, lake = _first_build(tmp_path)
+    cold_xrefs, cold_ids = _xrefs(db), _geo_sport_ids(db)
+    assert cold_xrefs  # the recorded roster carries no poi_id, so the direct pin is in
+    # `test_the_roster_silver_keeps_the_wfs_poi_id` below; this one proves the spine is stable.
+    code = build(
+        db_path=db,
+        data_dir=DATA_DIR,
+        clients=unreachable_wfs_clients(),
+        lake=lake,
+        now=_MONDAY + timedelta(hours=6),
+    )
+    assert code == 0
+    assert _xrefs(db) == cold_xrefs
+    assert _geo_sport_ids(db) == cold_ids
+
+
+def test_the_content_sha_tracks_facts_not_fetch_times(tmp_path: Path) -> None:
+    _, lake = _first_build(tmp_path)
+    first = {s: lake.read(s).header.content_sha for s in SILVER_SOURCES}  # type: ignore[union-attr]
+    other = Lake(tmp_path / "lake2")
+    assert (
+        build(
+            db_path=tmp_path / "g2.sqlite",
+            data_dir=DATA_DIR,
+            clients=recorded_build_clients(),
+            lake=other,
+            now=_MONDAY + timedelta(days=30),
+        )
+        == 0
+    )
+    second = {s: other.read(s).header.content_sha for s in SILVER_SOURCES}  # type: ignore[union-attr]
+    assert first == second  # same recorded pages, a month apart: same facts, same sha
+
+
 def test_a_down_source_past_its_ttl_is_kept_stale_and_the_build_says_so(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
@@ -277,3 +329,24 @@ def test_the_manifest_carries_the_stores_per_source_freshness(tmp_path: Path) ->
     assert freshness["roster"]["fetched_at"] == _MONDAY.isoformat()
     assert freshness["schedules"]["status"] == "fresh"
     assert '"freshness"' in manifest.value.to_json()  # type: ignore[union-attr]
+
+
+def test_the_roster_silver_keeps_the_wfs_poi_id() -> None:
+    """The direct pin for the 2026-09-06 audit finding: `poi_id` is what becomes `geo_sport_id`
+    and the `geo_sport` xref; a silver round-trip that drops it nulls both on a warm build."""
+    from swimzh.domain.catalog import PoolCatalogEntry
+    from swimzh.domain.models import PoolKind
+    from swimzh.etl.silver_codec import decode_roster, encode_roster
+
+    entry = PoolCatalogEntry(
+        pool_id="hallenbad-city",
+        name="Hallenbad City",
+        kind=PoolKind.INDOOR,
+        address="Sihlstrasse 77, 8001 Zürich",
+        geo=None,
+        url=None,
+        description=None,
+        phone=None,
+        poi_id="hb001",
+    )
+    assert decode_roster(encode_roster((entry,), _MONDAY)) == (entry,)
