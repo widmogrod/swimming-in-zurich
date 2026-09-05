@@ -9,12 +9,12 @@
     "the gate. Raise a limit only deliberately, with the reason recorded in the plan."
   ],
   "app_minus_sqlite": {
-    "limit_bytes": 4194304,
-    "plan_ratchet_bytes": 4194304,
+    "limit_bytes": 12582912,
+    "plan_ratchet_bytes": 12582912,
     "ceiling_bytes": 31457280,
-    "measured_bytes": 2088982,
+    "measured_bytes": 9275948,
     "how": "sum of every bundled Mach-O's __TEXT segment (size -m) + every non-Mach-O resource, minus ios.sqlite",
-    "why": "RAISED DELIBERATELY to 4 MB at S5 (2 MB at S3b, 1 MB at S2b). This is the PLAN's own ratchet figure \u2014 `plan_ratchet_bytes` is unchanged and the two are now equal, so this is not a widening beyond what the plan agreed; it is the last step inside it. WHY NOW, with the number: S4's five compiled string catalogs took the measurement from 1,339,498 B to 1,908,758 B, 91% of the 2 MB limit. S5 then added the Baditicker client, the manifest/download/validate/swap path, `StoreHost`, and the sheet row that renders a live reading, measuring 2,088,982 B (__TEXT 1,900,544 + resources 188,438) \u2014 99.6% of 2 MB, i.e. 24 KB of headroom, which is a gate that fails on the next paragraph of a comment rather than on a real regression. Against 4 MB the app sits at 49.8%, and against the 30 MB ceiling the user set, 6.6%. Do NOT raise this again without moving the plan's ratchet first, and never to make a build pass. Still an UNSIGNED PROXY on the Debug configuration, not the thinned download: -exportArchive needs a signing identity CI has not got. Measured context: a stripped hello-world SwiftUI binary is ~71 KB, so the 30 MB ceiling was never in play."
+    "why": "RAISED DELIBERATELY to 12 MB on 2026-09-05 for the layered Liquid Glass app icon (docs/plan/2026-09-05-ios27-liquid-glass-review.md), with the owner's say-so. The Icon Composer `AppIcon.icon` is 16 KB of SVG in git, but actool flattens it into 1024 px renders (default, dark, tintable) of 1,322,508 + 1,312,157 + 540,588 B — and for a DEVICE build it emits that set TWICE, once per idiom (phone AND pad), even with TARGETED_DEVICE_FAMILY = 1 and `--target-device iphone` (measured by hand with actool). So the simulator build measures 5,960,236 B and the device Debug build 9,275,948 B (__TEXT 2,654,208 + resources 6,621,740); App Thinning drops the pad set from the real download, but this gate measures the unthinned Debug bundle, so the gate has to fit the device number. Not code: the whole rise from 2,088,982 B (S5) is icon bitmaps. Against 12 MB the device build sits at 74%, against the 30 MB ceiling at 31%. `plan_ratchet_bytes` moved with it, so the two stay equal. PRIOR HISTORY: 4 MB at S5 (2 MB at S3b, 1 MB at S2b). Do NOT raise this again without moving the plan's ratchet first, and never to make a build pass. Still an UNSIGNED PROXY on the Debug configuration for simulator builds; device Debug builds now sign automatically (CODE_SIGNING_ALLOWED[sdk=iphoneos*])."
   },
   "sqlite": {
     "limit_bytes": 8388608,

@@ -208,8 +208,16 @@ def test_the_committed_budget_file_states_a_limit_for_every_gated_number() -> No
     #    and it is not a widening beyond it: `plan_ratchet_bytes` is unchanged, the two are now
     #    equal, and the 30 MB ceiling the user set is still 7x away. Any future raise has to
     #    move the plan's own number, which is a different and larger conversation.
-    assert budgets["app_minus_sqlite"]["limit_bytes"] == 4 * 1024 * 1024
-    assert budgets["app_minus_sqlite"]["plan_ratchet_bytes"] == 4 * 1024 * 1024
+    #  * 2026-09-05, 4 MB -> 12 MB, and this one MOVED the plan's number too, with the owner's
+    #    say-so. The layered Liquid Glass app icon (`AppIcon.icon`, 16 KB of SVG in git) is
+    #    flattened by actool into 1024 px renders — default, dark, tintable — of 1.32 + 1.31 +
+    #    0.54 MB inside Assets.car, and a DEVICE build carries that set twice (phone and pad
+    #    idioms, even for an iPhone-only target). Simulator: 5,960,236 B; device Debug:
+    #    9,275,948 B. Not code: the whole rise from 2,088,982 B is icon bitmaps that App
+    #    Thinning removes from the real download but this unthinned proxy still counts. 74% of
+    #    12 MB, 31% of the ceiling. See docs/plan/2026-09-05-ios27-liquid-glass-review.md.
+    assert budgets["app_minus_sqlite"]["limit_bytes"] == 12 * 1024 * 1024
+    assert budgets["app_minus_sqlite"]["plan_ratchet_bytes"] == 12 * 1024 * 1024
     assert (
         budgets["app_minus_sqlite"]["limit_bytes"]
         <= budgets["app_minus_sqlite"]["plan_ratchet_bytes"]
