@@ -47,6 +47,12 @@ struct FacilitySheet: View {
   /// Whether the bar is stating the name yet. See the header.
   @State private var showsTitle = false
 
+  /// `Lab.heroExtends`: the hero map runs edge to edge and under the navigation bar, rather
+  /// than sitting as a rounded picture inside the first row's gutters. The row's insets and
+  /// the title handover both depend on it, which is why the sheet reads the flag and not only
+  /// `PoolHeader`.
+  @AppStorage(Lab.heroExtends) private var heroExtends = true
+
   /// How tall the hero's name is at the reader's text size. `@ScaledMetric` rather than a
   /// constant for the same reason the day strip's height is one: at an accessibility size this
   /// line is more than twice as tall, and a fixed threshold would hand the name to the bar
@@ -56,8 +62,35 @@ struct FacilitySheet: View {
   /// How far down the content the hero's name ends: the map, the gap under it, the name itself,
   /// and the section's own top inset. Composed from the parts rather than written as one number
   /// so that changing the map's height cannot silently desynchronise the handover.
+  ///
+  /// The top inset is the row's, so it is composed from the SAME value `heroInsets` uses:
+  /// when the hero extends, the row has no top inset and the name ends that much sooner.
+  ///
+  /// EXTENDED, the list starts under the bar rather than below it, so the name is hidden not
+  /// when it leaves the screen but when it passes under the bar's bottom edge — `barBottom`
+  /// points earlier. Measured, not assumed: the bar's height is the system's, and it differs
+  /// between a phone with a Dynamic Island and one without.
   private var nameBottom: Double {
-    Design.Space.row + heroMapHeight + Design.Space.gutter + nameHeight
+    let underTheBar = heroExtends ? barBottom : 0
+    // The map is taller by the part of it under the bar, and the bar hides that much of the
+    // content: the two cancel, and writing both keeps the handover honest if either moves.
+    return heroInsets.top + heroMapHeight + underTheBar + Design.Space.gutter + nameHeight
+      - underTheBar
+  }
+
+  /// The top safe area — status bar plus navigation bar — as measured OUTSIDE the list, which
+  /// is the only place it can be read once the list itself ignores it.
+  @State private var barBottom: Double = 0
+
+  /// The hero row's insets. With the hero extended the map reaches all three top edges of the
+  /// row — the gutters move INTO `PoolHeader`, under the map, so the name and the actions keep
+  /// their margin while the picture does not.
+  private var heroInsets: EdgeInsets {
+    heroExtends
+      ? EdgeInsets(top: 0, leading: 0, bottom: Design.Space.row, trailing: 0)
+      : EdgeInsets(
+        top: Design.Space.row, leading: Design.Space.gutter,
+        bottom: Design.Space.row, trailing: Design.Space.gutter)
   }
 
   var body: some View {
@@ -65,15 +98,17 @@ struct FacilitySheet: View {
       // THE SCREEN NO LONGER OPENS ON A TABLE. See `PoolHeader` for what replaced it and why
       // every row below it survived the change.
       Section {
-        PoolHeader(detail: detail, row: row, point: point, isToday: isToday)
-          .listRowInsets(
-            .init(
-              top: Design.Space.row, leading: Design.Space.gutter,
-              bottom: Design.Space.row, trailing: Design.Space.gutter)
-          )
-          .listRowBackground(Color.clear)
-          .listRowSeparator(.hidden)
+        PoolHeader(
+          detail: detail, row: row, point: point, isToday: isToday,
+          heroTopInset: heroExtends ? barBottom : 0
+        )
+        .listRowInsets(heroInsets)
+        .listRowBackground(Color.clear)
+        .listRowSeparator(.hidden)
       }
+      // The section's own side margins would keep an edge-to-edge map twenty points short
+      // of each edge; they go to zero for the hero section alone. `nil` is the default.
+      .listSectionMargins(.horizontal, heroExtends ? 0 : nil)
       ForEach(sections) { section in
         Section {
           ForEach(section.rows) { row in
@@ -88,6 +123,21 @@ struct FacilitySheet: View {
     }
     .listStyle(.insetGrouped)
     .listSectionSpacing(.compact)
+    // THE HERO REACHES UNDER THE BAR, and `.backgroundExtensionEffect()` alone did not do it —
+    // driven and photographed: inside a `List` row the effect had nothing to extend into, and
+    // the screen opened on a band of empty background between the back button and the map.
+    // What reaches is the list itself starting at the top of the screen: the map is then the
+    // thing under the status bar and the glass back button, and the bar's own scroll edge
+    // effect does the softening. Off the switch, nothing here changes.
+    .contentMargins(.top, heroExtends ? 0 : nil, for: .scrollContent)
+    .ignoresSafeArea(edges: heroExtends ? .top : [])
+    // Read on the view that still HAS a top safe area — the one outside `ignoresSafeArea` —
+    // because inside it the inset is, by construction, zero.
+    .onGeometryChange(for: Double.self) { proxy in
+      proxy.safeAreaInsets.top
+    } action: { inset in
+      barBottom = inset
+    }
     // The sheet's rendered identity is the pool's NAME, never its id — which is why
     // `FacilityDetailOut.facility_id` stays deliberately omitted from `renderedFields`. It is
     // rendered twice over: at `heroTitle` in `PoolHeader`, and here once that has scrolled off.

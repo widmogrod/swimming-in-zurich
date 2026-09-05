@@ -36,16 +36,31 @@ struct PoolHeader: View {
   let row: PoolRow?
   let point: GeoPoint?
   let isToday: Bool
+  /// How much of the hero sits UNDER the bar when it extends — the top safe area, measured by
+  /// `FacilitySheet` outside the list. Added to the map's height so the picture keeps its full
+  /// 150 points below the bar rather than losing two thirds of itself behind the glass. Zero
+  /// when the hero does not extend.
+  var heroTopInset: Double = 0
+
+  /// `Lab.heroExtends`: the map is a full-bleed hero that extends under the navigation bar.
+  /// `FacilitySheet` reads the same key for the row's insets; this side decides what the map
+  /// itself looks like and where the gutters go when the row no longer supplies them.
+  @AppStorage(Lab.heroExtends) private var heroExtends = true
 
   var body: some View {
     VStack(alignment: .leading, spacing: Design.Space.gutter) {
       map
-      VStack(alignment: .leading, spacing: Design.Space.snug) {
-        title
-        verdict
+      VStack(alignment: .leading, spacing: Design.Space.gutter) {
+        VStack(alignment: .leading, spacing: Design.Space.snug) {
+          title
+          verdict
+        }
+        ribbon
+        PoolActions(detail: detail, point: point)
       }
-      ribbon
-      PoolActions(detail: detail, point: point)
+      // The words keep their margin whether or not the picture has one. Zero here when the
+      // row still insets itself, so the two paths cannot add up to a double gutter.
+      .padding(.horizontal, heroExtends ? Design.Space.gutter : 0)
     }
     .padding(.bottom, Design.Space.row)
   }
@@ -54,8 +69,28 @@ struct PoolHeader: View {
   /// is a picture of where the pool is, and a map that panned under a finger scrolling the
   /// facts below would fight the screen it is part of. Getting to a real map is the Directions
   /// action, which hands the whole job to Maps.
+  ///
+  /// EXTENDED, it is a hero rather than a picture: no rounded clip, edge to edge (the row's
+  /// insets are zero, see `FacilitySheet.heroInsets`), and `.backgroundExtensionEffect()` so
+  /// the water appears to continue up under the glass navigation bar, with the back button
+  /// floating over it — the iOS 26 idiom for a screen that opens on an image. The map stays
+  /// inert and hidden from VoiceOver either way; only its frame changes.
   @ViewBuilder
   private var map: some View {
+    // `picture` unwraps the point itself; this only decides whether the frame exists at all.
+    if point != nil {
+      picture
+        .frame(height: heroMapHeight + heroTopInset)
+        .clipShape(.rect(cornerRadius: heroExtends ? 0 : Design.Radius.control))
+        .backgroundExtensionEffect(isEnabled: heroExtends)
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
+        .accessibilityIdentifier("heroMap")
+    }
+  }
+
+  @ViewBuilder
+  private var picture: some View {
     if let point {
       Map(
         initialPosition: .region(
@@ -76,11 +111,6 @@ struct PoolHeader: View {
         }
         .annotationTitles(.hidden)
       }
-      .frame(height: heroMapHeight)
-      .clipShape(RoundedRectangle(cornerRadius: Design.Radius.control))
-      .allowsHitTesting(false)
-      .accessibilityHidden(true)
-      .accessibilityIdentifier("heroMap")
     }
   }
 
