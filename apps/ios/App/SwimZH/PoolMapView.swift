@@ -48,6 +48,19 @@ import SwimZHKit
 struct PoolMapView: View {
   @Environment(\.localized) private var localized
   let pins: PinSet
+  /// The pool whose facts are open beside this map, or nil. Set only by the STAGE wide layout
+  /// (`TodayView`), where the facts live in a column over the map rather than on a screen of
+  /// their own: the map flies to the pool when one opens and back to the whole answer when it
+  /// closes. Any card that was up is dropped — the column is already saying more than it did.
+  var focus: String? = nil
+  /// How wide the map is framed around a focused pool. The stage's (`Lab.WideFocus`).
+  var focusSpanMetres: Double = minimumMapSpanMetres
+  /// What a tapped PIN does when there is a column beside the map to open a pool in: the
+  /// STAGE hands the pool straight to its column's stack, in ONE tap, and no card is raised —
+  /// the column is the card. Nil — the phone — and a pin raises `PinCard`, whose whole face is
+  /// a `NavigationLink` on the map's own stack. Apple Maps on iPad does the same: a pin fills
+  /// the sidebar; on a phone it raises a card.
+  var open: ((String) -> Void)? = nil
 
   /// The pin whose card is up, or none. It holds the WHOLE pin rather than its id, for the
   /// reason the ribbon's tap state had to learn: an id alone is a selection nothing can render.
@@ -115,6 +128,23 @@ struct PoolMapView: View {
       selectedID = nil
       selected = nil
       regroup()
+    }
+    .onChange(of: focus) { _, id in focus(on: id) }
+  }
+
+  /// Fly to the focused pool and mark its pin, or back to the answer's frame when the focus is
+  /// cleared. The pin is SELECTED — it grows, as a tapped pin does — but its card stays down:
+  /// the column beside the map is already saying everything the card would (see `select`).
+  private func focus(on id: String?) {
+    selected = nil
+    guard let id, let pin = pins.pins.first(where: { $0.poolID == id }) else {
+      selectedID = nil
+      return withAnimation(.smooth(duration: 0.45)) { frame() }
+    }
+    selectedID = id
+    withAnimation(.smooth(duration: 0.45)) {
+      point(
+        at: MapFrame(centre: pin.point, tallMetres: focusSpanMetres, wideMetres: focusSpanMetres))
     }
   }
 
@@ -189,7 +219,11 @@ struct PoolMapView: View {
     guard let id, let cluster = clusters.first(where: { $0.id == id }) else {
       return withAnimation(.snappy(duration: 0.24)) { selected = nil }
     }
+    // The focused pool's pin is marked, not carded — its facts are open beside the map.
+    guard id != focus else { return }
     guard cluster.isSingle else { return expand(cluster) }
+    // A column to open into: the pin opens the pool there, and that is the whole tap.
+    if let open { return open(cluster.lead.poolID) }
     withAnimation(.snappy(duration: 0.24)) { selected = cluster.lead }
   }
 
@@ -368,23 +402,29 @@ struct PinCard: View {
       .accessibilityIdentifier("pinCard")
   }
 
+  /// The whole card is the way to the pool. Phone only: on the stage a pin opens the pool in
+  /// the column and no card is raised (`PoolMapView.open`).
   private var link: some View {
     NavigationLink(value: Route.pool(pin.poolID)) {
-      HStack(spacing: Design.Space.gutter) {
-        VStack(alignment: .leading, spacing: Design.Space.hair) {
-          Text(verbatim: pin.name).font(.rowTitle).foregroundStyle(.primary)
-          verdict
-        }
-        Spacer(minLength: 0)
-        distance
-        Image(systemName: pin.mark.symbol)
-          .foregroundStyle(pin.mark.accent)
-          .accessibilityLabel(Text(pin.mark.voiceOverLabel, localized))
-      }
-      .padding(Design.Space.gutter)
-      .contentShape(Rectangle())
+      face
     }
     .buttonStyle(.plain)
+  }
+
+  private var face: some View {
+    HStack(spacing: Design.Space.gutter) {
+      VStack(alignment: .leading, spacing: Design.Space.hair) {
+        Text(verbatim: pin.name).font(.rowTitle).foregroundStyle(.primary)
+        verdict
+      }
+      Spacer(minLength: 0)
+      distance
+      Image(systemName: pin.mark.symbol)
+        .foregroundStyle(pin.mark.accent)
+        .accessibilityLabel(Text(pin.mark.voiceOverLabel, localized))
+    }
+    .padding(Design.Space.gutter)
+    .contentShape(Rectangle())
   }
 
   private var verdict: some View {

@@ -17,6 +17,14 @@
 // Each tab holds its OWN `NavigationStack`, so a push on one page never moves another, and
 // every stack has the same one `navigationDestination` over `Route`.
 //
+// A WIDE WINDOW — an unfolded phone, an iPad, a landscape Max — is laid out differently, and the
+// difference is keyed off the horizontal SIZE CLASS and nothing else (see `Lab.swift` for why:
+// there is no fold API, and the size class is what an unfolded phone will report). Under review
+// as `Lab.WideLayout`: `stage` (the map with the list floating over it, the default) and `phone`
+// (this layout stretched, the control). The content stack's PATH is one
+// `@State` shared by the compact list page and the wide detail column, so a pool open when the
+// phone unfolds is still open after — the screen changes shape, not place.
+//
 // The iOS 26 adoptions the tab bar did not change, each with its reason:
 //  * the day strip via `safeAreaBar(edge: .top)` on the scrolling view — see `DayStrip.swift`.
 //  * `List`, not `LazyVStack`: not for speed (both are lazy, and 57 rows is noise either way)
@@ -88,12 +96,60 @@ struct TodayView: View {
   /// reads it, through the same bridge.
   @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
+  /// Whether the window is wide. THE size-class, not the device: an unfolded phone, an iPad and
+  /// a landscape Max all report `.regular`, and a folded phone, a Split View slice and a
+  /// portrait phone all report `.compact`. Nothing here asks what the hardware is.
+  @Environment(\.horizontalSizeClass) private var sizeClass
+  /// Which wide layout is under review. Read through `@AppStorage` so a change in Settings
+  /// re-renders the app on return, without a relaunch.
+  @AppStorage(Lab.wideLayout) private var wideLayoutRaw = Lab.WideLayout.default.rawValue
+  private var wideLayout: Lab.WideLayout { Lab.WideLayout(rawValue: wideLayoutRaw) ?? .default }
+  /// Where search and the filters live in a wide window — see `Lab.WideChrome`.
+  @AppStorage(Lab.wideChrome) private var wideChromeRaw = Lab.WideChrome.default.rawValue
+  private var wideChrome: Lab.WideChrome { Lab.WideChrome(rawValue: wideChromeRaw) ?? .default }
+  /// Wide, with the column carrying its own controls: no tab bar at all.
+  private var columnChrome: Bool { isWide && wideChrome == .column }
+  /// Whether the filters popover is up (column chrome only).
+  @State private var showsFilters = false
+  /// Whether the column's search row is on screen — pulled for, never resident. The DECISION
+  /// is the kit's (`columnControlsShouldShow`); this only records it, from the same scroll
+  /// report the strip reads.
+  @State private var showsSearch = false
+  /// Whether the column's field has the keyboard — one of the two things that pin the row.
+  @FocusState private var searchFocused: Bool
+  /// How far the stage's map flies in when a pool opens — see `Lab.WideFocus`.
+  @AppStorage(Lab.wideFocus) private var wideFocusRaw = Lab.WideFocus.default.rawValue
+  private var wideFocus: Lab.WideFocus { Lab.WideFocus(rawValue: wideFocusRaw) ?? .default }
+  /// Wide, AND a wide layout is chosen. `phone` is the control: a wide window laid out as the
+  /// phone is, so the two others can be judged against it.
+  private var isWide: Bool { sizeClass == .regular && wideLayout != .phone }
+  /// The window's width, for the column widths the kit derives from it.
+  @State private var windowWidth: Double = 0
+  /// Which edge the stage's column sits against — flicked across by the reader. Held here
+  /// because the MAP has to know it: the map is inset by the column's side, so what it frames is
+  /// framed in the part of it the reader can see.
+  @State private var columnSide: ColumnSide = .leading
+
+  /// The content stack: the list page's pushes in a compact window, the detail column's in a
+  /// wide one. ONE path for both, which is what carries an open pool across a fold or unfold.
+  @State private var contentPath: [Route] = []
+  /// The map tab's own stack, compact only — a wide window has no map tab.
+  @State private var mapPath: [Route] = []
+  /// The search tab's stack, kept apart: two `NavigationStack`s bound to one path push twice.
+  @State private var searchPath: [Route] = []
+
   private var stripHeight: Double {
     stripLayout(for: TypeSize(dynamicTypeSize), width: 0).stripHeight
   }
 
+  /// The strip's height as laid out — the kit's number until the first measurement, so the
+  /// folding frame is right from the first frame and exact once the legend (which only the
+  /// accessibility sizes add) has been measured.
+  @State private var measuredStripHeight: Double =
+    stripLayout(for: TypeSize(.large), width: 0).stripHeight
+
   var body: some View {
-    tabShell
+    shell
       .task {
         await model.load()
         // A fix for a reader who already chose one, and never a prompt — see
@@ -117,6 +173,35 @@ struct TodayView: View {
         Task { await model.refreshStore() }
         Task { await model.refreshLocation() }
       }
+      .onGeometryChange(for: Double.self) { proxy in
+        proxy.size.width
+      } action: { width in
+        windowWidth = width
+      }
+      // THE FOLD. Going wide takes the map tab away (the map is on screen anyway), so a reader
+      // on it lands on the list — with whatever they had pushed from the map carried over, so
+      // unfolding over a pool keeps that pool. Going compact brings the tab back and the path
+      // is already the list's.
+      .onChange(of: isWide) { _, wide in
+        guard wide, tab == .map || searchedContent == .map else { return }
+        if tab == .map { tab = .list }
+        searchedContent = .list
+        if contentPath.isEmpty { contentPath = mapPath }
+        mapPath = []
+      }
+  }
+
+  /// The tab bar — or, in a wide window under the column chrome, no bar: the stage alone, its
+  /// column carrying search and the filters. The regular-width tab bar floats at the top centre
+  /// of the window, over the column's top; there is no API to move it, so the column chrome
+  /// does without it (see `Lab.WideChrome`).
+  @ViewBuilder
+  private var shell: some View {
+    if columnChrome {
+      widePage(searchable: true, path: $contentPath)
+    } else {
+      tabShell
+    }
   }
 
   /// The tab bar. The selection is the bar's own glass lens; the search tab turns the bar into
@@ -127,14 +212,21 @@ struct TodayView: View {
   private var tabShell: some View {
     TabView(selection: $tab) {
       Tab(value: TabPage.list) {
-        NavigationStack { findPage(searchable: false) }
+        if isWide {
+          widePage(searchable: false, path: $contentPath)
+        } else {
+          NavigationStack(path: $contentPath) { routed(findPage(searchable: false)) }
+        }
       } label: {
         Label(Message("nav.list"), systemImage: Icon.list, localized)
       }
-      Tab(value: TabPage.map) {
-        NavigationStack { mapPage(searchable: false) }
-      } label: {
-        Label(Message("nav.map"), systemImage: Icon.map, localized)
+      // No map tab in a wide window: both wide layouts keep the map on screen.
+      if !isWide {
+        Tab(value: TabPage.map) {
+          NavigationStack(path: $mapPath) { routed(mapPage(searchable: false)) }
+        } label: {
+          Label(Message("nav.map"), systemImage: Icon.map, localized)
+        }
       }
       Tab(value: TabPage.filters) {
         FilterPage(
@@ -149,11 +241,15 @@ struct TodayView: View {
       }
       Tab(value: TabPage.search, role: .search) {
         // The page the reader came from, with the field over it — see `searchedContent`.
-        NavigationStack {
-          if searchedContent == .map {
-            mapPage(searchable: true)
-          } else {
-            findPage(searchable: true)
+        if isWide {
+          widePage(searchable: true, path: $searchPath)
+        } else {
+          NavigationStack(path: $searchPath) {
+            if searchedContent == .map {
+              routed(mapPage(searchable: true))
+            } else {
+              routed(findPage(searchable: true))
+            }
           }
         }
       }
@@ -193,19 +289,140 @@ struct TodayView: View {
             // costs a scroll to the top of fifty rows. Whether it shows is
             // `SwimZHKit.stripShouldShow` — a rule, and a rule in a `body` is one nothing
             // measures.
-            stripIfShown
-              .animation(.snappy(duration: 0.22), value: showsStrip)
+            VStack(spacing: Design.Space.row) {
+              // The column's controls, ONE row: the search field and the filters button,
+              // side by side under the grab bar — and only when PULLED FOR. A navigation bar
+              // did this first (a title row holding one button, the field in a drawer under
+              // it: a band of empty glass), then a resident row; the owner wanted neither
+              // above the day strip. Mail hides its search the same way.
+              if columnChrome && showsSearch {
+                columnControls
+                  .transition(.move(edge: .top).combined(with: .opacity))
+              }
+              stripIfShown
+                .animation(.snappy(duration: 0.22), value: showsStrip)
+            }
           }
+          .animation(.snappy(duration: 0.22), value: showsSearch)
       }
-      .toolbarVisibility(.hidden, for: .navigationBar)
-      .navigationDestination(for: Route.self, destination: screen)
-    if searchable {
+    if columnChrome {
+      // No navigation bar in the column either: its controls are in the bar above.
+      bare(page)
+    } else if searchable {
       // ON THE READY PAGE, not on the stack: attached one level up it drew the search field
       // over the loading state — a field for a list that was not there yet.
-      searching(page)
+      searching(bare(page))
     } else {
-      page
+      bare(page)
     }
+  }
+
+  /// A page with NO navigation bar — see `findPage`'s header for why the phone has none.
+  private func bare(_ page: some View) -> some View {
+    page.toolbarVisibility(.hidden, for: .navigationBar)
+  }
+
+  /// The column's search field and filters button, in one row. The field is the app's own —
+  /// not `.searchable`, which needs a navigation bar to live in — bound to the same
+  /// `filters.search` the phone's field writes, so the list narrows as the reader types.
+  private var columnControls: some View {
+    HStack(spacing: Design.Space.row) {
+      HStack(spacing: Design.Space.row) {
+        Image(systemName: Icon.noMatch)
+          .foregroundStyle(.secondary)
+        TextField(
+          text: $model.filters.search, prompt: Text(Message("nav.findAPool"), localized)
+        ) {
+          Text(Message("nav.findAPool"), localized)
+        }
+        .textFieldStyle(.plain)
+        .autocorrectionDisabled()
+        .submitLabel(.search)
+        .focused($searchFocused)
+        .accessibilityIdentifier("columnSearch")
+        if !model.filters.search.isEmpty {
+          Button {
+            model.filters.search = ""
+          } label: {
+            Image(systemName: Icon.clearSearch)
+              .foregroundStyle(.secondary)
+          }
+          .buttonStyle(.plain)
+          .accessibilityLabel(Text(Message("nav.findAPool"), localized))
+        }
+      }
+      .padding(.horizontal, Design.Space.gutter)
+      .frame(minHeight: Design.hitTarget)
+      .background(.quaternary, in: Capsule())
+      filtersButton
+    }
+    .padding(.horizontal, Design.Space.gutter)
+  }
+
+  /// The filters, behind one button, as a POPOVER: a form-sized surface anchored to the
+  /// button, not a screen. The glyph fills when something is narrowed, as the tab's does.
+  private var filtersButton: some View {
+    Button {
+      showsFilters.toggle()
+    } label: {
+      Image(systemName: model.filters.isNarrowed ? Icon.filterActive : Icon.filter)
+        .font(.screenHeadline)
+        .frame(width: Design.hitTarget, height: Design.hitTarget)
+        .contentShape(Rectangle())
+    }
+    .buttonStyle(.plain)
+    .accessibilityLabel(Text(Message("mobile.filters"), localized))
+    .accessibilityIdentifier("filtersButton")
+    .popover(isPresented: $showsFilters, arrowEdge: .top) {
+      FilterPage(
+        filters: $model.filters, kinds: model.kinds, location: model.location,
+        onUseMyLocation: { await model.useMyLocation() },
+        onUseNamedPlace: { model.useNamedPlace($0) }
+      )
+      .frame(minWidth: listColumnMinimumWidth, minHeight: formPopoverHeight)
+    }
+  }
+
+  /// A page with the one `navigationDestination` every stack has. Attached by the CALLER, on
+  /// the stack's root, so the page itself knows nothing about which stack it is in.
+  private func routed(_ page: some View) -> some View {
+    page.navigationDestination(for: Route.self, destination: screen)
+  }
+
+  /// The wide window's page. Never called for `phone`: that layout is `isWide == false`.
+  ///
+  /// STAGE: the map is the screen; the list floats over its leading side in a glass card, and
+  /// a tapped pool's facts take the card while the map flies to the pool with its neighbours'
+  /// pins kept. The map is inset by the card's width so what it frames is framed in the part
+  /// of it the reader can see. The map's own pin card opens the same facts in the same card —
+  /// it REPLACES the column's stack rather than pushing on it, so pin after pin never piles
+  /// up screens behind the back button.
+  private func widePage(searchable: Bool, path: Binding<[Route]>) -> some View {
+    ZStack(alignment: .topLeading) {
+      ready { list, _ in
+        PoolMapView(
+          pins: poolPins(list.sections, geo: model.geoByPool),
+          focus: focusedPool(path.wrappedValue), focusSpanMetres: wideFocus.spanMetres,
+          open: { path.wrappedValue = [.pool($0)] }
+        )
+        .safeAreaPadding(
+          columnSide == .leading ? .leading : .trailing,
+          listColumnWidth(in: windowWidth) + Design.Space.gutter)
+      }
+      StageColumn(windowWidth: windowWidth, side: $columnSide) {
+        NavigationStack(path: path) {
+          routed(findPage(searchable: searchable))
+            .containerBackground(.clear, for: .navigation)
+        }
+        .environment(\.poolPresentation, .column)
+      }
+    }
+  }
+
+  /// The pool the stage's column is showing: the top of its stack, when that is a pool.
+  private func focusedPool(_ path: [Route]) -> String? {
+    if case .pool(let poolID)? = path.last { return poolID }
+    return nil
   }
 
   /// The map page: the same answer as the list, pinned by the roster's coordinates
@@ -222,12 +439,10 @@ struct TodayView: View {
             DayStrip(chips: model.chips, selection: $model.filters.day)
           }
       }
-      .toolbarVisibility(.hidden, for: .navigationBar)
-      .navigationDestination(for: Route.self, destination: screen)
     if searchable {
-      searching(page)
+      searching(bare(page))
     } else {
-      page
+      bare(page)
     }
   }
 
@@ -268,8 +483,9 @@ struct TodayView: View {
       // A pushed screen is its own place: the pool screen is a full map with a drawer at the
       // bottom, and a tab bar (and the filter pill above it) drawn over that drawer is two
       // bars fighting for the thumb. Photos does the same on a photo. The edge swipe and the
-      // back button are the ways home.
-      .toolbarVisibility(.hidden, for: .tabBar)
+      // back button are the ways home. In a WIDE window the push lands in a column beside the
+      // list, which stays in use — so the bar stays too.
+      .toolbarVisibility(isWide ? .automatic : .hidden, for: .tabBar)
   }
 
   @ViewBuilder
@@ -289,6 +505,11 @@ struct TodayView: View {
         load: { await model.facility($0) },
         live: { await model.liveTemperature(poiid: $0) }
       )
+      // IDENTITY FOLLOWS THE POOL. On the stage a pin REPLACES the open pool in the column's
+      // path — same depth, different value — and without this SwiftUI kept the screen's state
+      // (its loaded facts, its live reading) and showed the OLD pool under the new route:
+      // "clicking on pins does not work". A new pool is a new screen.
+      .id(poolID)
     // A PLAIN push, deliberately: the zoom transition this route had gives the pushed screen
     // a drag-to-dismiss on every downward pan, which hijacked the drawer's own drag and hid
     // the bar while it did (see `PoolPanel`). The plain push keeps the edge swipe.
@@ -363,11 +584,27 @@ struct TodayView: View {
   }
 
   @ViewBuilder
+  /// The strip, in a frame that FOLDS when it yields. An `if` alone took the strip out of the
+  /// bar in one step: the transition animated the strip's own fade, but the bar's height — and
+  /// so the list's top inset — changed at once, and the rows jumped by a strip's height under
+  /// the finger ("the animation of days hiding is not smooth"). The frame around it now animates
+  /// from the strip's measured height to zero, so the bar and the list move together on one
+  /// curve; the strip itself still leaves the tree, so a hidden strip is hidden to VoiceOver and
+  /// to the driven tests alike.
   private var stripIfShown: some View {
-    if showsStrip {
-      DayStrip(chips: model.chips, selection: $model.filters.day)
-        .transition(.move(edge: .top).combined(with: .opacity))
+    ZStack(alignment: .bottom) {
+      if showsStrip {
+        DayStrip(chips: model.chips, selection: $model.filters.day)
+          .onGeometryChange(for: Double.self) { proxy in
+            proxy.size.height
+          } action: { height in
+            if height > 0 { measuredStripHeight = height }
+          }
+          .transition(.opacity)
+      }
     }
+    .frame(height: showsStrip ? measuredStripHeight : 0, alignment: .bottom)
+    .clipped()
   }
 
   /// Read the scroll, ask the kit, record the answer.
@@ -381,6 +618,12 @@ struct TodayView: View {
     // are the kit's (`listReachedTop`, `TodayModel.settleFavouriteOrder`); this only reports.
     if listReachedTop(scrolled: scrolled, wasAtTop: listAtTop) { model.settleFavouriteOrder() }
     listAtTop = listIsAtTop(scrolled: scrolled)
+    if columnChrome {
+      let search = columnControlsShouldShow(
+        scrolled: scrolled, showing: showsSearch,
+        pinned: searchFocused || !model.filters.search.isEmpty)
+      if search != showsSearch { showsSearch = search }
+    }
     let shows = stripShouldShow(
       scrolled: scrolled, stripHeight: stripHeight, showing: showsStrip)
     guard shows != showsStrip else { return }
@@ -489,6 +732,9 @@ struct TodayView: View {
     }
     .modifier(PullToCheck(enabled: model.canCheckForUpdates) { await model.checkForUpdates() })
     .listStyle(.insetGrouped)
+    // On the stage the list is inside a glass card, and the card is the ground — see
+    // `StageColumn`. On the phone the list keeps the system's grouped ground.
+    .scrollContentBackground(isWide ? .hidden : .automatic)
     // Inset-grouped sections default to about forty points of air between them. On a screen
     // whose whole job is a ranked list of six tiers, that is a row of pools spent on gaps.
     .listSectionSpacing(.compact)

@@ -946,7 +946,9 @@ struct UILintTests {
   /// `.buttonStyle(.glass)`, the system's own glass button, which paints no surface of ours.
   ///
   /// Rows, sheets and forms stay banned: they are the content layer.
-  static let glassFiles: Set<String> = ["DayStrip.swift", "PoolMapView.swift", "PoolPanel.swift"]
+  static let glassFiles: Set<String> = [
+    "DayStrip.swift", "PoolMapView.swift", "PoolPanel.swift", "StageColumn.swift",
+  ]
 
   @Test("`.glassEffect()` is applied only in the navigation-layer files that may")
   func nothingPaintsItsOwnGlass() throws {

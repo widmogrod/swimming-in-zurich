@@ -40,6 +40,9 @@
 		1A000000000000000000057 /* FacilitySheetLoader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A000000000000000000056 /* FacilitySheetLoader.swift */; };
 		1A0000000000000000000E3 /* PoolGlance.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A0000000000000000000E2 /* PoolGlance.swift */; };
 		1A0000000000000000000E6 /* AboutView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A0000000000000000000E5 /* AboutView.swift */; };
+		1A0000000000000000000B1 /* Lab.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A0000000000000000000B0 /* Lab.swift */; };
+		1A0000000000000000000B3 /* Settings.bundle in Resources */ = {isa = PBXBuildFile; fileRef = 1A0000000000000000000B2 /* Settings.bundle */; };
+		1A0000000000000000000E8 /* StageColumn.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A0000000000000000000E7 /* StageColumn.swift */; };
 		1A000000000000000000059 /* AccessTypesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A000000000000000000058 /* AccessTypesView.swift */; };
 		1A000000000000000000062 /* BehaviourTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A000000000000000000061 /* BehaviourTests.swift */; };
 		1A0000000000000000000B5 /* AppIcon.icon in Resources */ = {isa = PBXBuildFile; fileRef = 1A0000000000000000000B4 /* AppIcon.icon */; };
@@ -103,6 +106,9 @@
 		1A000000000000000000056 /* FacilitySheetLoader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FacilitySheetLoader.swift; sourceTree = "<group>"; };
 		1A0000000000000000000E2 /* PoolGlance.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PoolGlance.swift; sourceTree = "<group>"; };
 		1A0000000000000000000E5 /* AboutView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AboutView.swift; sourceTree = "<group>"; };
+		1A0000000000000000000B0 /* Lab.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Lab.swift; sourceTree = "<group>"; };
+		1A0000000000000000000B2 /* Settings.bundle */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.plug-in"; path = Settings.bundle; sourceTree = "<group>"; };
+		1A0000000000000000000E7 /* StageColumn.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StageColumn.swift; sourceTree = "<group>"; };
 		1A000000000000000000058 /* AccessTypesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccessTypesView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -183,6 +189,9 @@
 				1A000000000000000000056 /* FacilitySheetLoader.swift */,
 				1A0000000000000000000E2 /* PoolGlance.swift */,
 				1A0000000000000000000E5 /* AboutView.swift */,
+				1A0000000000000000000B0 /* Lab.swift */,
+				1A0000000000000000000B2 /* Settings.bundle */,
+				1A0000000000000000000E7 /* StageColumn.swift */,
 				1A000000000000000000058 /* AccessTypesView.swift */,
 			);
 			path = SwimZH;
@@ -333,6 +342,7 @@
 				1A0000000000000000000B5 /* AppIcon.icon in Resources */,
 				1A00000000000000000002B /* PrivacyInfo.xcprivacy in Resources */,
 				1A000000000000000000077 /* InfoPlist.xcstrings in Resources */,
+				1A0000000000000000000B3 /* Settings.bundle in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -399,6 +409,8 @@
 				1A000000000000000000057 /* FacilitySheetLoader.swift in Sources */,
 				1A0000000000000000000E3 /* PoolGlance.swift in Sources */,
 				1A0000000000000000000E6 /* AboutView.swift in Sources */,
+				1A0000000000000000000B1 /* Lab.swift in Sources */,
+				1A0000000000000000000E8 /* StageColumn.swift in Sources */,
 				1A000000000000000000059 /* AccessTypesView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -497,12 +509,13 @@
 				INFOPLIST_FILE = SwimZH/Info.plist;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				MARKETING_VERSION = 0.1;
 				PRODUCT_BUNDLE_IDENTIFIER = ch.swimzh.SwimZH;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				SWIFT_EMIT_LOC_STRINGS = NO;
-				TARGETED_DEVICE_FAMILY = 1;
+				TARGETED_DEVICE_FAMILY = "1,2";
 			};
 			name = Debug;
 		};
@@ -520,12 +533,13 @@
 				INFOPLIST_FILE = SwimZH/Info.plist;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				MARKETING_VERSION = 0.1;
 				PRODUCT_BUNDLE_IDENTIFIER = ch.swimzh.SwimZH;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				SWIFT_EMIT_LOC_STRINGS = NO;
-				TARGETED_DEVICE_FAMILY = 1;
+				TARGETED_DEVICE_FAMILY = "1,2";
 			};
 			name = Release;
 		};
@@ -539,7 +553,7 @@
 				MARKETING_VERSION = 0.1;
 				PRODUCT_BUNDLE_IDENTIFIER = ch.swimzh.SwimZHTests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
-				TARGETED_DEVICE_FAMILY = 1;
+				TARGETED_DEVICE_FAMILY = "1,2";
 				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/SwimZH.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/SwimZH";
 			};
 			name = Debug;
@@ -554,7 +568,7 @@
 				MARKETING_VERSION = 0.1;
 				PRODUCT_BUNDLE_IDENTIFIER = ch.swimzh.SwimZHTests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
-				TARGETED_DEVICE_FAMILY = 1;
+				TARGETED_DEVICE_FAMILY = "1,2";
 				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/SwimZH.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/SwimZH";
 			};
 			name = Release;
@@ -569,7 +583,7 @@
 				PRODUCT_BUNDLE_IDENTIFIER = ch.swimzh.SwimZHUITests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_VERSION = 6.0;
-				TARGETED_DEVICE_FAMILY = 1;
+				TARGETED_DEVICE_FAMILY = "1,2";
 				TEST_TARGET_NAME = SwimZH;
 			};
 			name = Debug;
@@ -584,7 +598,7 @@
 				PRODUCT_BUNDLE_IDENTIFIER = ch.swimzh.SwimZHUITests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_VERSION = 6.0;
-				TARGETED_DEVICE_FAMILY = 1;
+				TARGETED_DEVICE_FAMILY = "1,2";
 				TEST_TARGET_NAME = SwimZH;
 			};
 			name = Release;

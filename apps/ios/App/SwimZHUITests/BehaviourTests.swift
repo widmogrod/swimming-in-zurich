@@ -749,6 +749,206 @@ final class BehaviourTests: XCTestCase {
     return element.exists
   }
 
+  // MARK: - A wide window: an unfolded phone, an iPad, a landscape Max
+
+  /// The `Lab.wideLayout` key, spelled out because this target links no app code.
+  private let wideLayoutKey = "lab.wideLayout"
+
+  /// Whether the window is wide enough for the regular size class. Below it every wide test is
+  /// SKIPPED rather than passed: a phone in portrait proves nothing about the unfolded layout.
+  private var windowIsWide: Bool { app.windows.firstMatch.frame.width >= 600 }
+
+  /// Launch again with Lab arguments, from the same clean start.
+  private func relaunch(arguments: [String]) {
+    app.terminate()
+    app.launchArguments += arguments
+    app.launch()
+    XCTAssertTrue(find("poolRow").waitForExistence(timeout: 30), "no row after relaunch")
+  }
+
+  func testAWideWindowIsAMapWithTheListFloatingOverItAndAPoolOpensInTheCard() throws {
+    // The default wide layout, the STAGE: the map is the screen, the list floats over it in a
+    // glass card, and a tapped pool's facts take the card while the map — the SAME map, its
+    // other pins kept — flies to the pool. Never a second map over the first.
+    try XCTSkipUnless(windowIsWide, "a compact window has no wide layout to prove")
+    XCTAssertTrue(find("stageColumn").waitForExistence(timeout: 10), "no floating column")
+    XCTAssertTrue(find("poolMap").exists, "the stage has no map under the column")
+    // The column chrome: no tab bar anywhere, and NO control row at rest — the card opens on
+    // the day strip. A pull past the top brings the search field and the filters button, on
+    // one row; the filters open as a popover, which goes away on a tap outside it.
+    XCTAssertFalse(app.tabBars.firstMatch.exists, "a tab bar is up over the column")
+    XCTAssertFalse(find("columnSearch").exists, "the search row is resident, not pulled for")
+    let rowTop = find("poolRow").coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.2))
+    rowTop.press(forDuration: 0.1, thenDragTo: rowTop.withOffset(CGVector(dx: 0, dy: 300)))
+    let filters = find("filtersButton")
+    XCTAssertTrue(filters.waitForExistence(timeout: 5), "the pull brought no filters button")
+    let search = find("columnSearch")
+    XCTAssertTrue(search.exists, "the pull brought no search field")
+    XCTAssertEqual(
+      search.frame.midY, filters.frame.midY, accuracy: 2,
+      "the search field and the filters button are not on one row")
+    XCTAssertLessThan(
+      search.frame.minY - find("stageColumn").frame.minY, 80,
+      "empty glass above the column's controls")
+    filters.tap()
+    XCTAssertTrue(find("measureFrom").waitForExistence(timeout: 5), "the filters did not open")
+    app.coordinate(withNormalizedOffset: CGVector(dx: 0.9, dy: 0.9)).tap()
+    XCTAssertTrue(waitForDisappearance(of: find("measureFrom")), "the popover did not close")
+    let pinsBefore = all("mapPin").count + all("mapCluster").count
+    find("poolRow").tap()
+    XCTAssertTrue(
+      find("poolFacts").waitForExistence(timeout: 10), "the facts did not open in the card")
+    XCTAssertFalse(find("poolStage").exists, "a second map opened over the stage's map")
+    XCTAssertTrue(find("poolMap").exists, "the stage's map went away")
+    sleep(1)
+    XCTAssertGreaterThan(
+      all("mapPin").count + all("mapCluster").count, 1,
+      "flying to the pool lost every other pin (had \(pinsBefore) before)")
+    // A PIN is the other way to a pool, and on the stage it is ONE tap: the pool opens in the
+    // card, no floating pin card in between. The map is zoomed to a neighbourhood now, so a
+    // single pin is on screen — the assertion is not optional here.
+    app.navigationBars.firstMatch.buttons.firstMatch.tap()
+    XCTAssertTrue(find("poolRow").waitForExistence(timeout: 10), "the list did not come back")
+    let pins = all("mapPin")
+    XCTAssertTrue(pins.firstMatch.waitForExistence(timeout: 5), "no single pin on the map")
+    // The last one: the first may be the pool just closed, whose pin is still marked.
+    pins.element(boundBy: pins.count - 1).tap()
+    XCTAssertTrue(
+      find("poolFacts").waitForExistence(timeout: 10), "tapping a pin did not open the pool")
+    XCTAssertFalse(find("pinCard").exists, "the stage raised a phone pin card")
+  }
+
+  func testOnTheStageEveryPinOpensItsPoolInTheCard() throws {
+    // "Clicking on pins does not work" (owner, 2026-09-06). Driven pin by pin: the FIRST pin at
+    // rest, a second pin while the first pool is open, and a pin after coming back — each must
+    // put a DIFFERENT pool's facts in the card, and the name in the card must be the pin's.
+    try XCTSkipUnless(windowIsWide, "a compact window has no wide layout to prove")
+    XCTAssertTrue(find("stageColumn").waitForExistence(timeout: 10), "no floating column")
+    let pins = all("mapPin")
+    XCTAssertTrue(pins.firstMatch.waitForExistence(timeout: 5), "no single pin on the map")
+    let first = pins.element(boundBy: 0)
+    let firstName = first.label
+    first.tap()
+    XCTAssertTrue(find("poolFacts").waitForExistence(timeout: 10), "the first pin did nothing")
+    XCTAssertTrue(
+      app.staticTexts[firstName].waitForExistence(timeout: 5),
+      "the card does not name the pin's pool (\(firstName))")
+    // A second pin, with the first pool open: the card must switch. The pins regroup once the
+    // fly-in settles, so give them the beat; a pool with no single neighbour in 1.5 km is a
+    // fact about Zürich, not a failure, and the switch is then proved from the city view below.
+    sleep(2)
+    if let second = all("mapPin").allElementsBoundByIndex.first(where: { $0.label != firstName }) {
+      let secondName = second.label
+      second.tap()
+      XCTAssertTrue(
+        app.staticTexts[secondName].waitForExistence(timeout: 10),
+        "the second pin did not switch the card to \(secondName)")
+    }
+    // Back to the list, then a DIFFERENT pin from the city view, straight over the open list.
+    app.navigationBars.firstMatch.buttons.firstMatch.tap()
+    XCTAssertTrue(find("poolRow").waitForExistence(timeout: 10), "the list did not come back")
+    sleep(2)
+    let again = try XCTUnwrap(
+      all("mapPin").allElementsBoundByIndex.first(where: { $0.label != firstName }),
+      "no other single pin on the city view")
+    let againName = again.label
+    again.tap()
+    XCTAssertTrue(
+      app.staticTexts[againName].waitForExistence(timeout: 10),
+      "a pin after coming back did not open \(againName)")
+    // ...and with THAT pool open, the first pin again, if the fly-in left it a single pin: the
+    // card must switch back. Queried LIVE, not from the snapshot above — the map regroups as
+    // it flies, and an element from before the flight may no longer exist.
+    sleep(2)
+    let firstAgain = all("mapPin").matching(NSPredicate(format: "label == %@", firstName))
+      .firstMatch
+    if firstAgain.exists {
+      firstAgain.tap()
+      XCTAssertTrue(
+        app.staticTexts[firstName].waitForExistence(timeout: 10),
+        "tapping the first pin again did not switch the card back to \(firstName)")
+    }
+  }
+
+  func testTheColumnShrinksByItsHandleAndFlicksToTheOtherSide() throws {
+    // "The sidebar should allow reducing its height or moving to a different side of the screen
+    // just by flicking or dragging a finger." Dragged down by its handle it gets shorter and
+    // the list is still there; flicked across, it is on the other side; flicked back, it is
+    // back.
+    try XCTSkipUnless(windowIsWide, "a compact window has no wide layout to prove")
+    let column = find("stageColumn")
+    XCTAssertTrue(column.waitForExistence(timeout: 10), "no floating column")
+    let tall = column.frame
+    // The handle is the card's top edge.
+    let handle = column.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.02))
+    handle.press(
+      forDuration: 0.1,
+      thenDragTo: handle.withOffset(CGVector(dx: 0, dy: tall.height * 0.6)))
+    sleep(1)
+    XCTAssertLessThan(column.frame.height, tall.height * 0.75, "the column did not shrink")
+    XCTAssertTrue(find("poolRow").exists, "shrinking the column lost the list")
+    // Across the screen.
+    let shortHandle = column.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.05))
+    shortHandle.press(
+      forDuration: 0.1,
+      thenDragTo: shortHandle.withOffset(CGVector(dx: app.frame.width * 0.6, dy: 0)))
+    sleep(1)
+    XCTAssertGreaterThan(
+      column.frame.midX, app.frame.midX, "the column did not move to the other side")
+    // And back.
+    let farHandle = column.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.05))
+    farHandle.press(
+      forDuration: 0.1,
+      thenDragTo: farHandle.withOffset(CGVector(dx: -app.frame.width * 0.6, dy: 0)))
+    sleep(1)
+    XCTAssertLessThan(column.frame.midX, app.frame.midX, "the column did not come back")
+    // Grown again by its handle.
+    let backHandle = column.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.05))
+    backHandle.press(
+      forDuration: 0.1,
+      thenDragTo: backHandle.withOffset(CGVector(dx: 0, dy: -tall.height * 0.8)))
+    sleep(1)
+    XCTAssertGreaterThan(column.frame.height, tall.height * 0.9, "the column did not grow back")
+  }
+
+  func testThePhoneLayoutIsTheControlInAWideWindow() throws {
+    try XCTSkipUnless(windowIsWide, "a compact window has no wide layout to prove")
+    relaunch(arguments: ["-\(wideLayoutKey)", "phone"])
+    XCTAssertFalse(find("poolMap").exists, "the control layout shows a map beside the list")
+  }
+
+  func testTheTabBarChromeIsTheControlOnTheStage() throws {
+    try XCTSkipUnless(windowIsWide, "a compact window has no wide layout to prove")
+    relaunch(arguments: ["-lab.wideChrome", "tabs"])
+    XCTAssertTrue(find("stageColumn").waitForExistence(timeout: 10), "no floating column")
+    XCTAssertFalse(find("filtersButton").exists, "the column bar's button is up under tabs")
+  }
+
+  func testFoldingKeepsTheOpenPool() throws {
+    // THE FOLD, stood in for by a rotation: a Max is compact upright and regular on its side.
+    // A pool opened wide must still be open narrow, and the other way round — the screen
+    // changes shape, never place.
+    // A teardown block, not `defer`: a failed assertion halts the test before a `defer` runs,
+    // and a device left on its side makes every later phone test run wide and fail.
+    addTeardownBlock { XCUIDevice.shared.orientation = .portrait }
+    XCUIDevice.shared.orientation = .landscapeLeft
+    XCTAssertTrue(find("poolRow").waitForExistence(timeout: 10))
+    try XCTSkipUnless(windowIsWide, "this device is not wide on its side")
+    XCTAssertTrue(find("poolMap").waitForExistence(timeout: 10), "not wide on its side")
+    find("poolRow").tap()
+    XCTAssertTrue(find("poolFacts").waitForExistence(timeout: 10), "the pool did not open")
+    // Folded: the SAME route is the phone's pool screen — a map with the facts in a drawer.
+    XCUIDevice.shared.orientation = .portrait
+    XCTAssertTrue(
+      find("poolStage").waitForExistence(timeout: 10), "folding closed the open pool")
+    XCTAssertFalse(find("poolRow").exists, "the list is still beside the pool when narrow")
+    // Unfolded again: the facts are back in the card, over the map, with the list a tap away.
+    XCUIDevice.shared.orientation = .landscapeLeft
+    XCTAssertTrue(
+      find("poolFacts").waitForExistence(timeout: 10), "unfolding closed the open pool")
+    XCTAssertTrue(find("poolMap").exists, "unfolding lost the map")
+  }
+
   private func waitForDisappearance(of element: XCUIElement) -> Bool {
     let gone = expectation(for: NSPredicate(format: "exists == false"), evaluatedWith: element)
     return XCTWaiter().wait(for: [gone], timeout: 8) == .completed

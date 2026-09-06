@@ -70,9 +70,14 @@ struct FacilitySheet: View {
   @Environment(\.dismiss) private var dismiss
   /// Whether the map has been asked for yet. False until the push has landed — see `stage`.
   @State private var mapArrived = false
+  /// Stage or column — see `PoolPresentation`. In a column the screen is already inside a card
+  /// over a live map (`StageColumn`), so a second map with a drawer would be a map over a map;
+  /// the facts are a plain list there, under the same header, and the map behind flies to the
+  /// pool (`PoolMapView.focus`).
+  @Environment(\.poolPresentation) private var presentation
 
   var body: some View {
-    if let point {
+    if let point, presentation == .stage {
       ZStack(alignment: .bottom) {
         stage(point)
         PoolPanel(detent: $detent, onDismiss: { dismiss() }) {
@@ -99,22 +104,32 @@ struct FacilitySheet: View {
           .accessibilityIdentifier("poolStageRecentre")
         }
       }
-    } else if let detail {
+    } else {
+      // The column, and the no-coordinates fallback: the same list. The header says the name
+      // at once and the facts fill in under it — the column never opens on a bare spinner,
+      // for the reason the panel never does.
       List {
         Section {
-          PoolHeader(
-            detail: detail, row: row, point: point, isToday: isToday, live: live, asOf: asOf
-          )
-          .listRowBackground(Color.clear)
-          .listRowSeparator(.hidden)
+          panelHeader
+            .listRowBackground(Color.clear)
+            .listRowSeparator(.hidden)
+            .listRowInsets(.init(top: 0, leading: 0, bottom: 0, trailing: 0))
         }
-        facts(detail)
+        if let detail {
+          facts(detail)
+        }
       }
       .listStyle(.insetGrouped)
       .listSectionSpacing(.compact)
+      // In the column the card is the surface, as it is for the panel: the list's grouped
+      // ground and the pushed host's own ground would both paint over the glass.
+      .scrollContentBackground(presentation == .column ? .hidden : .automatic)
+      .containerBackground(.clear, for: .navigation)
+      // Straight under the back button: the list's default top margin plus the header's own
+      // air was a band of empty glass between the bar and the name.
+      .contentMargins(.top, 0, for: .scrollContent)
       .navigationBarTitleDisplayMode(.inline)
-    } else {
-      ProgressView()
+      .accessibilityIdentifier("poolFacts")
     }
   }
 

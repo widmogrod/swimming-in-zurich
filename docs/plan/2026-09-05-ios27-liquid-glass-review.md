@@ -505,3 +505,73 @@ a link to GitHub."
 - `BehaviourTests.testTheAboutScreenSaysWhoWhatAndHow` drives it: reachable from the list, the
   count and provenance rows exist, the repository link is there, and tapping the button produces
   the check row (launched with the automatic check off, so the row is provably the button's).
+
+### Ready for a wide window — the unfolded phone (2026-09-06, evening)
+
+"Apple released in iOS 27 a way for responsive apps … this is for the foldable phone; adjust
+this app to be ready for it, in the unfolded state."
+
+**What the SDK actually offers.** Nothing fold-specific: the iOS 27 SwiftUI and UIKit
+interfaces were grepped for hinge / fold / posture and name none. What an unfolded phone will
+report is what every wide window reports today — a **regular horizontal size class** — so
+readiness means keying the layout off the size class and nothing else (never the idiom, never a
+screen size), and surviving a size-class flip mid-session. The same code is what an iPad, a
+Split View window and a landscape Max get, which is also how it is tested: the app target now
+runs natively on iPad (`TARGETED_DEVICE_FAMILY = "1,2"`, all four iPad orientations so the window
+is resizable), the iPad mini simulator stands in for the unfolded phone, and a Max rotation
+stands in for the fold.
+
+**Built, behind a rebuilt Lab** (`App/SwimZH/Lab.swift` + `Settings.bundle`, `@AppStorage`, live
+on return from Settings; tests pass `-lab.<key> value`):
+
+| Switch | Key | Values |
+| --- | --- | --- |
+| Wide layout | `lab.wideLayout` | `stage` (default): the map is the screen and the list floats over its leading side in a glass card (`StageColumn`, width from the kit's `listColumnWidth`); a tapped row's facts take the card (`PoolPresentation.column` — `FacilitySheet` renders its list branch, no second map) while the SAME map flies to the pool with its neighbours' pins kept (`PoolMapView.focus`, the pin marked but not carded); the map's pin card opens the same facts in the same card (`PoolMapView.open` replaces the column's stack). No Map tab — the map is always there. `phone`: the phone layout stretched, the control. |
+| Search and filters | `lab.wideChrome` | `column` (default): NO tab bar in a wide window — the regular-width `TabView` floats at the top centre, over the column's top, and cannot be moved ("list and filters are on center and take space for sidebar", owner) — so the column's own navigation bar carries the search field and a Filters button, and the filters open as a POPOVER sized as a form (`formPopoverHeight`). `tabs`: the system tab bar, the control; its filter page is held to `formMaximumWidth` and centred ("filter full screen looks bad on iPad"). |
+| Opening a pool zooms to | `lab.wideFocus` | `neighbourhood` (default): the answer's 1.5 km minimum span, so the pools around it stay on the map; `pool`: the phone pool-screen's 700 m. |
+
+- **`split` was built first and deleted the same evening** — a `NavigationSplitView` with the
+  list in the sidebar and the map in the detail column, a tapped pool pushed over the map as the
+  phone's pool screen. The owner's reaction on seeing it: the sidebar was not a floating glass
+  surface while the pin card over the map was, and a tap opened a *second* map instead of
+  moving the one already there; they asked for a tap to zoom the map to the pool with the other
+  pins kept and for the facts to expand the list's card. That is the stage.
+- **Two rounds of the owner's eye on the iPad.** (1) The card was an opaque white sheet with
+  glass corners: a `NavigationStack` paints `systemBackground` under everything it hosts, so
+  the glass never showed — `containerBackground(.clear, for: .navigation)` on the stack (and on
+  the pushed facts) plus `scrollContentBackground(.hidden)` on the lists is what makes the card
+  read as the phone's `PoolPanel` does. (2) A pin on the stage opens the pool in the card in
+  ONE tap (`PoolMapView.open`, no floating `PinCard` on the stage); the phone keeps the card.
+- **The card moves** ("the sidebar should allow reducing its height or moving to a different
+  side of the screen just by flicking or dragging a finger"). A grab handle at the card's top is
+  the one drag area (the list under it keeps scrolling). Dragged down it rests at one of three
+  heights (`ColumnDetent`: whole, half, or just the search field + day strip — anchored to the
+  bottom, content laid out once at full height, the card a window from the top, as `PoolPanel`);
+  flicked across it goes to the other side (`ColumnSide`, decided by where the card's centre was
+  HEADED against the window's middle) and the map's inset follows. Rules in the kit
+  (`columnVisibleHeight`, `columnDetent`, `columnSide`), tested; driven by
+  `testTheColumnShrinksByItsHandleAndFlicksToTheOtherSide`. Also: a pin REPLACING the open pool
+  needed `.id(poolID)` on the pool screen — same depth, new value, and SwiftUI kept the old
+  screen's loaded state ("clicking on pins does not work").
+- **Pulled for, not resident** (third round): the search row is hidden until the list is
+  pulled past its top (`columnControlsShouldShow`, kit-tested; pinned while the field has focus
+  or a query), so the card opens on the grab bar and the day strip. The facts list lost its top
+  margin under the back button.
+- **The day strip folds instead of vanishing** ("the animation of days hiding is not smooth
+  on iPhone or iPad"): the `if` that removed it snapped the bar's height — and the list's top
+  inset — in one step while only the strip's fade animated. The strip now sits in a frame
+  animated from its measured height to zero, so bar and list move on one curve; the strip still
+  leaves the tree, so the yield tests and VoiceOver see it go.
+- **One icon source.** `Assets.xcassets/AppIcon.appiconset` (the flat PNG the review's finding 1
+  replaced) still sat beside `AppIcon.icon` under the same name; the two idioms resolved it
+  differently ("why does the app icon look different on iPhone vs iPad?"). Deleted; the layered
+  icon is the only `AppIcon`, and both simulators' home screens now show the same icon.
+- **The fold keeps the open pool.** One `contentPath: [Route]` is bound to the compact list
+  stack and to the stage column's stack, so a pool open in the card is, after folding, the
+  phone's map-with-drawer screen for the same route, and is back in the card after unfolding.
+  Going wide takes the Map tab away and carries a pool pushed from it over to the list's path.
+- Driven: `BehaviourTests.testAWideWindowIsAMapWithTheListFloatingOverItAndAPoolOpensInTheCard`
+  and `testThePhoneLayoutIsTheControlInAWideWindow` (skip in a compact window; run on the iPad
+  mini), `testFoldingKeepsTheOpenPool` (a Max on its side, then upright, then on its side).
+- Follow-up not done: under `tabs` the top tab bar still overlaps the column's top; only
+  `column` solves that, which is why it is the default.

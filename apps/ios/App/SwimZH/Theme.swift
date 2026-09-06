@@ -130,6 +130,7 @@ enum Icon {
   static let expand = "chevron.down"
   static let collapse = "chevron.up"
   static let storeError = "xmark.icloud"
+  static let clearSearch = "xmark.circle.fill"
   static let beyondHorizon = "calendar.badge.exclamationmark"
   static let fairWeather = "sun.max"
   static let selected = "checkmark"

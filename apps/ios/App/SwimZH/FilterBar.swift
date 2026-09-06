@@ -18,6 +18,9 @@ import SwimZHKit
 /// reader leaves by choosing another tab, and every change has already applied.
 struct FilterPage: View {
   @Environment(\.localized) private var localized
+  /// A wide window holds the form to `formMaximumWidth`, centred, on the same ground the list
+  /// draws on. Stretched across an iPad a label and its value sat a hand's width apart.
+  @Environment(\.horizontalSizeClass) private var sizeClass
   @Binding var filters: Filters
   let kinds: [String]
   let location: any LocationFixing
@@ -30,6 +33,9 @@ struct FilterPage: View {
         filters: $filters, kinds: kinds, location: location, onUseMyLocation: onUseMyLocation,
         onUseNamedPlace: onUseNamedPlace
       )
+      .frame(maxWidth: sizeClass == .regular ? formMaximumWidth : .infinity)
+      .frame(maxWidth: .infinity)
+      .background((sizeClass == .regular ? Color("LaunchBackground") : .clear).ignoresSafeArea())
       .navigationTitle(Text(Message("mobile.filters"), localized))
       .navigationBarTitleDisplayMode(.inline)
     }
