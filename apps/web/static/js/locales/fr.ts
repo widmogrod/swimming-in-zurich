@@ -420,6 +420,11 @@ export const fr = {
   "basin.fact.water": "Eau",
   "basin.fact.diving": "Plongeoir",
   "basin.fact.lanePlan": "Plan des couloirs",
+  // The pool screen's at-a-glance strip: a caption under a number, so each is a noun.
+  "glance.water.stale": "Eau, plus tôt",
+  "glance.water.nominal": "Eau, annoncée",
+  "glance.length": "Longueur",
+  "glance.lanes": "Couloirs",
   "basin.size.lengthByWidth": "{length} × {width}",
   "basin.size.length": "{length}",
   "basin.size.width": "{width} de large",

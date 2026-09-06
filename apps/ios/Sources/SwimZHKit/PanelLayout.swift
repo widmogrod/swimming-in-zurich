@@ -17,9 +17,11 @@ import Foundation
 
 /// The three heights the panel rests at, as fractions of the screen it sits in.
 ///
-/// `peek` shows the pool's name, its answer and its actions and leaves the map the point of the
-/// screen; `half` shows the first facts; `tall` is for reading, and leaves a band of map at the
-/// top so the screen never stops being a map.
+/// `peek` shows the pool's name, its answer, its three numbers and its actions and leaves the
+/// map the point of the screen; `half` shows the first facts; `tall` is for reading, and leaves
+/// a band of map at the top so the screen never stops being a map. `peek` grew from 0.36 when
+/// the glance strip arrived: at 0.36 the action captions were cut off under it, which the
+/// driven test now checks by geometry.
 public enum PanelDetent: CaseIterable, Sendable, Equatable {
   case peek
   case half
@@ -27,7 +29,7 @@ public enum PanelDetent: CaseIterable, Sendable, Equatable {
 
   public var fraction: Double {
     switch self {
-    case .peek: return 0.36
+    case .peek: return 0.42
     case .half: return 0.55
     case .tall: return 0.9
     }

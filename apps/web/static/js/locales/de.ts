@@ -431,6 +431,11 @@ export const de = {
   "basin.fact.water": "Wasser",
   "basin.fact.diving": "Sprunganlage",
   "basin.fact.lanePlan": "Belegungsplan",
+  // The pool screen's at-a-glance strip: a caption under a number, so each is a noun.
+  "glance.water.stale": "Wasser, früher",
+  "glance.water.nominal": "Wasser, laut Bad",
+  "glance.length": "Länge",
+  "glance.lanes": "Bahnen",
   "basin.size.lengthByWidth": "{length} × {width}",
   "basin.size.length": "{length}",
   "basin.size.width": "{width} breit",

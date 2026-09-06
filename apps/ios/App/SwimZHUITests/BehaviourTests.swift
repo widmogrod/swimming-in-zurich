@@ -452,45 +452,51 @@ final class BehaviourTests: XCTestCase {
 
   func testThePoolScreenLeadsWithTheNumbersAndOffersTheLanePlan() {
     // "Temperature, number of lanes and lane length — at a glance; currently it's buried
-    // somewhere below. And a link to the lane plan when the pool has one." The pool opened
-    // here is one whose ROW offers a lane plan, because a pool without one must show no
-    // button — the same rule as Call for a pool without a phone — and that pool cannot
-    // prove the button exists.
-    let disclosure = find("laneDisclosure")
-    guard disclosure.waitForExistence(timeout: 10) else {
-      return XCTFail("no row in the fixture store offers a lane plan")
+    // somewhere below. And a link to the lane plan when the pool has one." Driven under BOTH
+    // Lab shapes of the strip, with a frame of each attached for the owner to compare. The
+    // pool opened is one whose ROW offers a lane plan, because a pool without one must show
+    // no button — the same rule as Call for a pool without a phone — and cannot prove it.
+    for shape in ["tiles", "line"] {
+      relaunch(withLab: "lab.glance", value: shape)
+      let disclosure = find("laneDisclosure")
+      guard disclosure.waitForExistence(timeout: 10) else {
+        return XCTFail("no row in the fixture store offers a lane plan")
+      }
+      // The row the disclosure belongs to, by GEOMETRY: `poolRow` is the row's LINK — the name
+      // and the answer — and the ribbon and the disclosure hang under it outside that element,
+      // so the row above the button, nearest to it, is its own.
+      let rowWithPlan = all("poolRow").allElementsBoundByIndex
+        .filter { $0.frame.maxY <= disclosure.frame.minY }
+        .max { $0.frame.maxY < $1.frame.maxY }
+      guard let rowWithPlan else { return XCTFail("the lane disclosure hangs under no row") }
+      rowWithPlan.tap()
+      let panel = find("poolPanel")
+      XCTAssertTrue(panel.waitForExistence(timeout: 10), "[\(shape)] the pool screen never opened")
+      let lanePlan = find("lanePlanButton")
+      XCTAssertTrue(
+        lanePlan.waitForExistence(timeout: 5),
+        "[\(shape)] a pool with a lane plan offers no way to it")
+      XCTAssertTrue(lanePlan.isHittable, "[\(shape)] the lane plan button is not reachable")
+      // The numbers sit in the header — ABOVE the actions, which is what "at a glance" means:
+      // visible at the drawer's smallest rest, before any scroll.
+      let glance = find("poolGlance")
+      XCTAssertTrue(
+        glance.waitForExistence(timeout: 5),
+        "[\(shape)] the pool screen shows no numbers at a glance")
+      XCTAssertLessThan(
+        glance.frame.minY, lanePlan.frame.minY, "[\(shape)] the numbers are below the actions")
+      XCTAssertGreaterThan(
+        glance.frame.minY, panel.frame.minY, "[\(shape)] the numbers left the panel")
+      // ...and the strip did not push the actions out of the smallest rest: the first frame
+      // of the tiles had every caption cut off under the panel's bottom edge.
+      XCTAssertLessThanOrEqual(
+        lanePlan.frame.maxY, panel.frame.maxY, "[\(shape)] the actions are cut off at the peek")
+      sleep(1)
+      let shot = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
+      shot.name = "glance-\(shape)"
+      shot.lifetime = .keepAlways
+      add(shot)
     }
-    // The row the disclosure sits in, by GEOMETRY: `containing(_:identifier:)` does not see
-    // through a `.contain` element, so the rows are walked for the one around the button.
-    let rowWithPlan = all("poolRow").allElementsBoundByIndex.first {
-      $0.frame.contains(disclosure.frame)
-    }
-    guard let rowWithPlan else {
-      let frames = all("poolRow").allElementsBoundByIndex.map { "\($0.frame)" }
-      return XCTFail("the lane disclosure \(disclosure.frame) sits in no row: \(frames)")
-    }
-    // The TOP of the row — its bottom is the disclosure, which expands instead of opening.
-    rowWithPlan.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.1)).tap()
-    XCTAssertTrue(find("poolPanel").waitForExistence(timeout: 10), "the pool screen never opened")
-    let lanePlan = find("lanePlanButton")
-    XCTAssertTrue(
-      lanePlan.waitForExistence(timeout: 5), "a pool with a lane plan offers no way to it")
-    XCTAssertTrue(lanePlan.isHittable, "the lane plan button is not reachable")
-    // The numbers sit in the header — ABOVE the facts list, which is what "at a glance" means:
-    // visible at the drawer's smallest rest, before any scroll.
-    let glance = find("poolGlance")
-    XCTAssertTrue(
-      glance.waitForExistence(timeout: 5), "the pool screen shows no numbers at a glance")
-    XCTAssertLessThan(
-      glance.frame.minY, lanePlan.frame.minY, "the numbers are below the actions, not at a glance")
-    XCTAssertGreaterThan(
-      glance.frame.minY, find("poolPanel").frame.minY, "the numbers are not in the panel")
-    // Every fact on the strip is still a row below — the strip is a second reading, not a move.
-    // A screen the owner can compare: one frame per Lab shape, attached to the run.
-    let shot = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
-    shot.name = "glance-\(ProcessInfo.processInfo.arguments.contains("line") ? "line" : "tiles")"
-    shot.lifetime = .keepAlways
-    add(shot)
   }
 
   func testThePoolScreenSaysItsNameOnceAtATime() {
