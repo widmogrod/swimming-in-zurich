@@ -551,6 +551,34 @@ final class BehaviourTests: XCTestCase {
     XCTAssertGreaterThanOrEqual(directions.frame.width, 44, "the action is too small to hit")
   }
 
+  // MARK: - The pool's own page
+
+  func testTheWebsiteOpensInsideTheApp() {
+    // The website action used to hand the address to Safari and put the app in the
+    // background. Every opener that claims to keep the reader in the app must put a page on
+    // screen with the app still in front. The Safari app itself (`external`) is not driven:
+    // it would leave Safari open in front of every later test.
+    for opener in ["safari", "sheet", "web"] {
+      app.terminate()
+      relaunch(withLab: "lab.linkOpener", value: opener)
+      find("poolRow").tap()
+      let website = find("websiteButton")
+      XCTAssertTrue(website.waitForExistence(timeout: 10), "\(opener): no website action")
+      website.tap()
+      XCTAssertTrue(
+        app.webViews.firstMatch.waitForExistence(timeout: 20),
+        "\(opener): no page opened inside the app")
+      XCTAssertEqual(app.state, .runningForeground, "\(opener): the app left the foreground")
+      if opener == "web" {
+        // The app's own browser has the app's own Done, and it must give the pool back.
+        find("browserDone").tap()
+        XCTAssertTrue(
+          waitForDisappearance(of: app.webViews.firstMatch), "\(opener): Done left the page up")
+        XCTAssertTrue(website.exists, "\(opener): Done did not return to the pool")
+      }
+    }
+  }
+
   // MARK: - The phone's own position
 
   func testMyLocationChangesWhatNearestMeans() {

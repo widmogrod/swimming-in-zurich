@@ -25,6 +25,9 @@ enum Lab {
   static let glassCard = "lab.glassCard"
   /// SF Symbol motion: the favourite heart bounces, the filter glyph bounces when narrowed.
   static let symbolMotion = "lab.symbolMotion"
+  /// WHERE a web link opens. A picker: the question is how much of the app stays in view
+  /// while the reader looks at the pool's own page. See `LinkOpener`.
+  static let linkOpener = "lab.linkOpener"
 
   // DECIDED, and deleted as the header says a decided switch must be: `lab.heroExtends` (the
   // pool screen's hero map under the bar) and `lab.heroStage` (that map opening to fill the
@@ -70,6 +73,30 @@ enum Lab {
     case flat, morph, tint, button
     static let `default`: StripStyle = .tint
     var isGlass: Bool { self != .flat }
+  }
+
+  /// The four places a pool's web page can open. `external` is what the app shipped with:
+  /// `openURL` handed the address to Safari, the app went to the background, and coming back
+  /// was a swipe up and a tap on the right card. The three others keep the reader IN the app,
+  /// which is what Apple's own apps do (Mail, Messages, News all open links in place) and what
+  /// the HIG asks for when the page is a detour, not a destination.
+  ///  * `safari` — `SFSafariViewController`, full screen. Safari's engine, Safari's cookies
+  ///    and passwords, Reader, content blockers, the reader's own Safari settings; on iOS 26+
+  ///    the system draws its bars in Liquid Glass. Done closes it; the app is still where it
+  ///    was. The default: the most capable browser and the least code.
+  ///  * `sheet` — the same controller as a page sheet. The pool screen stays visible behind
+  ///    it, and a pull down closes it — the lightest way to glance at a page and come back.
+  ///    Cost: a sheet is shorter than the screen, and the page's own header eats some of it.
+  ///  * `web` — SwiftUI's `WebView` (WebKit) inside the app's own navigation stack: our bar,
+  ///    our Done, back/forward/reload and share in a bottom bar the system draws in glass, the
+  ///    page's title in the bar, a progress line while it loads. Cost: no shared Safari
+  ///    cookies or passwords, no Reader, and every control is ours to keep right.
+  ///  * `external` — the Safari app, as before. For comparison.
+  enum LinkOpener: String, CaseIterable {
+    case safari, sheet, web, external
+    static let `default`: LinkOpener = .safari
+    /// Whether the opener is `SFSafariViewController`, which is the one worth prewarming.
+    var usesSafariController: Bool { self == .safari || self == .sheet }
   }
 
   /// Make a launch argument count. `-lab.glassStrip NO` lands in the defaults' ARGUMENT domain

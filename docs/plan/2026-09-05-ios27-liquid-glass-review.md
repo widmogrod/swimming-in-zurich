@@ -148,7 +148,7 @@ Not part of this review's fixes.
 ## What was built (same day, this branch)
 
 Every visual change is behind a **Lab switch** so the two looks can be compared on a phone:
-`App/SwimZH/Lab.swift` names four `UserDefaults` keys, read through `@AppStorage`, defaulting
+`App/SwimZH/Lab.swift` names five `UserDefaults` keys, read through `@AppStorage`, defaulting
 to the NEW look; `App/SwimZH/Settings.bundle` puts the four toggles in the system Settings app
 under SwimZH (English only, deliberately: they exist until a variant is chosen, then the key,
 the toggle and the losing branch are deleted). Tests pass `-lab.<key> NO` as launch arguments;
@@ -162,6 +162,7 @@ screenshot set was pixel-identical to the new one for exactly that reason.
 | Bottom bar | `lab.bottomBar` (picker) | `toggle`: the same toolbar with list/map as ONE glyph-swapping glass button, so every control presses alike; `tabs`: a system `TabView` — Find, Map, All pools, `Tab(role: .search)` — whose selection is the tab bar's own draggable glass lens, the filter as `tabViewBottomAccessory`, `tabBarMinimizeBehavior(.onScrollDown)` | `toolbar`: bottom toolbar with a segmented list/map picker (a flat thumb inside the bar's glass — the one control with no lens) |
 | Glass map card | `lab.glassCard` | `.glassEffect(.regular.interactive())`, `.materialize` transition, no shadow | `.regularMaterial` + shadow |
 | Symbol motion | `lab.symbolMotion` | heart draws on/off, filter glyph replace + bounce | plain swaps |
+| Links open in | `lab.linkOpener` (picker) | `safari` (default): `SFSafariViewController` full screen, prewarmed; `sheet`: the same as a pull-down page sheet; `web`: SwiftUI `WebView` in the app's own glass bars | `external`: the Safari app |
 
 ### The pool screen is a map (decided the same evening; two switches deleted)
 
@@ -284,6 +285,50 @@ with the iOS 27.0 simulator. The "iPhone 17 Pro" iOS 27 simulator crashed twice 
 Dropped from the list above: the bottom-bar minimize (finding 6). The reported
 `toolbarMinimizeBehavior` API is not in the iOS 27.0 SDK; only `tabBarMinimizeBehavior`
 exists, and this app has no tab bar.
+
+### Links open inside the app (2026-09-06; a fourth picker)
+
+The ask: "opening links in the app should happen by a built-in browser", with Apple's
+practices and the iOS 27 look. Before: the website action and the facts' `Link` both went
+through the environment's `openURL`, which handed the address to Safari and put the app in
+the background. Coming back was the app switcher.
+
+What was built, `App/SwimZH/LinkOpener.swift`:
+
+- **One seam.** `linkOpening()` at the app root replaces `openURL` with an `OpenURLAction`
+  that takes `http(s)` and returns `.systemAction` for everything else, so `tel:`, the Maps
+  URL and `app-settings:` still leave the app. No call site changed; `Link` and `openURL(...)`
+  both land here.
+- **`lab.linkOpener`**, a picker in Settings > SwimZH with four values:
+  - `safari` (default) — `SFSafariViewController` in a full-screen cover. Safari's engine and
+    the reader's own cookies, passwords, Reader and content blockers; on iOS 26+ its bars are
+    the system's Liquid Glass. `entersReaderIfAvailable` off (Reader strips the timetable
+    table), `barCollapsingEnabled` on, `preferredControlTintColor` the app accent, delegate
+    finish clears the presentation state so the same link opens twice.
+  - `sheet` — the same controller as a page sheet: the pool screen stays visible behind it and
+    a pull down closes it. Lighter to glance at; the page is shorter.
+  - `web` — SwiftUI's `WebView` (`WebPage`, iOS 26) in the app's own `NavigationStack`: Done
+    and Share in the top bar, the page title inline, a bottom bar of back / forward / reload /
+    open-in-Safari in the system's glass with `ToolbarSpacer`s, a linear progress line while
+    loading, edge-swipe back and link previews on. Costs: no shared Safari state, no Reader,
+    and every control is ours to keep right.
+  - `external` — the Safari app, for comparison.
+- **Prewarmed.** `prewarmingLink(url)` on the actions row calls
+  `SFSafariViewController.prewarmConnections(to:)` while the panel is on screen and
+  invalidates the token when it leaves, so the tap opens on a page rather than a spinner.
+  Only for the two openers that use Safari's controller.
+- **Driven.** `BehaviourTests.testTheWebsiteOpensInsideTheApp` relaunches with each in-app
+  opener, taps the website action, and asserts a web view is on screen with the app still in
+  the foreground; for `web` it presses the app's own Done and asserts the pool is back.
+- Four catalog keys in five languages (`action.back`, `action.forward`, `action.reload`,
+  `action.openInSafari`); four `Icon` entries (Safari's glyphs; open-in-Safari is the
+  `arrow.up.right.square` leave-the-app arrow, not a second compass).
+
+Recommendation: keep `safari`. It is the HIG's answer for a page that is a detour, it is the
+least code, and it follows the reader's Safari settings and the iOS 27 glass slider for free.
+`sheet` is worth a second look on a phone if the map behind it turns out to matter more than
+the page height. `web` earns its keep only if the app ever needs to act on the page (inject a
+timetable parser, keep the bar's own controls) — not today.
 
 ## Recommended order
 

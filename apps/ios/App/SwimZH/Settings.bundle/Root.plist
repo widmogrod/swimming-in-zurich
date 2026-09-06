@@ -85,6 +85,30 @@
 			<key>DefaultValue</key>
 			<true/>
 		</dict>
+		<dict>
+			<key>Type</key>
+			<string>PSMultiValueSpecifier</string>
+			<key>Title</key>
+			<string>Links open in</string>
+			<key>Key</key>
+			<string>lab.linkOpener</string>
+			<key>DefaultValue</key>
+			<string>safari</string>
+			<key>Titles</key>
+			<array>
+				<string>In-app Safari, full screen</string>
+				<string>In-app Safari, pull-down sheet</string>
+				<string>App browser (own glass toolbar)</string>
+				<string>Safari app (previous look)</string>
+			</array>
+			<key>Values</key>
+			<array>
+				<string>safari</string>
+				<string>sheet</string>
+				<string>web</string>
+				<string>external</string>
+			</array>
+		</dict>
 	</array>
 </dict>
 </plist>

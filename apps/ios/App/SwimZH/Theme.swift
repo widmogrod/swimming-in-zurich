@@ -148,6 +148,13 @@ enum Icon {
   static let pin = "mappin.circle.fill"
   /// The pool screen's one map control: bring a panned map back to the pool.
   static let backToPool = "mappin.and.ellipse"
+  /// The in-app browser's own controls (`Lab.LinkOpener.web`). Safari's glyphs, so a reader
+  /// who knows Safari knows these. `openInSafari` is the system's "leave for another app"
+  /// arrow, NOT the compass: the compass already means "the pool's website" on the actions row.
+  static let back = "chevron.backward"
+  static let forward = "chevron.forward"
+  static let reload = "arrow.clockwise"
+  static let openInSafari = "arrow.up.right.square"
 }
 
 /// The day strip's own colours, kept here with the rest.

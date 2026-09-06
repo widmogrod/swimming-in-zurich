@@ -139,6 +139,9 @@ struct PoolActions: View {
       Spacer(minLength: 0)
     }
     .accessibilityElement(children: .contain)
+    // Safari's connection to the pool's host, opened while the reader is still reading the
+    // panel, so the website button shows a page and not a spinner. See `LinkOpener`.
+    .prewarmingLink(websiteURL)
   }
 
   @ViewBuilder
@@ -168,11 +171,13 @@ struct PoolActions: View {
 
   @ViewBuilder
   private var website: some View {
-    if let raw = detail.url, let url = URL(string: raw) {
+    if let url = websiteURL {
       ActionButton(caption: Message("detail.fact.website"), symbol: Icon.website) { openURL(url) }
         .accessibilityIdentifier("websiteButton")
     }
   }
+
+  private var websiteURL: URL? { detail.url.flatMap { URL(string: $0) } }
 
   /// The kit builds the string; this only turns it into a `URL`. The escaping and the
   /// locale-independent coordinate formatting are rules with a test — see `mapsDirectionsURL`,
