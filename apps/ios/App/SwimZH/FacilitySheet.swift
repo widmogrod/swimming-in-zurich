@@ -68,11 +68,7 @@ struct FacilitySheet: View {
   @State private var listPull: Double = 0
   /// The drawer pulled past its smallest size is the way out — see `PoolPanel`.
   @Environment(\.dismiss) private var dismiss
-  /// `Lab.poolMapArrival`: whether the map is in the pushed screen's first frame or arrives
-  /// once the push has landed.
-  @AppStorage(Lab.poolMapArrival) private var mapArrival = Lab.PoolMapArrival.default
-  /// Whether the map has been asked for yet. Under `afterPush` it starts false and flips when
-  /// the push has landed; under `withPush` it is true from the first frame.
+  /// Whether the map has been asked for yet. False until the push has landed — see `stage`.
   @State private var mapArrived = false
 
   var body: some View {
@@ -127,14 +123,15 @@ struct FacilitySheet: View {
   /// THE TAP USED TO WAIT FOR THE MAP. SwiftUI renders a pushed screen's first frame before
   /// the push animation can begin, and this screen's first frame held a live `Map`: MapKit's
   /// renderer, its tiles, the location dot. So the reader's tap on a row was followed by a
-  /// pause, then a push — the "opening a pool lags" complaint. Under `afterPush` the first
-  /// frame is a flat ground in the launch colour (the panel with the pool's name is there at
-  /// once), the push starts immediately, and the map is built one beat later and fades in.
+  /// pause, then a push — the "opening a pool lags" complaint. So the first frame is a flat
+  /// ground in the launch colour (the panel with the pool's name is there at once), the push
+  /// starts immediately, and the map is built one beat later and fades in. Decided
+  /// 2026-09-06 over the map-in-the-first-frame variant, which is deleted.
   /// `MapWarmup` already paid the framework's cost; this moves the map's own first frame off
   /// the tap. The map view is never resized either way — see `PoolStage`.
   @ViewBuilder
   private func stage(_ point: GeoPoint) -> some View {
-    if mapArrived || mapArrival == .withPush {
+    if mapArrived {
       PoolStage(name: name, point: point, homeRequests: homeRequests)
         .transition(.opacity)
     } else {

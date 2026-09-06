@@ -147,25 +147,23 @@ Not part of this review's fixes.
 
 ## What was built (same day, this branch)
 
-Every visual change is behind a **Lab switch** so the two looks can be compared on a phone:
-`App/SwimZH/Lab.swift` names five `UserDefaults` keys, read through `@AppStorage`, defaulting
-to the NEW look; `App/SwimZH/Settings.bundle` puts the four toggles in the system Settings app
-under SwimZH (English only, deliberately: they exist until a variant is chosen, then the key,
-the toggle and the losing branch are deleted). Tests pass `-lab.<key> NO` as launch arguments;
-`Lab.typeLaunchArguments()` rewrites those string values as real booleans in the volatile
-argument domain, because `@AppStorage<Bool>` reads a string as absent — the first "old look"
-screenshot set was pixel-identical to the new one for exactly that reason.
+Every visual change was behind a **Lab switch** so the two looks could be compared on a phone
+(`App/SwimZH/Lab.swift` + `App/SwimZH/Settings.bundle`, read through `@AppStorage`, defaulting
+to the NEW look; tests passed `-lab.<key> value` launch arguments). **ALL DECIDED 2026-09-06
+(evening): `Lab.swift`, the Settings bundle, `LabSwitchTests`, the "previous look" screenshot
+set and every losing branch are deleted.** The table records what each switch compared and
+which side won.
 
 | Switch | Key | On | Off |
 | --- | --- | --- | --- |
 | Day strip | DECIDED 2026-09-06: `morph`, chips scale and fade in on scroll | chips in a `GlassEffectContainer`, the selected tint a separate glass view with one `glassEffectID` that morphs chip to chip; a `.scrollTransition` scales and fades each chip up as the scroll brings it in. Chosen over `flat`, `tint` (one interactive glass per chip, tint cross-fade) and `button` (`GlassButtonStyle`) after all four were felt, and — for the arrival — over the glass `.materialize` transition and plain pop-in. A tap no longer centres the tapped chip, and the strip's scroll clip is off so the press lens is not cut | — |
 | Bottom bar | DECIDED 2026-09-06: a system tab bar — List, Map, Filters, Search | `TabView` whose selection is the bar's own draggable glass lens, `tabBarMinimizeBehavior(.onScrollDown)`, `Tab(role: .search)` with `tabViewSearchActivation(.searchTabSelection)`. Chosen over the bottom toolbar with a segmented list/map picker (a flat thumb inside the bar's glass, the one control with no lens) and a toolbar with a glyph-swapping toggle. The all-pools browser was REMOVED in the same decision: the list already holds every pool for the day. The search tab searches the PAGE the reader came from (list or map — `searchedContent`), with pool names as `searchSuggestions` through the kit's `browsePools` rule, so a search from the map stays on the map with autocomplete. The filters are a TAB (a page, not a sheet), chosen over a pill above the bar (`tabViewBottomAccessory`) after both were felt. A pushed pool screen hides the bar | — |
-| Glass map card | `lab.glassCard` | `.glassEffect(.regular.interactive())`, `.materialize` transition, no shadow | `.regularMaterial` + shadow |
-| Symbol motion | `lab.symbolMotion` | heart draws on/off, filter glyph replace + bounce | plain swaps |
-| Links open in | `lab.linkOpener` (picker) | `safari` (default): `SFSafariViewController` full screen, prewarmed; `sheet`: the same as a pull-down page sheet; `web`: SwiftUI `WebView` in the app's own glass bars | `external`: the Safari app |
-| Favourite row | `lab.favouriteMove` (picker) | `hold` (default): the heart appears in place, nothing moves; the favourites-first order is applied when the reader scrolls back to the top, changes day/filter, or relaunches; `never`: favourites never lead | `move`: the row slides to the front of its tier at once (the old behaviour, now animated instead of cut) |
-| Pool map arrives | `lab.poolMapArrival` (picker) | `afterPush` (default): the screen pushes at once over a flat ground, the `Map` is built one beat later and fades in | `withPush`: the `Map` is in the pushed screen's first frame, so the tap waits for it |
-| Preload keyboard | `lab.keyboardWarmup` | a hidden field takes and resigns first responder once after the answer is on screen, so the first tap on search skips UIKit's first-keyboard bring-up | the first search tap pays it |
+| Glass map card | DECIDED: glass (switch deleted) | `.glassEffect(.regular.interactive())`, `.materialize` transition, no shadow | `.regularMaterial` + shadow |
+| Symbol motion | DECIDED: on (switch deleted) | heart draws on/off, filter glyph replace + bounce | plain swaps |
+| Links open in | DECIDED: `sheet` — the in-app Safari pull-down sheet; `safari`, `web` (and its `WebBrowser`, icons and Done) and `external` deleted | `safari` (default): `SFSafariViewController` full screen, prewarmed; `sheet`: the same as a pull-down page sheet; `web`: SwiftUI `WebView` in the app's own glass bars | `external`: the Safari app |
+| Favourite row | DECIDED: `hold` — the row stays put, the order settles at the top; `move`/`never` deleted | `hold` (default): the heart appears in place, nothing moves; the favourites-first order is applied when the reader scrolls back to the top, changes day/filter, or relaunches; `never`: favourites never lead | `move`: the row slides to the front of its tier at once (the old behaviour, now animated instead of cut) |
+| Pool map arrives | DECIDED: `afterPush` (switch deleted) | `afterPush` (default): the screen pushes at once over a flat ground, the `Map` is built one beat later and fades in | `withPush`: the `Map` is in the pushed screen's first frame, so the tap waits for it |
+| Preload keyboard | DECIDED: on (switch deleted) | a hidden field takes and resigns first responder once after the answer is on screen, so the first tap on search skips UIKit's first-keyboard bring-up | the first search tap pays it |
 
 ### The pool screen is a map (decided the same evening; two switches deleted)
 
@@ -302,7 +300,8 @@ What was built, `App/SwimZH/LinkOpener.swift`:
   that takes `http(s)` and returns `.systemAction` for everything else, so `tel:`, the Maps
   URL and `app-settings:` still leave the app. No call site changed; `Link` and `openURL(...)`
   both land here.
-- **`lab.linkOpener`**, a picker in Settings > SwimZH with four values:
+- **`lab.linkOpener`**, a picker in Settings > SwimZH with four values — DECIDED 2026-09-06:
+  `sheet`; the other three are deleted:
   - `safari` (default) — `SFSafariViewController` in a full-screen cover. Safari's engine and
     the reader's own cookies, passwords, Reader and content blockers; on iOS 26+ its bars are
     the system's Liquid Glass. `entersReaderIfAvailable` off (Reader strips the timetable
@@ -382,16 +381,16 @@ The honest next measurement is on the phone: Instruments → Time Profiler + Han
   answers in milliseconds, and the HIG reserves progress indication for waits a reader can
   feel), and no search bar — `.searchable` moved from the stack onto the READY screen, so the
   bottom bar arrives with the rows it searches rather than a beat before them over nothing.
-- *Search.* `KeyboardWarmup` (behind `lab.keyboardWarmup`, default on): after the answer is
+- *Search.* `KeyboardWarmup` (was behind `lab.keyboardWarmup`; decided on): after the answer is
   on screen, a zero-alpha `UITextField` takes and resigns first responder once, which loads
   the input system without showing it. The first tap on search then costs what the second
   always did. Same shape as `MapWarmup`.
-- *Pool screen.* `lab.poolMapArrival` (default `afterPush`): SwiftUI must render a pushed
+- *Pool screen.* `lab.poolMapArrival` (decided `afterPush`, switch deleted): SwiftUI must render a pushed
   screen's first frame before the push can begin, and that frame held a live `Map`. Now the
   first frame is a flat ground in the launch colour with the panel and the pool's name already
   on it; the push starts at once; the `Map` is built 450 ms later and fades in. `withPush` is
   the previous behaviour, for comparison. The map is still never resized (`PoolStage`).
-- *Favourites.* `lab.favouriteMove` (default `hold`). The kit's `listModel` gained a
+- *Favourites.* `lab.favouriteMove` (decided `hold`, switch deleted). The kit's `listModel` gained a
   `leading:` set — WHICH favourites lead their tier — separate from `favourites` — which rows
   wear the heart. `TodayModel` holds `leading` at the order on screen across a heart toggle,
   and catches it up on the next refresh the reader causes or when the list arrives back at its
@@ -415,3 +414,21 @@ Judge the "few seconds" again on a Release build before deciding anything else.
 4. Manual glass-slider pass (finding 7) after slice 2, on device.
 5. Hero background extension (finding 4) as its own spike.
 6. Widgets and intents as a separate plan.
+
+### The pool screen leads with its numbers (2026-09-06, evening; decided the same night)
+
+"Temperature, number of lanes and lane length — at a glance; and a link to the lane plan when
+the pool has one; the address, phone and website rows repeat the buttons, push them down."
+
+- `SwimZHKit/Glance.swift` — `glanceFacts`: water (live reading > measured > the pool's
+  stated number, each captioned honestly; a stale live reading muted), the LONGEST basin's
+  length, its lane count (falling back to the day's Belegungsplan count). `lanePlanLinks`: one
+  per basin with a published plan URL. Tested in `GlanceTests`.
+- `PoolGlance.swift` — ONE line under the kind and verdict: "26 °C · 50 m · 6 lanes" with
+  glyphs; the caption is the VoiceOver label. **Decided over three captioned tiles**
+  (`lab.glance`, deleted): the line costs almost no height in the drawer's smallest rest.
+- `PoolActions` gained **Lane plan** (a menu of basin names when a pool has two — Oerlikon).
+- `detailSections` order: about (blurb + schedule state), admission, season, basins, features,
+  lockers, rentals, lanes, **where (address/phone/website) second to last**, source.
+- `PanelDetent.peek` 0.36 → 0.42, pinned by the driven test's geometry check that the action
+  captions are not clipped at the smallest rest.

@@ -28,10 +28,10 @@ struct GlanceTests {
   }
 
   static func said(_ facts: [GlanceFact], _ id: String) -> (value: String, caption: String)? {
-    facts.first { $0.id == id }.map { (en($0.value), en($0.caption)) }
+    facts.first { $0.id == id }.map { (en($0.phrase), en($0.caption)) }
   }
 
-  /// The tile's value and caption as one string, so a whole tile can be asserted in one line.
+  /// The phrase and its caption as one string, so a whole item can be asserted in one line.
   static func tile(_ facts: [GlanceFact], _ id: String) -> String? {
     said(facts, id).map { "\($0.value) / \($0.caption)" }
   }
@@ -52,7 +52,7 @@ struct GlanceTests {
     #expect(facts.map(\.id) == ["water", "length", "lanes"])
     #expect(Self.said(facts, "water")?.value == Self.degrees(28))
     #expect(Self.said(facts, "length")?.value == "50 m")
-    #expect(Self.said(facts, "lanes")?.value == "6")
+    #expect(Self.said(facts, "lanes")?.value == "6 lanes")
     // The one-line rendering needs the noun; the tile's caption already has it.
     #expect(Self.en(facts[2].phrase) == "6 lanes")
     #expect(Self.en(facts[1].phrase) == "50 m")
@@ -64,7 +64,7 @@ struct GlanceTests {
       Self.basin("paddle", length: 12, lanes: 2), Self.basin("lap", length: 25, lanes: 5),
     ])
     #expect(Self.said(facts, "length")?.value == "25 m")
-    #expect(Self.said(facts, "lanes")?.value == "5")
+    #expect(Self.said(facts, "lanes")?.value == "5 lanes")
   }
 
   @Test("a nominal temperature says it is the pool's statement, a measured one does not")
@@ -110,7 +110,7 @@ struct GlanceTests {
       confidence: "complete")
     let panel = LanePanel(basinID: "lap", basinName: "25m", day: day)
     let facts = Self.facts([Self.basin("lap", length: 25)], panels: [panel])
-    #expect(Self.said(facts, "lanes")?.value == "6")
+    #expect(Self.said(facts, "lanes")?.value == "6 lanes")
     #expect(Self.en(facts.last!.phrase) == "6 lanes")
   }
 

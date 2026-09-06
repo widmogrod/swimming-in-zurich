@@ -35,13 +35,6 @@ final class ScreenshotTests: XCTestCase {
   /// no app code. `Lab.swift` keeps every iOS 27 experiment behind one of these, defaulting to
   /// the new look; `-key NO` at launch is how a test asks for the previous one.
   ///
-  /// A LAUNCH ARGUMENT, and never an environment variable. Two attempts to switch the old look
-  /// on from the `xcodebuild test` line — `TEST_RUNNER_SWIMZH_LAB_OFF=1`, then a scheme
-  /// variable expanded from a build setting — produced "old look" sets that were pixel for
-  /// pixel the new one; a marker attachment proved the variable never reached this process.
-  /// The argument path is the one `-swimzh.useMyLocation NO` already proves on every run.
-  private let labKeys = ["lab.glassCard", "lab.symbolMotion"]
-
   private func launch() {
     app.launch()
     XCTAssertTrue(
@@ -75,17 +68,6 @@ final class ScreenshotTests: XCTestCase {
   func testCaptureTheAppStoreSet() throws {
     launch()
     try walk(prefix: "")
-  }
-
-  /// The same walk with every Lab switch off — the look the app shipped before the iOS 27
-  /// experiments — so the two sets can be put side by side. Files are prefixed `old-`.
-  /// Select it alone with `-only-testing:SwimZHUITests/ScreenshotTests/testCaptureThePreviousLookSet`.
-  func testCaptureThePreviousLookSet() throws {
-    for key in labKeys {
-      app.launchArguments += ["-\(key)", "NO"]
-    }
-    launch()
-    try walk(prefix: "old-")
   }
 
   private func walk(prefix: String) throws {

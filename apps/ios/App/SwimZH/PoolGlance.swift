@@ -6,64 +6,22 @@
 // things they could already tap to reach the three numbers they had opened it for.
 //
 // WHICH numbers, from WHICH basin, and what a stale live reading is called, are
-// `SwimZHKit.glanceFacts` — rules with a test. This file only draws the strip, in one of the
-// two shapes `Lab.Glance` compares (`tiles` and `line`), or not at all (`none`). Nothing here
-// is glass: the strip sits INSIDE the panel's content, and the HIG's rule against glass in the
-// content layer is the one `UILintTests` enforces.
+// `SwimZHKit.glanceFacts` — rules with a test. This file only draws the strip: ONE quiet line
+// under the kind and the verdict — "26 °C · 50 m · 6 lanes", with the glyphs — the second
+// subtitle a Maps place card carries. Decided 2026-09-06 over three captioned tiles: the line
+// costs almost no height in the drawer's smallest rest. What the tiles' captions said — that a
+// temperature is the pool's statement, or a reading hours old — the line says to VoiceOver
+// (each phrase is labelled by its caption) and shows by weight (a stale reading is muted).
+// Nothing here is glass: the strip sits INSIDE the panel's content.
 
 import SwiftUI
 import SwimZHKit
 
 struct PoolGlance: View {
   @Environment(\.localized) private var localized
-  @AppStorage(Lab.glance) private var style = Lab.Glance.default
   let facts: [GlanceFact]
 
   var body: some View {
-    if !facts.isEmpty {
-      switch style {
-      case .tiles: tiles
-      case .line: line
-      case .none: EmptyView()
-      }
-    }
-  }
-
-  /// Three small cards: a glyph, the number, and under it the caption that names the number
-  /// and — for a temperature — says how much to trust it.
-  private var tiles: some View {
-    HStack(spacing: Design.Space.row) {
-      ForEach(facts) { fact in
-        VStack(alignment: .leading, spacing: Design.Space.hair) {
-          HStack(spacing: Design.Space.tight) {
-            Image(systemName: fact.symbol)
-              .font(.glanceCaption)
-              .foregroundStyle(.tint)
-            Text(fact.value, localized)
-              .font(.glanceValue)
-              .monospacedDigit()
-              .foregroundStyle(fact.muted ? AnyShapeStyle(.secondary) : AnyShapeStyle(.primary))
-          }
-          Text(fact.caption, localized)
-            .font(.glanceCaption)
-            .foregroundStyle(.secondary)
-            .lineLimit(1)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, Design.Space.row + Design.Space.tight)
-        .padding(.vertical, Design.Space.row)
-        .background(.fill.tertiary, in: RoundedRectangle(cornerRadius: Design.Radius.control))
-        .accessibilityElement(children: .combine)
-      }
-    }
-    .padding(.top, Design.Space.tight)
-    .accessibilityElement(children: .contain)
-    .accessibilityIdentifier("poolGlance")
-  }
-
-  /// One quiet line: glyph and phrase, glyph and phrase, a dot between — the second subtitle
-  /// a Maps place card carries.
-  private var line: some View {
     HStack(spacing: Design.Space.row) {
       if let first = facts.first {
         phrase(first)
@@ -92,5 +50,7 @@ struct PoolGlance: View {
     .font(.heroSubtitle)
     .foregroundStyle(fact.muted ? AnyShapeStyle(.secondary) : AnyShapeStyle(.primary))
     .lineLimit(1)
+    // "Water, earlier: 26 °C" — the caption names the number and says how far to trust it.
+    .accessibilityLabel(Text(.joined([fact.caption, fact.phrase]), localized))
   }
 }

@@ -352,8 +352,6 @@ struct ClusterMark: View {
 /// genuinely sits above content rather than beside it.
 struct PinCard: View {
   @Environment(\.localized) private var localized
-  /// `Lab.glassCard`: Liquid Glass under the card, or the material it shipped with.
-  @AppStorage(Lab.glassCard) private var glassCard = true
   let pin: PoolPin
 
   /// GLASS, and the comment that used to sit here said the opposite. It claimed the card
@@ -362,23 +360,12 @@ struct PinCard: View {
   /// it, and the one other control on this screen — `MapUserLocationButton`, in the same corner
   /// — is already glass. So a material here was the one floating surface on the map that
   /// ignored the reader's iOS 27 Liquid Glass slider; `.glassEffect` follows it. No shadow:
-  /// glass carries its own edge. The material branch is the previous look, kept exactly, for
-  /// the comparison the flag exists to allow.
-  @ViewBuilder
+  /// glass carries its own edge. Decided 2026-09-06; the material branch is deleted.
   var body: some View {
-    if glassCard {
-      link
-        .glassEffect(.regular.interactive(), in: .rect(cornerRadius: Design.Radius.control))
-        .glassEffectTransition(.materialize)
-        .accessibilityIdentifier("pinCard")
-    } else {
-      link
-        .background(
-          .regularMaterial, in: RoundedRectangle(cornerRadius: Design.Radius.control)
-        )
-        .shadow(radius: 10, y: 4)
-        .accessibilityIdentifier("pinCard")
-    }
+    link
+      .glassEffect(.regular.interactive(), in: .rect(cornerRadius: Design.Radius.control))
+      .glassEffectTransition(.materialize)
+      .accessibilityIdentifier("pinCard")
   }
 
   private var link: some View {

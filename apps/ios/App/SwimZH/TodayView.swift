@@ -99,8 +99,8 @@ struct TodayView: View {
         // off the answer's critical path — see `MapWarmup`.
         await MapWarmup.warm()
         // The keyboard's first show is the same kind of bill, paid by the first tap on search.
-        // See `KeyboardWarmup`; behind a Lab switch so the two can be felt side by side.
-        if Lab.isOn(Lab.keyboardWarmup) { await KeyboardWarmup.warm() }
+        // See `KeyboardWarmup`.
+        await KeyboardWarmup.warm()
         // AFTER the screen has answered. The refresh is a background nicety; making the first
         // answer wait on a network round trip would trade the app's whole premise — an answer
         // with no network — for a store that is at most seven days fresher.

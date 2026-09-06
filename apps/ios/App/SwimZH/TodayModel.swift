@@ -201,19 +201,17 @@ final class TodayModel {
     return try? await store.facility(poolID: poolID, on: filters.day)
   }
 
-  /// Toggle the heart, and let `Lab.FavouriteMove` say whether the row moves now.
+  /// Toggle the heart. The row STAYS PUT — decided 2026-09-06 over an animated move to the
+  /// front of its tier and over never leading with favourites at all.
   ///
-  /// Under `hold` the ORDER is left exactly as the reader sees it: the rebuilt model differs
+  /// The ORDER is left exactly as the reader sees it: the rebuilt model differs
   /// from the one on screen in one row's heart and nothing else, so SwiftUI updates one row.
   /// The favourites-first order is caught up by `settleFavouriteOrder` — the next refresh the
   /// reader causes, or their return to the top of the list.
   func toggleFavourite(_ poolID: String) {
     favourites.toggle(poolID)
     UserDefaults.standard.set(favourites.encoded, forKey: Self.favouritesKey)
-    switch Lab.FavouriteMove.current() {
-    case .hold, .never: startRefresh(holdingOrder: true)
-    case .move: startRefresh(animated: true)
-    }
+    startRefresh(holdingOrder: true)
   }
 
   /// Apply the favourites-first order the reader's swipes have been held back from.
@@ -222,21 +220,15 @@ final class TodayModel {
   /// of a tier is — so a row that moves does so on screen and animated, never out from under a
   /// thumb mid-list. A no-op when nothing is held, which is almost always.
   func settleFavouriteOrder() {
-    guard Lab.FavouriteMove.current() == .hold, leadingFavourites != favourites else { return }
+    guard leadingFavourites != favourites else { return }
     startRefresh(animated: true)
   }
 
-  /// Which favourites the rows are ORDERED by, for this refresh. Every policy but `hold`
-  /// answers the same thing every time; `hold` answers "the order on screen" until a refresh
-  /// that is not itself a heart toggle catches it up.
+  /// Which favourites the rows are ORDERED by, for this refresh: the order on screen, until a
+  /// refresh that is not itself a heart toggle catches it up.
   private func leadingFavourites(holdingOrder: Bool) -> Favourites {
-    switch Lab.FavouriteMove.current() {
-    case .never: return Favourites()
-    case .move: return favourites
-    case .hold:
-      if !holdingOrder { leadingFavourites = favourites }
-      return leadingFavourites
-    }
+    if !holdingOrder { leadingFavourites = favourites }
+    return leadingFavourites
   }
 
   /// One pool's live water temperature, asked for when its sheet opens.

@@ -9,8 +9,9 @@
 // THE KIT DECIDES, THE VIEW DRAWS — the same split as `detailSections`, and for the same
 // reason: which basin's number to show, whether a live reading beats a published one, and
 // what a stale reading is called are rules, and a rule inside a `body` is a rule nothing can
-// test. Every fact here is ALSO still a row in the list below, so `FieldCoverage`'s rendered
-// claims are unchanged; the strip is a second, earlier reading of facts the sheet already has.
+// test. `GlanceFact.phrase` is what the line shows; `caption` is what VoiceOver says first.
+// Every fact here is ALSO still a row in the list below, so `FieldCoverage`'s rendered claims
+// are unchanged; the strip is a second, earlier reading of facts the sheet already has.
 //
 // HONESTY RULES, in one place:
 //  * WATER. The live feed's reading wins when it has a number: it is a measurement of the water
@@ -18,7 +19,7 @@
 //    shown, MUTED, under a caption that says "earlier" — the same rule `liveWaterRow` mutes by.
 //    With no live number the published basin temperature stands in, and a NOMINAL one (the
 //    pool's stated target, not a measurement) says so in its caption rather than passing as a
-//    reading. No number at all: no tile. A blank tile would be a claim.
+//    reading. No number at all: no item. A blank would be a claim.
 //  * LENGTH and LANES come from the pool's LONGEST basin, because "how long is the pool" means
 //    the lap basin, never the paddling pool beside it. A lane count no basin publishes falls
 //    back to the day's Belegungsplan, which counts the lanes it schedules — the one other
@@ -28,17 +29,15 @@
 
 import Foundation
 
-/// One tile of the glance strip: a number, what it is, and how much to trust it.
+/// One item of the glance line: a number as a phrase, what it is, and how much to trust it.
 public struct GlanceFact: Equatable, Sendable, Identifiable {
   public let id: String
   /// The SF Symbol drawn beside the number.
   public let symbol: String
-  /// The number itself, formatted: "27 °C", "50 m", "6".
-  public let value: Wording
-  /// What the number is — the tile's caption: "Water, live", "Length", "Lanes".
+  /// What the number is, and how far to trust it: "Live water", "Water, as stated", "Length",
+  /// "Lanes". Spoken by VoiceOver before the phrase; the line itself shows only the phrase.
   public let caption: Wording
-  /// The number as a self-contained phrase for a one-line rendering: "27 °C", "50 m",
-  /// "6 lanes". A lane count needs its noun there; the tile's caption already carries it.
+  /// The number as a self-contained phrase: "27 °C", "50 m", "6 lanes".
   public let phrase: Wording
   /// A weaker fact, drawn as one — a live reading hours old. Same rule as `DetailRow.muted`.
   public let muted: Bool
@@ -54,8 +53,8 @@ public struct LanePlanLink: Equatable, Sendable, Identifiable {
   public var id: String { basinID }
 }
 
-/// The symbols the strip draws, kept beside the rule that picks them so a tile and its glyph
-/// cannot drift apart.
+/// The symbols the strip draws, kept beside the rule that picks them so a number and its
+/// glyph cannot drift apart.
 public enum GlanceSymbol {
   public static let water = "thermometer.medium"
   public static let length = "ruler"
@@ -76,14 +75,13 @@ public func glanceFacts(
     let text = format.length(metres: length)
     facts.append(
       GlanceFact(
-        id: "length", symbol: GlanceSymbol.length, value: .verbatim(text),
-        caption: .key("glance.length"), phrase: .verbatim(text), muted: false))
+        id: "length", symbol: GlanceSymbol.length, caption: .key("glance.length"),
+        phrase: .verbatim(text), muted: false))
   }
   if let lanes = lap?.lanes ?? scheduledLaneCount(detail.lanePanels) {
     facts.append(
       GlanceFact(
-        id: "lanes", symbol: GlanceSymbol.lanes, value: .verbatim(format.integer(lanes)),
-        caption: .key("glance.lanes"),
+        id: "lanes", symbol: GlanceSymbol.lanes, caption: .key("glance.lanes"),
         phrase: .message(Message("basin.laneCount", count: lanes)), muted: false))
   }
   return facts
@@ -125,8 +123,8 @@ private func water(
 ) -> GlanceFact {
   let text = format.temperature(celsius: celsius)
   return GlanceFact(
-    id: "water", symbol: GlanceSymbol.water, value: .verbatim(text), caption: .key(caption),
-    phrase: .verbatim(text), muted: muted)
+    id: "water", symbol: GlanceSymbol.water, caption: .key(caption), phrase: .verbatim(text),
+    muted: muted)
 }
 
 /// The lap basin: the longest one that publishes a length. A basin with no length cannot be

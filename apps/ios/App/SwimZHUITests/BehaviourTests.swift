@@ -303,18 +303,6 @@ final class BehaviourTests: XCTestCase {
     XCTAssertTrue(find("poolRow").waitForExistence(timeout: 10), "no way back to the list")
   }
 
-  /// Relaunch with one Lab key set — replacing, not appending, an earlier value of the same
-  /// key, so a loop over values leaves exactly one on the line.
-  private func relaunch(withLab key: String, value: String) {
-    if let previous = app.launchArguments.firstIndex(of: "-" + key) {
-      app.launchArguments.removeSubrange(previous...(previous + 1))
-    }
-    app.launchArguments += ["-" + key, value]
-    app.launch()
-    XCTAssertTrue(
-      find("poolRow").waitForExistence(timeout: 30), "the list never showed a pool row")
-  }
-
   func testTheDayStripSelectsADay() throws {
     // A chip is a button, and the chosen one carries `.isSelected`.
     let strip = find("dayStrip")
@@ -452,12 +440,11 @@ final class BehaviourTests: XCTestCase {
 
   func testThePoolScreenLeadsWithTheNumbersAndOffersTheLanePlan() {
     // "Temperature, number of lanes and lane length — at a glance; currently it's buried
-    // somewhere below. And a link to the lane plan when the pool has one." Driven under BOTH
-    // Lab shapes of the strip, with a frame of each attached for the owner to compare. The
-    // pool opened is one whose ROW offers a lane plan, because a pool without one must show
-    // no button — the same rule as Call for a pool without a phone — and cannot prove it.
-    for shape in ["tiles", "line"] {
-      relaunch(withLab: "lab.glance", value: shape)
+    // somewhere below. And a link to the lane plan when the pool has one." The pool opened
+    // is one whose ROW offers a lane plan, because a pool without one must show no button —
+    // the same rule as Call for a pool without a phone — and cannot prove it.
+    do {
+      let shape = "line"
       let disclosure = find("laneDisclosure")
       guard disclosure.waitForExistence(timeout: 10) else {
         return XCTFail("no row in the fixture store offers a lane plan")
@@ -488,7 +475,7 @@ final class BehaviourTests: XCTestCase {
       XCTAssertGreaterThan(
         glance.frame.minY, panel.frame.minY, "[\(shape)] the numbers left the panel")
       // ...and the strip did not push the actions out of the smallest rest: the first frame
-      // of the tiles had every caption cut off under the panel's bottom edge.
+      // of the (since deleted) tiles had every caption cut off under the panel's bottom edge.
       XCTAssertLessThanOrEqual(
         lanePlan.frame.maxY, panel.frame.maxY, "[\(shape)] the actions are cut off at the peek")
       sleep(1)
@@ -608,12 +595,9 @@ final class BehaviourTests: XCTestCase {
 
   func testTheWebsiteOpensInsideTheApp() {
     // The website action used to hand the address to Safari and put the app in the
-    // background. Every opener that claims to keep the reader in the app must put a page on
-    // screen with the app still in front. The Safari app itself (`external`) is not driven:
-    // it would leave Safari open in front of every later test.
-    for opener in ["safari", "sheet", "web"] {
-      app.terminate()
-      relaunch(withLab: "lab.linkOpener", value: opener)
+    // background. The in-app sheet must put a page on screen with the app still in front.
+    do {
+      let opener = "sheet"
       find("poolRow").tap()
       let website = find("websiteButton")
       XCTAssertTrue(website.waitForExistence(timeout: 10), "\(opener): no website action")
@@ -622,13 +606,6 @@ final class BehaviourTests: XCTestCase {
         app.webViews.firstMatch.waitForExistence(timeout: 20),
         "\(opener): no page opened inside the app")
       XCTAssertEqual(app.state, .runningForeground, "\(opener): the app left the foreground")
-      if opener == "web" {
-        // The app's own browser has the app's own Done, and it must give the pool back.
-        find("browserDone").tap()
-        XCTAssertTrue(
-          waitForDisappearance(of: app.webViews.firstMatch), "\(opener): Done left the page up")
-        XCTAssertTrue(website.exists, "\(opener): Done did not return to the pool")
-      }
     }
   }
 

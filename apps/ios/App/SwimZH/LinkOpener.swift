@@ -7,9 +7,12 @@
 // detour in place (Mail, Messages, News, Maps), and the HIG's "Safari view controller" page
 // says why: the page is a side trip, so the app stays where it was and one button returns.
 //
-// FOUR OPENERS, under `Lab.linkOpener`, because "in the app" still leaves a real choice to
-// feel rather than argue: full screen, or a sheet the pool stays visible behind, or a browser
-// of the app's own with the app's own glass bars. `Lab.LinkOpener` says what each costs.
+// A SHEET, decided 2026-09-06 after four openers were felt side by side: `SFSafariViewController`
+// as a page sheet, so the pool screen stays visible behind the page and a pull down closes it.
+// Safari's engine, the reader's own cookies and passwords, Reader and content blockers, the
+// system's Liquid Glass bars — and the least code. The full-screen cover of the same controller,
+// a `WebView` browser of the app's own (own Done, back/forward/reload, share) and the Safari
+// app itself were the other three, and are deleted rather than left as unmeasured paths.
 //
 // THE ONE SEAM. `linkOpening()` replaces the environment's `openURL` at the root, so every
 // `Link` and every `openURL(...)` in the app reaches it — the facts' `Link`, the actions row,
@@ -25,7 +28,6 @@
 import SafariServices
 import SwiftUI
 import SwimZHKit
-import WebKit
 
 /// One address on its way to being shown. `Identifiable` by the address itself, so a
 /// presentation binding can carry it and the same address tapped twice presents twice.
@@ -42,17 +44,15 @@ struct WebLink: Identifiable, Equatable {
 }
 
 extension View {
-  /// Route every web link on this view's tree through `Lab.linkOpener`. Once, at the root.
+  /// Route every web link on this view's tree into the in-app sheet. Once, at the root.
   func linkOpening() -> some View { modifier(LinkOpening()) }
 
   /// Open Safari's connection to `url` while this view is on screen, so a later tap on it
-  /// lands on a page rather than a spinner. A no-op for the openers that never use Safari's
-  /// controller, and for anything that is not a web address.
+  /// lands on a page rather than a spinner. A no-op for anything that is not a web address.
   func prewarmingLink(_ url: URL?) -> some View { modifier(LinkPrewarming(url: url)) }
 }
 
 struct LinkOpening: ViewModifier {
-  @AppStorage(Lab.linkOpener) private var opener = Lab.LinkOpener.default
   @State private var link: WebLink?
 
   func body(content: Content) -> some View {
@@ -60,33 +60,15 @@ struct LinkOpening: ViewModifier {
       .environment(
         \.openURL,
         OpenURLAction { url in
-          guard opener != .external, WebLink.isWeb(url) else { return .systemAction }
+          guard WebLink.isWeb(url) else { return .systemAction }
           link = WebLink(url: url)
           return .handled
         }
       )
-      .fullScreenCover(item: covered) { link in
-        switch opener {
-        case .web:
-          WebBrowser(link: link)
-        case .safari, .sheet, .external:
-          SafariBrowser(link: link, onFinish: { self.link = nil })
-            .ignoresSafeArea()
-        }
-      }
-      .sheet(item: sheeted) { link in
+      .sheet(item: $link) { link in
         SafariBrowser(link: link, onFinish: { self.link = nil })
           .ignoresSafeArea()
       }
-  }
-
-  // One piece of state, two presentations: the address goes to whichever the opener names,
-  // and the other binding reads as nothing. Two `@State`s would be two chances to show both.
-  private var covered: Binding<WebLink?> {
-    Binding(get: { opener == .sheet ? nil : link }, set: { link = $0 })
-  }
-  private var sheeted: Binding<WebLink?> {
-    Binding(get: { opener == .sheet ? link : nil }, set: { link = $0 })
   }
 }
 
@@ -126,106 +108,15 @@ struct SafariBrowser: UIViewControllerRepresentable {
   }
 }
 
-/// The app's own browser: SwiftUI's `WebView` in the app's navigation stack, with the app's
-/// bars. The system draws those bars in glass, the page's title sits in the top one, and the
-/// bottom one carries what Safari's does — back, forward, reload, and the way out to Safari.
-/// A progress line runs under the bar while the page loads, because a blank white page for
-/// two seconds looks like a broken button.
-struct WebBrowser: View {
-  @Environment(\.localized) private var localized
-  @Environment(\.dismiss) private var dismiss
-  let link: WebLink
-  @State private var page = WebPage()
-
-  var body: some View {
-    NavigationStack {
-      WebView(page)
-        // Safari's own gestures: swipe from the edge to go back, press a link for a preview.
-        .webViewBackForwardNavigationGestures(.enabled)
-        .webViewLinkPreviews(.enabled)
-        .overlay(alignment: .top) { progress }
-        .navigationTitle(page.title)
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbar { bars }
-    }
-    .task { _ = page.load(link.url) }
-  }
-
-  @ViewBuilder
-  private var progress: some View {
-    if page.isLoading {
-      ProgressView(value: page.estimatedProgress)
-        .progressViewStyle(.linear)
-        .transition(.opacity)
-    }
-  }
-
-  /// Where the reader is now, or where they started if the page has not said yet.
-  private var current: URL { page.url ?? link.url }
-
-  @ToolbarContentBuilder
-  private var bars: some ToolbarContent {
-    ToolbarItem(placement: .topBarLeading) {
-      Button {
-        dismiss()
-      } label: {
-        Text(Message("action.done"), localized)
-      }
-      .accessibilityIdentifier("browserDone")
-    }
-    ToolbarItem(placement: .topBarTrailing) {
-      ShareLink(item: current)
-    }
-    ToolbarItemGroup(placement: .bottomBar) {
-      Button {
-        if let item = page.backForwardList.backList.last { _ = page.load(item) }
-      } label: {
-        Image(systemName: Icon.back)
-      }
-      .disabled(page.backForwardList.backList.isEmpty)
-      .accessibilityLabel(Text(Message("action.back"), localized))
-      Button {
-        if let item = page.backForwardList.forwardList.first { _ = page.load(item) }
-      } label: {
-        Image(systemName: Icon.forward)
-      }
-      .disabled(page.backForwardList.forwardList.isEmpty)
-      .accessibilityLabel(Text(Message("action.forward"), localized))
-    }
-    ToolbarSpacer(.flexible, placement: .bottomBar)
-    ToolbarItem(placement: .bottomBar) {
-      Button {
-        _ = page.reload()
-      } label: {
-        Image(systemName: Icon.reload)
-      }
-      .accessibilityLabel(Text(Message("action.reload"), localized))
-    }
-    ToolbarSpacer(.flexible, placement: .bottomBar)
-    ToolbarItem(placement: .bottomBar) {
-      Button {
-        // Straight to the system, NOT through `openURL`: inside this browser that environment
-        // is the app's own seam, and the reader asked to leave it.
-        UIApplication.shared.open(current)
-      } label: {
-        Image(systemName: Icon.openInSafari)
-      }
-      .accessibilityLabel(Text(Message("action.openInSafari"), localized))
-      .accessibilityIdentifier("browserOpenInSafari")
-    }
-  }
-}
-
 /// Holds Safari's prewarmed connection for as long as the view it decorates is on screen.
 struct LinkPrewarming: ViewModifier {
   let url: URL?
-  @AppStorage(Lab.linkOpener) private var opener = Lab.LinkOpener.default
   @State private var token: SFSafariViewController.PrewarmingToken?
 
   func body(content: Content) -> some View {
     content
       .onAppear {
-        guard opener.usesSafariController, let url, WebLink.isWeb(url) else { return }
+        guard let url, WebLink.isWeb(url) else { return }
         token = SFSafariViewController.prewarmConnections(to: [url])
       }
       .onDisappear {
