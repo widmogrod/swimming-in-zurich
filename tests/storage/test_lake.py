@@ -4,6 +4,7 @@ two runtime seams (`pull` from a directory or an http origin, `export` to a dire
 from __future__ import annotations
 
 import json
+from collections.abc import Callable
 from datetime import datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
@@ -11,16 +12,32 @@ from zoneinfo import ZoneInfo
 import httpx
 import pytest
 
-from swimzh.storage.lake import SILVER_SCHEMA, SILVER_SOURCES, Lake, SilverHeader, SilverStatus
+from swimzh.core.errors import ConnectionFailed, HttpStatus, SchemaMismatch
+from swimzh.core.http import HttpClient, RetryPolicy
+from swimzh.storage.lake import (
+    SILVER_SCHEMA,
+    SILVER_SOURCES,
+    Lake,
+    PullReport,
+    SilverHeader,
+    SilverStatus,
+)
 
 _ZURICH = ZoneInfo("Europe/Zurich")
 _T0 = datetime(2026, 8, 31, 5, 0, tzinfo=_ZURICH)
 
 
+def _client_over(handler: Callable[[httpx.Request], httpx.Response]) -> HttpClient:
+    """The production shape (`HttpClient` over one `httpx.Client`) with a MockTransport inside,
+    the same wiring as `tests/pipeline_clients.py`; one attempt so a refused connection is not
+    retried three times."""
+    inner = httpx.Client(transport=httpx.MockTransport(handler), follow_redirects=True)
+    return HttpClient(inner, source="lake", retry=RetryPolicy(max_attempts=1))
+
+
 def test_an_empty_lake_has_no_documents(tmp_path: Path) -> None:
     lake = Lake(tmp_path / "lake")
     assert all(lake.read(source) is None for source in SILVER_SOURCES)
-    assert lake.headers() == ()
 
 
 def test_write_then_read_round_trips_payload_and_a_fresh_header(tmp_path: Path) -> None:
@@ -103,15 +120,15 @@ def test_export_then_pull_from_a_directory_round_trips_every_present_source(tmp_
     assert (out / "silver" / "roster.json").exists()
 
     target = Lake(tmp_path / "b")
-    assert target.pull(str(out)) == ("roster", "prices")
+    assert target.pull(str(out)) == PullReport(
+        pulled=("roster", "prices"), absent=("schedules", "lane_plans")
+    )
     pulled = target.read("roster")
     assert pulled is not None and pulled.header == source_lake.read("roster").header  # type: ignore[union-attr]
     assert target.read("schedules") is None
 
 
-def test_pull_over_http_skips_404_and_adopts_200(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
-) -> None:
+def test_pull_over_http_adopts_200_reports_404_as_absent_and_500_as_typed(tmp_path: Path) -> None:
     published = Lake(tmp_path / "published")
     published.write("roster", {"entries": []}, fetched_at=_T0)
     body = published.path_for("roster").read_text(encoding="utf-8")
@@ -124,38 +141,78 @@ def test_pull_over_http_skips_404_and_adopts_200(
         return httpx.Response(404)
 
     target = Lake(tmp_path / "lake")
-    with httpx.Client(transport=httpx.MockTransport(serve)) as client:
-        pulled = target.pull("https://example.test/lake/", client=client)
-    assert pulled == ("roster",)
+    report = target.pull("https://example.test/lake/", client=_client_over(serve))
+    assert report.pulled == ("roster",)
+    assert report.absent == ("schedules", "lane_plans")  # a 404 is first-run, not an error
+    assert report.failed == (
+        (
+            "prices",
+            HttpStatus(
+                url="https://example.test/lake/silver/prices.json", status=500, body_snippet="down"
+            ),
+        ),
+    )
     assert target.read("roster") is not None
-    err = capsys.readouterr().err
-    assert "skipping prices" in err and "HTTP 500" in err
-    assert "schedules" not in err  # a 404 is first-run, not an error worth a line
+    assert target.read("prices") is None
 
 
-def test_pull_skips_an_unreadable_document(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
-) -> None:
-    origin = tmp_path / "origin" / "silver"
-    origin.mkdir(parents=True)
-    (origin / "roster.json").write_text("{not json", encoding="utf-8")
-    (origin / "prices.json").write_text(json.dumps({"silver": {"source": "roster"}, "payload": {}}))
+def test_pull_reports_an_unreadable_document_as_a_schema_mismatch(tmp_path: Path) -> None:
+    origin = Lake(tmp_path / "origin")
+    origin.write("roster", {"entries": []}, fetched_at=_T0)
+    valid = json.loads(origin.path_for("roster").read_text(encoding="utf-8"))
+    origin.path_for("roster").write_text("{not json", encoding="utf-8")
+    origin.path_for("prices").write_text(json.dumps(valid), encoding="utf-8")  # claims roster
+    valid["silver"]["source"] = "schedules"
+    valid["payload"] = []
+    origin.path_for("schedules").write_text(json.dumps(valid), encoding="utf-8")
     target = Lake(tmp_path / "lake")
-    assert target.pull(str(tmp_path / "origin")) == ()
-    assert "skipping roster" in capsys.readouterr().err
-    assert target.read("roster") is None and target.read("prices") is None
+    report = target.pull(str(origin.root))
+    assert report.pulled == () and report.absent == ("lane_plans",)
+    reasons = {source: error for source, error in report.failed}
+    assert list(reasons) == ["roster", "prices", "schedules"]
+    assert all(isinstance(error, SchemaMismatch) for error in reasons.values())
+    details = {
+        source: error.detail for source, error in report.failed if isinstance(error, SchemaMismatch)
+    }
+    assert "unreadable" in details["roster"]
+    assert "claims source 'roster'" in details["prices"]
+    assert "not an object" in details["schedules"]
+    assert all(target.read(source) is None for source in SILVER_SOURCES)
 
 
-def test_pull_over_http_reports_a_transport_error_and_continues(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
-) -> None:
+def test_pull_over_http_reports_a_transport_error_and_continues(tmp_path: Path) -> None:
     def refuse(request: httpx.Request) -> httpx.Response:
         raise httpx.ConnectError("refused", request=request)
 
     target = Lake(tmp_path / "lake")
-    with httpx.Client(transport=httpx.MockTransport(refuse)) as client:
-        assert target.pull("http://down.test", client=client) == ()
-    assert capsys.readouterr().err.count("skipping") == len(SILVER_SOURCES)
+    report = target.pull("http://down.test", client=_client_over(refuse))
+    assert report.pulled == () and report.absent == ()
+    assert [source for source, _ in report.failed] == list(SILVER_SOURCES)
+    assert all(isinstance(error, ConnectionFailed) for _, error in report.failed)
+
+
+def test_pull_over_http_without_a_client_builds_an_uncached_one(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The default client is a plain `httpx.Client` (no disk cache in between): a pull must
+    never be served from last week's cached bytes."""
+    seen: list[str] = []
+
+    def serve(request: httpx.Request) -> httpx.Response:
+        seen.append(request.url.path)
+        assert request.extensions.get("cache_tier", "default") == "default"
+        return httpx.Response(404)
+
+    real_client = httpx.Client
+
+    def plain_client(**kwargs: object) -> httpx.Client:
+        assert "transport" not in kwargs and kwargs.get("follow_redirects") is True
+        return real_client(transport=httpx.MockTransport(serve), follow_redirects=True)
+
+    monkeypatch.setattr(httpx, "Client", plain_client)
+    report = Lake(tmp_path / "lake").pull("https://example.test")
+    assert report == PullReport(absent=SILVER_SOURCES)
+    assert seen == [f"/silver/{s}.json" for s in SILVER_SOURCES]
 
 
 def test_a_document_under_another_schema_is_absent_not_decoded(
@@ -171,7 +228,11 @@ def test_a_document_under_another_schema_is_absent_not_decoded(
     assert lake.read("roster") is None
     assert "silver schema" in capsys.readouterr().err
     other = Lake(tmp_path / "other")
-    assert other.pull(str(tmp_path / "lake")) == ()
+    report = other.pull(str(tmp_path / "lake"))
+    assert report.pulled == ()
+    assert [source for source, _ in report.failed] == ["roster"]
+    _, error = report.failed[0]
+    assert isinstance(error, SchemaMismatch) and "silver schema" in error.detail
     # No `schema` key at all (a hand-made file) is schema 0: absent too.
     del obj["silver"]["schema"]
     lake.path_for("roster").write_text(json.dumps(obj), encoding="utf-8")

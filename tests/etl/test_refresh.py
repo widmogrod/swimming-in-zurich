@@ -167,3 +167,17 @@ def test_a_non_transient_failure_aborts_even_with_a_young_stale_candidate(tmp_pa
     assert isinstance(result, Err)
     assert result.error == RefreshFailure(source="roster", reason="not_transient", cause=drift)
     assert result.error.describe() == "roster: schema mismatch from wfs: layer renamed"
+
+
+def test_a_stale_keep_is_retried_on_the_very_next_run(tmp_path: Path) -> None:
+    """Reviewer finding 2026-09-06: a stale doc younger than the TTL must not be reused as if it
+    were fresh — the source may be back, and a store that cannot heal is worse than a slow one."""
+    lake = Lake(tmp_path)
+    lake.write("roster", {"v": 7}, fetched_at=_T0)
+    kept = _run(lake, _Fetch(Err(_DOWN)), now=_T0 + timedelta(days=10))
+    assert isinstance(kept, Ok) and kept.value.stale
+    healed = _Fetch(Ok(8))
+    result = _run(lake, healed, now=_T0 + timedelta(days=10, hours=1))
+    assert isinstance(result, Ok)
+    assert healed.calls == 1
+    assert result.value.value == 8 and result.value.fetched and not result.value.stale

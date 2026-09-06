@@ -112,7 +112,9 @@ def refresh_source[T](
     the only side effects are the lake writes and one stderr line on a stale keep."""
     rule = policy if policy is not None else silver_policy(source)
     previous = lake.read(source)
-    if previous is not None and not force:
+    if previous is not None and not force and previous.header.status is not SilverStatus.STALE:
+        # A STALE keep is always due: it must heal the moment the source is back, not sit
+        # unretried until its (already-passed) TTL would have expired again.
         age = now - previous.header.fetched_at
         if age < timedelta(seconds=rule.ttl_s):
             return Ok(

@@ -48,18 +48,14 @@ includes the scraping steps.
 #    and leaves any prior DB content-unchanged.
 uv run python -m swimzh.cli build --db gold.sqlite
 
-# 2. (optional) thin re-layer — re-run ONE phase against an already-built store, to refresh
-#    on its own cadence without a full rebuild:
-uv run python -m swimzh.cli scrape-gold  --db gold.sqlite   # schedules
-uv run python -m swimzh.cli scrape-lanes --db gold.sqlite   # per-basin lane plans
-#    scrape-gold composes the fresh scrape onto the curated tier REBUILT from `data/`
-#    (`--data`, default `data`), never onto the store's own previous output — so a re-layer
-#    really does refresh hours, prices, notices and closures. It writes only the pools it
-#    actually scraped, so nothing else in the store is touched. Lane plans a previous
-#    scrape-lanes attached are carried across that rebuild — UNLESS that basin's `data/`
-#    binding (`lane_plan_source`) was re-pointed at a different sheet, in which case the plan
-#    parsed from the OLD sheet is dropped rather than mis-attached, and the basin has no lane
-#    plan until the next scrape-lanes.
+# 2. (optional) ONE cadence forced — the same `build`, with one source set refetched regardless
+#    of its TTL and every other source reused from the lake (`--lake`, default `.lake/`):
+uv run python -m swimzh.cli scrape-gold  --db gold.sqlite   # prices + schedules forced
+uv run python -m swimzh.cli scrape-lanes --db gold.sqlite   # per-basin lane plans forced
+#    The store is rebuilt atomically from the lake's silver each time — never from its own
+#    previous output — so a re-run really does refresh hours, prices, notices and closures,
+#    while the lane plans (or the schedules) from last time come back untouched. No prior
+#    store is needed: the roster is the lake's, fetched live only if the lake has none.
 
 # 3. Serve it (UI at /, API at /swim). A missing/empty DB fails fast with a one-line
 #    "build it first" message (no traceback); SWIMZH_RELOAD=0 disables auto-reload.
@@ -78,11 +74,11 @@ the curated source of truth, built into the gold DB by `swimzh build`. The app n
 | I want to… | Command |
 |---|---|
 | Try it offline (curated pools only, no network) | `swimzh build --db gold.sqlite` |
-| Get real schedules + lane plans (network) | `build` then `scrape-gold` + `scrape-lanes` on the same `--db` |
+| Get real schedules + lane plans (network) | `build --db gold.sqlite`; `scrape-gold` / `scrape-lanes` refetch one cadence onto the same `--db` + `--lake` |
 | Refresh geo / WFS locations (network) | `build-catalog --out data/catalog.json` (regenerates the committed catalog; then re-`build` to stamp its coords) |
 | Serve the UI + API | `SWIMZH_GOLD_DB=gold.sqlite python -m apps.web.main` (clean fail-fast; `SWIMZH_RELOAD=0` to disable reload) |
 | Ask "where can I swim now/later?" | `GET /swim?at=<ISO>&gender=female\|male\|diverse&age=<int>&lat=&lon=&radius_km=&eligible_only=true` |
 | Browse all ~57 pools | `GET /pools?kind=indoor` · access rules at `/access-types` |
 
-(All CLI commands are `uv run python -m swimzh.cli <cmd>`. Enrichment layers onto an
-already-built DB; re-run any step to refresh that layer.)
+(All CLI commands are `uv run python -m swimzh.cli <cmd>`. Every pipeline command rebuilds the
+whole store from the lake; the cadence wrappers only decide which sources are refetched.)

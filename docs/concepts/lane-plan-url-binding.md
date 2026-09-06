@@ -75,7 +75,7 @@ variant round-trips: `ProviderSpecific.detail` is narrowed `object → JsonValue
 `repr`), which is what would let a future selective-retry model store failures by error class — but the shipped
 posture is fail-fast, so no such per-basin failure is persisted today.
 
-**Failure aborts the build.** A fetch/parse failure of a declared lane source is fatal to the atomic build (the
+**Failure aborts the build.** A parse failure of a declared lane source is fatal to the atomic build; a transient fetch failure keeps the last lane-plan silver stale, exit 2 (the
 fail-fast posture of [[discovery-driven-providers]]), not scoped to the basin — the older "the facility still
 builds with a lane hole" behaviour is gone.
 

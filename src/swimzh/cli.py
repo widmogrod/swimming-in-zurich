@@ -3,10 +3,9 @@
   swimzh build         --db gold.sqlite     # ONE atomic pipeline, through the lake (`--lake .lake`)
   swimzh lake pull     <dir-or-url>         # step 0: seed the lake's silver from the last publish
   swimzh lake export   --out dist/ios/lake  # ship the silver beside the store for the next run
-                                            #   -> schedule scrape -> lane scrape -> compose
   swimzh build-catalog --out data/catalog.json  # full pool catalog from the WFS (committed)
-  swimzh scrape-gold   --db gold.sqlite     # thin re-layer: re-run just the schedule phase
-  swimzh scrape-lanes  --db gold.sqlite     # thin re-layer: re-run just the lane-plan phase
+  swimzh scrape-gold   --db gold.sqlite     # == build, with prices + schedules FORCED to refetch
+  swimzh scrape-lanes  --db gold.sqlite     # == build, with lane_plans FORCED to refetch
   swimzh export-ios    --db gold.sqlite --out ios.sqlite  # OFFLINE: the pre-resolved iOS store
 
 Run via: `uv run python -m swimzh.cli <command> ...`
@@ -14,19 +13,19 @@ Run via: `uv run python -m swimzh.cli <command> ...`
 Since S2 (`delete-curated-schedule-tier`) `build` is a SINGLE ATOMIC PIPELINE: it fetches the WFS
 roster, assembles the curated facilities, then scrapes schedules + lane plans and composes them —
 all inside ONE temp-DB + `os.replace` swap. A mid-chain provider failure aborts the whole build
-non-zero and leaves the prior gold DB content-unchanged. `scrape-gold`/`scrape-lanes` remain as
-THIN RE-LAYER commands: each re-runs only its own phase against an already-built store (seeded temp
-+ swap), so an operator can refresh schedules or lane plans on their own cadence without a full
-WFS+curated rebuild. Both `build` and the thin commands drive the SAME phase functions
-(`_compose_schedules` / `_attach_lanes`), so there is no second implementation to drift.
+non-zero and leaves the prior gold DB content-unchanged. Since the lake (`storage/lake.py`) every
+source goes through the refresh policy (`etl/refresh.py`): a silver younger than its TTL is reused
+without the network, a due one is refetched, and a transiently unreachable one is kept stale.
 
-**A re-layer composes onto the curated tier REBUILT FROM `data/`, never onto the store's own
-previous output** — hence `scrape-gold --data`. Feeding the composed blob back in as the *curated*
-side made every aspect curated-wins against itself, so a re-layer refreshed nothing already
-present and still exited 0 (`docs/2026-08-10-scrape-gold-recompose-defect.md`). Both commands take
-their curated side from the one `etl.build.assemble_curated` path; the lane plans a previous
-`scrape-lanes` attached are carried across that rebuild (`compose.carry_lane_plans`), so trading
-silent staleness for silent deletion is not what happens.
+**There is ONE pipeline.** `scrape-gold` and `scrape-lanes` are thin wrappers over `build` that
+pass a `force_sources` set: `scrape-gold` forces `prices` + `schedules`, `scrape-lanes` forces
+`lane_plans`; every other source follows the normal policy (reused inside its TTL, fetched when
+due — the roster comes from the lake's `roster.json`, fetched live only if the lake has none). The
+store is then rebuilt atomically from silver exactly as `build` does. This retires the old
+re-layer path — a second pipeline that seeded a temp copy of the live store, read the hand-made
+`data/catalog.json` as its roster, and composed onto the previous gold without ever touching silver
+(the defect it kept re-fixing is `docs/2026-08-10-scrape-gold-recompose-defect.md`; under one
+pipeline `compose` is never fed its own output by construction).
 
 **HTTP disk cache.** Every network command runs over ONE `DiskCacheTransport` (`.cache/swimzh/`,
 git-ignored) shared by one `HttpClient` PER SOURCE (`ProviderClients`), so each provider's
@@ -45,13 +44,13 @@ from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import date, datetime
 from pathlib import Path
-from tempfile import mkdtemp
+from tempfile import TemporaryDirectory
 from typing import Any, Final, assert_never
 from zoneinfo import ZoneInfo
 
 import httpx
 
-from swimzh.build.compose import carry_lane_plans, compose_facilities, scraped_facility
+from swimzh.build.compose import compose_facilities, scraped_facility
 from swimzh.build.reconcile import Crosswalk, crosswalk_from_rows, resolve_all
 from swimzh.core.errors import ProviderError, SchemaMismatch, describe
 from swimzh.core.http import HttpClient, RetryPolicy
@@ -94,7 +93,7 @@ from swimzh.providers.page_provider import DiscoveryReport, discover_pages
 from swimzh.providers.price_scraper import CityTariffs, scrape_prices
 from swimzh.storage import catalog_json
 from swimzh.storage.atomic import atomic_swap
-from swimzh.storage.lake import DEFAULT_LAKE_ROOT, Lake
+from swimzh.storage.lake import DEFAULT_LAKE_ROOT, SILVER_SOURCES, Lake
 from swimzh.storage.sqlite_repo import (
     GoldRepository,
     load_alias_rows,
@@ -292,8 +291,8 @@ class _PhaseResult:
 # Each phase is split in two since the lake exists: a FETCH half that reaches the network and
 # returns the phase's typed silver value (or the typed cause), and a WRITE half that composes
 # that value onto an open staging store. `build` runs the fetch half through the refresh policy
-# (`etl/refresh`) so a stale silver can stand in; the thin re-layer commands run both halves
-# back to back, exactly as before.
+# (`etl/refresh`) so a reused or stale silver can stand in for it; the write half always runs.
+# These halves are the ONLY phase functions — `scrape-gold`/`scrape-lanes` are `build`.
 
 
 def _fetch_prices(client: HttpClient, on: date) -> Result[CityTariffs, ProviderError]:
@@ -376,10 +375,11 @@ def _write_scraped_schedules(
 
     Writes the composed facilities through the single ``write_schedules`` door — **only for the
     pools this scrape resolved an extract for**. A pool the curated tier names but the scrape did
-    not reach keeps whatever the store holds; a phase writes only the facts it owns, so it can
-    never delete another phase's. An `unresolved` name (a scraped pool in no alias) is a benign
-    partial success — the resolved pools are written and the phase exits 1 with the miss named
-    (``fatal=False``), not a data hole.
+    not reach keeps its curated blob; a phase writes only the facts it owns. An `unresolved` name
+    (a scraped `Name` in no alias) is a benign partial success — the resolved pools are written and
+    the phase exits 1 with the miss named (``fatal=False``), not a data hole. Under one pipeline
+    every scraped name IS a roster name and every roster name IS an alias, so the branch is reached
+    only through the `resolve_all` seam — it stays because the outcome type carries it.
     """
     for note in scraped.notes:
         # Non-fatal audit: a declared source whose page states no city tariff (free or privately
@@ -407,43 +407,6 @@ def _write_scraped_schedules(
         )
         return _PhaseResult(code=1, fatal=False)
     return _PhaseResult(code=0, fatal=False)
-
-
-def _compose_schedules(
-    conn: sqlite3.Connection,
-    *,
-    curated: tuple[Facility, ...],
-    catalog: tuple[PoolCatalogEntry, ...],
-    schedule_client: HttpClient,
-    price_client: HttpClient,
-    fetched_at: datetime,
-) -> _PhaseResult:
-    """The thin re-layer's schedule phase: fetch (prices, then the pages) and write, no lake.
-
-    **Two clients, not one**: the tariff page moves a few times a year (`price_scraper`, 7d) while
-    a pool timetable is re-cut per season (`schedule_scraper`, 12h). They are different sources at
-    different cadences, so each provider call gets the client whose cache tier matches it.
-    """
-    tariffs_result = _fetch_prices(price_client, fetched_at.date())
-    if isinstance(tariffs_result, Err):
-        print(
-            f"schedule scrape aborted: city tariff page failed: {describe(tariffs_result.error)}",
-            file=sys.stderr,
-        )
-        return _PhaseResult(code=1, fatal=True)
-    crosswalk = crosswalk_from_rows(load_alias_rows(conn), load_xref_rows(conn))
-    scraped = _fetch_schedules(
-        schedule_client,
-        catalog=catalog,
-        tariffs=tariffs_result.value,
-        crosswalk=crosswalk,
-        fetched_at=fetched_at,
-    )
-    if isinstance(scraped, Err):
-        if isinstance(scraped.error, SchemaMismatch) and scraped.error.source == "schedule_scraper":
-            print("no schedules could be scraped", file=sys.stderr)
-        return _PhaseResult(code=1, fatal=True)
-    return _write_scraped_schedules(conn, curated=curated, scraped=scraped.value)
 
 
 # ── Fetch: lane-plan discovery → sheets ─────────────────────────────────────────────────────────
@@ -580,40 +543,17 @@ def _write_lane_plans(
             assert_never(unreachable)
 
 
-def _attach_lanes(
-    conn: sqlite3.Connection,
-    *,
-    page_client: HttpClient,
-    lane_client: HttpClient,
-    fetched_at: datetime,
-) -> _PhaseResult:
-    """The thin re-layer's lane phase: discover + fetch, then attach and write, no lake.
-
-    Fail-fast (all aborts are ``fatal`` so the atomic swap discards, prior gold content-unchanged):
-    an empty store — nothing to attach to — plus every typed cause `_fetch_lane_plans` names.
-    """
-    facilities = GoldRepository(conn).load_all()
-    if not facilities:
-        print("gold store is empty; build it first", file=sys.stderr)
-        return _PhaseResult(code=1, fatal=True)
-    scraped = _fetch_lane_plans(
-        page_client=page_client,
-        lane_client=lane_client,
-        facilities=facilities,
-        pages=_page_urls(conn, facilities),
-    )
-    if isinstance(scraped, Err):
-        return _PhaseResult(code=1, fatal=True)
-    return _write_lane_plans(
-        conn, facilities=facilities, scraped=scraped.value, fetched_at=fetched_at
-    )
-
-
 # ── Commands ────────────────────────────────────────────────────────────────────────────────────
 
 
 #: `build`'s exit code when the store was written but at least one source is a KEPT STALE silver.
 EXIT_BUILT_STALE: Final = 2
+
+#: The silver sources each thin wrapper FORCES through the refresh policy (`force_sources`).
+#: `scrape-gold` is the schedule cadence — the tariff page rides with it because a scraped
+#: schedule is priced from it; `scrape-lanes` is the Belegungsplan cadence.
+SCHEDULE_SOURCES: Final = frozenset({"prices", "schedules"})
+LANE_SOURCES: Final = frozenset({"lane_plans"})
 
 
 def _freshness_line(refreshed: Sequence[Refreshed[Any]]) -> str:
@@ -636,6 +576,7 @@ def build(
     lake: Lake | None = None,
     now: datetime | None = None,
     force: bool = False,
+    force_sources: frozenset[str] = frozenset(),
 ) -> int:
     """Assemble a COMPLETE gold store from the LAKE in ONE atomic pipeline. Returns an exit code:
     `0` every source fetched or reused fresh, `EXIT_BUILT_STALE` (2) the store was written but a
@@ -653,17 +594,37 @@ def build(
 
     `lake=None` builds against a throwaway lake (every source must fetch — the pre-lake
     behaviour), so the lake is opt-in per call site and the default for the CLI (`--lake`).
-    `force` refetches every source regardless of TTL (`--refresh`).
+    `force` refetches every source regardless of TTL (`--refresh`); `force_sources` names the
+    `SILVER_SOURCES` to refetch regardless of TTL while every other source follows the policy —
+    this is what makes `scrape-gold`/`scrape-lanes` a cadence rather than a second pipeline. An
+    unknown name is a caller bug and raises rather than silently forcing nothing.
     """
+    unknown = force_sources - set(SILVER_SOURCES)
+    if unknown:
+        raise ValueError(f"force_sources not in SILVER_SOURCES: {sorted(unknown)}")
     now = now if now is not None else _now()
-    lake = lake if lake is not None else Lake(Path(mkdtemp(prefix="swimzh-lake-")))
+    if lake is None:
+        # A throwaway lake, removed with the call: nothing of a lake-less build outlives it.
+        with TemporaryDirectory(prefix="swimzh-lake-") as tmp:
+            return build(
+                db_path=db_path,
+                data_dir=data_dir,
+                clients=clients,
+                lake=Lake(Path(tmp)),
+                now=now,
+                force=force,
+                force_sources=force_sources,
+            )
     refreshed: list[Refreshed[Any]] = []
+
+    def forced(source: str) -> bool:
+        return force or source in force_sources
 
     roster = refresh_source(
         lake,
         "roster",
         now=now,
-        force=force,
+        force=forced("roster"),
         fetch=lambda: fetch_roster(clients.roster),
         encode=lambda entries: encode_roster(entries, now),
         decode=decode_roster,
@@ -682,7 +643,7 @@ def build(
         lake,
         "prices",
         now=now,
-        force=force,
+        force=forced("prices"),
         fetch=lambda: _fetch_prices(clients.prices, now.date()),
         encode=encode_prices,
         decode=decode_prices,
@@ -700,7 +661,7 @@ def build(
             lake,
             "schedules",
             now=now,
-            force=force,
+            force=forced("schedules"),
             fetch=lambda: _fetch_schedules(
                 clients.schedules,
                 catalog=roster.value.value,
@@ -715,11 +676,10 @@ def build(
             print(f"build aborted: schedules: {schedules.error.describe()}", file=sys.stderr)
             return 1  # no commit -> prior gold content-unchanged
         refreshed.append(schedules.value)
+        # Never fatal: an unresolved extra name is the benign exit-1 miss, the store still lands.
         written = _write_scraped_schedules(
             conn, curated=assembly.facilities, scraped=schedules.value.value
         )
-        if written.fatal:
-            return 1
 
         facilities = GoldRepository(conn).load_all()
         pages = _page_urls(conn, facilities)
@@ -727,7 +687,7 @@ def build(
             lake,
             "lane_plans",
             now=now,
-            force=force,
+            force=forced("lane_plans"),
             fetch=lambda: _fetch_lane_plans(
                 page_client=clients.pages,
                 lane_client=clients.lanes,
@@ -782,96 +742,52 @@ def scrape_gold(
     *,
     db_path: Path,
     data_dir: Path,
-    catalog_path: Path,
     clients: ProviderClients,
-    fetched_at: datetime,
+    lake: Lake | None = None,
+    now: datetime | None = None,
+    force: bool = False,
 ) -> int:
-    """THIN RE-LAYER: re-run only the schedule phase against an already-built store. Exit code.
+    """`build` on the SCHEDULE cadence: prices + schedules are forced through the refresh policy,
+    every other source follows it. Exit code as `build`.
 
-    Since S2 `build` folds this phase into the one atomic pipeline; this command survives so an
-    operator can refresh schedules alone (a faster cadence than the WFS roster) without a full
-    rebuild. It seeds a temp copy of the live store, runs the shared `_compose_schedules` phase
-    against it, and swaps the temp in ONLY on a non-fatal outcome — any abort leaves the prior gold
-    content-unchanged. The catalog is read from `catalog_path` (the roster double) rather than the
-    WFS, so this command stays offline of the roster feed.
-
-    **The curated side is REBUILT from `data_dir` + that catalog** (`assemble_curated`), never read
-    back out of the store: composing onto the store's own previous output made `curated` win
-    against itself, so a re-layer refreshed nothing already present and still exited 0
-    (`docs/2026-08-10-scrape-gold-recompose-defect.md`). The rebuilt tier carries the
-    `lane_plan_source` bindings but no fetched plans, so the lane plans the previous `scrape-lanes`
-    attached are carried across the rebuild (`carry_lane_plans`) — the fix must not trade silent
-    staleness for silent deletion.
-
-    Its blast radius is the pools this run actually SCRAPED — narrower than the pools the catalog
-    names, and deliberately so. A catalog entry can be named yet unscrapeable (no url, a url shared
-    with another entry, an unparseable operator page, a non-scrapeable kind), and since this command
-    reads the COMMITTED catalog while `build` uses the LIVE WFS roster, WFS drift puts real pools in
-    that class. Writing them would replace their stored scraped facts with a curated-only blob —
-    exit 0, no stderr line. `_compose_schedules` writes only what it resolved an extract for, so
-    every other blob is left byte-identical.
+    The roster is the lake's `roster.json` — reused inside its TTL, fetched live from the WFS if
+    the lake has none (a first run) or it is due. The lane plans are the lake's `lane_plans.json`
+    likewise, so the plans a previous run attached come back attached without a refetch. The store
+    is rebuilt atomically from silver, never from the previous gold: nothing here composes onto
+    its own output (`docs/2026-08-10-scrape-gold-recompose-defect.md` cannot recur), and a pool
+    this run did not scrape comes out of the same curated tier it came out of last time.
     """
-    if not catalog_path.exists():
-        print(f"catalog not found at {catalog_path}; run build-catalog first", file=sys.stderr)
-        return 1
-    if not db_path.exists():
-        print(f"gold store not found at {db_path}; run `swimzh build` first", file=sys.stderr)
-        return 1
-    catalog = catalog_json.loads(catalog_path.read_text(encoding="utf-8"))
-    assembly_result = assemble_curated(data_dir, catalog)
-    if isinstance(assembly_result, Err):
-        # Nothing is opened or written: the live store is untouched by construction.
-        print(
-            f"schedule re-layer aborted: curated inputs unusable: "
-            f"{describe(assembly_result.error)}",
-            file=sys.stderr,
-        )
-        return 1
-
-    with atomic_swap(db_path, seed_from=db_path) as staging:
-        conn = open_db(staging.path)
-        result = _compose_schedules(
-            conn,
-            curated=carry_lane_plans(
-                assembly_result.value.facilities, GoldRepository(conn).load_all()
-            ),
-            catalog=catalog,
-            schedule_client=clients.schedules,
-            price_client=clients.prices,
-            fetched_at=fetched_at,
-        )
-        if result.fatal:
-            return 1  # no commit -> the live store is untouched
-        conn.close()  # release the staging handle before the atomic rename
-        staging.commit()
-        return result.code
+    return build(
+        db_path=db_path,
+        data_dir=data_dir,
+        clients=clients,
+        lake=lake,
+        now=now,
+        force=force,
+        force_sources=SCHEDULE_SOURCES,
+    )
 
 
-def scrape_lanes(*, db_path: Path, clients: ProviderClients, fetched_at: datetime) -> int:
-    """THIN RE-LAYER: re-run only the lane-plan phase against an already-built store. Exit code.
-
-    Since S2 `build` folds this phase into the one atomic pipeline; this command survives so an
-    operator can refresh lane plans alone. It seeds a temp copy of the live store, runs the shared
-    `_attach_lanes` phase, and swaps the temp in ONLY on a non-fatal outcome — any abort leaves the
-    prior gold content-unchanged.
-    """
-    if not db_path.exists():
-        print(f"gold store not found at {db_path}; build it first", file=sys.stderr)
-        return 1
-
-    with atomic_swap(db_path, seed_from=db_path) as staging:
-        conn = open_db(staging.path)
-        result = _attach_lanes(
-            conn,
-            page_client=clients.pages,
-            lane_client=clients.lanes,
-            fetched_at=fetched_at,
-        )
-        if result.fatal:
-            return 1  # no commit -> the live store is untouched
-        conn.close()  # release the staging handle before the atomic rename
-        staging.commit()
-        return result.code
+def scrape_lanes(
+    *,
+    db_path: Path,
+    data_dir: Path,
+    clients: ProviderClients,
+    lake: Lake | None = None,
+    now: datetime | None = None,
+    force: bool = False,
+) -> int:
+    """`build` on the LANE-PLAN cadence: `lane_plans` (discovery + the Belegungsplan sheets) is
+    forced through the refresh policy, every other source follows it. Exit code as `build`."""
+    return build(
+        db_path=db_path,
+        data_dir=data_dir,
+        clients=clients,
+        lake=lake,
+        now=now,
+        force=force,
+        force_sources=LANE_SOURCES,
+    )
 
 
 def _export_report_line(out: Path, report: ExportReport) -> str:
@@ -960,8 +876,15 @@ def lake_command(args: argparse.Namespace) -> int:
     """
     lake = Lake(Path(args.lake))
     if args.lake_command == "pull":
-        pulled = lake.pull(args.origin)
-        print(f"lake pulled from {args.origin} into {lake.root}: {', '.join(pulled) or 'nothing'}")
+        report = lake.pull(args.origin)
+        for source, error in report.failed:
+            print(f"lake pull: skipping {source}: {describe(error)}", file=sys.stderr)
+        summary = ", ".join(report.pulled) or "nothing"
+        if report.absent:
+            summary += f" (absent: {', '.join(report.absent)})"
+        if report.failed:
+            summary += f" (failed: {', '.join(source for source, _ in report.failed)})"
+        print(f"lake pulled from {args.origin} into {lake.root}: {summary}")
         return 0
     copied = lake.export(Path(args.out))
     print(f"lake exported to {args.out}: {', '.join(copied) or 'nothing'}")
@@ -987,22 +910,25 @@ def main(argv: list[str] | None = None, *, clients: ProviderClients | None = Non
         ),
     )
 
-    roster_build = subparsers.add_parser(
-        "build",
-        parents=[cache_flags],
-        help="assemble a COMPLETE gold store (one atomic pipeline: roster+scrape+compose)",
-    )
-    roster_build.add_argument("--db", required=True, help="path to the gold SQLite file to write")
-    roster_build.add_argument(
+    # `build` and its two cadence wrappers share the store/data/lake flags: they ARE one command.
+    store_flags = argparse.ArgumentParser(add_help=False)
+    store_flags.add_argument("--db", required=True, help="path to the gold SQLite file to write")
+    store_flags.add_argument(
         "--data", default="data", help="curated data directory (default: data)"
     )
-    roster_build.add_argument(
+    store_flags.add_argument(
         "--lake",
         default=str(DEFAULT_LAKE_ROOT),
         help=(
             "the lake directory (silver per source; the previous run's facts stand in for an "
             f"unreachable source within its max_stale) (default: {DEFAULT_LAKE_ROOT})"
         ),
+    )
+
+    subparsers.add_parser(
+        "build",
+        parents=[cache_flags, store_flags],
+        help="assemble a COMPLETE gold store (one atomic pipeline: roster+scrape+compose)",
     )
 
     # The lake's two runtime seams — where the previous silver comes from, where this one goes.
@@ -1027,23 +953,22 @@ def main(argv: list[str] | None = None, *, clients: ProviderClients | None = Non
     )
     catalog.add_argument("--out", default="data/catalog.json", help="catalog JSON to write")
 
-    scrape = subparsers.add_parser(
+    subparsers.add_parser(
         "scrape-gold",
-        parents=[cache_flags],
-        help="re-layer only the schedule phase onto a built store",
+        parents=[cache_flags, store_flags],
+        help=(
+            "build with the schedule + price pages forced to refetch; the roster and lane plans "
+            "are reused from the lake (the roster is fetched live only if the lake has none)"
+        ),
     )
-    scrape.add_argument("--db", required=True, help="path to the gold SQLite file to write")
-    scrape.add_argument("--catalog", default="data/catalog.json", help="catalog JSON to read")
-    # The re-layer composes onto the curated tier rebuilt from here — NOT onto the store's own
-    # previous output. Same default as `build --data`, so the two commands assemble the same tier.
-    scrape.add_argument("--data", default="data", help="curated data directory (default: data)")
-
-    lanes = subparsers.add_parser(
+    subparsers.add_parser(
         "scrape-lanes",
-        parents=[cache_flags],
-        help="re-layer only the lane-plan phase onto a built store",
+        parents=[cache_flags, store_flags],
+        help=(
+            "build with the Belegungsplan lane plans forced to refetch; every other source is "
+            "reused from the lake (the roster is fetched live only if the lake has none)"
+        ),
     )
-    lanes.add_argument("--db", required=True, help="path to the existing gold SQLite file")
 
     # No `cache_flags`: the export touches no provider, so a cache switch would be a lie.
     ios = subparsers.add_parser(
@@ -1113,26 +1038,21 @@ def _dispatch_live(args: argparse.Namespace, *, now: datetime) -> int:
 
 def _dispatch(args: argparse.Namespace, *, clients: ProviderClients, now: datetime) -> int:
     """Route a parsed command to its handler with the resolved per-source HTTP clients."""
-    if args.command == "build":
-        return build(
-            db_path=Path(args.db),
-            data_dir=Path(args.data),
-            clients=clients,
-            lake=Lake(Path(args.lake)),
-            now=now,
-            force=bool(args.refresh),
-        )
-    if args.command == "scrape-gold":
-        return scrape_gold(
-            db_path=Path(args.db),
-            data_dir=Path(args.data),
-            catalog_path=Path(args.catalog),
-            clients=clients,
-            fetched_at=now,
-        )
-    if args.command == "scrape-lanes":
-        return scrape_lanes(db_path=Path(args.db), clients=clients, fetched_at=now)
-    return build_catalog_file(out=Path(args.out), client=clients.roster, generated_at=now)
+    if args.command == "build-catalog":
+        return build_catalog_file(out=Path(args.out), client=clients.roster, generated_at=now)
+    pipeline: dict[str, Callable[..., int]] = {
+        "build": build,
+        "scrape-gold": scrape_gold,
+        "scrape-lanes": scrape_lanes,
+    }
+    return pipeline[args.command](
+        db_path=Path(args.db),
+        data_dir=Path(args.data),
+        clients=clients,
+        lake=Lake(Path(args.lake)),
+        now=now,
+        force=bool(args.refresh),
+    )
 
 
 if __name__ == "__main__":  # pragma: no cover

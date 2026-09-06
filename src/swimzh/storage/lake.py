@@ -35,6 +35,9 @@ from typing import Any, Final
 
 import httpx
 
+from swimzh.core.errors import HttpStatus, ProviderError, SchemaMismatch
+from swimzh.core.http import HttpClient
+from swimzh.core.result import Err, Ok, Result
 from swimzh.storage.atomic import atomic_swap
 
 #: The silver documents a build reads and writes, in pipeline order. Each name is a file
@@ -50,6 +53,11 @@ SILVER_SCHEMA: Final = 2
 
 _SILVER_DIR: Final = "silver"
 _PULL_TIMEOUT_S: Final = 30.0
+#: The `HttpClient.source` of a pull. It has NO row in `core/cache_tiers.CACHE_POLICIES` on
+#: purpose: a pull must never be served from the provider disk cache (last week's silver is the
+#: one thing a run wants current), and `pull` builds its own uncached transport anyway — the
+#: tier stamp `policy_for` falls back to is inert without a `DiskCacheTransport` underneath.
+_PULL_SOURCE: Final = "lake"
 
 
 class SilverStatus(Enum):
@@ -101,6 +109,21 @@ class SilverDoc:
     payload: dict[str, Any]
 
 
+@dataclass(frozen=True, slots=True)
+class PullReport:
+    """What one `Lake.pull` did, per source, in `SILVER_SOURCES` order.
+
+    `pulled` were adopted; `absent` the origin does not have (a 404 or a missing file — "first
+    run for that source", not a failure); `failed` carry the typed reason each was skipped: a
+    `ProviderError` straight from the transport (`HttpStatus`, `ConnectionFailed`, ...) or a
+    `SchemaMismatch` for a document that was fetched but is not a silver for that source.
+    """
+
+    pulled: tuple[str, ...] = ()
+    absent: tuple[str, ...] = ()
+    failed: tuple[tuple[str, ProviderError], ...] = ()
+
+
 #: Keys that name WHEN a payload was produced rather than WHAT it says (`valid_as_of` is the
 #: scrape date stamped onto prices and provenance, not a fact from any page — a plan's own
 #: `valid_from` IS a fact and is kept). The content hash skips them at any depth, so a re-fetch of
@@ -147,19 +170,22 @@ class Lake:
         if not path.exists():
             return None
         obj = json.loads(path.read_text(encoding="utf-8"))
+        # Schema first, before the header is parsed: a document from another schema is absent by
+        # definition, whatever else is in it.
+        schema = int(obj.get("silver", {}).get("schema", 0)) if isinstance(obj, dict) else 0
+        if schema != SILVER_SCHEMA:
+            print(
+                f"lake: ignoring {path} (silver schema {schema}, this build writes "
+                f"{SILVER_SCHEMA}); {source} will be fetched as a first run",
+                file=sys.stderr,
+            )
+            return None
         header = SilverHeader.from_json_obj(obj["silver"])
         payload = obj["payload"]
         if not isinstance(payload, dict):
             raise TypeError(f"silver payload for {source} is not an object")
         if header.source != source:
             raise ValueError(f"silver file {path} claims source {header.source!r}")
-        if header.schema != SILVER_SCHEMA:
-            print(
-                f"lake: ignoring {path} (silver schema {header.schema}, this build writes "
-                f"{SILVER_SCHEMA}); {source} will be fetched as a first run",
-                file=sys.stderr,
-            )
-            return None
         return SilverDoc(header=header, payload=payload)
 
     def write(self, source: str, payload: dict[str, Any], *, fetched_at: datetime) -> SilverDoc:
@@ -195,15 +221,6 @@ class Lake:
             staging.commit()
         return doc
 
-    def headers(self) -> tuple[SilverHeader, ...]:
-        """The headers of every silver document present, in `SILVER_SOURCES` order."""
-        found: list[SilverHeader] = []
-        for source in SILVER_SOURCES:
-            doc = self.read(source)
-            if doc is not None:
-                found.append(doc.header)
-        return tuple(found)
-
     # ── runtime seams: where the previous silver comes from, where this one goes ──────────
 
     def export(self, out: Path) -> tuple[str, ...]:
@@ -218,70 +235,89 @@ class Lake:
                 copied.append(source)
         return tuple(copied)
 
-    def pull(self, origin: str, *, client: httpx.Client | None = None) -> tuple[str, ...]:
+    def pull(self, origin: str, *, client: HttpClient | None = None) -> PullReport:
         """Seed this lake's silver from a previous publish — a directory or an `http(s)://` base
         that serves `<origin>/silver/<source>.json`.
 
-        BEST-EFFORT AND LOUD: a source the origin does not have (a 404, a missing file) is
-        simply "first run for that source" and is skipped; any other failure is printed to
-        stderr and that source is skipped too. Nothing here aborts: an unreachable origin makes
-        the following build behave exactly like today's (every source must fetch fresh), which
-        is the honest fallback — the build itself reports what it could not refresh.
+        BEST-EFFORT AND TYPED: a source the origin does not have (a 404, a missing file) is
+        simply "first run for that source" (`absent`); any other failure is reported as a typed
+        value in `failed` and that source is skipped too. Nothing here raises or aborts: an
+        unreachable origin makes the following build behave exactly like today's (every source
+        must fetch fresh), which is the honest fallback — the build itself reports what it could
+        not refresh. Printing is the caller's job (`cli.lake_command`).
 
-        Returns the sources pulled. Pulled documents are validated by decoding them, so a
-        corrupt upstream file is skipped rather than adopted.
+        Pulled documents are validated by decoding them, so a corrupt upstream file is reported
+        (`SchemaMismatch`) rather than adopted. For an http origin without a `client`, a plain
+        uncached `HttpClient` is built for the pull (see `_PULL_SOURCE`).
         """
+        if _is_http(origin) and client is None:
+            with httpx.Client(timeout=_PULL_TIMEOUT_S, follow_redirects=True) as inner:
+                return self.pull(origin, client=_pull_client(inner))
         pulled: list[str] = []
+        absent: list[str] = []
+        failed: list[tuple[str, ProviderError]] = []
         for source in SILVER_SOURCES:
-            text = _read_origin(origin, source, client)
-            if text is None:
-                continue
-            doc = _decode_document(text, source)
-            if doc is None:
-                print(f"lake pull: skipping {source}: unreadable document", file=sys.stderr)
-                continue
-            self._store(doc)
-            pulled.append(source)
-        return tuple(pulled)
+            match _read_origin(origin, source, client):
+                case Ok(None):
+                    absent.append(source)
+                case Ok(str() as text):
+                    match _decode_document(text, source):
+                        case Ok(doc):
+                            self._store(doc)
+                            pulled.append(source)
+                        case Err(error):
+                            failed.append((source, error))
+                case Err(error):
+                    failed.append((source, error))
+        return PullReport(pulled=tuple(pulled), absent=tuple(absent), failed=tuple(failed))
 
 
-def _decode_document(text: str, source: str) -> SilverDoc | None:
-    """Decode a pulled silver document, or `None` if it is not one for `source`."""
+def _is_http(origin: str) -> bool:
+    return origin.startswith(("http://", "https://"))
+
+
+def _pull_client(inner: httpx.Client) -> HttpClient:
+    return HttpClient(inner, source=_PULL_SOURCE, timeout_s=_PULL_TIMEOUT_S)
+
+
+def _decode_document(text: str, source: str) -> Result[SilverDoc, SchemaMismatch]:
+    """Decode a pulled silver document, or say why it is not one for `source`."""
+
+    def mismatch(detail: str) -> Err[SchemaMismatch]:
+        return Err(SchemaMismatch(source=_PULL_SOURCE, detail=f"{source}: {detail}"))
+
     try:
         obj = json.loads(text)
         header = SilverHeader.from_json_obj(obj["silver"])
         payload = obj["payload"]
-    except (ValueError, KeyError, TypeError):
-        return None
-    if header.source != source or not isinstance(payload, dict):
-        return None
+    except (ValueError, KeyError, TypeError) as exc:
+        return mismatch(f"unreadable silver document: {exc}")
+    if header.source != source:
+        return mismatch(f"document claims source {header.source!r}")
+    if not isinstance(payload, dict):
+        return mismatch("payload is not an object")
     if header.schema != SILVER_SCHEMA:
-        return None
-    return SilverDoc(header=header, payload=payload)
+        return mismatch(f"silver schema {header.schema}, this build reads {SILVER_SCHEMA}")
+    return Ok(SilverDoc(header=header, payload=payload))
 
 
-def _read_origin(origin: str, source: str, client: httpx.Client | None) -> str | None:
-    """The text of `<origin>/silver/<source>.json`, or `None` if it is absent/unreadable."""
-    if origin.startswith(("http://", "https://")):
+def _read_origin(
+    origin: str, source: str, client: HttpClient | None
+) -> Result[str | None, ProviderError]:
+    """The text of `<origin>/silver/<source>.json`; `Ok(None)` when the origin has no such
+    document (a 404 / a missing file), `Err` for any other failure."""
+    if _is_http(origin):
+        if client is None:  # pragma: no cover - `pull` always supplies one for an http origin
+            raise ValueError("an http(s) origin needs an HttpClient")
         url = f"{origin.rstrip('/')}/{_SILVER_DIR}/{source}.json"
-        try:
-            if client is None:
-                response = httpx.get(url, timeout=_PULL_TIMEOUT_S, follow_redirects=True)
-            else:
-                response = client.get(url)
-        except httpx.HTTPError as exc:
-            print(f"lake pull: skipping {source}: {url}: {exc}", file=sys.stderr)
-            return None
-        if response.status_code == 404:
-            return None
-        if response.status_code != 200:
-            print(
-                f"lake pull: skipping {source}: {url}: HTTP {response.status_code}",
-                file=sys.stderr,
-            )
-            return None
-        return response.text
+        match client.get(url):
+            case Ok(response):
+                return Ok(response.text)
+            case Err(HttpStatus(status=404)):
+                return Ok(None)
+            case Err(error):
+                return Err(error)
     path = Path(origin) / _SILVER_DIR / f"{source}.json"
     if not path.exists():
-        return None
-    return path.read_text(encoding="utf-8")
+        return Ok(None)
+    return Ok(path.read_text(encoding="utf-8"))

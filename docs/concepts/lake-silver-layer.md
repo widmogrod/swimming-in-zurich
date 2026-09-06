@@ -73,14 +73,31 @@ GitHub Actions runs exactly those three lines (`publish-store.yml`), pulling fro
 the store is served from and accepting exit 2 with a warning annotation. A laptop runs the same
 three lines against a local folder. `--refresh` forces every source to refetch regardless of TTL.
 
+## Known edges (recorded, not fixed)
+
+* A stale-kept silver is always DUE on the next run, so it heals the moment the source is back.
+* The schedule scrape prices pools from the `prices` silver it saw at scrape time, so a stale-kept
+  `schedules` may carry tariffs older than the `prices` row says. Exit 2 makes it visible.
+* On a laptop the raw HTTP cache sits under the refresh policy: a source that is down can still
+  come out `fresh` for up to the tier's cache TTL, stamped with this run's time. CI has no cache.
+* The shape pin (`tests/etl/test_silver_schema.py`) sees only keys the recorded build emits;
+  a DTO field that serialises only when non-default is not covered by it.
+* A reused `schedules` silver that carries an `unresolved` name repeats the benign exit 1 on
+  every run inside its TTL (the pre-lake semantics, now persistent until the name resolves).
+
 ## What was deliberately not done
 
 * No bot commits of silver into git; no one-workflow-per-source. Both are host-specific
   shapes of what the refresh policy already does in process.
-* No hand-made fallback catalog. `data/catalog.json` remains what it was (the `scrape-gold`
-  re-layer's roster double); the lake's `roster.json` is the build's own.
-* The thin re-layer commands (`scrape-gold`, `scrape-lanes`) run their fetch + write halves back
-  to back without the lake, as before.
+* No hand-made fallback catalog. `data/catalog.json` remains a WFS snapshot for tests and
+  `build-catalog`; no command reads it as a roster any more — the lake's `roster.json` is the
+  build's own.
+* No second pipeline. `scrape-gold` and `scrape-lanes` were retired as separate code paths on
+  2026-09-06: each is now `build(force_sources=…)` — `{prices, schedules}` and `{lane_plans}`
+  respectively — so a cadence is a set of sources forced through the refresh policy, and every
+  other source is reused from the lake. Consequence worth knowing: a *transient* failure on a
+  forced source (a 503 on a Belegungsplan sheet, say) is now a stale keep with exit 2, where the
+  old re-layer aborted; schema drift and a first run still abort.
 
 ## Verified 2026-09-06, live
 

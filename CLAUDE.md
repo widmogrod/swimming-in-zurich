@@ -47,12 +47,17 @@ The app reads **only** one SQLite gold store — every endpoint (`/swim`, `/pool
 ```sh
 # 1. Build a COMPLETE gold DB in ONE atomic pipeline — NETWORK-DEPENDENT (WFS + scrapers).
 #    Runs the whole provider chain (roster → discover → schedule/price scrape → lanes → compose)
-#    inside a temp-DB + swap: any provider failure aborts non-zero, prior gold content-unchanged.
+#    inside a temp-DB + swap: a non-transient provider failure (schema drift, first run, silver past
+#    max_stale) aborts non-zero, prior gold content-unchanged; a TRANSIENT one (timeout, refused, 5xx)
+#    keeps that source's last silver as STALE and exits 2 (see "The lake" below).
 uv run python -m swimzh.cli build --db gold.sqlite
 
-# 2. (optional) Thin RE-LAYER commands — refresh one cadence onto an already-built store:
-uv run python -m swimzh.cli scrape-gold   --db gold.sqlite   # re-run the schedule/price phase
-uv run python -m swimzh.cli scrape-lanes  --db gold.sqlite   # re-run the Belegungsplan lane phase
+# 2. (optional) ONE cadence forced — the SAME `build`, with one source set refetched regardless
+#    of its TTL and every other source reused from the lake (`--lake`, default `.lake/`).
+#    No prior store is needed: the roster comes from the lake's `roster.json`, fetched live
+#    only if the lake has none. `--refresh` still forces ALL sources.
+uv run python -m swimzh.cli scrape-gold   --db gold.sqlite   # == build, prices + schedules forced
+uv run python -m swimzh.cli scrape-lanes  --db gold.sqlite   # == build, lane_plans forced
 
 # 2c. DERIVED EXPORT for the iOS app — offline, reads gold only, never the network.
 #     Bakes every date in a fixed 400-day horizon into a pre-resolved SQLite the app embeds,
@@ -76,12 +81,15 @@ through uvicorn's lifespan traceback rather than the one-liner.
 `swimzh build` is **one atomic pipeline command** (`cli.build`): WFS roster (`fetch_roster`) →
 identity spine + thin crosswalk (`build_store`, the `pool` table = ~57-pool roster + its
 `pool_alias`/`pool_xref` crosswalk + the `calendar` singleton) → schedule + price scrape and
-reconcile (`_compose_schedules`) → lane discovery/fetch/attach (`_attach_lanes`) → `compose`. The
+reconcile (`_fetch_schedules` → `_write_scraped_schedules`) → lane discovery/fetch/attach
+(`_fetch_lane_plans` → `_write_lane_plans`) → `compose`. The
 whole chain runs inside **one** temp-DB + `os.replace` swap (`storage/atomic.py`): the store commits
-only if every phase completed, so a mid-chain provider failure aborts non-zero and leaves the prior
+only if every phase completed, so a non-transient mid-chain provider failure aborts non-zero (a
+transient one keeps that source's silver stale, exit 2 — "The lake" below) and leaves the prior
 gold **content-unchanged** — never a partial store. It is therefore **network-dependent** (the WFS
-roster + the page scrapers). `scrape-gold` / `scrape-lanes` are **thin re-layer commands** driving
-the same extracted phase functions (per-cadence refresh onto an already-built store). The facility
+roster + the page scrapers). `scrape-gold` / `scrape-lanes` are **`build` with `force_sources`**
+(`{prices, schedules}` / `{lane_plans}`): the same pipeline, one source set forced through the
+refresh policy, everything else reused from the lake — there is no second pipeline. The facility
 payload rides as a typed blob on the `pool` row (`facility_doc`); there is **no `facility` table**.
 The `--data` dir (default `data/`) supplies only the thin crosswalk; the **app never reads `data/`**.
 
@@ -98,7 +106,7 @@ one place): `geo_sport` 14d, `page_provider` 7d, `price_scraper` 7d, `belegungsp
 `schedule_scraper` 12h, `baditicker` 2m. `HttpClient.get` stamps the tier + TTL onto
 `request.extensions` from its `source=`, which is why **`cli.py` builds one `HttpClient` per source**
 over one shared transport and threads the source-matched client into each *provider call* — a phase is
-not source-atomic (`_compose_schedules` fans out to price *and* schedule; `_attach_lanes` to discovery
+not source-atomic (the schedule phase fans out to price *and* schedule; the lane phase to discovery
 *and* lanes), so both take two clients. A single shared client would silently collapse every request
 to one tier; a build-level test guards all five `(source, tier, ttl)` triples.
 
@@ -172,7 +180,8 @@ links; the lane provider fetches them), and each authored binding is validated a
 (`authored − discovered` → `UndiscoveredSource`). Reconciliation is a **deterministic URL-keyed
 join** in `etl/silver.py` (a single-basin sheet binds by URL alone; a stacked multi-basin sheet
 routes each section by its declared `section` token, failing safe to an audited `UnboundPlan` on any
-zero/ambiguous match). A failed declared lane source is **fatal** to the build (no per-basin
+zero/ambiguous match). A declared lane source that will not parse is **fatal** to the build; one that is
+transiently unreachable keeps the last lane-plan silver stale, exit 2 (no per-basin
 `LanePlanUnavailable` hole is persisted any more — the DTO survives only for old-blob round-trip).
 See `docs/concepts/lane-plan-url-binding.md`.
 

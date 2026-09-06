@@ -8,13 +8,10 @@ leaves the prior gold store **content-unchanged**: the fail-fast, all-or-nothing
 live file is never mutated in place, so a build that fails halfway never holds a half-written or
 stale-but-green dataset.
 
-Two seeding modes:
-  * ``seed_from=None`` — a from-scratch **build**: the temp starts empty and the command writes
-    the whole store into it.
-  * ``seed_from=<target>`` — a **layering scrape** (`scrape-gold` / `scrape-lanes`): the temp is
-    a byte-copy of the live store, so the command layers its enrichment onto the current content
-    while the live file stays untouched until the swap. This is why the scrape commands survive as
-    separate commands rather than folding into one transactional build.
+The temp always starts EMPTY: every command that writes a store is a from-scratch build composed
+from the lake (`swimzh build`, and the `scrape-gold` / `scrape-lanes` wrappers over it), so there
+is no "layer onto a byte-copy of the live store" mode any more — a store is only ever a pure
+function of the lake's silver plus `data/`.
 
 ``os.replace`` is atomic only within one filesystem, so the temp is always created in the
 target's own directory (never ``/tmp``).
@@ -23,7 +20,6 @@ target's own directory (never ``/tmp``).
 from __future__ import annotations
 
 import os
-import shutil
 from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
@@ -49,21 +45,18 @@ class Staging:
 
 
 @contextmanager
-def atomic_swap(target: str | Path, *, seed_from: str | Path | None = None) -> Iterator[Staging]:
+def atomic_swap(target: str | Path) -> Iterator[Staging]:
     """Yield a :class:`Staging` whose temp DB atomically replaces ``target`` only on ``commit()``.
 
     On any exception, or if ``commit()`` was never called, the temp is discarded and ``target`` is
     left content-unchanged (for a from-scratch build of a not-yet-existing target, it stays
-    absent). ``seed_from`` byte-copies an existing store into the temp so a layering command works
-    against the current content.
+    absent).
     """
     target = Path(target)
     target.parent.mkdir(parents=True, exist_ok=True)
     fd, tmp_name = mkstemp(dir=target.parent, prefix=f".{target.name}.", suffix=".tmp")
     os.close(fd)
     tmp = Path(tmp_name)
-    if seed_from is not None:
-        shutil.copyfile(seed_from, tmp)
     staging = Staging(path=tmp)
     try:
         yield staging

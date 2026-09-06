@@ -43,7 +43,7 @@ WFS_FIXTURES = FIXTURES / "wfs"
 
 # The composite build client's page routing: each declared source's roster `url` (its last path
 # segment, or the third-party bad-altstetten host) → the saved page fixture whose timetable
-# `_compose_schedules` scrapes and whose Belegungsplan links `_attach_lanes` discovers. Every pool
+# `_fetch_schedules` scrapes and whose Belegungsplan links `_fetch_lane_plans` discovers. Every pool
 # `etl.scrape.declared_sources` selects has a parseable fixture here, so the atomic `build`'s
 # fail-fast scrape completes — all 26: 7 indoor/thermal, the 4 school pools admitted in S2 of the
 # school-access-vocabulary plan, and the 15 outdoor/lake/river pools admitted in seasonal-hours S3.

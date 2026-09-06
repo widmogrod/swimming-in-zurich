@@ -303,6 +303,21 @@ def test_pull_from_an_absent_origin_is_a_loud_no_op(
     assert "nothing" in capsys.readouterr().out
 
 
+def test_pull_names_each_failed_source_on_stderr_and_still_exits_0(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Best-effort by design: a corrupt upstream document is reported (typed, via `describe`)
+    and skipped, and the next build treats that source as a first run."""
+    origin = tmp_path / "origin" / "silver"
+    origin.mkdir(parents=True)
+    (origin / "roster.json").write_text("{not json", encoding="utf-8")
+    assert main(["lake", "pull", str(tmp_path / "origin"), "--lake", str(tmp_path / "lake")]) == 0
+    captured = capsys.readouterr()
+    assert "lake pull: skipping roster:" in captured.err and "unreadable" in captured.err
+    assert "nothing" in captured.out and "(failed: roster)" in captured.out
+    assert "(absent: prices, schedules, lane_plans)" in captured.out
+
+
 def test_the_manifest_carries_the_stores_per_source_freshness(tmp_path: Path) -> None:
     db, lake = _first_build(tmp_path)
     friday = _MONDAY + timedelta(days=20)
