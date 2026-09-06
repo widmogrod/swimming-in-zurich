@@ -84,8 +84,8 @@ final class ScreenshotTests: XCTestCase {
     for key in labKeys {
       app.launchArguments += ["-\(key)", "NO"]
     }
-    // The strip is a picker, not a switch: its previous look is the named `flat` style.
-    app.launchArguments += ["-lab.stripStyle", "flat"]
+    // The pickers: their previous looks are the named choices.
+    app.launchArguments += ["-lab.stripEntry", "none"]
     launch()
     try walk(prefix: "old-")
   }
@@ -129,10 +129,10 @@ final class ScreenshotTests: XCTestCase {
 
     closeSheet()
 
-    // 5 — the map. Segment 1 by position, because a `Picker` gives its options no identifiers
-    // and list-then-map is the order `BehaviourTests` pins as the contract.
-    XCTAssertTrue(find("viewMode").waitForExistence(timeout: 10), "no view-mode control")
-    app.segmentedControls.firstMatch.buttons.element(boundBy: 1).tap()
+    // 5 — the map. The tab bar's second tab, by position: list-then-map is the order
+    // `BehaviourTests` pins as the contract.
+    XCTAssertTrue(app.tabBars.firstMatch.waitForExistence(timeout: 10), "no tab bar")
+    app.tabBars.firstMatch.buttons.element(boundBy: 1).tap()
     XCTAssertTrue(find("poolMap").waitForExistence(timeout: 15), "the map never appeared")
     capture("05-map")
 

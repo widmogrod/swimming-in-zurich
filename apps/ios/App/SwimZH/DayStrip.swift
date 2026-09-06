@@ -13,16 +13,17 @@
 //  * `.sensoryFeedback(.selection, trigger:)` on the selected day, so a chip change feels like
 //    a picker rather than a tap on glass.
 //
-// And one iOS 27 experiment, behind `Lab.stripStyle` — a PICKER of three glass behaviours
-// plus the flat look, because what a tap FEELS like is the thing under review and a reader
-// cannot feel it from a description (`Lab.StripStyle` says what each one changes):
-//  * `morph`: the selected tint is a separate glass view carrying one `glassEffectID`, so it
-//    flies from chip to chip inside the `GlassEffectContainer`. The chip's own glass is swapped
-//    off under it, which is where the tap animation goes wrong.
-//  * `tint`: one interactive glass per chip, always; selection is a tint cross-fade. The press
-//    lens works because the glass under the finger is never removed.
-//  * `button`: the system `GlassButtonStyle`, so the press feel is exactly the bars'.
-// The border and the today rule stay in every variant: colour is never the only channel.
+// And the iOS 27 look, DECIDED 2026-09-06 out of four candidates (flat, and three glass
+// behaviours that differed in what a tap did): the chips are Liquid Glass and the selection
+// MORPHS. The selected tint is not a property of the chip — it is a separate glass view, drawn
+// behind whichever chip is selected and carrying one `glassEffectID`. When the selection moves,
+// that view leaves one chip and appears under the next inside the same `GlassEffectContainer`,
+// which is exactly the pair SwiftUI morphs between. The border and the today rule stay: colour
+// is never the only channel.
+//
+// One thing survives from a discarded candidate, behind `Lab.stripEntry`: how a chip ARRIVES
+// as the strip is scrolled. The system-button variant's glass materialised as each new day came
+// on screen, and the owner missed exactly that; `Lab.StripEntry` says what each choice changes.
 
 import SwiftUI
 import SwimZHKit
@@ -51,7 +52,7 @@ struct DayStrip: View {
     self._position = State(
       initialValue: ScrollPosition(id: selection.wrappedValue, anchor: .center))
   }
-  @AppStorage(Lab.stripStyle) private var stripStyle = Lab.StripStyle.default
+  @AppStorage(Lab.stripEntry) private var stripEntry = Lab.StripEntry.default
   /// The namespace the morphing selection lives in. One id, `selectionGlassID`, ever in it.
   @Namespace private var glassNamespace
   private let selectionGlassID = "selection"
@@ -73,9 +74,8 @@ struct DayStrip: View {
     .accessibilityIdentifier("dayStrip")
     .sensoryFeedback(.selection, trigger: selection)
     // Declared here rather than started in the chip's action: the morph needs the selection
-    // change to be one animated transaction, and this is what makes it one. Nil when the
-    // switch is off, so the flat variant changes exactly as it did before.
-    .animation(stripStyle.isGlass ? .snappy(duration: 0.3) : nil, value: selection)
+    // change to be one animated transaction, and this is what makes it one.
+    .animation(.snappy(duration: 0.3), value: selection)
     .onChange(of: selection) { _, day in
       if selectionCameFromTap {
         selectionCameFromTap = false
@@ -120,23 +120,14 @@ struct DayStrip: View {
     .scrollClipDisabled()
   }
 
-  /// The chips, in a `GlassEffectContainer` when they are glass — adjacent glass shapes are
-  /// blended by the container, and the morph only happens inside one.
-  @ViewBuilder
+  /// The chips, in a `GlassEffectContainer` — adjacent glass shapes are blended by the
+  /// container, and the morph only happens inside one.
   private func chipRow(_ layout: StripLayout) -> some View {
-    if stripStyle.isGlass {
-      GlassEffectContainer(spacing: Design.Space.row) {
-        chipStack(layout)
-      }
-    } else {
-      chipStack(layout)
-    }
-  }
-
-  private func chipStack(_ layout: StripLayout) -> some View {
-    LazyHStack(spacing: Design.Space.row) {
-      ForEach(chips) { chip in
-        chipButton(chip, layout: layout)
+    GlassEffectContainer(spacing: Design.Space.row) {
+      LazyHStack(spacing: Design.Space.row) {
+        ForEach(chips) { chip in
+          chipButton(chip, layout: layout)
+        }
       }
     }
   }
@@ -151,45 +142,16 @@ struct DayStrip: View {
     // The whole chip is the target, gaps included — without this only the glyphs are tappable
     // and the 44 pt rule is satisfied on paper only.
     .contentShape(Rectangle())
-    .modifier(ChipButtonStyle(style: stripStyle, isSelected: chip.day == selection))
+    .buttonStyle(.plain)
+    // `Lab.StripEntry.scroll`: the chip scales and fades up as the scroll brings it in. The
+    // other two entries are a property of the glass, applied in `ChipSurface`.
+    .scrollTransition(.interactive, axis: .horizontal) { content, phase in
+      content
+        .opacity(stripEntry == .scroll && !phase.isIdentity ? 0.5 : 1)
+        .scaleEffect(stripEntry == .scroll && !phase.isIdentity ? 0.85 : 1)
+    }
     .accessibilityLabel(Text(verbatim: chip.accessibilityLabel))
     .accessibilityAddTraits(chip.day == selection ? [.isSelected, .isButton] : .isButton)
-  }
-
-  /// The glass the `tint` and `button` variants give a chip: the same interactive glass on
-  /// every chip, tinted on the selected one. Only the tint changes on a tap, so the glass
-  /// under the finger is never removed — which is what lets the press lens show.
-  private static func chipGlass(isSelected: Bool) -> Glass {
-    isSelected
-      ? .regular.tint(ChipColor.selected.opacity(ChipColor.selectedFill)).interactive()
-      : .regular.interactive()
-  }
-
-  /// How the BUTTON is styled, per variant. `flat` and `morph` paint their surface inside the
-  /// label (`ChipSurface`) and keep the plain style; `tint` puts the glass on the button itself,
-  /// outside the label, so the border and today rule drawn in the label sit on top of it;
-  /// `button` hands the whole surface to the system style.
-  private struct ChipButtonStyle: ViewModifier {
-    let style: Lab.StripStyle
-    let isSelected: Bool
-
-    @ViewBuilder
-    func body(content: Content) -> some View {
-      switch style {
-      case .flat, .morph:
-        content.buttonStyle(.plain)
-      case .tint:
-        content
-          .buttonStyle(.plain)
-          .glassEffect(
-            DayStrip.chipGlass(isSelected: isSelected),
-            in: .rect(cornerRadius: Design.Radius.control))
-      case .button:
-        content
-          .buttonStyle(.glass(DayStrip.chipGlass(isSelected: isSelected)))
-          .buttonBorderShape(.roundedRectangle(radius: Design.Radius.control))
-      }
-    }
   }
 
   private func chipLabel(_ chip: DayChip, layout: StripLayout) -> some View {
@@ -215,7 +177,7 @@ struct DayStrip: View {
     .overlay(chipBorder(chip))
     .overlay(alignment: .bottom) { todayMarker(chip) }
     .modifier(
-      ChipSurface(chip: chip, selection: selection, style: stripStyle) { selectionGlass }
+      ChipSurface(chip: chip, selection: selection, entry: stripEntry) { selectionGlass }
     )
   }
 
@@ -246,50 +208,34 @@ struct DayStrip: View {
     }
   }
 
-  /// The chip's surface, in either variant.
+  /// The chip's surface: an idle chip is plain interactive glass; the selected chip carries no
+  /// glass of its own (`.identity`) and instead sits on the one tinted `selectionGlass` — one
+  /// glass layer per chip, so glass never samples glass, and the layer that moves is the one
+  /// with the id.
   ///
-  /// FLAT: a TINTED background rather than a filled one, so the label keeps `.primary` and its
-  /// contrast is the system's problem in both appearances. A saturated fill would force a
-  /// hardcoded light-on-dark label colour, which is the literal the lint bans.
-  ///
-  /// MORPH: an idle chip is plain interactive glass; the selected chip carries no glass of its
-  /// own (`.identity`) and instead sits on the one tinted `selectionGlass` — one glass layer per
-  /// chip, so glass never samples glass, and the layer that moves is the one with the id.
-  ///
-  /// TINT and BUTTON: nothing here. Their surface is on the button (`ChipButtonStyle`).
+  /// The glass's own transition is `Lab.StripEntry`'s: `.materialize` is what a chip scrolling
+  /// into a lazy stack shows, and what the tap's glass swap shows too; `.matchedGeometry` is
+  /// the container's default, under which an id-less chip simply appears.
   private struct ChipSurface<Selection: View>: ViewModifier {
     let chip: DayChip
     let selection: String
-    let style: Lab.StripStyle
+    let entry: Lab.StripEntry
     @ViewBuilder let selectionGlass: () -> Selection
 
     private var isSelected: Bool { chip.day == selection }
 
-    @ViewBuilder
     func body(content: Content) -> some View {
-      switch style {
-      case .tint, .button:
-        content
-      case .morph:
-        content
-          .glassEffect(
-            isSelected ? .identity : .regular.interactive(),
-            in: .rect(cornerRadius: Design.Radius.control)
-          )
-          .background {
-            if isSelected {
-              selectionGlass()
-            }
+      content
+        .glassEffect(
+          isSelected ? .identity : .regular.interactive(),
+          in: .rect(cornerRadius: Design.Radius.control)
+        )
+        .glassEffectTransition(entry == .materialize ? .materialize : .matchedGeometry)
+        .background {
+          if isSelected {
+            selectionGlass()
           }
-      case .flat:
-        content.background(flatFill, in: .rect(cornerRadius: Design.Radius.control))
-      }
-    }
-
-    private var flatFill: Color {
-      isSelected
-        ? ChipColor.selected.opacity(ChipColor.selectedFill)
-        : ChipColor.idle.opacity(ChipColor.idleFill)
+        }
     }
   }
 

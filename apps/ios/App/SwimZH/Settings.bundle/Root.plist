@@ -23,46 +23,42 @@
 			<key>Type</key>
 			<string>PSMultiValueSpecifier</string>
 			<key>Title</key>
-			<string>Day strip</string>
+			<string>Day strip: new days arrive</string>
 			<key>Key</key>
-			<string>lab.stripStyle</string>
+			<string>lab.stripEntry</string>
 			<key>DefaultValue</key>
-			<string>tint</string>
+			<string>materialize</string>
 			<key>Titles</key>
 			<array>
-				<string>Flat (previous look)</string>
-				<string>Glass, morphing selection</string>
-				<string>Glass, tinted selection (lens on press)</string>
-				<string>Glass, system button style</string>
+				<string>Glass materialises (like a system button)</string>
+				<string>Scale and fade in with the scroll</string>
+				<string>Pop in (previous look)</string>
 			</array>
 			<key>Values</key>
 			<array>
-				<string>flat</string>
-				<string>morph</string>
-				<string>tint</string>
-				<string>button</string>
+				<string>materialize</string>
+				<string>scroll</string>
+				<string>none</string>
 			</array>
 		</dict>
 		<dict>
 			<key>Type</key>
 			<string>PSMultiValueSpecifier</string>
 			<key>Title</key>
-			<string>Bottom bar</string>
+			<string>Filters</string>
 			<key>Key</key>
-			<string>lab.bottomBar</string>
+			<string>lab.filterPlace</string>
 			<key>DefaultValue</key>
-			<string>toolbar</string>
+			<string>accessory</string>
 			<key>Titles</key>
 			<array>
-				<string>Toolbar, list/map segments (previous look)</string>
-				<string>Toolbar, one list/map toggle button</string>
-				<string>Tab bar (sliding lens) + filter pill</string>
+				<string>Pill above the tab bar</string>
+				<string>A tab of its own</string>
 			</array>
 			<key>Values</key>
 			<array>
-				<string>toolbar</string>
-				<string>toggle</string>
-				<string>tabs</string>
+				<string>accessory</string>
+				<string>tab</string>
 			</array>
 		</dict>
 		<dict>

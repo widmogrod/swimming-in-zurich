@@ -5,14 +5,20 @@
 // plan's governing constraint: the app target is outside the CRAP gate and a SwiftUI body
 // cannot be unit-tested at all, so a rule placed here is a rule nothing measures.
 //
-// The iOS 26 adoptions, each with its reason:
-//  * `.searchable` reached from the toolbar (`.searchToolbarBehavior(.minimize)`) — on iPhone
-//    iOS 26 already draws the field at the bottom, so the control shares the system's bar with
-//    the filter button instead of adding a surface. THE ALL-POOLS BROWSER NOW DOES THE SAME.
-//    It used to pin its field open with `navigationBarDrawer(displayMode: .always)` — the very
-//    form a lint bans on this screen for pinning the chrome — so the app searched two different
-//    ways depending on which list you were looking at.
-//  * the filter bar via `safeAreaBar(edge:)` — see `FilterBar.swift`.
+// THE BOTTOM OF THE SCREEN IS A SYSTEM TAB BAR — List, Map, Search — decided 2026-09-06 after
+// three bars were felt side by side. The bar it replaced was a bottom toolbar holding a
+// segmented list/map picker, and the picker drew a flat thumb inside the bar's own glass: glass
+// over glass, and the one control on the screen that did not press or drag like Apple's. A tab
+// bar's selection is the system's own glass lens — it slides, it can be dragged across the
+// tabs, and it minimises as the list scrolls down — and `Tab(role: .search)` turns the bar
+// itself into the search field. The all-pools browser went in the same decision: the list
+// already holds every pool for the day, nearest first.
+//
+// Each tab holds its OWN `NavigationStack`, so a push on one page never moves another, and
+// every stack has the same one `navigationDestination` over `Route`.
+//
+// The iOS 26 adoptions the tab bar did not change, each with its reason:
+//  * the day strip via `safeAreaBar(edge: .top)` on the scrolling view — see `DayStrip.swift`.
 //  * `List`, not `LazyVStack`: not for speed (both are lazy, and 57 rows is noise either way)
 //    but for `.swipeActions` and system row and section styling.
 //  * NO `.refreshable`: since S5 the store CAN be updated, but not by pulling on a list. The
@@ -29,30 +35,16 @@
 import SwiftUI
 import SwimZHKit
 
-/// Everywhere this stack can go.
+/// Everywhere a tab's stack can go.
 ///
 /// ONE route type, and every push is a value of it. The stack used to mix the two: rows pushed a
 /// `String` into a `navigationDestination`, while the browse menu pushed destination VIEWS. That
-/// is not a style difference — `BehaviourTests.testTheBrowserOpensAPoolToo` caught what it does.
-/// Tapping a pool inside the all-pools browser pushed the sheet AND re-activated the menu's
-/// view-based link, so the browser landed back on top of the sheet you had just opened. Mixing
-/// the two forms in one stack is the bug; this enum is the fix.
+/// is not a style difference — a pool tapped inside the old all-pools browser pushed the sheet
+/// AND re-activated the menu's view-based link, so the browser landed back on top of the sheet
+/// you had just opened. Mixing the two forms in one stack is the bug; this enum is the fix.
 enum Route: Hashable {
   case pool(String)
-  case allPools
   case legend
-}
-
-/// The two ways of drawing ONE answer.
-///
-/// A MODE, not a destination: switching does not push, does not change the day, the radius, the
-/// filters or the search, and cannot show a pool the other one hides — both are handed the same
-/// finished `[ListSection]`. That is the whole reason it is a segmented control in the bar
-/// rather than a third entry beside "All pools": a control that stays put and re-renders what is
-/// already on screen is a different promise from one that takes you somewhere.
-enum ViewMode: Hashable {
-  case list
-  case map
 }
 
 struct TodayView: View {
@@ -71,20 +63,17 @@ struct TodayView: View {
   /// an arrival from a rest. See `listReachedTop`.
   @State private var listAtTop = true
 
-  /// List or map. View state: nothing outside this screen has an opinion about it, and it
+  /// The tab bar's pages. `filters` exists only under `Lab.FilterPlace.tab`.
+  enum TabPage: Hashable {
+    case list, map, filters, search
+  }
+  /// Which tab. View state: nothing outside this screen has an opinion about it, and it
   /// deliberately does NOT persist — an app that reopened on the map would be answering a
   /// different question from the one it is for.
-  @State private var mode: ViewMode = .list
-
-  /// `Lab.bottomBar`: which of the three bottom bars this screen wears. See `Lab.BottomBar`.
-  @AppStorage(Lab.bottomBar) private var bottomBar = Lab.BottomBar.default
-
-  /// The tab bar's pages, for the `tabs` variant only. Not `ViewMode`: the tab bar has two
-  /// pages the picker never had (the roster, and search as a tab of its own).
-  enum TabPage: Hashable {
-    case list, map, allPools, search
-  }
   @State private var tab: TabPage = .list
+
+  /// `Lab.filterPlace`: the filter as a pill above the bar, or as a tab of its own.
+  @AppStorage(Lab.filterPlace) private var filterPlace = Lab.FilterPlace.default
 
   /// The reader's text size, for one purpose only: how tall the strip is, which is what sets
   /// the gap between the two thresholds that hide and show it. Read the same way `DayStrip`
@@ -96,7 +85,7 @@ struct TodayView: View {
   }
 
   var body: some View {
-    shell
+    tabShell
       .task {
         await model.load()
         // A fix for a reader who already chose one, and never a prompt — see
@@ -122,39 +111,20 @@ struct TodayView: View {
       }
   }
 
-  /// The screen's frame: one navigation stack with a bottom toolbar, or a tab bar of stacks.
-  @ViewBuilder
-  private var shell: some View {
-    switch bottomBar {
-    case .toolbar, .toggle:
-      stackShell
-    case .tabs:
-      tabShell
-    }
-  }
-
-  private var stackShell: some View {
-    NavigationStack {
-      content
-        // NO NAVIGATION BAR ON THIS SCREEN, and the two halves of that arrived together.
-        //
-        // First the TITLE went: it spelled the day out while the strip underneath drew the
-        // same fact — one thing said twice, costing a row of a phone screen for the copy you
-        // cannot tap. That left a full bar holding one overflow button, and a band of empty
-        // glass above the strip is worse than the title was: it costs the same height and says
-        // nothing at all. So the button went to the bottom bar with the other two controls,
-        // and the bar it was keeping alive went with it. The strip now starts at the top of the
-        // screen, and the rows get the ~50 points back.
-        .toolbarVisibility(.hidden, for: .navigationBar)
-        .navigationDestination(for: Route.self, destination: screen)
-    }
-  }
-
-  /// The `tabs` bar: Find, Map, All pools, Search — each its own stack, so a push on one page
-  /// does not move another. The selection is the tab bar's own glass lens; the filter is the
-  /// bottom accessory above it (the Music mini-player's slot); the bar minimises as the list
-  /// scrolls down, which is the same instinct the day strip's yielding follows.
+  /// The tab bar. The selection is the bar's own glass lens; the search tab turns the bar into
+  /// the field; the bar minimises as the list scrolls down, which is the same instinct the day
+  /// strip's yielding follows. Under `Lab.FilterPlace.accessory` the filter rides above the bar
+  /// as the bottom accessory (the Music mini-player's slot); under `.tab` it is a page.
   private var tabShell: some View {
+    tabs.tabViewBottomAccessory(isEnabled: filterPlace == .accessory) {
+      FilterButton(
+        filters: $model.filters, kinds: model.kinds, location: model.location,
+        onUseMyLocation: { await model.useMyLocation() },
+        onUseNamedPlace: { model.useNamedPlace($0) })
+    }
+  }
+
+  private var tabs: some View {
     TabView(selection: $tab) {
       Tab(value: TabPage.list) {
         NavigationStack { findPage(searchable: false) }
@@ -164,8 +134,12 @@ struct TodayView: View {
       Tab(value: TabPage.map) {
         NavigationStack {
           ready { list, _ in
+            // The SAME sections the list is drawing, pinned by the roster's coordinates. See
+            // `SwimZHKit.poolPins`.
             PoolMapView(pins: poolPins(list.sections, geo: model.geoByPool))
-              // ALWAYS up on the map: there is no scroll there to yield it to.
+              // ALWAYS up on the map: there is no scroll there to yield it to, and a strip
+              // left hidden by the last list scroll would take the day picker away from a
+              // screen that cannot get it back.
               .safeAreaBar(edge: .top) {
                 DayStrip(chips: model.chips, selection: $model.filters.day)
               }
@@ -176,38 +150,55 @@ struct TodayView: View {
       } label: {
         Label(Message("nav.map"), systemImage: Icon.map, localized)
       }
-      Tab(value: TabPage.allPools) {
-        NavigationStack {
-          PoolsBrowser(pools: model.pools)
-            .navigationDestination(for: Route.self, destination: screen)
+      if filterPlace == .tab {
+        Tab(value: TabPage.filters) {
+          FilterPage(
+            filters: $model.filters, kinds: model.kinds, location: model.location,
+            onUseMyLocation: { await model.useMyLocation() },
+            onUseNamedPlace: { model.useNamedPlace($0) })
+        } label: {
+          // The glyph fills when something is narrowed, as the button's does.
+          Label(
+            Message("mobile.filters"),
+            systemImage: model.filters.isNarrowed ? Icon.filterActive : Icon.filter, localized)
         }
-      } label: {
-        Label(Message("nav.allPools"), systemImage: Icon.allPools, localized)
       }
       Tab(value: TabPage.search, role: .search) {
         NavigationStack { findPage(searchable: true) }
       }
     }
     .tabBarMinimizeBehavior(.onScrollDown)
-    .tabViewBottomAccessory {
-      FilterButton(
-        filters: $model.filters, kinds: model.kinds, location: model.location,
-        onUseMyLocation: { await model.useMyLocation() },
-        onUseNamedPlace: { model.useNamedPlace($0) }
-      )
-      .frame(maxWidth: .infinity)
-    }
+    // Selecting the search tab IS the request to search: the bar becomes the field at once,
+    // rather than showing an empty page with a second control to press.
+    .tabViewSearchActivation(.searchTabSelection)
+    // The same feedback the day strip gives for the same kind of act: a selection moved.
     .sensoryFeedback(.selection, trigger: tab)
   }
 
-  /// The find page as a tab: the list under the day strip. The search tab is the same page
-  /// made searchable — with `Tab(role: .search)` the tab bar itself becomes the field.
+  /// The find page: the list under the day strip. The search tab is the same page made
+  /// searchable — with `Tab(role: .search)` the tab bar itself becomes the field, at the
+  /// bottom, under the thumb.
+  ///
+  /// NO NAVIGATION BAR ON THIS PAGE, and the two halves of that arrived together. First the
+  /// TITLE went: it spelled the day out while the strip underneath drew the same fact — one
+  /// thing said twice, costing a row of a phone screen for the copy you cannot tap. That left a
+  /// full bar holding one overflow button, and a band of empty glass above the strip is worse
+  /// than the title was: it costs the same height and says nothing at all. The strip starts at
+  /// the top of the screen, and the rows get the ~50 points back.
   @ViewBuilder
   private func findPage(searchable: Bool) -> some View {
     let page =
       ready { list, metadata in
+        // The strip attaches to the SCROLLING view, never to a wrapper around it: the system
+        // paints its scroll edge effect in response to the scroll view DIRECTLY under the
+        // bar, and a `VStack` whose first child is a static strip gives it nothing to answer.
         listDrawn(list, metadata)
           .safeAreaBar(edge: .top) {
+            // Present only while it is wanted. Reading DOWN the list takes it away and gives
+            // the rows its height; the smallest pull back up returns it, so changing day never
+            // costs a scroll to the top of fifty rows. Whether it shows is
+            // `SwimZHKit.stripShouldShow` — a rule, and a rule in a `body` is one nothing
+            // measures.
             stripIfShown
               .animation(.snappy(duration: 0.22), value: showsStrip)
           }
@@ -215,6 +206,8 @@ struct TodayView: View {
       .toolbarVisibility(.hidden, for: .navigationBar)
       .navigationDestination(for: Route.self, destination: screen)
     if searchable {
+      // ON THE READY PAGE, not on the stack: attached one level up it drew the search field
+      // over the loading state — a field for a list that was not there yet.
       page.searchable(
         text: $model.filters.search,
         prompt: Text(Message("nav.findAPool"), localized))
@@ -223,79 +216,19 @@ struct TodayView: View {
     }
   }
 
-  /// LIST OR MAP, and it is the one control on this screen that is neither a search nor a
-  /// filter.
-  ///
-  /// A segmented picker rather than the single toggling button Maps uses, and the reason is the
-  /// complaint it answers: a button whose glyph changes cannot say whether it shows where you
-  /// are or where you would go. Two segments, one of them lit, says it without a word — and the
-  /// words are there anyway for VoiceOver.
-  @ViewBuilder
-  private var modeControl: some View {
-    switch bottomBar {
-    case .toolbar, .tabs:
-      modePicker
-    case .toggle:
-      modeToggle
-    }
-  }
-
-  /// `Lab.BottomBar.toggle`: ONE button that swaps its glyph, the Maps pattern, so every
-  /// control in the bar is the same kind of glass button with the same press.
-  private var modeToggle: some View {
-    Button {
-      mode = mode == .list ? .map : .list
-    } label: {
-      if mode == .list {
-        Label(Message("nav.map"), systemImage: Icon.map, localized)
-      } else {
-        Label(Message("nav.list"), systemImage: Icon.list, localized)
-      }
-    }
-    .contentTransition(.symbolEffect(.replace))
-    .accessibilityIdentifier("viewMode")
-  }
-
-  private var modePicker: some View {
-    Picker(selection: $mode) {
-      Label(Message("nav.list"), systemImage: Icon.list, localized).tag(ViewMode.list)
-      Label(Message("nav.map"), systemImage: Icon.map, localized).tag(ViewMode.map)
-    } label: {
-      Text(Message("nav.map"), localized)
-    }
-    .pickerStyle(.segmented)
-    .accessibilityIdentifier("viewMode")
-  }
-
-  /// The whole roster, one tap away.
-  ///
-  /// IT HAS MOVED TWICE, and the second move was a mistake this session's own tests measured.
-  /// It began as an overflow-menu item (two taps, and a navigation bar kept alive to hang the
-  /// menu on), became a bottom-bar button, and was then pushed into the END OF THE LIST to make
-  /// room for the list/map picker. That last one read as tidy — the roster is reference, like
-  /// the colour legend beside it — and was wrong for a reason a screenshot cannot show: the
-  /// list is fifty-seven pools long, so "one tap" had become twenty-five swipes and a tap.
-  ///
-  /// What measured it was `BehaviourTests`. Two tests that merely needed to REACH this control
-  /// spent about a minute each scrolling to it, and both became load-dependent — passing alone,
-  /// failing inside a full suite run, because a row still decelerating is a row a tap misses. A
-  /// test that has to work that hard to reach a control is describing the reader's problem.
-  ///
-  /// The bar had room all along: search sits at the leading edge and the picker in the middle,
-  /// so this joins the filter in the trailing group — which is where it was before the picker
-  /// arrived. The colour legend STAYS in the list, because a note about what the colours mean
-  /// genuinely belongs where the colours are.
-  private var allPoolsButton: some View {
-    NavigationLink(value: Route.allPools) {
-      Label(Message("nav.allPools"), systemImage: Icon.allPools, localized)
-    }
-    .accessibilityIdentifier("allPoolsLink")
-  }
-
-  /// Every destination this stack has, in one place. A `switch` over VIEWS, not over sentences
+  /// Every destination a stack has, in one place. A `switch` over VIEWS, not over sentences
   /// — `noStateToStringInTheApp` bans the second, and this is the first.
-  @ViewBuilder
   private func screen(_ route: Route) -> some View {
+    destination(route)
+      // A pushed screen is its own place: the pool screen is a full map with a drawer at the
+      // bottom, and a tab bar (and the filter pill above it) drawn over that drawer is two
+      // bars fighting for the thumb. Photos does the same on a photo. The edge swipe and the
+      // back button are the ways home.
+      .toolbarVisibility(.hidden, for: .tabBar)
+  }
+
+  @ViewBuilder
+  private func destination(_ route: Route) -> some View {
     switch route {
     case .pool(let poolID):
       FacilitySheetLoader(
@@ -314,19 +247,13 @@ struct TodayView: View {
     // A PLAIN push, deliberately: the zoom transition this route had gives the pushed screen
     // a drag-to-dismiss on every downward pan, which hijacked the drawer's own drag and hid
     // the bar while it did (see `PoolPanel`). The plain push keeps the edge swipe.
-    case .allPools:
-      PoolsBrowser(pools: model.pools)
     case .legend:
       AccessTypesView()
     }
   }
 
-  private var content: some View {
-    ready { list, metadata in screen(list, metadata) }
-  }
-
-  /// The three states of the store, with the READY one drawn by the caller — the toolbar
-  /// shell and each tab draw a ready store differently, and the other two states the same.
+  /// The three states of the store, with the READY one drawn by the caller — each tab draws
+  /// a ready store differently, and the other two states the same.
   @ViewBuilder
   private func ready<Drawn: View>(
     @ViewBuilder _ draw: (ListModel, StoreMetadata) -> Drawn
@@ -385,76 +312,6 @@ struct TodayView: View {
     }
   }
 
-  private func screen(_ list: ListModel, _ metadata: StoreMetadata) -> some View {
-    // Both bars attach to the SCROLLING view, never to a wrapper around it. A `VStack` here
-    // was the whole defect: the navigation bar collapses its title, and the system paints its
-    // scroll edge effect — the Liquid Glass — in response to the scroll view DIRECTLY under
-    // it. Given a stack whose first child is a static strip, it has nothing to respond to, so
-    // the title never shrank, neither bar got glass, and the screen opened with a third of
-    // itself already spent.
-    drawn(list, metadata)
-      .safeAreaBar(edge: .top) {
-        // Present only while it is wanted. Reading DOWN the list takes it away and gives the
-        // rows its height; the smallest pull back up returns it, so changing day never costs a
-        // scroll to the top of fifty rows. Whether it shows is `SwimZHKit.stripShouldShow` —
-        // a rule, and a rule in a `body` is one nothing measures.
-        stripIfShown
-          .animation(.snappy(duration: 0.22), value: showsStrip)
-      }
-      // No placement argument, and deliberately so. On iOS 26 the search field ALREADY lives
-      // at the bottom on iPhone — that is the platform's own placement, not something to be
-      // arranged. The two attempts that fought it both added a surface: `.minimize` UNDER a
-      // custom bar of ours, and an `isPresented` binding that left the field resident anyway,
-      // stacked below. What was wrong was the custom bar, not the modifier: with the filter
-      // control moved into the system's own bottom bar, `.minimize` collapses the field into
-      // the same bar. The all-pools browser says exactly this, in the same two modifiers.
-      //
-      // ON THE READY SCREEN, not on the stack: attached one level up it drew the search
-      // control in a bottom bar over the loading state — a search field for a list that was
-      // not there yet, which was the first thing a reader saw of the app.
-      .searchable(
-        text: $model.filters.search,
-        prompt: Text(Message("nav.findAPool"), localized)
-      )
-      // Collapsed to a glyph rather than a resident field. Both were driven and screenshotted:
-      // resident puts a full-width field in the bottom bar for a control most sessions never
-      // use, and neither form changes what happens WHEN you open it — see the toolbar below.
-      .searchToolbarBehavior(.minimize)
-      // The strip is ALWAYS up on the map: there is no scroll there to yield it to, and a
-      // strip left hidden by the last list scroll would take the day picker away from a screen
-      // that cannot get it back.
-      .onChange(of: mode) { _, _ in showsStrip = true }
-      // ONE bottom bar, drawn by the system: the filter control shares its glass with the
-      // search field rather than floating above it. A `safeAreaBar` of our own here is what
-      // produced two stacked surfaces and left rows hidden behind them — the system insets
-      // the scroll view for its own toolbar, and cannot for ours.
-      .animation(.smooth(duration: 0.28), value: mode)
-      // The same feedback the day strip gives for the same kind of act: a selection moved. The
-      // strip has had it since S3b; the mode switch is the second control on this screen that
-      // changes what you are looking at without going anywhere.
-      .sensoryFeedback(.selection, trigger: mode)
-      .toolbar {
-        // THE SEARCH FIELD, PLACED. `.searchToolbarBehavior(.minimize)` says the field is
-        // collapsed; it does not say WHERE, and the answer was the NAVIGATION bar — the field
-        // collapsed into the same top pill as the browse menu, so opening search took that bar
-        // over and the menu went with it. That is the defect a reader reported after every
-        // gate here was green. `DefaultToolbarItem` is what actually moves the system's own
-        // search item down beside the filter, which this file's comments had claimed since S3b.
-        DefaultToolbarItem(kind: .search, placement: .bottomBar)
-        // Spacer BETWEEN them: search at the leading edge, the filter at the trailing one.
-        ToolbarSpacer(.flexible, placement: .bottomBar)
-        ToolbarItem(placement: .bottomBar) { modeControl }
-        ToolbarSpacer(.flexible, placement: .bottomBar)
-        ToolbarItem(placement: .bottomBar) { allPoolsButton }
-        ToolbarItem(placement: .bottomBar) {
-          FilterButton(
-            filters: $model.filters, kinds: model.kinds, location: model.location,
-            onUseMyLocation: { await model.useMyLocation() },
-            onUseNamedPlace: { model.useNamedPlace($0) })
-        }
-      }
-  }
-
   @ViewBuilder
   private var stripIfShown: some View {
     if showsStrip {
@@ -478,24 +335,6 @@ struct TodayView: View {
       scrolled: scrolled, stripHeight: stripHeight, showing: showsStrip)
     guard shows != showsStrip else { return }
     showsStrip = shows
-  }
-
-  /// The answer, in whichever mode is selected.
-  ///
-  /// A `switch` over VIEWS — the same shape `screen(_ route:)` uses, and for the same reason:
-  /// this file maps a state onto a rendering and never onto a sentence.
-  @ViewBuilder
-  private func drawn(_ list: ListModel, _ metadata: StoreMetadata) -> some View {
-    switch mode {
-    case .list:
-      listDrawn(list, metadata)
-        .transition(.opacity)
-    case .map:
-      // The SAME sections the list is drawing, pinned by the roster's coordinates. See
-      // `SwimZHKit.poolPins`.
-      PoolMapView(pins: poolPins(list.sections, geo: model.geoByPool))
-        .transition(.opacity)
-    }
   }
 
   /// The list, reporting its scroll so the strip can yield to it.
@@ -554,7 +393,7 @@ struct TodayView: View {
 
   private func answerList(_ list: ListModel, _ metadata: StoreMetadata) -> some View {
     // The list reserves a top margin for chrome that is no longer resident there — the search
-    // field moved into the toolbar — which left a whole row of empty screen under the day
+    // field lives in the tab bar — which left a whole row of empty screen under the day
     // strip. Reclaimed deliberately, not by nudging paddings until it looked right.
     List {
       // The headline is a FACT, not a control, so it belongs in the content the eye reads
@@ -629,9 +468,7 @@ struct TodayView: View {
       // The ribbon's colour key, reachable from the screen the ribbons are on. It was two taps
       // deep inside an overflow menu — a legend nobody finds is a legend that is not there,
       // and without it the day tail's colours cannot be read at all.
-      // The colour key, at the end of the answer — where the colours are. Its neighbour here
-      // used to be the all-pools link; see `allPoolsButton` for why that one went back to the
-      // bar and this one did not.
+      // The colour key, at the end of the answer — where the colours are.
       NavigationLink(value: Route.legend) {
         Label(Message("nav.accessTypes"), systemImage: Icon.legend, localized)
       }

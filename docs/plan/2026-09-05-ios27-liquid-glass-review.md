@@ -42,7 +42,7 @@ API name above as "check the SDK before writing it".
 | Scroll edge effect hidden on the day strip | `.scrollEdgeEffectHidden(for: .horizontal)` | Follows "edge effects are not decorative" |
 | Bars attach to the scrolling view | lint `filterBarUsesSafeAreaBar` + no `VStack` wrapper | Edge effect and title collapse work |
 | Haptics, numeric roll | `.sensoryFeedback`, `.numericText()` | Good iOS 26 delight, all declarative. The zoom push the pool route had was REMOVED on 2026-09-06: a zoom-pushed screen owns a drag-to-dismiss on every downward pan, which hijacked the drawer's drag and hid the bar (see "The pool screen is a map") |
-| Deployment target | `IPHONEOS_DEPLOYMENT_TARGET = 26.0`, Swift 6 | Nothing blocks iOS 27 APIs behind `#available` |
+| Deployment target | `IPHONEOS_DEPLOYMENT_TARGET = 27.0`, Swift 6 | iOS 27 only, by decision (2026-09-06): no `#available` and no older-OS branches |
 
 ## Findings, ranked by delight per hour
 
@@ -158,8 +158,8 @@ screenshot set was pixel-identical to the new one for exactly that reason.
 
 | Switch | Key | On | Off |
 | --- | --- | --- | --- |
-| Day strip | `lab.stripStyle` (picker) | `morph`: chips in a `GlassEffectContainer`, the selected tint a separate glass view with one `glassEffectID` that morphs chip to chip — but each tap also swaps the tapped chip's own glass off, three glass transitions at once, and the press lens never shows on the selected chip; `tint` (default): one interactive glass per chip always, selection is a tint cross-fade, the lens works; `button`: the system `GlassButtonStyle`, same tint rule | `flat`: tinted chips |
-| Bottom bar | `lab.bottomBar` (picker) | `toggle`: the same toolbar with list/map as ONE glyph-swapping glass button, so every control presses alike; `tabs`: a system `TabView` — Find, Map, All pools, `Tab(role: .search)` — whose selection is the tab bar's own draggable glass lens, the filter as `tabViewBottomAccessory`, `tabBarMinimizeBehavior(.onScrollDown)` | `toolbar`: bottom toolbar with a segmented list/map picker (a flat thumb inside the bar's glass — the one control with no lens) |
+| Day strip | DECIDED 2026-09-06: `morph` | chips in a `GlassEffectContainer`, the selected tint a separate glass view with one `glassEffectID` that morphs chip to chip. Chosen over `flat`, `tint` (one interactive glass per chip, tint cross-fade) and `button` (`GlassButtonStyle`) after all four were felt; a tap no longer centres the tapped chip, and the strip's scroll clip is off so the press lens is not cut. What survived from `button` is behind `lab.stripEntry`: `materialize` (default, the chip's glass uses `.glassEffectTransition(.materialize)` as it scrolls in), `scroll` (a `.scrollTransition` scale-and-fade), `none` | — |
+| Bottom bar | DECIDED 2026-09-06: a system tab bar | `TabView` — List, Map, `Tab(role: .search)` — whose selection is the bar's own draggable glass lens, `tabBarMinimizeBehavior(.onScrollDown)`. Chosen over the bottom toolbar with a segmented list/map picker (a flat thumb inside the bar's glass, the one control with no lens) and a toolbar with a glyph-swapping toggle. The all-pools browser was REMOVED in the same decision: the list already holds every pool for the day. Where the filter lives is `lab.filterPlace`: `accessory` (default, a pill above the bar via `tabViewBottomAccessory`, carrying the filter summary, inline beside the minimised bar) or `tab` (Filters as the third tab, a page not a sheet) | — |
 | Glass map card | `lab.glassCard` | `.glassEffect(.regular.interactive())`, `.materialize` transition, no shadow | `.regularMaterial` + shadow |
 | Symbol motion | `lab.symbolMotion` | heart draws on/off, filter glyph replace + bounce | plain swaps |
 | Links open in | `lab.linkOpener` (picker) | `safari` (default): `SFSafariViewController` full screen, prewarmed; `sheet`: the same as a pull-down page sheet; `web`: SwiftUI `WebView` in the app's own glass bars | `external`: the Safari app |

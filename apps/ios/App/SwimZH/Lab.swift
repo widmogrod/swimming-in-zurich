@@ -14,13 +14,11 @@
 import SwiftUI
 
 enum Lab {
-  /// HOW the day strip's chips are drawn — a PICKER, not a switch, because the question is not
-  /// "glass or flat" but which of three glass behaviours feels right under a finger. See
-  /// `StripStyle`. Read as a `String`, so a test's `-lab.stripStyle flat` needs no retyping.
-  static let stripStyle = "lab.stripStyle"
-  /// HOW the find screen's bottom bar is built. A picker, like `stripStyle`, and for the same
-  /// reason: the press-and-drag feel of the bar is the thing under review. See `BottomBar`.
-  static let bottomBar = "lab.bottomBar"
+  /// HOW a day chip ARRIVES as the strip is scrolled. A picker: see `StripEntry`. Read as a
+  /// `String`, so a test's `-lab.stripEntry none` needs no retyping.
+  static let stripEntry = "lab.stripEntry"
+  /// WHERE the filter control lives around the tab bar. A picker: see `FilterPlace`.
+  static let filterPlace = "lab.filterPlace"
   /// The map's pin card is Liquid Glass rather than a material.
   static let glassCard = "lab.glassCard"
   /// SF Symbol motion: the favourite heart bounces, the filter glyph bounces when narrowed.
@@ -46,9 +44,9 @@ enum Lab {
   // screen). The owner chose the open map as the pool screen itself — see `PoolStage` — so
   // there is no picture left for either switch to compare.
 
-  /// The BOOLEAN switches — the ones `typeLaunchArguments` retypes. `stripStyle` is a string
-  /// and is deliberately not here: `"flat" as NSString).boolValue` is `false`, which would turn
-  /// a named style into a `Bool` no reader ever asked for.
+  /// The BOOLEAN switches — the ones `typeLaunchArguments` retypes. The string pickers are
+  /// deliberately not here: `("none" as NSString).boolValue` is `false`, which would turn a
+  /// named choice into a `Bool` no reader ever asked for.
   static let keys = [glassCard, symbolMotion, keyboardWarmup]
 
   /// A boolean switch, read outside a view — `@AppStorage` is for bodies. Absent means ON,
@@ -92,40 +90,35 @@ enum Lab {
     static let `default`: PoolMapArrival = .afterPush
   }
 
-  /// The three bottom bars. The reader's complaint was that the bar's controls do not press
-  /// and drag like Apple's own in iOS 27: the list/map segmented picker draws a flat thumb
-  /// inside the bar's glass, which is glass over glass and the one control on the screen with
-  /// no lens.
-  ///  * `toolbar` — the bar as shipped: system bottom toolbar, search + segmented picker +
-  ///    two buttons. The default, because every driven test pins this bar's contract.
-  ///  * `toggle` — the same toolbar, but list/map is ONE glass button whose glyph swaps (the
-  ///    Maps pattern). Every control in the bar is then the same kind of button with the same
-  ///    press. Cost: a changing glyph says where you would go, not where you are.
-  ///  * `tabs` — a system tab bar: Find, Map, All pools, and a search tab. The selection is
-  ///    the tab bar's own glass lens, which slides and can be dragged across tabs — Apple's
-  ///    iOS 26/27 interaction exactly. The filter rides above it as the bottom accessory, and
-  ///    the bar minimises as the list scrolls down.
-  enum BottomBar: String, CaseIterable {
-    case toolbar, toggle, tabs
-    static let `default`: BottomBar = .toolbar
+  /// How a chip arrives when the strip is scrolled and a new day comes on screen. DECIDED
+  /// on the same day the day strip's glass was: the morphing selection stays; what the owner
+  /// missed from the discarded system-button variant was the way its glass MATERIALISED as a
+  /// new chip scrolled in — the morph's chips simply popped.
+  ///  * `materialize` — the chip's glass uses the system's materialize transition, the one a
+  ///    `GlassButtonStyle` gets for free: it fades in with the glass ripple. The default. It
+  ///    also governs the tap's own glass swap, so a selection change materialises too.
+  ///  * `scroll` — a scroll transition instead: a chip entering from either edge scales and
+  ///    fades up as it arrives, driven by the scroll itself (the carousel feel of the App Store
+  ///    and Photos). Preferable if the materialise is too subtle or fights the morph.
+  ///  * `none` — chips pop in, as the morph strip did before. The control.
+  enum StripEntry: String, CaseIterable {
+    case materialize, scroll, none
+    static let `default`: StripEntry = .materialize
   }
 
-  /// The four ways the day strip can draw its chips. `flat` is the look the app shipped with;
-  /// the three others are Liquid Glass and differ ONLY in what a tap does, which is the thing
-  /// a reader has to feel rather than read about:
-  ///  * `morph` — the selected tint is its own glass view that flies chip to chip. Every tap
-  ///    also swaps the tapped chip's own glass OFF and the old chip's ON, so three glass
-  ///    transitions run at once. The press lens never shows: the selected chip has no glass.
-  ///  * `tint` — every chip is the SAME interactive glass, always; the selected one is tinted.
-  ///    A tap cross-fades the tint and nothing else. The lens works on every chip, because the
-  ///    glass under the finger never goes away. The default.
-  ///  * `button` — the system's own `GlassButtonStyle`, which is what Apple's bars use. Same
-  ///    tint rule as `tint`. The system decides padding and press feel; the chips come out a
-  ///    little wider than the layout asked for.
-  enum StripStyle: String, CaseIterable {
-    case flat, morph, tint, button
-    static let `default`: StripStyle = .tint
-    var isGlass: Bool { self != .flat }
+  /// Where the filter control sits, now that the find screen's bottom is a system tab bar
+  /// (List, Map, Search) rather than a toolbar. Apple's own apps put a control like this in one
+  /// of two places, and which one FEELS right is the question:
+  ///  * `accessory` — a pill ABOVE the tab bar, the slot Music's mini-player uses
+  ///    (`tabViewBottomAccessory`). Always one tap away on every tab; it carries the current
+  ///    filter summary, and collapses beside the minimised bar as the list scrolls. The
+  ///    default: the filters are the answer's context, and context rides with the bar.
+  ///  * `tab` — Filters is a TAB of its own, a page rather than a sheet: List, Map, Filters,
+  ///    Search. The bar is pure and every control in it is a tab; the glyph fills when
+  ///    something is narrowed. Preferable if the pill reads as clutter over the list.
+  enum FilterPlace: String, CaseIterable {
+    case accessory, tab
+    static let `default`: FilterPlace = .accessory
   }
 
   /// The four places a pool's web page can open. `external` is what the app shipped with:

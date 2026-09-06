@@ -37,7 +37,7 @@
 		1A000000000000000000051 /* RibbonCanvas.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A000000000000000000050 /* RibbonCanvas.swift */; };
 		1A000000000000000000053 /* LaneGanttView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A000000000000000000052 /* LaneGanttView.swift */; };
 		1A000000000000000000055 /* FacilitySheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A000000000000000000054 /* FacilitySheet.swift */; };
-		1A000000000000000000057 /* PoolsBrowser.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A000000000000000000056 /* PoolsBrowser.swift */; };
+		1A000000000000000000057 /* FacilitySheetLoader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A000000000000000000056 /* FacilitySheetLoader.swift */; };
 		1A000000000000000000059 /* AccessTypesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A000000000000000000058 /* AccessTypesView.swift */; };
 		1A000000000000000000062 /* BehaviourTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A000000000000000000061 /* BehaviourTests.swift */; };
 		1A0000000000000000000B1 /* Lab.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A0000000000000000000B0 /* Lab.swift */; };
@@ -101,7 +101,7 @@
 		1A000000000000000000050 /* RibbonCanvas.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RibbonCanvas.swift; sourceTree = "<group>"; };
 		1A000000000000000000052 /* LaneGanttView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LaneGanttView.swift; sourceTree = "<group>"; };
 		1A000000000000000000054 /* FacilitySheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FacilitySheet.swift; sourceTree = "<group>"; };
-		1A000000000000000000056 /* PoolsBrowser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PoolsBrowser.swift; sourceTree = "<group>"; };
+		1A000000000000000000056 /* FacilitySheetLoader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FacilitySheetLoader.swift; sourceTree = "<group>"; };
 		1A000000000000000000058 /* AccessTypesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccessTypesView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -180,7 +180,7 @@
 				1A000000000000000000050 /* RibbonCanvas.swift */,
 				1A000000000000000000052 /* LaneGanttView.swift */,
 				1A000000000000000000054 /* FacilitySheet.swift */,
-				1A000000000000000000056 /* PoolsBrowser.swift */,
+				1A000000000000000000056 /* FacilitySheetLoader.swift */,
 				1A000000000000000000058 /* AccessTypesView.swift */,
 			);
 			path = SwimZH;
@@ -396,7 +396,7 @@
 				1A000000000000000000051 /* RibbonCanvas.swift in Sources */,
 				1A000000000000000000053 /* LaneGanttView.swift in Sources */,
 				1A000000000000000000055 /* FacilitySheet.swift in Sources */,
-				1A000000000000000000057 /* PoolsBrowser.swift in Sources */,
+				1A000000000000000000057 /* FacilitySheetLoader.swift in Sources */,
 				1A000000000000000000059 /* AccessTypesView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -451,7 +451,7 @@
 				ENABLE_TESTABILITY = YES;
 				GCC_NO_COMMON_BLOCKS = YES;
 				GCC_OPTIMIZATION_LEVEL = 0;
-				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 27.0;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				ONLY_ACTIVE_ARCH = YES;
 				SDKROOT = iphoneos;
@@ -472,7 +472,7 @@
 				ENABLE_NS_ASSERTIONS = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				GCC_NO_COMMON_BLOCKS = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 27.0;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				SDKROOT = iphoneos;
 				SWIFT_COMPILATION_MODE = wholemodule;

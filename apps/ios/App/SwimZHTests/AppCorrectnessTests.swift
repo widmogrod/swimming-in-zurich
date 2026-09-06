@@ -117,20 +117,20 @@ struct LabSwitchTests {
     #expect(AppStorage(wrappedValue: true, Lab.symbolMotion).wrappedValue == true)
   }
 
-  @Test("a `-lab.stripStyle flat` launch argument reaches @AppStorage as the named style")
-  func launchArgumentPicksAStripStyle() {
-    // A STRING key, and deliberately not retyped: `("flat" as NSString).boolValue` is `false`,
-    // so had `stripStyle` been in `Lab.keys` every named style would have read as a Bool.
+  @Test("a `-lab.stripEntry none` launch argument reaches @AppStorage as the named choice")
+  func launchArgumentPicksAStripEntry() {
+    // A STRING key, and deliberately not retyped: `("none" as NSString).boolValue` is `false`,
+    // so had `stripEntry` been in `Lab.keys` every named choice would have read as a Bool.
     let defaults = UserDefaults.standard
     let before = defaults.volatileDomain(forName: UserDefaults.argumentDomain)
     defer { defaults.setVolatileDomain(before, forName: UserDefaults.argumentDomain) }
     var arguments = before
-    arguments[Lab.stripStyle] = "flat"
+    arguments[Lab.stripEntry] = "none"
     defaults.setVolatileDomain(arguments, forName: UserDefaults.argumentDomain)
     Lab.typeLaunchArguments(in: defaults)
     #expect(
-      AppStorage(wrappedValue: Lab.StripStyle.default, Lab.stripStyle).wrappedValue == .flat)
-    #expect(Lab.StripStyle.default.isGlass)
-    #expect(!Lab.keys.contains(Lab.stripStyle))
+      AppStorage(wrappedValue: Lab.StripEntry.default, Lab.stripEntry).wrappedValue == .none)
+    #expect(!Lab.keys.contains(Lab.stripEntry))
+    #expect(!Lab.keys.contains(Lab.filterPlace))
   }
 }

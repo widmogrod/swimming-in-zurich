@@ -70,12 +70,12 @@ final class BehaviourTests: XCTestCase {
   /// the moment it moved into the list itself: a `List` is lazy, so an off-screen row is not in
   /// the hierarchy at all and `.exists` is false on a screen that is plainly showing. The mode
   /// picker is in the toolbar, which is always resident.
-  private var onTheFindScreen: XCUIElement { find("viewMode") }
+  private var onTheFindScreen: XCUIElement { app.tabBars.firstMatch }
 
-  /// The two segments of that picker. A `Picker` gives its options no identifiers of their own,
-  /// so they are reached by position — and the ORDER is the contract: list first, map second.
+  /// The tabs of that bar. A `Tab` label is a sentence in the running language, so they are
+  /// reached by position — and the ORDER is the contract: list first, map second.
   private func modeSegment(_ index: Int) -> XCUIElement {
-    app.segmentedControls.firstMatch.buttons.element(boundBy: index)
+    app.tabBars.firstMatch.buttons.element(boundBy: index)
   }
 
   /// The search control the system draws for us. It is NOT ours, so it has no identifier of
@@ -115,13 +115,14 @@ final class BehaviourTests: XCTestCase {
       "the search field opened in the top half — it is collapsing into the navigation bar again")
 
     // The system's own control, so it is found by ITS label rather than one of our catalog's —
-    // the one place in this file where a label is the right query.
-    let close = app.buttons.matching(NSPredicate(format: "label == %@", "close")).firstMatch
+    // the one place in this file where a label is the right query. Case-insensitively: the
+    // toolbar's field said "close", the search tab's field says "Close".
+    let close = app.buttons.matching(NSPredicate(format: "label ==[c] %@", "close")).firstMatch
     XCTAssertTrue(close.waitForExistence(timeout: 5), "search has no visible way out")
     close.tap()
     XCTAssertTrue(
       onTheFindScreen.waitForExistence(timeout: 8),
-      "closing search did not give the navigation bar back")
+      "closing search did not give the tab bar back")
   }
 
   func testTypingInSearchNarrowsTheList() {
@@ -272,34 +273,25 @@ final class BehaviourTests: XCTestCase {
     XCTAssertTrue(find("dayStrip").exists, "the day strip is not on the find screen")
   }
 
-  func testTheDayStripSelectsADayInEveryStripStyle() throws {
-    // `Lab.stripStyle` defaults to one glass style, so every other test here drives that one.
-    // This one relaunches with EACH of the other styles — the flat chips the app shipped
-    // before and the two other glass behaviours — and proves each still selects: a chip is a
-    // button, and the chosen one carries `.isSelected`.
-    for style in ["flat", "morph", "button"] {
-      try selectsADay(stripStyle: style)
+  func testTheDayStripSelectsADayUnderEveryEntryEffect() throws {
+    // `Lab.stripEntry` defaults to one arrival effect, so every other test here drives that
+    // one. This one relaunches with each of the others and proves a chip still selects under
+    // it: a chip is a button, and the chosen one carries `.isSelected`.
+    for entry in ["scroll", "none"] {
+      try selectsADay(stripEntry: entry)
     }
   }
 
-  func testTheOtherBottomBarsStillSwitchToTheMapAndOpenTheFilters() {
-    // `Lab.bottomBar` defaults to the toolbar every other test drives. The two alternatives
-    // must still do the bar's two jobs: switch to the map, and open the filters.
-    for bar in ["toggle", "tabs"] {
-      app.terminate()
-      relaunch(withLab: "lab.bottomBar", value: bar)
-      if bar == "tabs" {
-        // The tab bar's second tab; list-then-map is the order `tabShell` declares.
-        app.tabBars.firstMatch.buttons.element(boundBy: 1).tap()
-      } else {
-        find("viewMode").tap()
-      }
-      XCTAssertTrue(find("poolMap").waitForExistence(timeout: 10), "\(bar): no map after switching")
-      XCTAssertTrue(find("dayStrip").exists, "\(bar): the map took the day strip away")
-      find("filterButton").tap()
-      let measureFrom = find("measureFrom")
-      XCTAssertTrue(measureFrom.waitForExistence(timeout: 5), "\(bar): the filters never opened")
-    }
+  func testTheFilterTabOpensTheFiltersToo() {
+    // `Lab.filterPlace` defaults to the pill above the bar, which every other test drives.
+    // Under `tab` the filters are the third tab, and the form must be the same one.
+    app.terminate()
+    relaunch(withLab: "lab.filterPlace", value: "tab")
+    modeSegment(2).tap()
+    XCTAssertTrue(
+      find("measureFrom").waitForExistence(timeout: 5), "the filter tab shows no filter form")
+    modeSegment(0).tap()
+    XCTAssertTrue(find("poolRow").waitForExistence(timeout: 10), "no way back to the list")
   }
 
   /// Relaunch with one Lab key set — replacing, not appending, an earlier value of the same
@@ -314,9 +306,9 @@ final class BehaviourTests: XCTestCase {
       find("poolRow").waitForExistence(timeout: 30), "the list never showed a pool row")
   }
 
-  private func selectsADay(stripStyle: String) throws {
+  private func selectsADay(stripEntry: String) throws {
     app.terminate()
-    relaunch(withLab: "lab.stripStyle", value: stripStyle)
+    relaunch(withLab: "lab.stripEntry", value: stripEntry)
 
     let strip = find("dayStrip")
     XCTAssertTrue(strip.waitForExistence(timeout: 5), "the day strip is not on the find screen")
@@ -346,35 +338,24 @@ final class BehaviourTests: XCTestCase {
     XCTAssertFalse(chip(previousLabel).isSelected, "the previous chip is still selected too")
   }
 
-  // MARK: - The two screens that filter
+  // MARK: - The filter pill
 
-  func testTheFilterButtonOpensASheetOnBothScreens() {
+  func testTheFilterPillOpensTheSheetFromTheListAndTheMap() {
+    // The pill rides ABOVE the tab bar, on every tab: one tap to the same sheet from the list
+    // and from the map, and Done gives the screen back.
     find("filterButton").tap()
     XCTAssertTrue(
-      app.navigationBars.buttons.firstMatch.waitForExistence(timeout: 5),
-      "the filter sheet did not open on the find screen")
+      find("measureFrom").waitForExistence(timeout: 5),
+      "the filter pill did not open the sheet on the list")
     app.navigationBars.buttons.firstMatch.tap()
+    XCTAssertTrue(waitForDisappearance(of: find("measureFrom")), "Done did not close the sheet")
 
-    openAllPools()
-    // The BROWSER's own row first. This assertion used to be the filter button alone — which
-    // exists on both screens, so the test went on passing for a whole run in which
-    // `openAllPools` was tapping the glass bar and never leaving the find screen. An assertion
-    // that cannot tell the two screens apart is not testing the sentence it claims to.
+    modeSegment(1).tap()
+    XCTAssertTrue(find("poolMap").waitForExistence(timeout: 10), "the map never appeared")
+    find("filterButton").tap()
     XCTAssertTrue(
-      find("browserRow").waitForExistence(timeout: 10), "the browser never opened")
-    XCTAssertTrue(
-      find("filterButton").waitForExistence(timeout: 5),
-      "the all-pools browser has no filter button in the same place")
-  }
-
-  func testTheBrowserOpensAPoolToo() {
-    openAllPools()
-    let row = find("browserRow")
-    XCTAssertTrue(row.waitForExistence(timeout: 10), "the browser listed nothing")
-    row.tap()
-    XCTAssertTrue(
-      waitForDisappearance(of: find("browserRow")),
-      "a browser row did not push the pool's sheet")
+      find("measureFrom").waitForExistence(timeout: 5),
+      "the filter pill did not open the sheet on the map")
   }
 
   func testTheColourLegendIsReachableFromTheList() {
@@ -688,19 +669,6 @@ final class BehaviourTests: XCTestCase {
   }
 
   // MARK: - Helpers
-
-  /// The whole roster, in one tap from the bottom bar.
-  ///
-  /// IT USED TO SCROLL, and the reason it no longer does is worth keeping. When the link lived
-  /// at the end of the fifty-seven-row list, this helper had to swipe to the row BELOW it —
-  /// stopping the moment `allPoolsLink` merely entered the hierarchy left it at the very bottom
-  /// edge, under the floating bar, so the tap landed on glass and the browser never opened.
-  /// That helper took about fifty-five seconds per test and was load-dependent, which is what
-  /// measured the real defect: the control was twenty-five swipes from the reader too. It went
-  /// back to the toolbar, and this went back to a tap.
-  private func openAllPools() {
-    find("allPoolsLink").tap()
-  }
 
   /// Swipe until the element is in the hierarchy, or give up. A lazy `List` does not build a
   /// row it is not showing, so "scroll to it" is the only way to assert anything about one.

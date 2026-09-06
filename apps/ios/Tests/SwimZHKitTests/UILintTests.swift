@@ -246,7 +246,8 @@ struct UILintTests {
     let sheet = try #require(try Self.appFiles().first { $0.name == "FacilitySheet.swift" })
     #expect(Self.code(sheet.text).contains("live: live"), "the sheet drops the live reading")
 
-    let loader = try #require(try Self.appFiles().first { $0.name == "PoolsBrowser.swift" })
+    let loader = try #require(
+      try Self.appFiles().first { $0.name == "FacilitySheetLoader.swift" })
     let code = Self.code(loader.text)
     #expect(code.contains("await live(detail?.baditickerPOIID)"), "nothing fetches a reading")
     // The age is a fact about the clock, so the sheet must re-ask while it is open and on
@@ -828,27 +829,27 @@ struct UILintTests {
     }
   }
 
-  @Test("both lists of pools reach search and filters the same way")
-  func theTwoListsShareOneIdiom() throws {
-    // They push the same destination and answer the same question about the same roster. One
-    // pinned its search field and hung its filter off a top-bar MENU while the other reached
-    // search from the bar and opened a filter SHEET — wearing the same glyph for both.
-    for name in ["TodayView.swift", "PoolsBrowser.swift"] {
-      let file = try #require(try Self.appFiles().first { $0.name == name })
-      let code = Self.code(file.text)
-      #expect(code.contains(".searchToolbarBehavior(.minimize)"), "\(name): search is resident")
-      #expect(
-        code.contains("ToolbarItem(placement: .bottomBar)"),
-        "\(name): the filter control is not in the system's bottom bar")
-      // AND THE SEARCH FIELD IS ACTUALLY DOWN THERE WITH IT. `.minimize` says the field is
-      // collapsed, not where: without this item it collapses into the NAVIGATION bar, next to
-      // the browse menu, and opening search takes that bar over so the menu disappears. Every
-      // comment in both files claimed the two shared one bar while they did not — which is
-      // exactly the class of claim a lint has to carry, because prose cannot be run.
-      #expect(
-        code.contains("DefaultToolbarItem(kind: .search, placement: .bottomBar)"),
-        "\(name): search collapses into the top bar, not the bar the filter is in")
-    }
+  @Test("the find screen's bottom is the system tab bar, with search as a tab")
+  func theFindScreenIsATabBar() throws {
+    // DECIDED 2026-09-06 after three bars were felt on a phone. The bottom toolbar's segmented
+    // list/map picker drew a flat thumb inside the bar's glass — glass over glass, the one
+    // control that did not press or drag like Apple's. A tab bar's selection is the system's
+    // own lens, and `Tab(role: .search)` turns the bar itself into the field, so nothing here
+    // arranges a search control any more.
+    let file = try #require(try Self.appFiles().first { $0.name == "TodayView.swift" })
+    let code = Self.code(file.text)
+    #expect(code.contains("TabView(selection:"), "the find screen is not a tab bar")
+    #expect(code.contains("role: .search)"), "search is not a tab of the bar")
+    #expect(
+      code.contains(".tabBarMinimizeBehavior(.onScrollDown)"),
+      "the bar no longer minimises as the list scrolls")
+    #expect(
+      code.contains(".tabViewBottomAccessory("),
+      "the filter control has left the bar's accessory slot")
+    // ...and the old bar is not being rebuilt beside it.
+    #expect(!code.contains("ToolbarItem(placement: .bottomBar)"), "a bottom toolbar is back")
+    #expect(!code.contains(".pickerStyle(.segmented)"), "the segmented list/map picker is back")
+    #expect(!code.contains(".searchToolbarBehavior("), "search is being placed by hand again")
   }
 
   @Test("every screen's title is inline")
@@ -987,19 +988,10 @@ struct UILintTests {
     #expect(
       !code.contains("displayMode: .always"),
       "`.always` pins the search field open; the default yields it on scroll")
-    // Search is REACHED, not resident. `.searchToolbarBehavior(.minimize)` did that, but on a
-    // screen that already owns a bottom bar it added a SECOND stacked bottom surface. The
-    // property that matters is that the field is presented on demand and the control lives in
-    // the bar the thumb is already near — so the lint checks that, not a modifier name.
-    #expect(
-      code.contains(".searchToolbarBehavior(.minimize)"),
-      "the search field is reached from the toolbar, never resident in a row of its own")
-    // ONE bottom bar, and it is the system's. Two custom attempts stacked a second surface
-    // under the field iOS 26 already draws at the bottom; the filter control is a toolbar
-    // item now, so it shares that bar and the system insets the list for both.
-    #expect(
-      code.contains("ToolbarItem(placement: .bottomBar)"),
-      "the filter control shares the system's bottom bar with the search field")
+    // Search is REACHED, not resident: it is a TAB of the system's bar, and the bar itself
+    // becomes the field on demand (`theFindScreenIsATabBar` pins the bar). ONE bottom bar,
+    // and it is the system's: two custom attempts stacked a second surface under the field
+    // iOS 26 already draws at the bottom, so the filter control rides the bar's own accessory.
     #expect(
       !code.contains(".safeAreaBar(edge: .bottom)"),
       "a bar of our own at the bottom stacks under the system's search field")

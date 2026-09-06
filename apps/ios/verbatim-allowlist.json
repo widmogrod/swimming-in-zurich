@@ -60,11 +60,6 @@
       "reason": "(b) an axis tick — HH:MM off the store's own clock values"
     },
     {
-      "file": "PoolsBrowser.swift",
-      "expression": "pool.name",
-      "reason": "(a) the pool's own name, a proper noun"
-    },
-    {
       "file": "PoolRowView.swift",
       "expression": "accessibilityLabel",
       "reason": "(c) four clauses each localised, then joined as a visual list by Wording.joined"
