@@ -432,3 +432,76 @@ the pool has one; the address, phone and website rows repeat the buttons, push t
   lockers, rentals, lanes, **where (address/phone/website) second to last**, source.
 - `PanelDetent.peek` 0.36 → 0.42, pinned by the driven test's geometry check that the action
   captions are not clipped at the smallest rest.
+
+### Pull to check for newer data (2026-09-06, night)
+
+"Pull to update: first fetch the latest manifest and show me whether the data is up to date and
+when it was updated, any staleness; when the manifest does not match the app's state, download."
+
+The S5 rule was **no `.refreshable`**: the store is republished weekly, so a pull would spin and,
+six days in seven, change nothing — a gesture that usually does nothing teaches distrust. The
+rule is kept in its real form: the pull exists only where it can **always answer**.
+
+- `SwimZHKit/DataStatus.swift` — `dataCheck(after: RefreshOutcome)` folds every outcome into one
+  of four sentences: **up to date** (`.notNewer`), **newer data installed** (`.installed`),
+  **update the app for newer data** (`.schemaMismatch`), **could not check** (everything else —
+  offline is the common case and is worded as a state, not an error). `SourceFreshness` decodes
+  the store's own `meta.source_freshness` (the lake's silver headers); `staleSources` picks the
+  ones the build could not refresh. `Format.instant/storeInstant/storeInstantDay` render the
+  ISO stamps (Python's microseconds are dropped before parsing — Foundation takes 0 or 3 digits).
+- `TodayModel.checkForUpdates` is the pull: **never throttled** (the reader asked), records
+  `dataStatus = (check, checkedAt)`, reloads on install. The automatic launch/foreground
+  `refreshStore` now runs through the same path, still throttled to once an hour, so the data
+  rows are filled in quietly without a pull. `canCheckForUpdates` is "a manifest URL is
+  configured"; the seam (`host`, `manifestURL`, `fetcher`) is injectable, the transport is still
+  named only in the kit (`SourceLintTests.noNetworkOutsideTheSeam` holds).
+- `TodayView` — `.refreshable` sits behind `PullToCheck(enabled:)`: **no manifest URL, no
+  gesture** (the only pull that could exist would say "could not check" forever). The data
+  section under the answer gains: **Updated** (`built_at`, date + time), the check row
+  (sentence + time of the check, `dataCheck`), and one muted row per stale source
+  ("Prices: not refreshed since 30 August 2026", `staleSource`). The footer says "pull down to
+  check" only when the pull exists. `UILintTests.listAndNoFakeRefresh` now pins exactly one
+  `.refreshable`, behind the gate, with its answer rendered.
+- Catalog: ten keys in all five languages (`meta.builtAt`, `meta.check.*`, `meta.staleSource`,
+  `meta.offlineNote.pull`, `sources.roster/schedules/lanePlans`); iOS catalog regenerated.
+- Tests: `DataStatusTests` (kit), `TodayModelPullTests` (app-hosted, a real `StoreHost` in a
+  scratch directory with a counting stub fetcher: install + sentence + time, up to date,
+  offline, and the throttle that the pull bypasses).
+
+**The URL is set** (same night): the base `Info.plist` names
+`https://widmogrod.github.io/swimming-in-zurich/manifest.json`, which is what `publish-store.yml`
+already publishes; `AppCorrectnessTests.theManifestIsConfigured` pins https + our host (it used
+to pin the opposite). Note the committed fixture store is BUILT LATER than the published one, so
+a pull on a dev build says "up to date" until the workflow publishes again — the `built_at >`
+rule doing its job. `-swimzh.autoCheck NO` (launch argument) turns only the automatic check off,
+so `BehaviourTests.testPullingTheListChecksForNewerDataAndSaysWhatItFound` can prove the row is
+the PULL's.
+
+Considered and not done: comparing `content_hash` instead of `built_at` (a same-facts republish
+would then say "up to date" rather than download; it needs the manifest to carry the hash — an
+additive field — and a rollback publish would then be followed, which `built_at >` refuses).
+Worth doing the day the cadence is daily.
+
+### The About screen (2026-09-06, night)
+
+"An About screen: who built the app, what state the pool database is in, how to contribute —
+a link to GitHub."
+
+- `App/SwimZH/AboutView.swift`, pushed as `Route.about` from a new **About SwimZH** row at the
+  end of the list's data section (beside the colour legend). Four sections:
+  1. the app — display name and `Version {version} ({build})`, both read from the bundle;
+  2. **Pool data** — `{count} pools in Zürich` (a plural, so fr/it needed `many`), data from /
+     answers through / updated, one row **per source** (`sources.roster` … `lanePlans`) saying
+     `fetched {date}` or, muted, `kept from {date} — the site could not be reached`, the same
+     `dataCheck` row the pull fills, and a **Check for newer data** button (progress while it
+     runs, `TodayModel.isChecking`) for the reader who never pulls;
+  3. **Made by** — `NSHumanReadableCopyright` from the base `Info.plist` (`© 2026 Gabriel
+     Habryn`): a name lives in data, never as a literal, which is also what keeps
+     `UILintTests.noSentencesInTheApp` honest;
+  4. **Contribute** — three `Link`s (repository, issues, the city's pool pages) that open in the
+     in-app sheet through the root `openURL` seam, and a footer inviting fixes, missing pools and
+     translations.
+- Sixteen catalog keys (`nav.about`, `about.*`) in five languages; `AboutLinks` holds the URLs.
+- `BehaviourTests.testTheAboutScreenSaysWhoWhatAndHow` drives it: reachable from the list, the
+  count and provenance rows exist, the repository link is there, and tapping the button produces
+  the check row (launched with the automatic check off, so the row is provably the button's).

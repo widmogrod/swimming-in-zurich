@@ -1063,15 +1063,22 @@ struct UILintTests {
     #expect(!code.contains("ScrollViewReader"))
   }
 
-  @Test("the list is a `List`, and nothing pretends to refresh a bundled store")
+  @Test("the list is a `List`, and a pull exists only where it can answer")
   func listAndNoFakeRefresh() throws {
     let view = try #require(try Self.appFiles().first { $0.name == "TodayView.swift" })
     let code = Self.code(view.text)
     #expect(code.contains("List {"), "the rows must be a List — .swipeActions needs one")
     #expect(!code.contains("LazyVStack"))
-    // The store is bundle-only until S5. A pull-to-refresh would spin and change nothing,
-    // which is a lie told with an animation.
-    #expect(!code.contains(".refreshable"))
+    // Until 2026-09-06 this asserted NO `.refreshable` at all: the store is republished weekly,
+    // and a pull that spins and changes nothing is a lie told with an animation. The pull now
+    // exists, on two conditions this keeps: it is attached ONLY behind `PullToCheck`'s
+    // `enabled` gate (no manifest URL, no gesture), and it always reports what it found
+    // (`dataStatus`), so it never spins in silence.
+    let sites = code.ranges(of: ".refreshable").count
+    #expect(sites == 1, "expected exactly one `.refreshable`, behind PullToCheck; found \(sites)")
+    #expect(code.contains("if enabled {\n      content.refreshable"), "the pull lost its gate")
+    #expect(code.contains("PullToCheck(enabled: model.canCheckForUpdates)"))
+    #expect(code.contains("model.dataStatus.check"), "the pull's answer is no longer rendered")
   }
 
   // MARK: - Acceptance 5: List laziness, structurally

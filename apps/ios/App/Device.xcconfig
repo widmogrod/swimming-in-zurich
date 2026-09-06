@@ -14,4 +14,13 @@
 //
 // The `[sdk=iphoneos*]` conditions keep the simulator unsigned even on that developer's Mac.
 
+// THE DEFAULTS LIVE HERE, NOT IN THE PROJECT FILE, and the order matters. A build setting
+// written on a target in `project.pbxproj` beats every xcconfig, so a `CODE_SIGNING_ALLOWED =
+// NO` on the target would win over Local.xcconfig's `[sdk=iphoneos*] = YES` and the device
+// build would ship unsigned — "The executable is not codesigned" at install (seen 2026-09-06).
+// In an xcconfig the LAST assignment wins, so the include comes after the defaults.
+CODE_SIGNING_ALLOWED = NO
+CODE_SIGNING_REQUIRED = NO
+CODE_SIGN_IDENTITY =
+
 #include? "Local.xcconfig"

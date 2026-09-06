@@ -281,9 +281,23 @@ def test_the_project_needs_no_signing_identity() -> None:
     assert "CODE_SIGN_STYLE" not in project, (
         "automatic signing needs an account; the chain signs nothing"
     )
+    # The "sign nothing" defaults live in Device.xcconfig, NOT on the targets: a setting written
+    # on a target beats every xcconfig, so a target-level `CODE_SIGNING_ALLOWED = NO` would also
+    # beat the developer's git-ignored Local.xcconfig and the device build would install
+    # unsigned. Every signable configuration bases on that xcconfig instead.
+    for setting in ("CODE_SIGNING_ALLOWED", "CODE_SIGNING_REQUIRED", "CODE_SIGN_IDENTITY"):
+        assert setting not in project, f"`{setting}` on a target overrides Device.xcconfig"
     signable = 6  # app, unit tests, UI tests — Debug and Release each
-    for setting in ("CODE_SIGNING_ALLOWED = NO;", "CODE_SIGNING_REQUIRED = NO;"):
-        assert project.count(setting) == signable, (
-            f"expected `{setting}` in all {signable} signable build configurations"
-        )
-    assert project.count('CODE_SIGN_IDENTITY = "";') == signable
+    assert project.count("baseConfigurationReference = ") == signable
+    assert project.count("/* Device.xcconfig */;") == signable
+    xcconfig = (REPO_ROOT / "apps/ios/App/Device.xcconfig").read_text(encoding="utf-8")
+    body = "\n".join(line for line in xcconfig.splitlines() if not line.startswith("//"))
+    for setting in (
+        "CODE_SIGNING_ALLOWED = NO",
+        "CODE_SIGNING_REQUIRED = NO",
+        "CODE_SIGN_IDENTITY =",
+    ):
+        assert setting in body, f"Device.xcconfig lost its default `{setting}`"
+    assert body.index("CODE_SIGNING_ALLOWED = NO") < body.index('#include? "Local.xcconfig"'), (
+        "the include must come AFTER the defaults — in an xcconfig the last assignment wins"
+    )

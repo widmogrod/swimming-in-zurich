@@ -49,6 +49,9 @@ final class BehaviourTests: XCTestCase {
   /// rather than imported: the UI test target links no app code, so this is the one place the
   /// two have to agree by hand, and `LocationSourceKeyTests` in the package asserts they do.
   private let locationPreferenceKey = "swimzh.useMyLocation"
+  /// `TodayModel.automaticCheckKey` — the app process's constant, spelled here because a UI
+  /// test cannot import the app.
+  private let automaticCheckKey = "swimzh.autoCheck"
 
   /// One element by identifier, whatever SwiftUI decided to call its type.
   ///
@@ -331,6 +334,57 @@ final class BehaviourTests: XCTestCase {
     XCTAssertTrue(
       waitFor { chip(nextLabel).isSelected }, "tapping the next chip did not select it")
     XCTAssertFalse(chip(previousLabel).isSelected, "the previous chip is still selected too")
+  }
+
+  func testPullingTheListChecksForNewerDataAndSaysWhatItFound() {
+    // The pull's contract: it ALWAYS answers. The app is launched with the automatic check
+    // off, so the check row under the answer is absent until the reader pulls — which is what
+    // makes its appearance the pull's doing and not the launch's. Which sentence it says
+    // (up to date, newer data installed, could not check) depends on the runner's network and
+    // on what is published; the claim here is that a sentence and a time appear at all.
+    app.terminate()
+    app.launchArguments += ["-\(automaticCheckKey)", "NO"]
+    app.launch()
+    XCTAssertTrue(find("poolRow").waitForExistence(timeout: 10), "no list to pull on")
+    let check = find("dataCheck")
+    XCTAssertTrue(scrollTo(find("legendLink")), "the data section was not reachable")
+    XCTAssertFalse(check.exists, "the check row was there before anyone pulled")
+    // Back to the TOP — the headline, not merely the first pool row: a drag on a list that is
+    // still scrolled down only scrolls it, and the first attempt at this test proved exactly
+    // that with a screenshot.
+    let headline = find("headline")
+    for _ in 0..<25 where !headline.isHittable { app.swipeDown() }
+    XCTAssertTrue(headline.isHittable, "could not scroll the list back to its top")
+
+    // From the MIDDLE of the list, not its top edge: the day strip rides the top safe-area
+    // bar, and a drag that begins under it lands on the strip's own horizontal scroller.
+    let list = app.collectionViews.firstMatch
+    let start = list.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.45))
+    let end = list.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.98))
+    start.press(forDuration: 0.3, thenDragTo: end, withVelocity: .slow, thenHoldForDuration: 0.5)
+
+    XCTAssertTrue(scrollTo(check), "pulling the list produced no check row")
+    XCTAssertTrue(
+      check.waitForExistence(timeout: 20), "the pull spun and said nothing")
+  }
+
+  func testTheAboutScreenSaysWhoWhatAndHow() {
+    // Who made it, what state the pool data is in, how to help — and a BUTTON that checks for
+    // newer data and reports, for the reader who never pulls. Launched with the automatic
+    // check off so the check row is provably the button's.
+    app.terminate()
+    app.launchArguments += ["-\(automaticCheckKey)", "NO"]
+    app.launch()
+    XCTAssertTrue(scrollTo(find("aboutLink")), "the About link is not reachable from the list")
+    find("aboutLink").tap()
+    XCTAssertTrue(find("aboutPoolCount").waitForExistence(timeout: 5), "no pool count")
+    XCTAssertTrue(find("freshSource").exists, "no per-source provenance rows")
+    XCTAssertTrue(scrollTo(find("aboutRepository")), "no way to the source code")
+    XCTAssertFalse(find("dataCheck").exists, "a check row before any check")
+    let button = find("checkNow")
+    XCTAssertTrue(scrollTo(button), "no check button")
+    button.tap()
+    XCTAssertTrue(find("dataCheck").waitForExistence(timeout: 20), "the button said nothing")
   }
 
   func testTheColourLegendIsReachableFromTheList() {

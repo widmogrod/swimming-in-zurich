@@ -21,10 +21,15 @@
 //  * the day strip via `safeAreaBar(edge: .top)` on the scrolling view — see `DayStrip.swift`.
 //  * `List`, not `LazyVStack`: not for speed (both are lazy, and 57 rows is noise either way)
 //    but for `.swipeActions` and system row and section styling.
-//  * NO `.refreshable`: since S5 the store CAN be updated, but not by pulling on a list. The
-//    published store changes weekly and the check runs at launch and on foreground; a
-//    pull-to-refresh would spin for a second and, on all but one day in seven, change nothing.
-//    A gesture that usually does nothing is a gesture that teaches the reader to distrust it.
+//  * `.refreshable` ONLY when a manifest URL is configured, and it ALWAYS answers. The first
+//    S5 cut refused the gesture outright: the store changes weekly, so a pull would spin and,
+//    on six days in seven, change nothing — and a gesture that usually does nothing teaches
+//    the reader to distrust it. Decided 2026-09-06: the pull is worth having when it SAYS
+//    something every time. It fetches the manifest and then the data section reports one of
+//    four sentences (up to date / updated / could not check / update the app), the time of the
+//    check, when the store was built, and any source the build could not refresh. An app with
+//    no manifest URL gets no pull at all, because that pull could only ever say "could not
+//    check". The automatic launch/foreground check fills the same rows, silently.
 //
 // Every sentence on this screen is a `Message` from the package, rendered by the one
 // `Localized` in the environment (see `Localization.swift`). There is not a single
@@ -45,6 +50,7 @@ import SwimZHKit
 enum Route: Hashable {
   case pool(String)
   case legend
+  case about
 }
 
 struct TodayView: View {
@@ -288,6 +294,11 @@ struct TodayView: View {
     // the bar while it did (see `PoolPanel`). The plain push keeps the edge swipe.
     case .legend:
       AccessTypesView()
+    case .about:
+      AboutView(
+        poolCount: model.pools.count, metadata: model.metadata, status: model.dataStatus,
+        canCheck: model.canCheckForUpdates, isChecking: model.isChecking,
+        check: { await model.checkForUpdates() })
     }
   }
 
@@ -445,6 +456,7 @@ struct TodayView: View {
         // whose leading token is one. It costs nothing on the branches with no number in them.
         .contentTransition(.numericText())
         .animation(.snappy(duration: 0.3), value: list.day)
+        .accessibilityIdentifier("headline")
         .listRowSeparator(.hidden)
         .listRowBackground(Color.clear)
         .listRowInsets(
@@ -475,6 +487,7 @@ struct TodayView: View {
       }
       provenance(metadata)
     }
+    .modifier(PullToCheck(enabled: model.canCheckForUpdates) { await model.checkForUpdates() })
     .listStyle(.insetGrouped)
     // Inset-grouped sections default to about forty points of air between them. On a screen
     // whose whole job is a ranked list of six tiers, that is a row of pools spent on gaps.
@@ -504,6 +517,38 @@ struct TodayView: View {
       // should be. An absent stamp means no row, not an empty one.
       stampRow(metadata.goldValidAsOf, label: "meta.dataFrom")
       stampRow(metadata.horizonEnd, label: "meta.answersThrough")
+      // When the store in use was BUILT — the "when was it updated" a pull is asked for. An
+      // instant, not a day key, so it goes through `storeInstant`; still shown as itself if
+      // a store ever writes a stamp that is not one.
+      if !metadata.builtAt.isEmpty {
+        LabeledContent(
+          content: { Text(verbatim: localized.format.storeInstant(metadata.builtAt)) },
+          label: { Text(Message("meta.builtAt"), localized) })
+      }
+      // What the last check for a newer store found, and when. Nothing until one has run.
+      if let check = model.dataStatus.check, let checkedAt = model.dataStatus.checkedAt {
+        LabeledContent(
+          content: { Text(verbatim: localized.format.dateTime(checkedAt)) },
+          label: { Text(check.message, localized) }
+        )
+        .accessibilityIdentifier("dataCheck")
+      }
+      // Every source the build kept from an earlier run because it could not reach the site.
+      // One row each, named: a reader told "prices: not refreshed since 30 August" can allow
+      // for it; a reader told nothing cannot.
+      ForEach(staleSources(metadata), id: \.source) { stale in
+        Text(
+          Message(
+            "meta.staleSource",
+            [
+              "source": localized(stale.name),
+              "date": localized.format.storeInstantDay(stale.fetchedAt),
+            ]),
+          localized
+        )
+        .foregroundStyle(.secondary)
+        .accessibilityIdentifier("staleSource")
+      }
       // The ribbon's colour key, reachable from the screen the ribbons are on. It was two taps
       // deep inside an overflow menu — a legend nobody finds is a legend that is not there,
       // and without it the day tail's colours cannot be read at all.
@@ -512,8 +557,17 @@ struct TodayView: View {
         Label(Message("nav.accessTypes"), systemImage: Icon.legend, localized)
       }
       .accessibilityIdentifier("legendLink")
+      // Who made this, what state the data is in, and how to help — one screen, at the end.
+      NavigationLink(value: Route.about) {
+        Label(Message("nav.about"), systemImage: Icon.about, localized)
+      }
+      .accessibilityIdentifier("aboutLink")
     } footer: {
-      Text(Message("meta.offlineNote"), localized)
+      if model.canCheckForUpdates {
+        Text(Message("meta.offlineNote.pull"), localized)
+      } else {
+        Text(Message("meta.offlineNote"), localized)
+      }
     }
   }
 
@@ -527,6 +581,22 @@ struct TodayView: View {
     }
   }
 
+}
+
+/// The pull, attached only when it can answer. SwiftUI has no "refreshable if", and a
+/// `.refreshable` that runs a no-op is exactly the gesture the header refuses — so the
+/// modifier is applied or not, and the DECISION (`canCheckForUpdates`) is the model's.
+private struct PullToCheck: ViewModifier {
+  let enabled: Bool
+  let check: @Sendable () async -> Void
+
+  func body(content: Content) -> some View {
+    if enabled {
+      content.refreshable { await check() }
+    } else {
+      content
+    }
+  }
 }
 
 // S2's `TodayView.statusLabel` is GONE, deliberately.

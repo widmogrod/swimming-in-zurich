@@ -82,7 +82,10 @@ declared rendered that the phone structurally could not render.
 **The crowd/occupancy badge.** The source does not exist and its integration is deferred on legal
 grounds (`data/sources.md`), so the client renders **no row** — a permanent "unavailable" would imply
 a source that is merely down. **The refresh path** is complete and tested but **inert**: no manifest
-URL is configured, because hosting was out of scope.
+URL is configured, because hosting was out of scope. Since 2026-09-06 the list also offers a
+pull-to-check — the reader's own, unthrottled refresh that always reports what it found (up to date
+/ newer data installed / could not check / update the app), when the store was built, and any
+source the build kept stale — but the pull, too, appears only once that URL is set.
 
 ## Not verified
 
@@ -95,6 +98,6 @@ per-body timing, device launch under 1 s, and the live-water row on screen in an
 1. Seed **2027** into `data/calendar/zurich.yaml` — 269 of the first export's 400 days already fall
    outside `known_years`, and ship warned.
 2. Eyeball the `CA92.1` privacy reason in a browser (documentation-verified, not human-verified).
-3. Host `manifest.json` + the store, and set `SWIMZHStoreManifestURL`.
+3. ~~Host `manifest.json` + the store, and set `SWIMZHStoreManifestURL`.~~ Done 2026-09-06: `publish-store.yml` publishes to GitHub Pages and the base `Info.plist` names that manifest.
 4. Have a native speaker read the Polish and German catalogs.
 5. Look at the app on a real device.

@@ -231,3 +231,127 @@ final class HeldFix: LocationFixing {
     fixedAt = nil
   }
 }
+
+// MARK: - The pull
+
+/// Serves fixed bytes per URL, or fails, and counts what it was asked — so a test can tell a
+/// pull that fetched from a throttled check that did not. An actor rather than a struct because
+/// the count is written from the model's task and read from the test.
+private actor CountingFetcher: HTTPFetching {
+  var bodies: [String: Data]
+  var failing: Bool
+  private(set) var calls = 0
+
+  init(bodies: [String: Data] = [:], failing: Bool = false) {
+    self.bodies = bodies
+    self.failing = failing
+  }
+
+  func data(from url: URL) async throws -> Data {
+    calls += 1
+    if failing { throw URLError(.notConnectedToInternet) }
+    guard let body = bodies[url.absoluteString] else { throw URLError(.fileDoesNotExist) }
+    return body
+  }
+}
+
+@Suite("TodayModel's check for newer data")
+@MainActor
+struct TodayModelPullTests {
+  static let manifestURL = URL(string: "https://example.test/manifest.json")!
+  static let storeURL = URL(string: "https://example.test/ios.sqlite")!
+
+  private func scratchHost() throws -> (StoreHost, URL) {
+    let directory = FileManager.default.temporaryDirectory
+      .appending(path: "swimzh-pull-\(UUID().uuidString)")
+    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    return (try StoreHost.standard(directory: directory), directory)
+  }
+
+  /// A manifest describing the BUNDLED store's own bytes as the published one, stamped
+  /// `builtAt`. The download then passes every validation with no SQLite surgery here; what
+  /// varies between tests is only the stamp, which is what the decision reads.
+  private func manifest(for host: StoreHost, builtAt: String) async throws -> Data {
+    let path = await host.bundledPath
+    let size = try #require(path.resourceValues(forKeys: [.fileSizeKey]).fileSize)
+    let manifest = StoreManifest(
+      schemaVersion: appStoreSchemaVersion, builtAt: builtAt, horizonEnd: "2099-12-31",
+      url: Self.storeURL.absoluteString, sha256: try DownloadedStore.digest(of: path),
+      bytes: size)
+    return try JSONEncoder().encode(manifest)
+  }
+
+  @Test("no manifest URL, no pull; a URL, a pull")
+  func thePullExistsOnlyWhenItCanAnswer() {
+    #expect(!TodayModel(manifestURL: nil).canCheckForUpdates)
+    #expect(TodayModel(manifestURL: Self.manifestURL).canCheckForUpdates)
+  }
+
+  @Test("a pull that finds a newer store installs it and says so, with the time")
+  func aPullInstallsANewerStore() async throws {
+    let (host, directory) = try scratchHost()
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let current = try await host.store().metadata()
+    let fetcher = CountingFetcher(bodies: [
+      Self.manifestURL.absoluteString: try await manifest(
+        for: host, builtAt: "2099-01-01T00:00:00+01:00"),
+      Self.storeURL.absoluteString: try Data(contentsOf: await host.bundledPath),
+    ])
+    let model = TodayModel(host: host, manifestURL: Self.manifestURL, fetcher: fetcher)
+    let now = try #require(
+      ZurichClock.instant(day: current.horizonStart, at: TimeOfDay(hour: 12, minute: 0)))
+    await model.load(now: now)
+    #expect(model.dataStatus == .unchecked, "nothing is claimed before a check has run")
+
+    await model.checkForUpdates(now: now)
+
+    #expect(model.dataStatus == DataStatus(check: .updated, checkedAt: now))
+    #expect(FileManager.default.fileExists(atPath: await host.installedPath.path))
+    guard case .ready = model.state else {
+      Issue.record("the model did not come back ready after the swap: \(model.state)")
+      return
+    }
+    #expect(await fetcher.calls == 2, "the manifest and the store, once each")
+  }
+
+  @Test("a pull that finds the same store says up to date, and one offline says it could not check")
+  func aPullReportsWhatItFound() async throws {
+    let (host, directory) = try scratchHost()
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let current = try await host.store().metadata()
+    let same = CountingFetcher(bodies: [
+      Self.manifestURL.absoluteString: try await manifest(for: host, builtAt: current.builtAt)
+    ])
+    let model = TodayModel(host: host, manifestURL: Self.manifestURL, fetcher: same)
+    let now = Date()
+    await model.load(now: now)
+
+    await model.checkForUpdates(now: now)
+    #expect(model.dataStatus == DataStatus(check: .upToDate, checkedAt: now))
+    #expect(!FileManager.default.fileExists(atPath: await host.installedPath.path))
+
+    let offline = TodayModel(
+      host: host, manifestURL: Self.manifestURL, fetcher: CountingFetcher(failing: true))
+    await offline.load(now: now)
+    await offline.checkForUpdates(now: now)
+    #expect(offline.dataStatus == DataStatus(check: .couldNotCheck, checkedAt: now))
+  }
+
+  @Test("the automatic check is throttled to once an hour; the reader's pull is not")
+  func thePullIsNeverThrottled() async throws {
+    let (host, directory) = try scratchHost()
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let fetcher = CountingFetcher(failing: true)
+    let model = TodayModel(host: host, manifestURL: Self.manifestURL, fetcher: fetcher)
+    let now = Date()
+    await model.load(now: now)
+
+    await model.refreshStore(now: now)
+    await model.refreshStore(now: now.addingTimeInterval(60))
+    #expect(await fetcher.calls == 1, "a second automatic check a minute later reached the network")
+
+    await model.checkForUpdates(now: now.addingTimeInterval(120))
+    #expect(await fetcher.calls == 2, "the reader's own pull was throttled")
+    #expect(model.dataStatus.checkedAt == now.addingTimeInterval(120))
+  }
+}

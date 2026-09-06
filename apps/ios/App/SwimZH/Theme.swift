@@ -118,6 +118,12 @@ enum Icon {
   static let browse = "ellipsis.circle"
   /// The colour legend — an explanation, not a question.
   static let legend = "info.circle"
+  static let about = "figure.pool.swim"
+  static let repository = "chevron.left.forwardslash.chevron.right"
+  static let issue = "exclamationmark.bubble"
+  static let city = "building.columns"
+  static let author = "person"
+  static let checkNow = "arrow.clockwise"
   static let favourite = "heart"
   static let unfavourite = "heart.slash"
   static let favouriteMark = "heart.fill"

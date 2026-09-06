@@ -39,10 +39,38 @@ final class TodayModel {
 
   /// `location` is defaulted so no call site changes; a test passes a double that can hold a
   /// fix open across the reader's second tap. See `LocationFixing`.
-  init(localized: Localized = .current, location: (any LocationFixing)? = nil) {
+  ///
+  /// `host`, `manifestURL` and `fetcher` are the store-refresh seam, defaulted to the app's:
+  /// the bundled store in Application Support, the manifest URL from `Info.plist`, and the
+  /// kit's own transport (named nowhere in this target — `nil` lets `StoreHost.refresh` supply
+  /// its default). A test hands in a scratch host, a fixed URL and a stub.
+  init(
+    localized: Localized = .current, location: (any LocationFixing)? = nil,
+    host: StoreHost? = nil,
+    manifestURL: URL? = RefreshConfiguration.manifestURL(Bundle.main.infoDictionary),
+    fetcher: (any HTTPFetching)? = nil
+  ) {
     self.localized = localized
     self.location = location ?? LocationSource()
+    self.host = host
+    self.manifestURL = manifestURL
+    self.fetcher = fetcher
   }
+
+  /// Where the release manifest is published, if anywhere. Nil means the app never reaches the
+  /// network for a store — and the list offers no pull, because a pull that cannot check
+  /// anything is the do-nothing gesture `TodayView`'s header refuses.
+  private let manifestURL: URL?
+  private let fetcher: (any HTTPFetching)?
+
+  var canCheckForUpdates: Bool { manifestURL != nil }
+
+  /// What the last check for a newer store concluded, and when. Rendered under the answer;
+  /// `.unchecked` until a check has run, so nothing is claimed before it is known.
+  private(set) var dataStatus: DataStatus = .unchecked
+  /// Whether a check is in flight — the About screen's button shows progress from it. The
+  /// pull has the list's own spinner and does not read it.
+  private(set) var isChecking = false
 
   private static let log = Logger(subsystem: "ch.swimzh.app", category: "store")
 
@@ -70,7 +98,7 @@ final class TodayModel {
   }
 
   private var store: Store?
-  private var metadata: StoreMetadata?
+  private(set) var metadata: StoreMetadata?
   /// Owns the connection and the swap. NOT a `Store` any more: the store in use may be the
   /// bundled one or a downloaded one, and only one type may decide which — see `StoreHost`.
   private var host: StoreHost?
@@ -420,10 +448,37 @@ final class TodayModel {
   /// manifest is worth acting on, whether a downloaded file may be trusted, and the order of
   /// the swap. This method sequences; it decides nothing.
   func refreshStore(now: Date = Date()) async {
-    guard let host, shouldRefreshStore(lastAttempt: lastRefreshAttempt, now: now) else { return }
+    guard Self.automaticCheckEnabled, shouldRefreshStore(lastAttempt: lastRefreshAttempt, now: now)
+    else { return }
+    await checkForUpdates(now: now)
+  }
+
+  /// `-swimzh.autoCheck NO` as a launch argument turns the AUTOMATIC check off — the reader's
+  /// pull is untouched. Exists for one reason: a driven test that pulls the list has to be able
+  /// to tell the pull's answer from the launch check's, and the two are otherwise the same row.
+  /// The same shape as `LocationSource.preferredKey`; a shipped app never sets it.
+  static let automaticCheckKey = "swimzh.autoCheck"
+  private static var automaticCheckEnabled: Bool {
+    UserDefaults.standard.object(forKey: automaticCheckKey) == nil
+      || UserDefaults.standard.bool(forKey: automaticCheckKey)
+  }
+
+  /// The reader's own check — the pull. Never throttled: they asked, so the manifest is
+  /// fetched now, and what it says is shown (`dataStatus`) rather than only logged. The
+  /// automatic check shares this path, so the row under the answer is filled in by launch and
+  /// foreground too, quietly.
+  func checkForUpdates(now: Date = Date()) async {
+    guard let host, !isChecking else { return }
     lastRefreshAttempt = now
-    let outcome = await host.refresh(
-      manifestURL: RefreshConfiguration.manifestURL(Bundle.main.infoDictionary), now: now)
+    isChecking = true
+    defer { isChecking = false }
+    let outcome: RefreshOutcome
+    if let fetcher {
+      outcome = await host.refresh(manifestURL: manifestURL, fetcher: fetcher, now: now)
+    } else {
+      outcome = await host.refresh(manifestURL: manifestURL, now: now)
+    }
+    dataStatus = DataStatus(check: dataCheck(after: outcome), checkedAt: now)
     switch outcome {
     case .skipped(let reason):
       // Logged, not shown. An operator debugging a botched upload needs the reason; a swimmer

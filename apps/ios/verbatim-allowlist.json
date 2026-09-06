@@ -105,6 +105,16 @@
       "reason": "(b) a `meta` date key formatted for the reader; `stampRow` omits the whole row when the store carries no stamp"
     },
     {
+      "file": "TodayView.swift",
+      "expression": "localized.format.storeInstant(metadata.builtAt)",
+      "reason": "(b) `meta.built_at` formatted for the reader; the row is omitted when the store carries no stamp"
+    },
+    {
+      "file": "TodayView.swift",
+      "expression": "localized.format.dateTime(checkedAt)",
+      "reason": "(b) the time of the last manifest check, a Date the model recorded, formatted"
+    },
+    {
       "file": "PoolMapView.swift",
       "expression": "pin.name",
       "reason": "(a) the pool's own name, on its map pin and on the card the pin raises"
@@ -148,6 +158,31 @@
       "file": "PoolHeader.swift",
       "expression": "plan.link.basinName",
       "reason": "(a) a basin's name is the pool's own word for it (\"Sprungbecken\"), the menu item for its lane plan"
+    },
+    {
+      "file": "AboutView.swift",
+      "expression": "appName",
+      "reason": "(a) the bundle's display name, a proper noun from Info.plist"
+    },
+    {
+      "file": "AboutView.swift",
+      "expression": "localized.format.storeInstant(metadata.builtAt)",
+      "reason": "(b) `meta.built_at` formatted for the reader"
+    },
+    {
+      "file": "AboutView.swift",
+      "expression": "localized.format.dateTime(checkedAt)",
+      "reason": "(b) the time of the last manifest check, formatted"
+    },
+    {
+      "file": "AboutView.swift",
+      "expression": "localized.format.storeDate(key)",
+      "reason": "(b) a `meta` date key formatted for the reader; the row is omitted when empty"
+    },
+    {
+      "file": "AboutView.swift",
+      "expression": "copyright",
+      "reason": "(a) NSHumanReadableCopyright from Info.plist — a name and a year, never translated"
     }
   ]
 }

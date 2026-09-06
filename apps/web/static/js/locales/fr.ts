@@ -140,6 +140,9 @@ export const fr = {
   "sources.official": "Page officielle",
   "sources.lanePlan": "Plan des lignes",
   "sources.prices": "Tarifs",
+  "sources.roster": "Liste des piscines",
+  "sources.schedules": "Horaires",
+  "sources.lanePlans": "Plans des couloirs",
   "sources.pdf": "PDF",
   "sources.pdfLabel": "{label} PDF",
   "sources.chipAria": "{name} — ouvre {host} dans un nouvel onglet",
@@ -555,6 +558,38 @@ export const fr = {
   "meta.answersThrough": "Réponses jusqu’au",
   "meta.offlineNote":
     "Fonctionne hors ligne. Tout ici a été calculé avant la publication de l’app.",
+  "meta.builtAt": "Mis à jour le",
+  "meta.check.upToDate": "À jour",
+  "meta.check.updated": "Données plus récentes installées",
+  "meta.check.couldNotCheck":
+    "Impossible de vérifier les données plus récentes",
+  "meta.check.appUpdateNeeded":
+    "Mettez à jour l’app pour des données plus récentes",
+  "meta.staleSource": "{source} : non actualisé depuis le {date}",
+  "meta.offlineNote.pull":
+    "Fonctionne hors ligne. Tirez vers le bas pour chercher des données plus récentes.",
+  "nav.about": "À propos de SwimZH",
+  "about.title": "À propos",
+  "about.version": "Version {version} ({build})",
+  "about.data": "Données des piscines",
+  "about.poolCount": {
+    one: "{count} piscine à Zurich",
+    many: "{count} piscines à Zurich",
+    other: "{count} piscines à Zurich",
+  },
+  "about.source.fresh": "récupéré le {date}",
+  "about.source.stale": "conservé du {date} — le site était injoignable",
+  "about.checkNow": "Chercher des données plus récentes",
+  "about.checking": "Vérification…",
+  "about.dataNote":
+    "Chaque horaire, tarif et plan des couloirs vient des pages de la ville et est reconstruit environ une fois par semaine.",
+  "about.madeBy": "Réalisé par",
+  "about.contribute": "Contribuer",
+  "about.repository": "Code source sur GitHub",
+  "about.issues": "Signaler un problème",
+  "about.dataSource": "Pages des piscines de la Ville de Zurich",
+  "about.contributeNote":
+    "SwimZH est open source. Corrections, piscines manquantes et meilleures traductions sont les bienvenues.",
   "action.favourite": "Ajouter aux favoris",
   "action.unfavourite": "Retirer des favoris",
   "action.showLanePlan": "Afficher le plan des couloirs",
