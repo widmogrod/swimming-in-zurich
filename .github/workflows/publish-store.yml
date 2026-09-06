@@ -32,11 +32,34 @@ jobs:
       - name: Sync environment
         run: uv sync
 
-      # NETWORK-DEPENDENT and the slowest step here: WFS roster + every page scraper. The build
-      # is atomic — any provider failure aborts non-zero and nothing downstream runs, which is
-      # exactly what we want before an App Store submission.
+      # Step 0 of the pipeline, not a CI trick: the previous publish's SILVER (our per-source
+      # typed facts, exported beside the store below) is this run's input. GitHub is only the
+      # host it happens to sit on — `swimzh lake pull` takes any directory or http base, and a
+      # laptop does the same against a local folder. Best-effort and loud: an absent or
+      # unreachable origin makes this a first run (every source must fetch), which the build
+      # itself then reports. The runner's disk is otherwise empty every time.
+      - name: Pull the previous silver into the lake
+        run: uv run python -m swimzh.cli lake pull "${IOS_STORE_URL%/*}/lake"
+        env:
+          IOS_STORE_URL: ${{ vars.IOS_STORE_URL }}
+
+      # NETWORK-DEPENDENT and the slowest step here: WFS roster + every page scraper. Each
+      # source runs through the refresh policy (`etl/refresh`): a source that is down keeps
+      # last time's silver — marked STALE, within that source's `max_stale` — and the build
+      # exits 2 so the log says so; a source that will not parse, or is too old to trust,
+      # still aborts non-zero with the prior store content-unchanged. Exit 2 is a SHIPPABLE
+      # store whose manifest names what is old, so it is accepted here on purpose.
       - name: Build the gold store
-        run: uv run python -m swimzh.cli build --db gold.sqlite
+        run: |
+          set +e
+          uv run python -m swimzh.cli build --db gold.sqlite --lake .lake
+          code=$?
+          set -e
+          if [ "$code" = "2" ]; then
+            echo "::warning::built on STALE silver for at least one source (see the 'sources:' line above)"
+            exit 0
+          fi
+          exit "$code"
 
       # Projects gold into the pre-resolved iOS store AND writes manifest.json, whose `url`
       # field is IOS_STORE_URL. That URL must be where `pages` below publishes it, or an

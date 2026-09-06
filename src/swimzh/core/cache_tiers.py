@@ -57,6 +57,11 @@ class CachePolicy:
 
     tier: CacheTier
     ttl_s: int
+    #: How old a KEPT silver payload may be before a run refuses to build on it (the silver
+    #: layer's `stale_if_transient`): past this, an unreachable source aborts the build exactly
+    #: as it did before the lake existed. `0` means "never serve stale" (the live tier). This is
+    #: OUR policy, per source, in the one table — not a runtime's cron.
+    max_stale_s: int = 0
 
 
 #: The fallback for a source with no entry in the table (and for an unstamped request).
@@ -65,12 +70,12 @@ DEFAULT_POLICY: Final = CachePolicy(tier=DEFAULT_TIER, ttl_s=DEFAULT_TTL_S)
 #: The per-source policy table — the single place these TTLs are decided.
 CACHE_POLICIES: Final[dict[str, CachePolicy]] = {
     # static: the WFS roster, the discovered page set, the tariff page.
-    "geo_sport": CachePolicy(STATIC, 14 * _DAY_S),
-    "page_provider": CachePolicy(STATIC, 7 * _DAY_S),
-    "price_scraper": CachePolicy(STATIC, 7 * _DAY_S),
+    "geo_sport": CachePolicy(STATIC, 14 * _DAY_S, max_stale_s=90 * _DAY_S),
+    "page_provider": CachePolicy(STATIC, 7 * _DAY_S, max_stale_s=30 * _DAY_S),
+    "price_scraper": CachePolicy(STATIC, 7 * _DAY_S, max_stale_s=30 * _DAY_S),
     # snapshot: lane plans (Belegungsplan PDFs) and the scraped timetables.
-    "belegungsplan": CachePolicy(SNAPSHOT, 3 * _DAY_S),
-    "schedule_scraper": CachePolicy(SNAPSHOT, 12 * _HOUR_S),
+    "belegungsplan": CachePolicy(SNAPSHOT, 3 * _DAY_S, max_stale_s=21 * _DAY_S),
+    "schedule_scraper": CachePolicy(SNAPSHOT, 12 * _HOUR_S, max_stale_s=14 * _DAY_S),
     # live: water temperatures / open-closed, worth having only while fresh.
     "baditicker": CachePolicy(LIVE, 2 * _MINUTE_S),
 }

@@ -19,6 +19,8 @@ blob lives solely on ``pool.facility_doc``.
 from __future__ import annotations
 
 import sqlite3
+from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -28,7 +30,22 @@ from swimzh.domain.geo import GeoPoint
 from swimzh.domain.models import Facility, PoolId
 from swimzh.storage import calendar_codec, codec
 from swimzh.storage.codec import _KIND_FROM
+from swimzh.storage.lake import SILVER_SOURCES, SilverHeader, SilverStatus
 from swimzh.storage.rows import PoolSpine
+
+
+@dataclass(frozen=True, slots=True)
+class SourceFreshness:
+    """One `source_freshness` row: a silver header plus the build that composed from it."""
+
+    header: SilverHeader
+    built_at: datetime
+
+    @property
+    def age_days(self) -> float:
+        """How old the source's facts were AT BUILD TIME, in days."""
+        return (self.built_at - self.header.fetched_at).total_seconds() / 86400.0
+
 
 # The identity spine (`pool` + `pool_alias` + `pool_xref`) alongside the singleton `calendar`
 # row. All `CREATE TABLE IF NOT EXISTS`, so an existing store gains the spine additively.
@@ -63,6 +80,13 @@ CREATE TABLE IF NOT EXISTS calendar (
     id            TEXT PRIMARY KEY,
     doc           TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS source_freshness (
+    source      TEXT PRIMARY KEY,
+    fetched_at  TEXT NOT NULL,
+    status      TEXT NOT NULL,
+    content_sha TEXT NOT NULL,
+    built_at    TEXT NOT NULL
+) STRICT;
 """
 
 _CALENDAR_ROW_ID = "singleton"
@@ -200,6 +224,55 @@ def write_calendar(conn: sqlite3.Connection, calendar: ZurichCalendar) -> None:
         (_CALENDAR_ROW_ID, calendar_codec.dumps(calendar)),
     )
     conn.commit()
+
+
+def write_source_freshness(
+    conn: sqlite3.Connection, headers: tuple[SilverHeader, ...], *, built_at: datetime
+) -> None:
+    """Persist the per-source provenance this build composed from (full replace).
+
+    One row per silver source: when its facts were fetched and whether this build kept them
+    STALE. This is what lets `/health` and the iOS manifest say "hours from 08-31" instead of
+    stamping every fact with the build time.
+    """
+    conn.execute("DELETE FROM source_freshness")
+    conn.executemany(
+        "INSERT INTO source_freshness (source, fetched_at, status, content_sha, built_at) "
+        "VALUES (?, ?, ?, ?, ?)",
+        [
+            (
+                h.source,
+                h.fetched_at.isoformat(),
+                h.status.value,
+                h.content_sha,
+                built_at.isoformat(),
+            )
+            for h in headers
+        ],
+    )
+    conn.commit()
+
+
+def load_source_freshness(conn: sqlite3.Connection) -> tuple[SourceFreshness, ...]:
+    """Every source's provenance row, in `SILVER_SOURCES` order; empty on a pre-lake store."""
+    cursor = conn.execute(
+        "SELECT source, fetched_at, status, content_sha, built_at FROM source_freshness"
+    )
+    by_source = {
+        str(row[0]): SourceFreshness(
+            header=SilverHeader(
+                source=str(row[0]),
+                fetched_at=datetime.fromisoformat(str(row[1])),
+                status=SilverStatus(str(row[2])),
+                content_sha=str(row[3]),
+            ),
+            built_at=datetime.fromisoformat(str(row[4])),
+        )
+        for row in cursor.fetchall()
+    }
+    ordered = [by_source[s] for s in SILVER_SOURCES if s in by_source]
+    ordered.extend(v for k, v in sorted(by_source.items()) if k not in SILVER_SOURCES)
+    return tuple(ordered)
 
 
 def load_calendar(conn: sqlite3.Connection) -> ZurichCalendar:

@@ -392,7 +392,7 @@ def test_the_two_unparseable_operator_pages_are_excluded_by_id() -> None:
 
 def test_an_excluded_operator_page_is_not_even_fetched_so_it_cannot_fail() -> None:
     """Excluded means excluded, not "fetched and tolerated": no extract AND no `ScrapeFailure`.
-    A tolerated failure would still abort the build (`cli._compose_schedules` aborts on the first
+    A tolerated failure would still abort the build (`cli._fetch_schedules` aborts on the first
     entry in `failures`), so a test that only asserted "no extract" would assert nothing."""
     catalog = (
         _entry("seebad-enge", "Seebad Enge", PoolKind.LAKE, "https://www.tonttu.ch/"),

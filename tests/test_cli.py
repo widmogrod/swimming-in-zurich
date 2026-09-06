@@ -11,14 +11,17 @@ from dataclasses import replace
 from datetime import date, datetime, time, timedelta
 from decimal import Decimal
 from pathlib import Path
+from typing import Any
 from zoneinfo import ZoneInfo
 
 import httpx
 import pytest
 
 from swimzh.build.compose import ScrapedAspects, compose
+from swimzh.build.reconcile import resolve_all
 from swimzh.cli import (
     CACHE_ENV_VAR,
+    EXIT_BUILT_STALE,
     CacheModeError,
     ProviderClients,
     build,
@@ -50,15 +53,17 @@ from swimzh.domain.models import BasinId, Facility, PoolKind, reconstruct_pool_i
 from swimzh.domain.pricing import PriceCategory, PriceEntry, PriceTable
 from swimzh.domain.resolver import resolve_basin
 from swimzh.domain.schedule import ClosedDay, OpenDay, Weather
-from swimzh.etl.build import build_store
 from swimzh.etl.scrape import ScrapeReport, declared_sources, shared_sources
+from swimzh.etl.silver_codec import decode_roster, encode_roster
 from swimzh.providers.geo_sport import POOL_LAYERS
 from swimzh.providers.price_scraper import PRICES_URL
 from swimzh.storage import catalog_json
+from swimzh.storage.lake import Lake, SilverStatus
 from swimzh.storage.sqlite_repo import (
     GoldRepository,
     load_calendar,
     load_roster,
+    load_source_freshness,
     open_db,
     write_schedules,
 )
@@ -116,14 +121,6 @@ FETCHED_AT = datetime(2026, 7, 18, 9, 0, tzinfo=ZURICH)
 _ROSTER = catalog_json.loads((DATA_DIR / "catalog.json").read_text(encoding="utf-8"))
 
 
-def _offline_base(db: Path) -> None:
-    """Assemble the pre-scrape base offline via `build_store` (no schedule scrape), so an indoor
-    pool like Altstetten starts SCHEDULE-LESS — the precondition the thin `scrape-gold` re-layer
-    tests need. (The atomic `build` folds the scrape in, so it would arrive already scheduled.)"""
-    result = build_store(DATA_DIR, db, _ROSTER)
-    assert isinstance(result, Ok), result
-
-
 def _layer_handler(request: httpx.Request) -> httpx.Response:
     typename = request.url.params.get("TYPENAME", "")
     fc = {
@@ -152,46 +149,11 @@ def test_build_catalog_writes_all_layers(tmp_path: Path) -> None:
     assert {e.kind.value for e in entries} == {k.value for k in POOL_LAYERS.values()}
 
 
-def _city_catalog_file(tmp_path: Path) -> Path:
-    catalog_file = tmp_path / "catalog.json"
-    entry = PoolCatalogEntry(
-        pool_id="hallenbad-city",
-        name="Hallenbad City",
-        kind=PoolKind.INDOOR,
-        address="Sihlstrasse 71",
-        geo=GeoPoint(lat=47.37, lon=8.53),
-        url="https://example.test/city.html",
-        description=None,
-        phone=None,
-    )
-    catalog_file.write_text(catalog_json.dumps((entry,), FETCHED_AT), encoding="utf-8")
-    return catalog_file
-
-
-def _scraped_only_catalog_file(tmp_path: Path) -> Path:
-    """A catalog naming an INDOOR pool the curated dataset does NOT cover (Hallenbad Altstetten
-    resolves to the scraped-only `hallenbad-altstetten` spine row). Its scraped schedule can
-    reach the read path only if scrape-gold writes it to `pool.facility_doc`."""
-    catalog_file = tmp_path / "catalog.json"
-    entry = PoolCatalogEntry(
-        pool_id="hallenbad-altstetten",
-        name="Hallenbad Altstetten",
-        kind=PoolKind.INDOOR,
-        address="Flurstrasse 91",
-        geo=GeoPoint(lat=47.39, lon=8.49),
-        url="https://example.test/altstetten.html",
-        description=None,
-        phone=None,
-    )
-    catalog_file.write_text(catalog_json.dumps((entry,), FETCHED_AT), encoding="utf-8")
-    return catalog_file
-
-
 def _with_price_fixture(fallback_body: bytes) -> ProviderClients:
     """Clients serving the committed tariff fixture at the price page, `fallback_body` elsewhere.
 
     Since admission-union S2 a failed `scrape_prices` is FATAL to the schedule phase (`scrape-gold`
-    drives the same `_compose_schedules`), so every scrape double must serve a parseable price
+    is `build` with that phase forced), so every scrape double must serve a parseable price
     page — unless the price failure IS the test's subject
     (`test_build_price_scrape_failure_aborts_content_unchanged`)."""
     prices = (_FIXTURES / "preise_abos.html").read_bytes()
@@ -209,24 +171,49 @@ def _city_scrape_clients() -> ProviderClients:
     return _with_price_fixture(FIXTURE_HTML.read_bytes())
 
 
-# ── The re-layer actually refreshes (board-order-and-defects S1) ────────────────────────────────
+# ── The re-layer is `build` on one cadence (one-pipeline) ───────────────────────────────────────
 #
-# `scrape-gold` used to load the composed blob back out of the store and hand it to `compose` as
-# the CURATED side. Every one of the ten `_ASPECTS` is curated-wins and `_merge_basins` returns
-# curated wholesale once it has a schedule, so the previous output beat the fresh scrape on every
-# aspect — a re-layer refreshed NOTHING already present and still exited 0. See
-# `docs/2026-08-10-scrape-gold-recompose-defect.md`. The fix composes onto the curated tier rebuilt
-# from `data/` + the catalog, so these two tests fail against the pre-fix code (measured: hours
-# stayed `06:00–22:00`, the adult rate stayed `8.00`).
+# `scrape-gold`/`scrape-lanes` used to be a SECOND pipeline: they seeded a temp copy of the live
+# store, read `data/catalog.json` as their roster and composed onto the previous gold — and, once,
+# onto their own output, so a re-layer refreshed nothing and still exited 0
+# (`docs/2026-08-10-scrape-gold-recompose-defect.md`). Now each is `build` with its own sources
+# FORCED through the refresh policy (`force_sources`) and every other source reused from the lake.
+# The tests below drive the wrappers over ONE lake: a build at `_T0`, the re-layer at `_T1` — one
+# hour later, inside every silver TTL, so the only network a re-layer may touch is what it forces.
 
-#: The production shape of a re-layer: the SAME committed roster snapshot the app is built from,
-#: so every declared source is re-scraped exactly as a live `scrape-gold` would.
-FULL_CATALOG = DATA_DIR / "catalog.json"
+_T0 = FETCHED_AT
+_T1 = FETCHED_AT + timedelta(hours=1)
 
 
-def _mutated_relayer_clients() -> ProviderClients:
-    """The full recorded-build transport with TWO sources mutated: City's page hours
-    (`6–22 Uhr` → `7–21 Uhr`) and the shared tariff's adult rate (`Fr. 8.–` → `Fr. 13.–`).
+def _lake_build(tmp_path: Path) -> tuple[Path, Lake]:
+    """A store built from the recorded transport at `_T0`, and the lake that build filled."""
+    db = tmp_path / "gold.sqlite"
+    lake = Lake(tmp_path / "lake")
+    assert build(db_path=db, data_dir=DATA_DIR, clients=_build_clients(), lake=lake, now=_T0) == 0
+    return db, lake
+
+
+def _freshness(db: Path) -> dict[str, tuple[str, datetime]]:
+    """Per source: (`status`, `fetched_at`) as the store's `source_freshness` rows record them."""
+    conn = open_db(db)
+    try:
+        return {
+            row.header.source: (row.header.status.value, row.header.fetched_at)
+            for row in load_source_freshness(conn)
+        }
+    finally:
+        conn.close()
+
+
+def _seed_roster(lake: Lake, entries: tuple[PoolCatalogEntry, ...]) -> None:
+    """Overwrite the lake's roster silver at `_T0` — the one way to hand a re-layer a roster the
+    WFS never published, now that no command reads a catalog file."""
+    lake.write("roster", encode_roster(entries, _T0), fetched_at=_T0)
+
+
+def _mutated_override() -> Callable[[httpx.Request], httpx.Response | None]:
+    """The recorded transport with TWO sources mutated: City's page hours (`6–22 Uhr` → `7–21 Uhr`)
+    and the shared tariff's adult rate (`Fr. 8.–` → `Fr. 13.–`).
 
     Re-serving the SAME fixture would prove nothing — an unchanged store is also what correct
     idempotence looks like (that case is `test_a_relayer_is_idempotent_over_unchanged_sources`).
@@ -248,7 +235,11 @@ def _mutated_relayer_clients() -> ProviderClients:
             return httpx.Response(200, content=tariff)
         return None  # every other source keeps its unmutated fixture
 
-    return recorded_build_clients(override)
+    return override
+
+
+def _mutated_relayer_clients() -> ProviderClients:
+    return recorded_build_clients(_mutated_override())
 
 
 def _city_hours(db: Path) -> set[tuple[time, time]]:
@@ -306,35 +297,15 @@ def _timeless(facility: Facility) -> Facility:
     )
 
 
-def _catalog_file_with_urls(tmp_path: Path, overrides: dict[str, str | None]) -> Path:
-    """The COMMITTED roster snapshot with one entry's `url` replaced — the shape WFS drift takes.
-
-    `scrape-gold` reads the committed catalog while `build` uses the live WFS roster, so the two
-    can disagree about a pool's url. Both overrides below make a pool NAMED BY THE CATALOG but
-    scraped by neither `declared_sources` nor `shared_sources`.
-    """
-    entries = tuple(
-        replace(entry, url=overrides[entry.pool_id]) if entry.pool_id in overrides else entry
-        for entry in _ROSTER
-    )
-    catalog_file = tmp_path / "drifted-catalog.json"
-    catalog_file.write_text(catalog_json.dumps(entries, FETCHED_AT), encoding="utf-8")
-    return catalog_file
-
-
 def test_a_relayer_refreshes_the_stored_schedule(tmp_path: Path) -> None:
     """S1 AC1 — the defect's own reproduction, inverted: a re-layer against an already-built store
-    whose page now states different hours CHANGES the stored rules."""
-    db = tmp_path / "gold.sqlite"
-    assert build(db_path=db, data_dir=DATA_DIR, clients=_build_clients()) == 0
+    whose page now states different hours CHANGES the stored rules. The forced `schedules` silver
+    is refetched inside its TTL, where a plain `build` would have reused it."""
+    db, lake = _lake_build(tmp_path)
     assert _city_hours(db) == {(time(6), time(22))}  # what the unmutated fixture states
 
     code = scrape_gold(
-        db_path=db,
-        data_dir=DATA_DIR,
-        catalog_path=FULL_CATALOG,
-        clients=_mutated_relayer_clients(),
-        fetched_at=FETCHED_AT,
+        db_path=db, data_dir=DATA_DIR, clients=_mutated_relayer_clients(), lake=lake, now=_T1
     )
     assert code == 0
     assert _city_hours(db) == {(time(7), time(21))}  # pre-fix: still 06:00–22:00
@@ -343,42 +314,32 @@ def test_a_relayer_refreshes_the_stored_schedule(tmp_path: Path) -> None:
 def test_a_relayer_refreshes_a_non_basin_aspect_too(tmp_path: Path) -> None:
     """S1 AC2 — the same re-layer moves a NON-basin aspect: a mutated tariff changes the stored
     price. A basins-only fix passes AC1 while every price, notice and closure stays frozen."""
-    db = tmp_path / "gold.sqlite"
-    assert build(db_path=db, data_dir=DATA_DIR, clients=_build_clients()) == 0
+    db, lake = _lake_build(tmp_path)
     assert _city_adult_price(db) == Decimal("8.00")
 
     code = scrape_gold(
-        db_path=db,
-        data_dir=DATA_DIR,
-        catalog_path=FULL_CATALOG,
-        clients=_mutated_relayer_clients(),
-        fetched_at=FETCHED_AT,
+        db_path=db, data_dir=DATA_DIR, clients=_mutated_relayer_clients(), lake=lake, now=_T1
     )
     assert code == 0
     assert _city_adult_price(db) == Decimal("13.00")  # pre-fix: still 8.00
 
 
-def _unmutated_relayer(db: Path, catalog_path: Path = FULL_CATALOG) -> int:
-    """A re-layer over the SAME fixtures the offline `build` used — nothing upstream changed."""
+def _unmutated_relayer(db: Path, lake: Lake, now: datetime = _T1) -> int:
+    """A re-layer over the SAME fixtures the build used — nothing upstream changed."""
     return scrape_gold(
-        db_path=db,
-        data_dir=DATA_DIR,
-        catalog_path=catalog_path,
-        clients=recorded_build_clients(),
-        fetched_at=FETCHED_AT,
+        db_path=db, data_dir=DATA_DIR, clients=recorded_build_clients(), lake=lake, now=now
     )
 
 
 def test_a_relayer_is_idempotent_over_unchanged_sources(tmp_path: Path) -> None:
-    """S1 AC3 / invariant S-1 — running the phase twice over unchanged sources leaves the store
-    content-identical. `compose` is never fed its own output, so a re-layer converges instead of
-    accreting."""
-    db = tmp_path / "gold.sqlite"
-    assert build(db_path=db, data_dir=DATA_DIR, clients=_build_clients()) == 0
+    """S1 AC3 / invariant S-1 — running the re-layer twice over unchanged sources leaves the store
+    content-identical. The store is rebuilt from silver each time, never from its own previous
+    output, so a re-layer converges instead of accreting."""
+    db, lake = _lake_build(tmp_path)
 
-    assert _unmutated_relayer(db) == 0
+    assert _unmutated_relayer(db, lake) == 0
     once = _db_content_digest(db)
-    assert _unmutated_relayer(db) == 0
+    assert _unmutated_relayer(db, lake) == 0
     assert _db_content_digest(db) == once
 
 
@@ -387,18 +348,15 @@ def test_a_relayer_over_unchanged_sources_changes_nothing_but_provenance(tmp_pat
     a re-layer over unchanged sources restamps when it fetched and changes NOTHING else — the pools
     it scraped come back with the same facts, and no row is added or dropped.
 
-    **It does NOT guard the deletion door**, and must not be read as if it did: with the
-    `scraped_ids` filter reverted this test still passes, because an unchanged catalog rewrites the
-    31 unscraped pools with byte-identical content and `rewritten` stays 26 (mutation-verified). A
-    pool the catalog names but this run does not scrape is guarded by
-    `test_a_relayer_never_rewrites_a_pool_it_did_not_scrape` — that is the test to keep.
+    The whole store is REBUILT here (a re-layer is `build`), so the 31 blobs the schedule phase
+    does not reach are byte-identical only because the curated tier is a pure function of the
+    reused roster silver + `data/` — which is the property this asserts.
     """
-    db = tmp_path / "gold.sqlite"
-    assert build(db_path=db, data_dir=DATA_DIR, clients=_build_clients()) == 0
+    db, lake = _lake_build(tmp_path)
     before_blobs = _facility_blobs(db)
     before = {str(f.identity.facility_id): f for f in GoldRepository(open_db(db)).load_all()}
 
-    assert _unmutated_relayer(db) == 0
+    assert _unmutated_relayer(db, lake) == 0
 
     after_blobs = _facility_blobs(db)
     assert set(after_blobs) == set(before_blobs)  # no row added, none dropped
@@ -422,60 +380,66 @@ def test_a_relayer_over_unchanged_sources_changes_nothing_but_provenance(tmp_pat
 
 
 @pytest.mark.parametrize(
-    ("pool_id", "url"),
+    "pool_id",
     [
-        # No url at all -> `declared_sources` rejects it (and it is in no shared set).
-        ("freibad-heuried", None),
-        # A UNIQUE url -> it leaves the Planschbecken shared fan-out, and `PADDLING` is not a
-        # scrapeable kind, so neither phase produces an extract for it.
-        ("planschbecken-artergut", "https://example.test/artergut-only.html"),
+        # An operator page no parser understands (`_UNPARSEABLE_OPERATOR_PAGES`).
+        "freibad-dolder",
+        "seebad-enge",
+        # No page of its own: one of the 14 entries on the generic `hallenbaeder.html`.
+        "schulschwimmanlage-hardau",
     ],
 )
-def test_a_relayer_never_rewrites_a_pool_it_did_not_scrape(
-    tmp_path: Path, pool_id: str, url: str | None
-) -> None:
-    """A pool the catalog NAMES but this run does not scrape keeps exactly what the store holds.
+def test_a_relayer_never_rewrites_a_pool_it_did_not_scrape(tmp_path: Path, pool_id: str) -> None:
+    """A pool the roster NAMES but the schedule phase does not reach keeps a byte-identical blob
+    across a re-layer whose scrape DID change — its blob is the curated tier's, and the curated
+    tier is rebuilt from the same reused roster silver + `data/` every time.
 
-    Found in review, and the reason `_compose_schedules` narrows its write: `compose` emits one
-    facility per pool on either side, so such a pool came out CURATED-ONLY and overwrote the
-    scraped rules, prices and season a previous `build` had written — non-fatal, exit 0, no stderr
-    line naming the pool. Both cases below are real input classes, not hypotheticals: `scrape-gold`
-    reads the committed catalog while `build` uses the live WFS roster, and `etl/scrape.py` records
-    that WFS drift has renamed roster entries before.
+    The old test drove this with a catalog FILE that disagreed with the store's roster (a pool
+    named but unscrapeable). Under one pipeline the roster the re-layer scrapes IS the roster its
+    spine is built from, so that split-brain has no second roster to come from any more; what is
+    left to pin is the honest set of pools no scrape reaches — derived from the predicates, never
+    hard-coded.
     """
-    db = tmp_path / "gold.sqlite"
-    assert build(db_path=db, data_dir=DATA_DIR, clients=_build_clients()) == 0
+    db, lake = _lake_build(tmp_path)
+    roster = lake.read("roster")
+    assert roster is not None
+    entries = decode_roster(roster.payload)
+    reached = {source.entry.pool_id for source in declared_sources(entries)} | {
+        member.pool_id for shared in shared_sources(entries) for member in shared.members
+    }
+    assert pool_id not in reached
     before = _facility_blobs(db)[pool_id]
-    stored = _facility_from_read_path(db, pool_id)
-    # The pool starts out holding facts only the SCRAPE could have supplied…
-    assert any(b.rules for b in stored.basins) or stored.operating_season is not None
 
-    code = _unmutated_relayer(db, _catalog_file_with_urls(tmp_path, {pool_id: url}))
+    code = scrape_gold(
+        db_path=db, data_dir=DATA_DIR, clients=_mutated_relayer_clients(), lake=lake, now=_T1
+    )
     assert code == 0
-
-    # …and the re-layer left its blob byte-identical, rather than replacing it curated-only.
     assert _facility_blobs(db)[pool_id] == before
 
 
 def test_a_relayer_keeps_the_lane_plans_a_previous_run_attached(tmp_path: Path) -> None:
-    """S1 / invariant S-2 — the fix must not trade silent staleness for silent DELETION. The
-    curated tier rebuilt from `data/` carries each basin's `lane_plan_source` binding but no
-    fetched plan (the lane phase is a different command on a different cadence), so a successful
-    schedule re-layer would erase every attached plan without `carry_lane_plans`."""
-    db = tmp_path / "gold.sqlite"
-    assert build(db_path=db, data_dir=DATA_DIR, clients=_build_clients()) == 0
+    """S1 / invariant S-2 — a schedule re-layer must not trade silent staleness for silent
+    DELETION of the lane plans a previous run attached. Now: the `lane_plans` silver is REUSED,
+    not refetched — proved by serving every Belegungsplan URL a 503: had `scrape-gold` asked for
+    one, the run would have kept-stale (exit 2) instead of exiting 0 with fresh lane rows."""
+    db, lake = _lake_build(tmp_path)
     before = _attached_lane_plans(db)
     assert before, "the offline build must attach lane plans for this to mean anything"
+    mutated = _mutated_override()
+
+    def override(request: httpx.Request) -> httpx.Response | None:
+        if str(request.url).endswith(".pdf"):
+            return httpx.Response(503, text="down")
+        return mutated(request)
 
     code = scrape_gold(
-        db_path=db,
-        data_dir=DATA_DIR,
-        catalog_path=FULL_CATALOG,
-        clients=_mutated_relayer_clients(),
-        fetched_at=FETCHED_AT,
+        db_path=db, data_dir=DATA_DIR, clients=recorded_build_clients(override), lake=lake, now=_T1
     )
     assert code == 0
     assert _attached_lane_plans(db) == before
+    rows = _freshness(db)
+    assert rows["lane_plans"] == ("fresh", _T0)  # reused: last time's fetch, still fresh
+    assert rows["schedules"] == ("fresh", _T1)  # forced: this run's fetch
 
 
 def _data_dir_with_repointed_city_binding(tmp_path: Path) -> Path:
@@ -495,15 +459,15 @@ def test_a_relayer_drops_a_lane_plan_whose_binding_was_repointed(tmp_path: Path)
     """The ONE path on which a re-layer legitimately removes stored content — asserted so it stays
     a decision rather than becoming a surprise.
 
-    `carry_lane_plans` keys on the BINDING (`lane_plan_source`), not just the basin, so re-pointing
-    a basin's sheet in `data/` means the stored plan — parsed from the OLD sheet — does not cross.
-    City is a scraped pool, so it IS rewritten, and it is rewritten plan-less. That is the honest
-    outcome (the alternative is a stale plan wearing a fresh binding, the mis-attach the URL-keyed
-    join exists to prevent) and it is repaired by the next `scrape-lanes`. Every OTHER pool's plan,
-    whose binding did not move, survives — so this is a targeted drop, never a sweep.
+    The lane join is URL-keyed (`etl/silver.attach_lane_plans`): the reused `lane_plans` silver
+    holds the sheet parsed from the OLD url, so a basin whose `data/` binding now names a different
+    sheet gets no plan — never a stale plan wearing a fresh binding, the mis-attach
+    `docs/concepts/lane-plan-url-binding.md` exists to prevent. It is repaired by the next
+    `scrape-lanes`, which refetches discovery and aborts loudly if the page does not advertise the
+    new url. Every OTHER pool's plan, whose binding did not move, survives — a targeted drop, never
+    a sweep.
     """
-    db = tmp_path / "gold.sqlite"
-    assert build(db_path=db, data_dir=DATA_DIR, clients=_build_clients()) == 0
+    db, lake = _lake_build(tmp_path)
     before = _attached_lane_plans(db)
     city_basins = {key for key in before if key[0] == "hallenbad-city"}
     assert city_basins, "City must start with an attached plan for this to mean anything"
@@ -511,9 +475,9 @@ def test_a_relayer_drops_a_lane_plan_whose_binding_was_repointed(tmp_path: Path)
     code = scrape_gold(
         db_path=db,
         data_dir=_data_dir_with_repointed_city_binding(tmp_path),
-        catalog_path=FULL_CATALOG,
         clients=recorded_build_clients(),
-        fetched_at=FETCHED_AT,
+        lake=lake,
+        now=_T1,
     )
     assert code == 0
 
@@ -527,23 +491,22 @@ def test_a_relayer_drops_a_lane_plan_whose_binding_was_repointed(tmp_path: Path)
 def test_a_relayer_aborts_when_the_curated_inputs_are_unusable(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    """The curated tier is now an INPUT to the re-layer, so it has its own fail-fast: unreadable
-    `data/` aborts before the temp store is even seeded, naming the typed cause. This is what makes
+    """The curated tier is an INPUT to the re-layer, so it has its own fail-fast: unreadable
+    `data/` aborts before the temp store is even opened, naming the typed cause. This is what makes
     "the live store is untouched by construction" true rather than merely likely."""
-    db = tmp_path / "gold.sqlite"
-    assert build(db_path=db, data_dir=DATA_DIR, clients=_build_clients()) == 0
+    db, lake = _lake_build(tmp_path)
     before = _db_content_digest(db)
 
     code = scrape_gold(
         db_path=db,
         data_dir=tmp_path / "no-such-data",
-        catalog_path=FULL_CATALOG,
         clients=_city_scrape_clients(),
-        fetched_at=FETCHED_AT,
+        lake=lake,
+        now=_T1,
     )
     assert code == 1
     assert _db_content_digest(db) == before
-    assert "curated inputs unusable" in capsys.readouterr().err
+    assert "build failed" in capsys.readouterr().err
 
 
 def test_build_aborts_when_the_curated_inputs_are_unusable(
@@ -558,111 +521,104 @@ def test_build_aborts_when_the_curated_inputs_are_unusable(
     assert "build failed" in capsys.readouterr().err
 
 
-def _urlless_catalog_file(tmp_path: Path) -> Path:
-    """A catalog whose single entry carries NO page URL, so `declared_sources` selects nothing and
+def test_build_rejects_an_unknown_force_source(tmp_path: Path) -> None:
+    """A `force_sources` name outside `SILVER_SOURCES` is a caller bug, not a silent no-force."""
+    with pytest.raises(ValueError, match="force_sources"):
+        build(
+            db_path=tmp_path / "gold.sqlite",
+            data_dir=DATA_DIR,
+            clients=_build_clients(),
+            force_sources=frozenset({"schedule"}),
+        )
+
+
+def _urlless_roster() -> tuple[PoolCatalogEntry, ...]:
+    """A roster whose single entry carries NO page URL, so `declared_sources` selects nothing and
     the phase scrapes zero extracts."""
-    catalog_file = tmp_path / "catalog.json"
-    entry = PoolCatalogEntry(
-        pool_id="hallenbad-city",
-        name="Hallenbad City",
-        kind=PoolKind.INDOOR,
-        address="Sihlstrasse 71",
-        geo=GeoPoint(lat=47.37, lon=8.53),
-        url=None,
-        description=None,
-        phone=None,
+    return (
+        PoolCatalogEntry(
+            pool_id="hallenbad-city",
+            name="Hallenbad City",
+            kind=PoolKind.INDOOR,
+            address="Sihlstrasse 71",
+            geo=GeoPoint(lat=47.37, lon=8.53),
+            url=None,
+            description=None,
+            phone=None,
+        ),
     )
-    catalog_file.write_text(catalog_json.dumps((entry,), FETCHED_AT), encoding="utf-8")
-    return catalog_file
 
 
 def test_a_relayer_that_scrapes_nothing_leaves_the_store_content_unchanged(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    """S1 AC4 / invariant S-2 — an EMPTY scrape is fatal to the phase, so the seeded temp is
-    discarded and the live store keeps everything the previous run wrote. Pinned as a regression:
-    `_compose_schedules` already aborts on `not report.extracts`, and the re-layer commits only on
-    a non-fatal outcome — but the fix's whole risk is deletion, so the property is now asserted.
-    (Its sibling, a FAILED declared source, is
+    """S1 AC4 / invariant S-2 — an EMPTY scrape is a `SchemaMismatch`, which the refresh policy
+    never papers over with a kept silver: the build aborts, the temp is discarded and the live
+    store keeps everything the previous run wrote. (Its sibling, a FAILED declared source, is
     `test_scrape_gold_declared_source_parse_failure_aborts_content_unchanged`.)"""
-    db = tmp_path / "gold.sqlite"
-    assert build(db_path=db, data_dir=DATA_DIR, clients=_build_clients()) == 0
+    db, lake = _lake_build(tmp_path)
     before = _db_content_digest(db)
+    _seed_roster(lake, _urlless_roster())  # reused at `_T1`: nothing on it is scrapeable
 
     code = scrape_gold(
-        db_path=db,
-        data_dir=DATA_DIR,
-        catalog_path=_urlless_catalog_file(tmp_path),
-        clients=_city_scrape_clients(),
-        fetched_at=FETCHED_AT,
+        db_path=db, data_dir=DATA_DIR, clients=_city_scrape_clients(), lake=lake, now=_T1
     )
     assert code == 1
     assert _db_content_digest(db) == before  # nothing deleted, nothing rewritten
     assert "no schedules could be scraped" in capsys.readouterr().err
 
 
-def test_scrape_gold_composes_onto_built_store(tmp_path: Path) -> None:
-    # scrape-gold now layers onto an already-built spine: it resolves the scraped WFS name to a
-    # canonical id by lookup and composes, rather than minting a second (long-slug) row.
+@pytest.mark.parametrize(
+    "relayer", [scrape_gold, scrape_lanes], ids=["scrape-gold", "scrape-lanes"]
+)
+def test_a_relayer_over_an_empty_lake_fetches_the_roster_and_builds(
+    tmp_path: Path, relayer: Callable[..., int]
+) -> None:
+    """No prior store, no prior silver: a re-layer is a first-run `build`. The roster is fetched
+    from the WFS (the lake has none to reuse) and the store comes out complete. There is no
+    "build it first" any more — the wrapper IS the build."""
     db = tmp_path / "gold.sqlite"
-    assert build(db_path=db, data_dir=DATA_DIR, clients=_build_clients()) == 0
+    lake = Lake(tmp_path / "lake")
+    code = relayer(db_path=db, data_dir=DATA_DIR, clients=_build_clients(), lake=lake, now=_T0)
+    assert code == 0
+    roster = lake.read("roster")
+    assert roster is not None and roster.header.fetched_at == _T0
+    assert all(row == ("fresh", _T0) for row in _freshness(db).values())
+    assert GoldRepository(open_db(db)).count() == 57
+
+
+def test_scrape_gold_reuses_the_lake_roster_without_the_wfs(tmp_path: Path) -> None:
+    """The roster comes from the lake's `roster.json`, not from a catalog file and not from the
+    WFS: with the WFS answering 500 to everything, scrape-gold still exits 0 — not even a stale
+    keep, because the roster was never asked for — and the spine + calendar it built are whole."""
+    db, lake = _lake_build(tmp_path)
+
+    def wfs_down(request: httpx.Request) -> httpx.Response | None:
+        if request.url.params.get("TYPENAME"):
+            return httpx.Response(500, text="<html>Internal Server Error</html>")
+        return None
 
     code = scrape_gold(
-        db_path=db,
-        data_dir=DATA_DIR,
-        catalog_path=_city_catalog_file(tmp_path),
-        clients=_city_scrape_clients(),
-        fetched_at=FETCHED_AT,
+        db_path=db, data_dir=DATA_DIR, clients=recorded_build_clients(wfs_down), lake=lake, now=_T1
     )
     assert code == 0
-    # No second row for City: the scrape composed onto the curated pool. Since S1 gives EVERY
-    # catalog pool a `facility_doc` (universal detail), the read path holds the full roster (57),
-    # and there is exactly one City row (no long-slug duplicate).
-    facilities = GoldRepository(open_db(db)).load_all()
-    assert len(facilities) == 57
-    assert sum(1 for f in facilities if str(f.identity.facility_id) == "hallenbad-city") == 1
-
-
-def test_scrape_gold_wires_scraped_only_pool_onto_read_path(tmp_path: Path) -> None:
-    # B4 wiring proof: scrape-gold MUST write the composed facilities through `write_schedules`
-    # (→ `pool.facility_doc`, the read path). A scraped-ONLY pool (curated data lacks it) can
-    # appear on that path only if the reroute holds; were scrape-gold to stop writing
-    # `pool.facility_doc`, the pool's blob stays NULL and `get` returns None — so this test goes
-    # red on that mutation, closing the enrichment gap for good. Base built OFFLINE (no folded
-    # scrape) so Altstetten starts schedule-less; the thin scrape-gold then adds its schedule.
-    db = tmp_path / "gold.sqlite"
-    _offline_base(db)
-    altstetten = reconstruct_pool_id("hallenbad-altstetten")
-    # Uncurated before the scrape: Slice F gives it a SCHEDULE-LESS prose blob, so it may be
-    # present on the read path but carries no schedule rule yet.
-    before = GoldRepository(open_db(db)).get(altstetten)
-    assert before is None or not any(b.rules for b in before.basins)
-
-    code = scrape_gold(
-        db_path=db,
-        data_dir=DATA_DIR,
-        catalog_path=_scraped_only_catalog_file(tmp_path),
-        clients=_city_scrape_clients(),
-        fetched_at=FETCHED_AT,
-    )
-    assert code == 0
-
-    served = GoldRepository(open_db(db)).get(altstetten)
-    assert served is not None, "scraped-only pool must reach pool.facility_doc via write_schedules"
-    # The scraped schedule (parsed from the fixture) is now on the read path…
-    assert any(b.rules for b in served.basins)
-    # …carrying scraped (not curated) provenance — proof it came through the scrape, not a seed.
-    assert served.provenance.curated is False
+    rows = _freshness(db)
+    assert rows["roster"] == ("fresh", _T0)  # reused
+    assert rows["prices"] == ("fresh", _T1)  # forced
+    assert rows["schedules"] == ("fresh", _T1)  # forced
+    assert rows["lane_plans"] == ("fresh", _T0)  # reused
+    conn = open_db(db)
+    assert len(load_roster(conn)) == 57
+    assert load_calendar(conn).covers(datetime(2026, 6, 1, tzinfo=ZURICH).date())
 
 
 def test_scrape_merge_puts_curated_schedule_and_scraped_price_on_read_path(tmp_path: Path) -> None:
-    # B4 acceptance: scrape-gold writes the composed facility through `write_schedules`, so the
-    # per-aspect merge (curated schedule kept + a scraped price the curated data lacked) is now
+    # B4 acceptance: the schedule phase writes the composed facility through `write_schedules`, so
+    # the per-aspect merge (curated schedule kept + a scraped price the curated data lacked) is
     # visible on the read path (`pool.facility_doc` via `GoldRepository`), where `/swim` reads.
-    # The live scrape-gold mock yields no scraped price for City (its own curated price already
-    # wins), so this drives the same compose→`write_schedules` seam scrape-gold runs internally,
-    # over the real curated City with its price stripped so the scraped price is the one that
-    # fills the gap.
+    # The recorded scrape yields no scraped price for City (its own curated price already wins),
+    # so this drives the same compose→`write_schedules` seam the phase runs internally, over the
+    # real curated City with its price stripped so the scraped price is the one that fills the gap.
     db = tmp_path / "gold.sqlite"
     assert build(db_path=db, data_dir=DATA_DIR, clients=_build_clients()) == 0
     conn = open_db(db)
@@ -699,131 +655,36 @@ def test_scrape_merge_puts_curated_schedule_and_scraped_price_on_read_path(tmp_p
     assert served.admission == Tariff(scraped_price)
 
 
-def test_scrape_gold_requires_a_built_store(tmp_path: Path) -> None:
-    # Without a prior `build` the spine is absent, so there is no id namespace to resolve into —
-    # scrape-gold refuses rather than opening a second door to a gold row.
-    code = scrape_gold(
-        db_path=tmp_path / "absent.sqlite",
-        data_dir=DATA_DIR,
-        catalog_path=_city_catalog_file(tmp_path),
-        clients=_city_scrape_clients(),
-        fetched_at=FETCHED_AT,
-    )
-    assert code == 1
-
-
 def test_scrape_gold_unreconcilable_name_is_reported_not_silently_written(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    # D2 partial success: a lone scraped name in no alias is a benign miss — never a silent
-    # wrong-pool write. Nothing is composed (no resolved refs), the miss is reported to stderr,
-    # and the exit code is non-zero so the miss stays visible.
-    db = tmp_path / "gold.sqlite"
-    assert build(db_path=db, data_dir=DATA_DIR, clients=_build_clients()) == 0
-    before = {f.identity.facility_id for f in GoldRepository(open_db(db)).load_all()}
+    """D2 partial success: a scraped name in no alias is a benign miss — NAMED on stderr and
+    signalled by exit 1, the resolved pools still written, nothing attached to a guessed pool.
 
-    catalog_file = tmp_path / "catalog.json"
-    entry = PoolCatalogEntry(
-        pool_id="hallenbad-nonexistent",
-        name="Hallenbad Nonexistent",  # in no pool_alias row
-        kind=PoolKind.INDOOR,
-        address="",
-        geo=GeoPoint(lat=47.37, lon=8.53),
-        url="https://example.test/city.html",
-        description=None,
-        phone=None,
-    )
-    catalog_file.write_text(catalog_json.dumps((entry,), FETCHED_AT), encoding="utf-8")
+    Under one pipeline every scraped `Name` is a roster name and every roster name is an alias of
+    the spine built from that same roster, so the miss cannot arise from data any more (the old
+    test manufactured it with a catalog file the store's spine had never seen). It is reached
+    through the `resolve_all` seam — the real resolver plus one extra unresolved label — exactly
+    as the ambiguous case always was; the branch stays because `ReconcileOutcome` carries it.
+    """
+    db, lake = _lake_build(tmp_path)
+    before = set(_facility_blobs(db))
 
+    def with_a_miss(extracts: Any, crosswalk: Any) -> Any:
+        outcome = resolve_all(extracts, crosswalk)
+        assert isinstance(outcome, Ok)
+        return Ok(
+            replace(outcome.value, unresolved=(*outcome.value.unresolved, "Hallenbad Nonexistent"))
+        )
+
+    monkeypatch.setattr("swimzh.cli.resolve_all", with_a_miss)
     code = scrape_gold(
-        db_path=db,
-        data_dir=DATA_DIR,
-        catalog_path=catalog_file,
-        clients=_city_scrape_clients(),
-        fetched_at=FETCHED_AT,
+        db_path=db, data_dir=DATA_DIR, clients=_mutated_relayer_clients(), lake=lake, now=_T1
     )
     assert code == 1  # the unmatched name is signalled by a non-zero exit
-    # The miss is named on stderr, not swallowed.
-    assert "Hallenbad Nonexistent" in capsys.readouterr().err
-    # The store's facility set is unchanged — nothing was attached to a guessed pool.
-    after = {f.identity.facility_id for f in GoldRepository(open_db(db)).load_all()}
-    assert after == before
-
-
-def _partial_catalog_file(tmp_path: Path) -> Path:
-    """A catalog mixing pools that reconcile (curated `Hallenbad City`, scraped-only
-    `Hallenbad Altstetten`) with one benign miss (`Hallenbad Nonexistent`, in no alias). Every
-    entry is INDOOR with a URL, so all three are scraped; only the matched two are written."""
-    catalog_file = tmp_path / "catalog.json"
-    entries = (
-        PoolCatalogEntry(
-            pool_id="hallenbad-city",
-            name="Hallenbad City",
-            kind=PoolKind.INDOOR,
-            address="Sihlstrasse 71",
-            geo=GeoPoint(lat=47.37, lon=8.53),
-            url="https://example.test/city.html",
-            description=None,
-            phone=None,
-        ),
-        PoolCatalogEntry(
-            pool_id="hallenbad-altstetten",
-            name="Hallenbad Altstetten",
-            kind=PoolKind.INDOOR,
-            address="Flurstrasse 91",
-            geo=GeoPoint(lat=47.39, lon=8.49),
-            url="https://example.test/altstetten.html",
-            description=None,
-            phone=None,
-        ),
-        PoolCatalogEntry(
-            pool_id="hallenbad-nonexistent",
-            name="Hallenbad Nonexistent",  # in no pool_alias row -> benign miss
-            kind=PoolKind.INDOOR,
-            address="",
-            geo=GeoPoint(lat=47.37, lon=8.53),
-            url="https://example.test/nonexistent.html",
-            description=None,
-            phone=None,
-        ),
-    )
-    catalog_file.write_text(catalog_json.dumps(entries, FETCHED_AT), encoding="utf-8")
-    return catalog_file
-
-
-def test_scrape_gold_partial_success_writes_matched_reports_unmatched(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
-) -> None:
-    # D2 acceptance: one unmatched name among several matched. The matched pools ARE written to
-    # `pool.facility_doc` (partial success — the good scrapes are not discarded), the unmatched
-    # name is reported to stderr, and the exit code is non-zero so the miss stays visible. Base
-    # built OFFLINE (no folded scrape) so Altstetten starts schedule-less.
-    db = tmp_path / "gold.sqlite"
-    _offline_base(db)
-    altstetten = reconstruct_pool_id("hallenbad-altstetten")
-    # Scraped-only pool: before the scrape it carries at most a SCHEDULE-LESS Slice-F prose blob
-    # (no rule), so no scraped schedule is on the read path yet.
-    before = GoldRepository(open_db(db)).get(altstetten)
-    assert before is None or not any(b.rules for b in before.basins)
-
-    code = scrape_gold(
-        db_path=db,
-        data_dir=DATA_DIR,
-        catalog_path=_partial_catalog_file(tmp_path),
-        clients=_city_scrape_clients(),
-        fetched_at=FETCHED_AT,
-    )
-    assert code == 1  # non-zero because one name stayed unmatched
-
-    # The matched scraped-only pool reached the read path (`pool.facility_doc`) — partial success.
-    served = GoldRepository(open_db(db)).get(altstetten)
-    assert served is not None, "matched pools must be written even when some are unresolved"
-    assert any(b.rules for b in served.basins)  # the scraped schedule is on the read path
-    assert served.provenance.curated is False  # it came through the scrape, not a seed
-    # The matched curated pool is still present too.
-    assert GoldRepository(open_db(db)).get(reconstruct_pool_id("hallenbad-city")) is not None
-    # The unmatched name is named on stderr, not swallowed.
-    assert "Hallenbad Nonexistent" in capsys.readouterr().err
+    assert "Hallenbad Nonexistent" in capsys.readouterr().err  # named, not swallowed
+    assert _city_hours(db) == {(time(7), time(21))}  # the resolved pools WERE written
+    assert set(_facility_blobs(db)) == before  # no row for a guessed pool
 
 
 def test_scrape_gold_ambiguous_reconcile_aborts_writing_nothing(
@@ -831,53 +692,42 @@ def test_scrape_gold_ambiguous_reconcile_aborts_writing_nothing(
 ) -> None:
     # Ambiguous stays structurally fatal. Scrape extracts are `Name`-only, so they can NEVER be
     # ambiguous by construction (D1's discovery) — a faithful CLI-level ambiguous scrape cannot
-    # exist. So we drive scrape_gold's `case Err` branch directly: a `resolve_all` that returns
-    # the typed ambiguous `Err` a seeded ambiguous crosswalk would produce (see
+    # exist. So we drive the `case Err` branch directly: a `resolve_all` that returns the typed
+    # ambiguous `Err` a seeded ambiguous crosswalk would produce (see
     # `test_resolve_all_is_fatal_on_ambiguous_ref_naming_the_offender`). The store must be left
-    # untouched — never a silent wrong-pool write.
-    db = tmp_path / "gold.sqlite"
-    assert build(db_path=db, data_dir=DATA_DIR, clients=_build_clients()) == 0
-    before = {f.identity.facility_id for f in GoldRepository(open_db(db)).load_all()}
+    # untouched — never a silent wrong-pool write — and so must the schedules silver.
+    db, lake = _lake_build(tmp_path)
+    before = _db_content_digest(db)
 
     ambiguous = SchemaMismatch(source="reconcile", detail="ambiguous basin hint: 'Twin Bad'")
     monkeypatch.setattr("swimzh.cli.resolve_all", lambda _extracts, _crosswalk: Err(ambiguous))
 
     code = scrape_gold(
-        db_path=db,
-        data_dir=DATA_DIR,
-        catalog_path=_city_catalog_file(tmp_path),
-        clients=_city_scrape_clients(),
-        fetched_at=FETCHED_AT,
+        db_path=db, data_dir=DATA_DIR, clients=recorded_build_clients(), lake=lake, now=_T1
     )
     assert code == 1
     assert "ambiguous" in capsys.readouterr().err.lower()
-    # Nothing written: the ambiguous batch aborts whole, leaving the store as `build` left it.
-    after = {f.identity.facility_id for f in GoldRepository(open_db(db)).load_all()}
-    assert after == before
+    assert _db_content_digest(db) == before  # the ambiguous batch aborts whole
+    schedules = lake.read("schedules")
+    assert schedules is not None and schedules.header.fetched_at == _T0  # silver not rewritten
 
 
 def test_scrape_gold_declared_source_parse_failure_aborts_content_unchanged(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    # S4 acceptance (scrape-gold): a declared source (an INDOOR catalog pool) whose page cannot be
-    # parsed is NOT skipped-and-green — the whole run ABORTS non-zero carrying the typed cause, and
-    # the prior gold DB is CONTENT-unchanged (content digest, not byte hash).
-    db = tmp_path / "gold.sqlite"
-    assert build(db_path=db, data_dir=DATA_DIR, clients=_build_clients()) == 0
+    # S4 acceptance (scrape-gold): a declared source whose page cannot be parsed is NOT
+    # skipped-and-green — the whole run ABORTS non-zero carrying the typed cause, and the prior
+    # gold DB is CONTENT-unchanged (content digest, not byte hash). A parse error is schema drift,
+    # so the refresh policy does NOT let the kept schedules silver stand in (unlike a 503).
+    db, lake = _lake_build(tmp_path)
     before = _db_content_digest(db)
 
-    # The city page fetches 200 but has no timetable, so `parse_schedule` fails -> a declared
+    # Every pool page fetches 200 but has no timetable, so `parse_schedule` fails -> a declared
     # source failure with a typed ParseError cause. The price page is served its REAL fixture
     # (`_with_price_fixture`) so the abort under test stays the pool page's, not the tariff
     # page's own fatal case.
     clients = _with_price_fixture(b"<html>no table</html>")
-    code = scrape_gold(
-        db_path=db,
-        data_dir=DATA_DIR,
-        catalog_path=_city_catalog_file(tmp_path),
-        clients=clients,
-        fetched_at=FETCHED_AT,
-    )
+    code = scrape_gold(db_path=db, data_dir=DATA_DIR, clients=clients, lake=lake, now=_T1)
     assert code == 1
     assert _db_content_digest(db) == before  # nothing written — the live store is unchanged
     err = capsys.readouterr().err
@@ -888,18 +738,8 @@ def test_scrape_gold_declared_source_parse_failure_aborts_content_unchanged(
 def test_build_and_scrape_gold_share_one_id_namespace(tmp_path: Path) -> None:
     # The acceptance: build and scrape-gold write into the SAME id namespace. Every facility row
     # id (the /swim read path) is a real pool PK — no long-vs-short split-brain.
-    db = tmp_path / "gold.sqlite"
-    assert build(db_path=db, data_dir=DATA_DIR, clients=_build_clients()) == 0
-    assert (
-        scrape_gold(
-            db_path=db,
-            data_dir=DATA_DIR,
-            catalog_path=_city_catalog_file(tmp_path),
-            clients=_city_scrape_clients(),
-            fetched_at=FETCHED_AT,
-        )
-        == 0
-    )
+    db, lake = _lake_build(tmp_path)
+    assert _unmutated_relayer(db, lake) == 0
 
     conn = open_db(db)
     pool_ids = {row[0] for row in conn.execute("SELECT id FROM pool").fetchall()}
@@ -943,50 +783,49 @@ def _lane_clients(pdf_handler: Callable[[httpx.Request], httpx.Response]) -> Pro
 
 
 def test_scrape_lanes_attaches_plan_to_curated_basin(tmp_path: Path) -> None:
-    # `scrape-lanes` reads the curated facilities (from `pool.facility_doc`), needs the offline
-    # `build` spine present, discovers the pool page's Belegungsplan links, then writes the
-    # attached plan back through `write_schedules`.
-    db = tmp_path / "gold.sqlite"
-    assert build(db_path=db, data_dir=DATA_DIR, clients=_build_clients()) == 0
+    """`scrape-lanes` forces ONLY `lane_plans`: discovery over the stored pool pages, then the
+    discovered PDFs, written back through `write_schedules`. `_lane_clients` routes nothing but
+    pool pages and PDFs — no WFS layer, no tariff page — so this passing proves every other
+    source came out of the lake untouched."""
+    db, lake = _lake_build(tmp_path)
 
     body = FIXTURE_PDF.read_bytes()
     clients = _lane_clients(lambda _r: httpx.Response(200, content=body))
-    code = scrape_lanes(db_path=db, clients=clients, fetched_at=FETCHED_AT)
+    code = scrape_lanes(db_path=db, data_dir=DATA_DIR, clients=clients, lake=lake, now=_T1)
     assert code == 0
 
-    # B4 closes the B2→B4 enrichment gap: the lane plan is now on the read path
+    # B4 closes the B2→B4 enrichment gap: the lane plan is on the read path
     # (`pool.facility_doc`), a scraped aspect curated City lacked, visible where `/swim` reads.
     city = _facility_from_read_path(db, "hallenbad-city")
     lap = next(b for b in city.basins if b.basin_id == BasinId("city-50m"))
     assert isinstance(lap.lane_plan, LanePlan)
     assert lap.lane_plan.lane_count == 6
-    assert lap.lane_plan.fetched_at == FETCHED_AT
+    assert lap.lane_plan.fetched_at == _T1
+    rows = _freshness(db)
+    assert rows["lane_plans"] == ("fresh", _T1)  # forced
+    assert rows["schedules"] == ("fresh", _T0)  # reused
+    assert rows["roster"] == ("fresh", _T0)  # reused
 
 
-def test_scrape_lanes_missing_db_is_error(tmp_path: Path) -> None:
-    clients = _pdf_clients(lambda _r: httpx.Response(200, content=b""))
-    code = scrape_lanes(db_path=tmp_path / "absent.sqlite", clients=clients, fetched_at=FETCHED_AT)
-    assert code == 1
-
-
-def test_scrape_lanes_pdf_fetch_failure_aborts_leaving_store_content_unchanged(
+def test_scrape_lanes_over_a_down_lane_source_keeps_last_times_plans_stale(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    # S4 acceptance: pages discover their Belegungsplan links, but every discovered PDF 503s. That
-    # is a declared/discovered source fetch failure -> the WHOLE run ABORTS non-zero (no persisted
-    # LanePlanUnavailable that lets the facility build), and the prior gold DB is CONTENT-unchanged
-    # (asserted via a content digest, not a byte hash). The abort message carries the typed cause.
-    db = tmp_path / "gold.sqlite"
-    assert build(db_path=db, data_dir=DATA_DIR, clients=_build_clients()) == 0
-    before = _db_content_digest(db)
+    """Pages discover their Belegungsplan links, but every discovered PDF 503s. Before the lake
+    that aborted the re-layer; under the refresh policy a 503 is TRANSIENT, so with a `lane_plans`
+    silver younger than `max_stale` the run KEEPS it, marks it stale, rebuilds the store on it and
+    exits 2 — the same plans as before, and the store says they are stale. (A first run, with no
+    silver to keep, still aborts: `test_build_lane_phase_failure_aborts_content_unchanged`.)"""
+    db, lake = _lake_build(tmp_path)
+    before = _attached_lane_plans(db)
 
     clients = _lane_clients(lambda _r: httpx.Response(503, text="down"))
-    code = scrape_lanes(db_path=db, clients=clients, fetched_at=FETCHED_AT)
-    assert code == 1
-    assert _db_content_digest(db) == before  # temp discarded — the live store never mutated
+    code = scrape_lanes(db_path=db, data_dir=DATA_DIR, clients=clients, lake=lake, now=_T1)
+    assert code == EXIT_BUILT_STALE
+    assert _attached_lane_plans(db) == before  # last time's plans, unchanged
+    assert _freshness(db)["lane_plans"] == ("stale", _T0)
     err = capsys.readouterr().err
-    assert "aborted" in err
     assert "HTTP 503" in err  # the typed ProviderError cause is surfaced
+    assert "STALE" in err
 
 
 _OERLIKON_COMBINED_PDF = _FIXTURES / "oerlikon-nichtschwimmer-sprungbecken.pdf"
@@ -998,10 +837,8 @@ def test_scrape_lanes_prints_unbound_audit_for_uncurated_section(
     # S4 audit: with every discovered source fetching fine (no miss -> no abort), the combined
     # Oerlikon sheet attaches Sprungbecken (its section token) and surfaces the still-uncurated
     # Nichtschwimmer section as a per-URL `unbound` line (an undiscovered-basin extra, non-fatal —
-    # NOT a missing declared fact). The run succeeds. (Under S4 a 503 here would ABORT instead, so
-    # the audit is exercised on an all-success run.)
-    db = tmp_path / "gold.sqlite"
-    assert build(db_path=db, data_dir=DATA_DIR, clients=_build_clients()) == 0
+    # NOT a missing declared fact). The run succeeds.
+    db, lake = _lake_build(tmp_path)
     oerlikon = _facility_from_read_path(db, "hallenbad-oerlikon")
     sprung = next(b for b in oerlikon.basins if b.basin_id == BasinId("oerlikon-sprungbecken"))
     assert sprung.lane_plan_source is not None
@@ -1016,7 +853,9 @@ def test_scrape_lanes_prints_unbound_audit_for_uncurated_section(
             return httpx.Response(200, content=combined_pdf)
         return httpx.Response(200, content=single_pdf)
 
-    code = scrape_lanes(db_path=db, clients=_lane_clients(handler), fetched_at=FETCHED_AT)
+    code = scrape_lanes(
+        db_path=db, data_dir=DATA_DIR, clients=_lane_clients(handler), lake=lake, now=_T1
+    )
     assert code == 0  # every source fetched; Sprungbecken + the single-basin sheets attach
 
     err = capsys.readouterr().err
@@ -1033,8 +872,7 @@ def test_scrape_lanes_prints_unmatched_section_audit(
     # but the token matches NO parsed header (here the single-basin Schwimmerbecken sheet is served
     # at the combined URL — "Sprungbecken" never appears). The basin is left None, but the silent
     # drop is surfaced as an `unmatched section` audit line (a parser-header-regression alarm).
-    db = tmp_path / "gold.sqlite"
-    assert build(db_path=db, data_dir=DATA_DIR, clients=_build_clients()) == 0
+    db, lake = _lake_build(tmp_path)
     oerlikon = _facility_from_read_path(db, "hallenbad-oerlikon")
     combined_url = next(
         b.lane_plan_source.url
@@ -1045,15 +883,16 @@ def test_scrape_lanes_prints_unmatched_section_audit(
     wrong_sheet = (_FIXTURES / "oerlikon-schwimmerbecken.pdf").read_bytes()
     city_sheet = FIXTURE_PDF.read_bytes()
 
-    # Under S4 any 503 would ABORT before the unmatched-section audit, so every OTHER discovered
-    # source is served a valid single-basin plan (it binds by URL); only the combined URL gets the
-    # wrong sheet, whose header lacks the declared "Sprungbecken" token.
+    # Every OTHER discovered source is served a valid single-basin plan (it binds by URL); only
+    # the combined URL gets the wrong sheet, whose header lacks the declared "Sprungbecken" token.
     def handler(request: httpx.Request) -> httpx.Response:
         if str(request.url) == combined_url:
             return httpx.Response(200, content=wrong_sheet)
         return httpx.Response(200, content=city_sheet)
 
-    code = scrape_lanes(db_path=db, clients=_lane_clients(handler), fetched_at=FETCHED_AT)
+    code = scrape_lanes(
+        db_path=db, data_dir=DATA_DIR, clients=_lane_clients(handler), lake=lake, now=_T1
+    )
     assert code == 0  # City attached, so the run succeeds
 
     err = capsys.readouterr().err
@@ -1062,35 +901,29 @@ def test_scrape_lanes_prints_unmatched_section_audit(
     assert "sprungbecken" in err
 
 
-def test_scrape_lanes_empty_store_is_error(tmp_path: Path) -> None:
-    db = tmp_path / "empty.sqlite"
-    open_db(db)  # schema only, no facilities
-    clients = _pdf_clients(lambda _r: httpx.Response(200, content=FIXTURE_PDF.read_bytes()))
-    code = scrape_lanes(db_path=db, clients=clients, fetched_at=FETCHED_AT)
-    assert code == 1
-
-
 def test_scrape_lanes_authored_source_not_advertised_aborts(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     # S4 acceptance (S2-surfaced case): an authored `lane_plan_source.url` its pool page fails to
     # advertise (`authored − discovered` non-empty — here every page returns an EMPTY body, so no
-    # link is discovered) is a HARD abort, never a silent drop. The prior gold DB is
-    # content-unchanged and the abort carries the typed cause.
-    db = tmp_path / "gold.sqlite"
-    assert build(db_path=db, data_dir=DATA_DIR, clients=_build_clients()) == 0
+    # link is discovered) is a HARD abort, never a silent drop: a `SchemaMismatch` is not
+    # transient, so the kept lane silver may NOT stand in. The prior gold DB is content-unchanged,
+    # the lane silver is not even marked stale, and the abort carries the typed cause.
+    db, lake = _lake_build(tmp_path)
     before = _db_content_digest(db)
 
     # Pool pages fetch 200 but advertise NO Belegungsplan links (so no PDF is ever fetched).
     clients = clients_over(
         httpx.MockTransport(lambda _r: httpx.Response(200, content=b"<html></html>"))
     )
-    code = scrape_lanes(db_path=db, clients=clients, fetched_at=FETCHED_AT)
+    code = scrape_lanes(db_path=db, data_dir=DATA_DIR, clients=clients, lake=lake, now=_T1)
     assert code == 1
     assert _db_content_digest(db) == before  # never mutated — the authored source is stranded loud
     err = capsys.readouterr().err
     assert "aborted" in err
     assert "not advertised" in err  # typed SchemaMismatch: the page no longer lists the URL
+    lanes = lake.read("lane_plans")
+    assert lanes is not None and lanes.header.status is SilverStatus.FRESH
 
 
 def test_build_produces_complete_store(tmp_path: Path) -> None:
@@ -1223,7 +1056,8 @@ def test_atomic_build_carries_lane_bindings_so_lane_plans_still_attach(tmp_path:
     # delete-curated-schedule-tier S3 crux: with the curated schedule stripped, the scraped
     # timetable wins the `basins` aspect — but `compose` CARRIES each curated basin's
     # `lane_plan_source` (the thin-crosswalk binding) alongside the scraped schedule, so the lane
-    # phase still finds an owner. Without the carry, `_attach_lanes` would abort on `attached == 0`.
+    # phase still finds an owner. Without the carry, `_write_lane_plans` would abort on
+    # `attached == 0`.
     db = tmp_path / "gold.sqlite"
     assert build(db_path=db, data_dir=DATA_DIR, clients=_build_clients()) == 0
     repo = GoldRepository(open_db(db))
@@ -1379,7 +1213,10 @@ def test_build_via_main(tmp_path: Path) -> None:
     # `main` threads an injected client into `build` (live runs create their own); the recorded
     # WFS snapshot lets the CLI-level build run offline.
     db = tmp_path / "gold.sqlite"
-    code = main(["build", "--db", str(db), "--data", str(DATA_DIR)], clients=_build_clients())
+    code = main(
+        ["build", "--db", str(db), "--data", str(DATA_DIR), "--lake", str(tmp_path / "lake")],
+        clients=_build_clients(),
+    )
     assert code == 0
     assert len(load_roster(open_db(db))) == 57
 
@@ -1422,58 +1259,6 @@ def test_build_atomically_replaces_an_existing_store(tmp_path: Path) -> None:
     assert len(load_roster(open_db(db))) == 57
 
 
-def test_build_then_scrape_gold_enriches(tmp_path: Path) -> None:
-    db = tmp_path / "gold.sqlite"
-    assert build(db_path=db, data_dir=DATA_DIR, clients=_build_clients()) == 0
-    before = GoldRepository(open_db(db)).count()
-
-    catalog_file = tmp_path / "catalog.json"
-    entry = PoolCatalogEntry(
-        pool_id="hallenbad-city",
-        name="Hallenbad City",
-        kind=PoolKind.INDOOR,
-        address="Sihlstrasse 71",
-        geo=GeoPoint(lat=47.37, lon=8.53),
-        url="https://example.test/city.html",
-        description=None,
-        phone=None,
-    )
-    catalog_file.write_text(catalog_json.dumps((entry,), FETCHED_AT), encoding="utf-8")
-
-    scraped = scrape_gold(
-        db_path=db,
-        data_dir=DATA_DIR,
-        catalog_path=catalog_file,
-        clients=_city_scrape_clients(),
-        fetched_at=FETCHED_AT,
-    )
-    assert scraped == 0
-    # Enrichment adds/updates facilities on top of the offline build; catalog+calendar survive.
-    conn = open_db(db)
-    assert GoldRepository(conn).count() >= before
-    assert len(load_roster(conn)) == 57
-    assert load_calendar(conn).covers(datetime(2026, 6, 1, tzinfo=ZURICH).date())
-
-
-def test_build_then_scrape_lanes_enriches(tmp_path: Path) -> None:
-    db = tmp_path / "gold.sqlite"
-    assert build(db_path=db, data_dir=DATA_DIR, clients=_build_clients()) == 0
-
-    body = FIXTURE_PDF.read_bytes()
-    clients = _lane_clients(lambda _r: httpx.Response(200, content=body))
-    code = scrape_lanes(db_path=db, clients=clients, fetched_at=FETCHED_AT)
-    assert code == 0
-
-    conn = open_db(db)
-    # B4: the attached plan is on the flipped read path (`pool.facility_doc`, via
-    # `write_schedules`) — the enrichment gap is closed, `/swim` sees the lane plan.
-    city = _facility_from_read_path(db, "hallenbad-city")
-    lap = next(b for b in city.basins if b.basin_id == BasinId("city-50m"))
-    assert isinstance(lap.lane_plan, LanePlan)
-    # Roster + calendar assembled by `build` are untouched by lane enrichment.
-    assert len(load_roster(conn)) == 57
-
-
 def test_build_lane_phase_failure_aborts_content_unchanged(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
@@ -1499,20 +1284,16 @@ def test_build_lane_phase_failure_aborts_content_unchanged(
 
 def test_main_routes_scrape_gold_scrape_lanes_and_build_catalog(tmp_path: Path) -> None:
     # `main` threads an injected client through `_dispatch` to each command (live runs make their
-    # own). Build the base first, then drive the two re-layer commands + build-catalog via `main`.
+    # own). Build the base first, then drive the two cadence wrappers over the SAME lake (each is
+    # `build`, so it takes `build`'s flags — and no longer a `--catalog`), then build-catalog.
     db = tmp_path / "gold.sqlite"
-    assert main(["build", "--db", str(db), "--data", str(DATA_DIR)], clients=_build_clients()) == 0
-
-    catalog = _city_catalog_file(tmp_path)
-    assert (
-        main(
-            ["scrape-gold", "--db", str(db), "--catalog", str(catalog), "--data", str(DATA_DIR)],
-            clients=_city_scrape_clients(),
-        )
-        == 0
-    )
+    store = ["--db", str(db), "--data", str(DATA_DIR), "--lake", str(tmp_path / "lake")]
+    assert main(["build", *store], clients=_build_clients()) == 0
+    assert main(["scrape-gold", *store], clients=recorded_build_clients()) == 0
     lane_clients = _lane_clients(lambda _r: httpx.Response(200, content=FIXTURE_PDF.read_bytes()))
-    assert main(["scrape-lanes", "--db", str(db)], clients=lane_clients) == 0
+    assert main(["scrape-lanes", *store], clients=lane_clients) == 0
+    with pytest.raises(SystemExit):  # the catalog-file roster double is gone
+        main(["scrape-gold", *store, "--catalog", str(DATA_DIR / "catalog.json")])
 
     out = tmp_path / "catalog.json"
     layer_clients = clients_over(httpx.MockTransport(_layer_handler))
@@ -1730,33 +1511,13 @@ def test_an_unknown_cache_env_value_fails_fast() -> None:
 def test_every_network_command_accepts_the_refresh_flag(tmp_path: Path) -> None:
     # The flag is parsed on each network subcommand (it drives the LIVE client construction, which
     # an injected-clients run bypasses), so `--refresh` must never be an "unrecognized arguments".
+    # On the pipeline commands it ALSO forces every silver source, so the two wrappers need the
+    # full recorded transport here — `--refresh` on `scrape-lanes` refetches the roster too.
     db = tmp_path / "gold.sqlite"
-    assert (
-        main(
-            ["build", "--refresh", "--db", str(db), "--data", str(DATA_DIR)],
-            clients=_build_clients(),
-        )
-        == 0
-    )
-    lane_clients = _lane_clients(lambda _r: httpx.Response(200, content=FIXTURE_PDF.read_bytes()))
-    assert main(["scrape-lanes", "--refresh", "--db", str(db)], clients=lane_clients) == 0
-    catalog = _city_catalog_file(tmp_path)
-    assert (
-        main(
-            [
-                "scrape-gold",
-                "--refresh",
-                "--db",
-                str(db),
-                "--catalog",
-                str(catalog),
-                "--data",
-                str(DATA_DIR),
-            ],
-            clients=_city_scrape_clients(),
-        )
-        == 0
-    )
+    store = ["--db", str(db), "--data", str(DATA_DIR), "--lake", str(tmp_path / "lake")]
+    assert main(["build", "--refresh", *store], clients=_build_clients()) == 0
+    assert main(["scrape-lanes", "--refresh", *store], clients=_build_clients()) == 0
+    assert main(["scrape-gold", "--refresh", *store], clients=_build_clients()) == 0
     out = tmp_path / "catalog.json"
     layer_clients = clients_over(httpx.MockTransport(_layer_handler))
     assert main(["build-catalog", "--refresh", "--out", str(out)], clients=layer_clients) == 0

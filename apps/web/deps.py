@@ -22,3 +22,11 @@ def get_temperature_provider(request: Request) -> TemperatureProvider | None:
     path that never set `app.state.temperature` still yields `None`, never an `AttributeError`."""
     provider: TemperatureProvider | None = getattr(request.app.state, "temperature", None)
     return provider
+
+
+def get_swim_data_or_none(request: Request) -> SwimStore | None:
+    """The gold store if the lifespan wired one, else `None` — for `/health`, which must answer
+    on a launch path that never set `app.state.swim_data` (same fail-open shape as the
+    temperature provider above)."""
+    data: SwimStore | None = getattr(request.app.state, "swim_data", None)
+    return data

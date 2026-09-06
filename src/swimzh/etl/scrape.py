@@ -258,7 +258,7 @@ def scrape_declared_sources(
     """Fetch and parse every declared source, deciding each pool's ``Admission`` as it goes.
 
     ``tariffs`` is REQUIRED: a failed city-tariff scrape is the *caller's* fatal abort
-    (`cli._compose_schedules`), so the "scrape failed but we continued" state is unrepresentable
+    (`cli._fetch_schedules`), so the "scrape failed but we continued" state is unrepresentable
     here — there is no ``None`` to degrade to. A pool whose page states neither the tariff nor
     free admission is still the per-pool honest ``Unknown`` (plus a note), never a failure.
     """

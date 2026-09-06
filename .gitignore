@@ -28,6 +28,10 @@ htmlcov/
 # of truth and never the test-fixture store (the vcrpy cassettes stay the committed contract).
 /.cache/
 
+# the lake (`swimzh build --lake`): raw = the same HTTP cache, silver = our per-source typed
+# facts. Published beside the store and pulled back by the next run — never committed.
+/.lake/
+
 # TS build output (tsc emits static/js -> static/dist; a build artifact, never committed)
 apps/web/static/dist/
 apps/web/static/js/node_modules/

@@ -27,7 +27,6 @@ from swimzh.domain.models import (
     Basin,
     Facility,
     Feature,
-    LanePlanSource,
     Notice,
     OperatingSeason,
     PoolId,
@@ -220,60 +219,6 @@ def _carry_bindings(
     return scraped_basins + tuple(replace(basin, rules=timetable) for basin in bound)
 
 
-def carry_lane_plans(
-    curated: Iterable[Facility], stored: Iterable[Facility]
-) -> tuple[Facility, ...]:
-    """Carry the lane plans a previous ``_attach_lanes`` wrote onto a FRESHLY ASSEMBLED curated
-    tier, keyed by ``(facility_id, basin_id, lane_plan_source)``.
-
-    A gold blob is three tiers folded flat: curated (``data/`` + the roster), scraped, and the lane
-    plans attached *after* ``compose``. A ``scrape-gold`` re-layer rebuilds the curated tier from
-    ``data/`` so the fresh scrape is not discarded — but that rebuilt tier carries each basin's
-    ``lane_plan_source`` **binding** with no fetched ``lane_plan``, because the lane phase is a
-    different command on a different cadence. Without this carry a *successful* re-layer would
-    silently DELETE every attached lane plan — the same class of bug as the staleness it replaces
-    (invariant S-2: a re-layer must not delete what a previous run wrote).
-
-    **The binding is part of the key, not just the identity.** ``LanePlanSource`` IS the join key a
-    plan was bound on (``url`` + the ``section`` token routing one sub-grid of a stacked sheet), and
-    both sides have it in hand. Keying on ``(facility_id, basin_id)`` alone would carry the plan
-    parsed from the OLD sheet onto a basin whose ``data/`` binding has since been re-pointed — a
-    stale plan wearing a fresh binding, which is exactly the mis-attach
-    ``docs/concepts/lane-plan-url-binding.md`` exists to prevent. A re-pointed basin carries nothing
-    and waits for the next ``scrape-lanes``, which is the honest state.
-
-    Only ``lane_plan`` crosses, and only onto a basin that has none — basin identity, physicals and
-    the binding itself are never merged (the rule ``_carry_bindings`` states as I2). A basin the
-    previous store no longer holds, or that ``data/`` no longer declares, simply has no plan: the
-    lane tier follows the curated crosswalk, it never resurrects a basin.
-    """
-    plans = {
-        (str(facility.identity.facility_id), str(basin.basin_id), basin.lane_plan_source): (
-            basin.lane_plan
-        )
-        for facility in stored
-        for basin in facility.basins
-        if basin.lane_plan is not None
-    }
-    carried: list[Facility] = []
-    for facility in curated:
-        pool_key = str(facility.identity.facility_id)
-        basins = tuple(
-            replace(basin, lane_plan=plans[_lane_key(pool_key, basin)])
-            if basin.lane_plan is None and _lane_key(pool_key, basin) in plans
-            else basin
-            for basin in facility.basins
-        )
-        carried.append(facility if basins == facility.basins else replace(facility, basins=basins))
-    return tuple(carried)
-
-
-def _lane_key(pool_key: str, basin: Basin) -> tuple[str, str, LanePlanSource | None]:
-    """The join key a carried lane plan must match on: the basin AND the binding it was parsed
-    from. A re-pointed ``lane_plan_source`` is a different key, so no stale plan crosses."""
-    return (pool_key, str(basin.basin_id), basin.lane_plan_source)
-
-
 def _merge_basins(
     by_source: dict[Source, Facility],
 ) -> tuple[tuple[Basin, ...], str | None, bool]:
@@ -287,7 +232,8 @@ def _merge_basins(
     * scraped has the schedule (curated has none — the post-strip world) → the scraped basins carry
       the timetable and every curated basin bearing a ``lane_plan_source`` is CARRIED alongside them
       **and stamped with that same scraped timetable** (``_carry_bindings``), so the crosswalk
-      binding + physicals survive, ``_attach_lanes`` finds an owner (no ``attached == 0`` abort),
+      binding + physicals survive, ``_write_lane_plans`` finds an owner (no ``attached == 0``
+      abort),
       and the lane basin goes on to produce its own ``/swim`` session instead of being skipped as
       schedule-less;
     * neither has a schedule → keep whichever source has basins (curated first).
@@ -357,10 +303,30 @@ def compose(
     present in only one source passes through. Output is ordered by canonical id so a re-run
     yields equal rows.
     """
+    return compose_facilities(
+        curated, (_scraped_facility(pool_id, aspects) for pool_id, aspects in scraped)
+    )
+
+
+def scraped_facility(pool_id: PoolId, aspects: ScrapedAspects) -> Facility:
+    """The scraped-side ``Facility`` for one reconciled extract — the SILVER form of a schedule
+    scrape. It is what ``compose`` folds, so storing it (via the gold codec) and folding it later
+    is the same computation as folding the aspects directly."""
+    return _scraped_facility(pool_id, aspects)
+
+
+def compose_facilities(
+    curated: Iterable[Facility],
+    scraped: Iterable[Facility],
+) -> Composition:
+    """Fold curated facilities + scraped-side facilities (``scraped_facility``) per pool.
+
+    The scraped side is keyed by its own ``identity.facility_id`` — already a reconciled
+    ``PoolId``. This is the compose entry the lake-backed build uses: the scraped facilities
+    come back out of the silver document rather than straight from the scraper.
+    """
     curated_by_id: dict[str, Facility] = {str(f.identity.facility_id): f for f in curated}
-    scraped_by_id: dict[str, tuple[PoolId, ScrapedAspects]] = {}
-    for pool_id, aspects in scraped:
-        scraped_by_id[str(pool_id)] = (pool_id, aspects)
+    scraped_by_id: dict[str, Facility] = {str(f.identity.facility_id): f for f in scraped}
 
     facilities: list[Facility] = []
     notes: list[str] = []
@@ -369,8 +335,7 @@ def compose(
         if pool_key in curated_by_id:
             by_source[Source.CURATED] = curated_by_id[pool_key]
         if pool_key in scraped_by_id:
-            pool_id, aspects = scraped_by_id[pool_key]
-            by_source[Source.SCRAPED] = _scraped_facility(pool_id, aspects)
+            by_source[Source.SCRAPED] = scraped_by_id[pool_key]
         merged, pool_notes = _fold(by_source)
         facilities.append(merged)
         notes.extend(pool_notes)

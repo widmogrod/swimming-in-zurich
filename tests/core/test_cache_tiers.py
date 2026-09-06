@@ -66,12 +66,12 @@ def _client(source: str) -> tuple[HttpClient, Recorder]:
 @pytest.mark.parametrize(
     ("source", "expected"),
     [
-        ("geo_sport", CachePolicy("static", 14 * DAY)),
-        ("page_provider", CachePolicy("static", 7 * DAY)),
-        ("price_scraper", CachePolicy("static", 7 * DAY)),
-        ("belegungsplan", CachePolicy("snapshot", 3 * DAY)),
-        ("schedule_scraper", CachePolicy("snapshot", 12 * HOUR)),
-        ("baditicker", CachePolicy("live", 2 * 60)),
+        ("geo_sport", CachePolicy("static", 14 * DAY, max_stale_s=90 * DAY)),
+        ("page_provider", CachePolicy("static", 7 * DAY, max_stale_s=30 * DAY)),
+        ("price_scraper", CachePolicy("static", 7 * DAY, max_stale_s=30 * DAY)),
+        ("belegungsplan", CachePolicy("snapshot", 3 * DAY, max_stale_s=21 * DAY)),
+        ("schedule_scraper", CachePolicy("snapshot", 12 * HOUR, max_stale_s=14 * DAY)),
+        ("baditicker", CachePolicy("live", 2 * 60, max_stale_s=0)),
     ],
 )
 def test_policy_table_is_exactly_this(source: str, expected: CachePolicy) -> None:
@@ -87,6 +87,16 @@ def test_table_holds_no_sources_beyond_the_asserted_six() -> None:
         "schedule_scraper",
         "baditicker",
     }
+
+
+def test_the_live_tier_never_serves_stale_and_every_other_tier_outlives_its_ttl() -> None:
+    # A live count from last week is a lie; every other source may stand in for itself, but
+    # only for LONGER than its refetch cadence — otherwise the stale window could never open.
+    for source, policy in CACHE_POLICIES.items():
+        if policy.tier == "live":
+            assert policy.max_stale_s == 0, source
+        else:
+            assert policy.max_stale_s > policy.ttl_s, source
 
 
 def test_unknown_source_falls_back_to_the_documented_default() -> None:

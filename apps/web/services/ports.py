@@ -14,6 +14,7 @@ from swimzh.domain.models import Facility
 # app's boundary surface names it in one place (business code depends on this Protocol, never on
 # a concrete adapter). `main.py` is the only module that wires a concrete implementation.
 from swimzh.domain.query import TemperatureProvider as TemperatureProvider
+from swimzh.storage.sqlite_repo import SourceFreshness
 
 
 class SwimStore(Protocol):
@@ -29,3 +30,8 @@ class SwimStore(Protocol):
     def roster(self) -> tuple[RosterEntry, ...]: ...
 
     def facility(self, facility_id: str) -> Facility | None: ...
+
+    def source_freshness(self) -> tuple[SourceFreshness, ...]:
+        """Per-source provenance of the store's facts (the lake's silver headers); empty on a
+        store built before the lake existed."""
+        ...

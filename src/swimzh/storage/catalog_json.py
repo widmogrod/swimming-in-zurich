@@ -31,6 +31,10 @@ class _EntryDTO(BaseModel):
     url: str | None
     description: str | None
     phone: str | None
+    # The WFS `poi_id` (→ `geo_sport_id` on the spine, and the `geo_sport` xref). Defaulted so a
+    # catalog written before the field existed still validates under `extra="forbid"`; emitted
+    # whenever present. Dropping it here made every lake-warm build lose all 25 geo_sport xrefs.
+    poi_id: str | None = None
 
 
 class _CatalogDTO(BaseModel):
@@ -51,6 +55,7 @@ def _to_dto(entry: PoolCatalogEntry) -> _EntryDTO:
         url=entry.url,
         description=entry.description,
         phone=entry.phone,
+        poi_id=entry.poi_id,
     )
 
 
@@ -67,6 +72,7 @@ def _from_dto(dto: _EntryDTO) -> PoolCatalogEntry:
         url=dto.url,
         description=dto.description,
         phone=dto.phone,
+        poi_id=dto.poi_id,
     )
 
 

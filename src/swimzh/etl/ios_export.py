@@ -76,7 +76,14 @@ from swimzh.domain.schedule import (
     Weekday,
 )
 from swimzh.storage.atomic import atomic_swap
-from swimzh.storage.sqlite_repo import GoldRepository, load_alias_rows, load_calendar, load_roster
+from swimzh.storage.sqlite_repo import (
+    GoldRepository,
+    SourceFreshness,
+    load_alias_rows,
+    load_calendar,
+    load_roster,
+    load_source_freshness,
+)
 
 _ZURICH = ZoneInfo("Europe/Zurich")
 
@@ -798,8 +805,30 @@ def _gold_valid_as_of(facilities: tuple[Facility, ...]) -> str | None:
     return max(stamps).isoformat() if stamps else None
 
 
+def _freshness_json(rows: tuple[SourceFreshness, ...]) -> str:
+    """The gold `source_freshness` rows as the manifest's `freshness` list, serialised once
+    here so the store's `meta` and the manifest carry byte-identical claims."""
+    return json.dumps(
+        [
+            {
+                "source": row.header.source,
+                "fetched_at": row.header.fetched_at.isoformat(),
+                "status": row.header.status.value,
+            }
+            for row in rows
+        ],
+        sort_keys=True,
+    )
+
+
 def _meta_rows(
-    tables: _Tables, *, start: date, end: date, built_at: datetime, gold_valid_as_of: str | None
+    tables: _Tables,
+    *,
+    start: date,
+    end: date,
+    built_at: datetime,
+    gold_valid_as_of: str | None,
+    freshness: tuple[SourceFreshness, ...] = (),
 ) -> tuple[tuple[str, str], ...]:
     return (
         ("schema_version", str(SCHEMA_VERSION)),
@@ -808,6 +837,9 @@ def _meta_rows(
         ("horizon_end", end.isoformat()),
         ("gold_valid_as_of", gold_valid_as_of or ""),
         ("content_hash", _content_hash(tables, start, end)),
+        # Per-source provenance (the lake's silver headers): which source this store's facts
+        # came from and how old each was at build time. Empty on a pre-lake gold store.
+        ("source_freshness", _freshness_json(freshness)),
     )
 
 
@@ -922,6 +954,7 @@ def export_ios(
         end=dates[-1],
         built_at=datetime.now(_ZURICH),
         gold_valid_as_of=_gold_valid_as_of(facilities),
+        freshness=load_source_freshness(conn),
     )
 
     with atomic_swap(out) as staging:
@@ -980,6 +1013,10 @@ class StoreManifest:
     url: str
     sha256: str
     bytes: int
+    #: Per-source provenance — `[{source, fetched_at, status}]`, straight from the store's own
+    #: `meta.source_freshness`. ADDITIVE: an older client's decoder ignores the key. Empty when
+    #: the gold store predates the lake.
+    freshness: tuple[dict[str, str], ...] = ()
 
     def to_json(self) -> str:
         """The wire form — snake_case keys, sorted, newline-terminated, so a re-release of an
@@ -1015,6 +1052,13 @@ def manifest_for(store: Path, *, url: str) -> Result[StoreManifest, ProviderErro
     missing = [key for key in ("schema_version", "built_at", "horizon_end") if key not in meta]
     if missing:
         return Err(SchemaMismatch(source="ios_export", detail=f"meta missing {missing}"))
+    freshness_raw = meta.get("source_freshness", "[]")
+    try:
+        freshness = tuple(
+            {str(k): str(v) for k, v in item.items()} for item in json.loads(freshness_raw)
+        )
+    except (ValueError, AttributeError) as exc:
+        return Err(SchemaMismatch(source="ios_export", detail=f"bad source_freshness: {exc}"))
     return Ok(
         StoreManifest(
             schema_version=int(meta["schema_version"]),
@@ -1023,6 +1067,7 @@ def manifest_for(store: Path, *, url: str) -> Result[StoreManifest, ProviderErro
             url=url,
             sha256=_sha256(store),
             bytes=store.stat().st_size,
+            freshness=freshness,
         )
     )
 

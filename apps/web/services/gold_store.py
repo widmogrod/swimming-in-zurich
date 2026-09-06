@@ -14,7 +14,14 @@ from pathlib import Path
 from swimzh.domain.calendar import ZurichCalendar
 from swimzh.domain.catalog import RosterEntry
 from swimzh.domain.models import Facility
-from swimzh.storage.sqlite_repo import GoldRepository, load_calendar, load_roster, open_db
+from swimzh.storage.sqlite_repo import (
+    GoldRepository,
+    SourceFreshness,
+    load_calendar,
+    load_roster,
+    load_source_freshness,
+    open_db,
+)
 
 
 class GoldSwimStore:
@@ -23,10 +30,12 @@ class GoldSwimStore:
         facilities: tuple[Facility, ...],
         roster: tuple[RosterEntry, ...],
         calendar: ZurichCalendar,
+        source_freshness: tuple[SourceFreshness, ...] = (),
     ) -> None:
         self._facilities = facilities
         self._roster = roster
         self._calendar = calendar
+        self._source_freshness = source_freshness
         # Index curated facilities by canonical id so `/pools/{id}` resolves a catalog pool to
         # its schedule with a lookup, not a scan.
         self._by_id = {str(f.identity.facility_id): f for f in facilities}
@@ -41,7 +50,7 @@ class GoldSwimStore:
             )
         roster = load_roster(conn)
         calendar = load_calendar(conn)
-        return GoldSwimStore(facilities, roster, calendar)
+        return GoldSwimStore(facilities, roster, calendar, load_source_freshness(conn))
 
     def facilities(self) -> tuple[Facility, ...]:
         return self._facilities
@@ -54,3 +63,6 @@ class GoldSwimStore:
 
     def facility(self, facility_id: str) -> Facility | None:
         return self._by_id.get(facility_id)
+
+    def source_freshness(self) -> tuple[SourceFreshness, ...]:
+        return self._source_freshness

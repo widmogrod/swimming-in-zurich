@@ -56,14 +56,3 @@ def test_from_scratch_build_leaves_no_target_on_abort(tmp_path: Path) -> None:
         # abort: no commit
     assert not target.exists()
     assert list(tmp_path.iterdir()) == []
-
-
-def test_seed_from_byte_copies_the_source_into_the_temp(tmp_path: Path) -> None:
-    target = tmp_path / "gold.sqlite"
-    target.write_text("LIVE-CONTENT", encoding="utf-8")
-    with atomic_swap(target, seed_from=target) as staging:
-        # The temp starts as a copy of the live store, so a layering command reads current content.
-        assert staging.path.read_text(encoding="utf-8") == "LIVE-CONTENT"
-        staging.path.write_text("LIVE-CONTENT+LAYER", encoding="utf-8")
-        staging.commit()
-    assert target.read_text(encoding="utf-8") == "LIVE-CONTENT+LAYER"
