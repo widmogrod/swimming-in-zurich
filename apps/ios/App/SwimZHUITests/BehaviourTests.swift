@@ -141,6 +141,42 @@ final class BehaviourTests: XCTestCase {
 
   // MARK: - The row
 
+  func testFavouritingARowKeepsItWhereItIs() {
+    // THE SWIPE THAT MADE A ROW VANISH. Marking a row rebuilt the list with that row sorted to
+    // the front of its tier: it left the screen, and every row under it jumped up by its
+    // height. Under `Lab.FavouriteMove.hold` (the default) the heart appears in place and the
+    // order waits — it is applied when the reader comes back to the top of the list, which is
+    // where the front of a tier is.
+    let rows = all("poolRow")
+    XCTAssertGreaterThan(rows.count, 2, "not enough rows on screen to hold one in place")
+    let second = rows.element(boundBy: 1)
+    let name = second.label
+    second.swipeRight()
+    let action = find("favouriteAction")
+    XCTAssertTrue(action.waitForExistence(timeout: 5), "swiping a row offered no favourite")
+    action.tap()
+    // The row is still the second row: nothing moved.
+    let held = expectation(
+      for: NSPredicate { _, _ in rows.element(boundBy: 1).label == name }, evaluatedWith: nil)
+    XCTAssertEqual(XCTWaiter().wait(for: [held], timeout: 5), .completed, "the row moved")
+    // Leave the top and come back: the held order is applied now, on screen. The row is at
+    // the front of its tier — which is the first row, or still the second when the second
+    // row already led a tier of its own.
+    app.swipeUp()
+    app.swipeDown()
+    app.swipeDown()
+    let settled = expectation(
+      for: NSPredicate { _, _ in
+        rows.element(boundBy: 0).label == name || rows.element(boundBy: 1).label == name
+      }, evaluatedWith: nil)
+    XCTAssertEqual(XCTWaiter().wait(for: [settled], timeout: 8), .completed, "the row was lost")
+    // Put it back, so the next launch's order is the one every other test assumes.
+    let favourite = rows.element(boundBy: 0).label == name ? rows.element(boundBy: 0) : second
+    favourite.swipeRight()
+    XCTAssertTrue(action.waitForExistence(timeout: 5))
+    action.tap()
+  }
+
   func testTheWholeRowOpensThePool() {
     let row = find("poolRow")
     // The BOTTOM of the row, deliberately: the pool's name is at the top, and until this pass

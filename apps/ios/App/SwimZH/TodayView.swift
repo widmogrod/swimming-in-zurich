@@ -67,6 +67,10 @@ struct TodayView: View {
   /// this screen has an opinion about it, and the DECISION it holds is the kit's.
   @State private var showsStrip = true
 
+  /// Whether the list was at its top on the last scroll report — so the NEXT report can tell
+  /// an arrival from a rest. See `listReachedTop`.
+  @State private var listAtTop = true
+
   /// List or map. View state: nothing outside this screen has an opinion about it, and it
   /// deliberately does NOT persist — an app that reopened on the map would be answering a
   /// different question from the one it is for.
@@ -103,6 +107,9 @@ struct TodayView: View {
         // set-up, and the first pool tapped used to pay it as a frozen push. Paid here instead,
         // off the answer's critical path — see `MapWarmup`.
         await MapWarmup.warm()
+        // The keyboard's first show is the same kind of bill, paid by the first tap on search.
+        // See `KeyboardWarmup`; behind a Lab switch so the two can be felt side by side.
+        if Lab.isOn(Lab.keyboardWarmup) { await KeyboardWarmup.warm() }
         // AFTER the screen has answered. The refresh is a background nicety; making the first
         // answer wait on a network round trip would trade the app's whole premise — an answer
         // with no network — for a store that is at most seven days fresher.
@@ -139,21 +146,6 @@ struct TodayView: View {
         // and the bar it was keeping alive went with it. The strip now starts at the top of the
         // screen, and the rows get the ~50 points back.
         .toolbarVisibility(.hidden, for: .navigationBar)
-        // No placement argument, and deliberately so. On iOS 26 the search field ALREADY lives
-        // at the bottom on iPhone — that is the platform's own placement, not something to be
-        // arranged. The two attempts that fought it both added a surface: `.minimize` UNDER a
-        // custom bar of ours, and an `isPresented` binding that left the field resident anyway,
-        // stacked below. What was wrong was the custom bar, not the modifier: with the filter
-        // control moved into the system's own bottom bar, `.minimize` collapses the field into
-        // the same bar. The all-pools browser says exactly this, in the same two modifiers.
-        .searchable(
-          text: $model.filters.search,
-          prompt: Text(Message("nav.findAPool"), localized)
-        )
-        // Collapsed to a glyph rather than a resident field. Both were driven and screenshotted:
-        // resident puts a full-width field in the bottom bar for a control most sessions never
-        // use, and neither form changes what happens WHEN you open it — see the toolbar below.
-        .searchToolbarBehavior(.minimize)
         .navigationDestination(for: Route.self, destination: screen)
     }
   }
@@ -341,7 +333,7 @@ struct TodayView: View {
   ) -> some View {
     switch model.state {
     case .loading:
-      // THE SAME COLOUR THE LAUNCH SCREEN IS, and this is a flicker rather than a nicety.
+      // THE SAME COLOUR THE LAUNCH SCREEN IS, AND NOTHING ON IT — no spinner, and no bar.
       // Launch runs through three surfaces — the launch screen, this, then the list — and
       // until now they were three different colours: the launch screen was BLANK WHITE (an
       // empty `UILaunchScreen` dict, so white even on a phone in dark mode), this view took
@@ -353,9 +345,15 @@ struct TodayView: View {
       // 0.05. What the reader actually waits through is the 1.3 s BEFORE any of our code runs
       // — dyld, the Swift runtime, SwiftUI — and the launch screen owns all of it. So the one
       // thing worth doing is making that screen look like the app rather than like nothing.
-      ProgressView()
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color("LaunchBackground"))
+      //
+      // The spinner went with the performance review: the store answers in a few
+      // milliseconds (every read measured under 3 ms), so the wheel showed for a frame or
+      // two and read as "the app is loading something" about an app that was not. The HIG
+      // reserves progress indication for waits a reader can feel. And the search field went
+      // with it — `.searchable` is attached to the READY screen below, so the bottom bar
+      // arrives with the rows it searches rather than a beat before them, over nothing.
+      Color("LaunchBackground")
+        .ignoresSafeArea()
     case .failed(let diagnostic):
       // The DIAGNOSTIC is not shown. It is a `StoreError`'s own English detail — an SQL table
       // name and a row id — which is a developer's sentence, not a reader's, and S3b shipped
@@ -403,6 +401,25 @@ struct TodayView: View {
         stripIfShown
           .animation(.snappy(duration: 0.22), value: showsStrip)
       }
+      // No placement argument, and deliberately so. On iOS 26 the search field ALREADY lives
+      // at the bottom on iPhone — that is the platform's own placement, not something to be
+      // arranged. The two attempts that fought it both added a surface: `.minimize` UNDER a
+      // custom bar of ours, and an `isPresented` binding that left the field resident anyway,
+      // stacked below. What was wrong was the custom bar, not the modifier: with the filter
+      // control moved into the system's own bottom bar, `.minimize` collapses the field into
+      // the same bar. The all-pools browser says exactly this, in the same two modifiers.
+      //
+      // ON THE READY SCREEN, not on the stack: attached one level up it drew the search
+      // control in a bottom bar over the loading state — a search field for a list that was
+      // not there yet, which was the first thing a reader saw of the app.
+      .searchable(
+        text: $model.filters.search,
+        prompt: Text(Message("nav.findAPool"), localized)
+      )
+      // Collapsed to a glyph rather than a resident field. Both were driven and screenshotted:
+      // resident puts a full-width field in the bottom bar for a control most sessions never
+      // use, and neither form changes what happens WHEN you open it — see the toolbar below.
+      .searchToolbarBehavior(.minimize)
       // The strip is ALWAYS up on the map: there is no scroll there to yield it to, and a
       // strip left hidden by the last list scroll would take the day picker away from a screen
       // that cannot get it back.
@@ -452,6 +469,11 @@ struct TodayView: View {
   /// animation from in here is how the app stopped ever reporting itself idle; the animation is
   /// declared on the bar instead, against this one value.
   private func strip(scrolledTo scrolled: Double) {
+    // Arriving back at the top is when a held favourite may take its place at the front of
+    // its tier — on screen, animated, and never out from under a thumb. Both halves of that
+    // are the kit's (`listReachedTop`, `TodayModel.settleFavouriteOrder`); this only reports.
+    if listReachedTop(scrolled: scrolled, wasAtTop: listAtTop) { model.settleFavouriteOrder() }
+    listAtTop = listIsAtTop(scrolled: scrolled)
     let shows = stripShouldShow(
       scrolled: scrolled, stripHeight: stripHeight, showing: showsStrip)
     guard shows != showsStrip else { return }

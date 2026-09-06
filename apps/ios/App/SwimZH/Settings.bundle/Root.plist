@@ -109,6 +109,66 @@
 				<string>external</string>
 			</array>
 		</dict>
+		<dict>
+			<key>Type</key>
+			<string>PSGroupSpecifier</string>
+			<key>Title</key>
+			<string>Lab: performance review</string>
+			<key>FooterText</key>
+			<string>Three ways the app moves, to feel side by side. Data and answers are the same under every setting.</string>
+		</dict>
+		<dict>
+			<key>Type</key>
+			<string>PSMultiValueSpecifier</string>
+			<key>Title</key>
+			<string>Favourite row</string>
+			<key>Key</key>
+			<string>lab.favouriteMove</string>
+			<key>DefaultValue</key>
+			<string>hold</string>
+			<key>Titles</key>
+			<array>
+				<string>Stays put; reorders at the top (default)</string>
+				<string>Slides to the front at once (previous, animated)</string>
+				<string>Never reorders</string>
+			</array>
+			<key>Values</key>
+			<array>
+				<string>hold</string>
+				<string>move</string>
+				<string>never</string>
+			</array>
+		</dict>
+		<dict>
+			<key>Type</key>
+			<string>PSMultiValueSpecifier</string>
+			<key>Title</key>
+			<string>Pool map arrives</string>
+			<key>Key</key>
+			<string>lab.poolMapArrival</string>
+			<key>DefaultValue</key>
+			<string>afterPush</string>
+			<key>Titles</key>
+			<array>
+				<string>After the push, fading in (default)</string>
+				<string>With the push (previous)</string>
+			</array>
+			<key>Values</key>
+			<array>
+				<string>afterPush</string>
+				<string>withPush</string>
+			</array>
+		</dict>
+		<dict>
+			<key>Type</key>
+			<string>PSToggleSwitchSpecifier</string>
+			<key>Title</key>
+			<string>Preload keyboard</string>
+			<key>Key</key>
+			<string>lab.keyboardWarmup</string>
+			<key>DefaultValue</key>
+			<true/>
+		</dict>
 	</array>
 </dict>
 </plist>

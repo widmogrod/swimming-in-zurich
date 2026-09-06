@@ -151,3 +151,22 @@ public func stripShouldShow(scrolled: Double, stripHeight: Double, showing: Bool
   if scrolled > stripHidesBeyond(stripHeight: stripHeight) { return false }
   return showing
 }
+
+// MARK: - Arriving back at the top
+
+/// Whether the list is at its top — the same band the strip is always shown within, so "at the
+/// top" means one thing on this screen rather than two numbers that drift apart.
+public func listIsAtTop(scrolled: Double) -> Bool {
+  scrolled < stripShowsWithin
+}
+
+/// Whether the list has JUST come back to its top: it is there now and was not a moment ago.
+///
+/// An arrival, not a state. A favourite marked while the reader is reading the list is held in
+/// place (see `listModel`'s `leading`); the moment it may move to the front of its tier is when
+/// the reader returns to the top, where the front is. Firing on the STATE instead — "at the top"
+/// — would move a row the instant it was marked whenever the list happened to be at rest at
+/// the top, which is the jump the hold exists to prevent.
+public func listReachedTop(scrolled: Double, wasAtTop: Bool) -> Bool {
+  listIsAtTop(scrolled: scrolled) && !wasAtTop
+}

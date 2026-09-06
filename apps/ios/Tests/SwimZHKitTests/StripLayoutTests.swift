@@ -124,6 +124,20 @@ struct StripLayoutTests {
     }
   }
 
+  @Test("the list REACHES its top only on the way back, never while resting there")
+  func reachingTheTopIsAnArrival() {
+    // The moment a held favourite may move to the front of its tier. Firing on the state
+    // would move a row the instant it was marked whenever the list was already at rest at the
+    // top — the very jump the hold exists to prevent.
+    #expect(listIsAtTop(scrolled: 0))
+    #expect(listIsAtTop(scrolled: stripShowsWithin - 1))
+    #expect(!listIsAtTop(scrolled: stripShowsWithin))
+    #expect(listReachedTop(scrolled: 0, wasAtTop: false))
+    #expect(!listReachedTop(scrolled: 0, wasAtTop: true))
+    #expect(!listReachedTop(scrolled: 300, wasAtTop: false))
+    #expect(!listReachedTop(scrolled: 300, wasAtTop: true))
+  }
+
   @Test("between them nothing changes, so the strip cannot flap")
   func theBandHolds() {
     let height = stripLayout(for: .large, width: 400).stripHeight

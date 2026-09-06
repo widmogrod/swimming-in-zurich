@@ -77,6 +77,9 @@ struct PoolRowView: View {
       // The app's own tint, not the row's TIER colour. A swipe action that changes colour from
       // row to row reads as a different action, and tier colour means something else here.
       .tint(.accentColor)
+      // For `BehaviourTests`, which swipes a row and presses this: by identifier, never by
+      // its five-language label.
+      .accessibilityIdentifier("favouriteAction")
     }
     // A HEART IS A PHYSICAL ACT. `.sensoryFeedback` rather than a `UIImpactFeedbackGenerator`:
     // it is declarative, it costs no UIKit import in a SwiftUI target, and it obeys the

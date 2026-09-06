@@ -25,6 +25,7 @@
 		1A000000000000000000075 /* LocationSource.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A000000000000000000074 /* LocationSource.swift */; };
 		1A000000000000000000073 /* PoolHeader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A000000000000000000072 /* PoolHeader.swift */; };
 		1A0000000000000000000C5 /* MapWarmup.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A0000000000000000000C4 /* MapWarmup.swift */; };
+		1A0000000000000000000E1 /* KeyboardWarmup.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A0000000000000000000E0 /* KeyboardWarmup.swift */; };
 		1A0000000000000000000C3 /* PoolPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A0000000000000000000C2 /* PoolPanel.swift */; };
 		1A0000000000000000000C7 /* LinkOpener.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A0000000000000000000C6 /* LinkOpener.swift */; };
 		1A0000000000000000000C1 /* PoolStage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A0000000000000000000C0 /* PoolStage.swift */; };
@@ -88,6 +89,7 @@
 		1A000000000000000000074 /* LocationSource.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocationSource.swift; sourceTree = "<group>"; };
 		1A000000000000000000072 /* PoolHeader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PoolHeader.swift; sourceTree = "<group>"; };
 		1A0000000000000000000C4 /* MapWarmup.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MapWarmup.swift; sourceTree = "<group>"; };
+		1A0000000000000000000E0 /* KeyboardWarmup.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyboardWarmup.swift; sourceTree = "<group>"; };
 		1A0000000000000000000C2 /* PoolPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PoolPanel.swift; sourceTree = "<group>"; };
 		1A0000000000000000000C6 /* LinkOpener.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LinkOpener.swift; sourceTree = "<group>"; };
 		1A0000000000000000000C0 /* PoolStage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PoolStage.swift; sourceTree = "<group>"; };
@@ -170,6 +172,7 @@
 						1A000000000000000000074 /* LocationSource.swift */,
 				1A000000000000000000072 /* PoolHeader.swift */,
 				1A0000000000000000000C4 /* MapWarmup.swift */,
+				1A0000000000000000000E0 /* KeyboardWarmup.swift */,
 				1A0000000000000000000C2 /* PoolPanel.swift */,
 				1A0000000000000000000C6 /* LinkOpener.swift */,
 				1A0000000000000000000C0 /* PoolStage.swift */,
@@ -385,6 +388,7 @@
 						1A000000000000000000075 /* LocationSource.swift in Sources */,
 				1A000000000000000000073 /* PoolHeader.swift in Sources */,
 				1A0000000000000000000C5 /* MapWarmup.swift in Sources */,
+				1A0000000000000000000E1 /* KeyboardWarmup.swift in Sources */,
 				1A0000000000000000000C3 /* PoolPanel.swift in Sources */,
 				1A0000000000000000000C7 /* LinkOpener.swift in Sources */,
 				1A0000000000000000000C1 /* PoolStage.swift in Sources */,

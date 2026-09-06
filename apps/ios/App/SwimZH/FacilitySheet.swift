@@ -68,11 +68,17 @@ struct FacilitySheet: View {
   @State private var listPull: Double = 0
   /// The drawer pulled past its smallest size is the way out — see `PoolPanel`.
   @Environment(\.dismiss) private var dismiss
+  /// `Lab.poolMapArrival`: whether the map is in the pushed screen's first frame or arrives
+  /// once the push has landed.
+  @AppStorage(Lab.poolMapArrival) private var mapArrival = Lab.PoolMapArrival.default
+  /// Whether the map has been asked for yet. Under `afterPush` it starts false and flips when
+  /// the push has landed; under `withPush` it is true from the first frame.
+  @State private var mapArrived = false
 
   var body: some View {
     if let point {
       ZStack(alignment: .bottom) {
-        PoolStage(name: name, point: point, homeRequests: homeRequests)
+        stage(point)
         PoolPanel(detent: $detent, onDismiss: { dismiss() }) {
           panelHeader
         } facts: {
@@ -111,6 +117,34 @@ struct FacilitySheet: View {
       .navigationBarTitleDisplayMode(.inline)
     } else {
       ProgressView()
+    }
+  }
+
+  /// The map — or, until the push has landed, the ground it will fade in over.
+  ///
+  /// THE TAP USED TO WAIT FOR THE MAP. SwiftUI renders a pushed screen's first frame before
+  /// the push animation can begin, and this screen's first frame held a live `Map`: MapKit's
+  /// renderer, its tiles, the location dot. So the reader's tap on a row was followed by a
+  /// pause, then a push — the "opening a pool lags" complaint. Under `afterPush` the first
+  /// frame is a flat ground in the launch colour (the panel with the pool's name is there at
+  /// once), the push starts immediately, and the map is built one beat later and fades in.
+  /// `MapWarmup` already paid the framework's cost; this moves the map's own first frame off
+  /// the tap. The map view is never resized either way — see `PoolStage`.
+  @ViewBuilder
+  private func stage(_ point: GeoPoint) -> some View {
+    if mapArrived || mapArrival == .withPush {
+      PoolStage(name: name, point: point, homeRequests: homeRequests)
+        .transition(.opacity)
+    } else {
+      Color("LaunchBackground")
+        .ignoresSafeArea()
+        .task {
+          // One push's worth of time, then the map. A fixed beat rather than a transition
+          // callback: SwiftUI's navigation push exposes no completion, and the push itself
+          // takes about this long.
+          try? await Task.sleep(for: .milliseconds(450))
+          withAnimation(.easeIn(duration: 0.25)) { mapArrived = true }
+        }
     }
   }
 

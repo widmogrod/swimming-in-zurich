@@ -12,6 +12,7 @@
 
 import Foundation
 import OSLog
+import SwiftUI
 import SwimZHKit
 
 @MainActor
@@ -81,6 +82,10 @@ final class TodayModel {
   /// worth of times.
   private var lastRefreshAttempt: Date?
   private var favourites: Favourites = Favourites()
+  /// The favourites the list is currently ORDERED by — `favourites` as of the last refresh
+  /// that was allowed to reorder. The two differ only while `Lab.FavouriteMove.hold` is
+  /// holding a just-toggled row where the reader can see it; see `toggleFavourite`.
+  private var leadingFavourites: Favourites = Favourites()
   /// Set only while `load` installs the initial filters, so that assignment's `didSet` does not
   /// race the first `refresh`. It deliberately does NOT cover a refresh in flight: a keystroke
   /// arriving mid-query must not be swallowed.
@@ -196,10 +201,42 @@ final class TodayModel {
     return try? await store.facility(poolID: poolID, on: filters.day)
   }
 
+  /// Toggle the heart, and let `Lab.FavouriteMove` say whether the row moves now.
+  ///
+  /// Under `hold` the ORDER is left exactly as the reader sees it: the rebuilt model differs
+  /// from the one on screen in one row's heart and nothing else, so SwiftUI updates one row.
+  /// The favourites-first order is caught up by `settleFavouriteOrder` — the next refresh the
+  /// reader causes, or their return to the top of the list.
   func toggleFavourite(_ poolID: String) {
     favourites.toggle(poolID)
     UserDefaults.standard.set(favourites.encoded, forKey: Self.favouritesKey)
-    startRefresh()
+    switch Lab.FavouriteMove.current() {
+    case .hold, .never: startRefresh(holdingOrder: true)
+    case .move: startRefresh(animated: true)
+    }
+  }
+
+  /// Apply the favourites-first order the reader's swipes have been held back from.
+  ///
+  /// Called when the list arrives back at its top (`listReachedTop`), which is where the front
+  /// of a tier is — so a row that moves does so on screen and animated, never out from under a
+  /// thumb mid-list. A no-op when nothing is held, which is almost always.
+  func settleFavouriteOrder() {
+    guard Lab.FavouriteMove.current() == .hold, leadingFavourites != favourites else { return }
+    startRefresh(animated: true)
+  }
+
+  /// Which favourites the rows are ORDERED by, for this refresh. Every policy but `hold`
+  /// answers the same thing every time; `hold` answers "the order on screen" until a refresh
+  /// that is not itself a heart toggle catches it up.
+  private func leadingFavourites(holdingOrder: Bool) -> Favourites {
+    switch Lab.FavouriteMove.current() {
+    case .never: return Favourites()
+    case .move: return favourites
+    case .hold:
+      if !holdingOrder { leadingFavourites = favourites }
+      return leadingFavourites
+    }
   }
 
   /// One pool's live water temperature, asked for when its sheet opens.
@@ -247,6 +284,7 @@ final class TodayModel {
       self.metadata = metadata
       favourites = Favourites.decode(
         UserDefaults.standard.string(forKey: Self.favouritesKey) ?? "")
+      leadingFavourites = favourites
       updateToday(now)
       // From the ROSTER, not from one day's answer: an answer is already narrowed by the
       // radius, so a kind filter built from it would silently lose the kinds that happen to be
@@ -288,7 +326,11 @@ final class TodayModel {
 
   /// Re-ask the store for the current filters. `now` supplies only the wall-clock time of day —
   /// the one clock input the client may reason about (invariant E1).
-  func refresh(now: Date = Date()) async {
+  ///
+  /// `holdingOrder` is a heart toggle asking the rows to stay where they are (see
+  /// `toggleFavourite`); `animated` publishes the answer inside an animation, so a row that
+  /// does move is seen to slide. Neither changes what the answer says.
+  func refresh(now: Date = Date(), holdingOrder: Bool = false, animated: Bool = false) async {
     guard let store, let metadata else { return }
     // BEFORE anything else. `today` was captured once at launch, so an app left open across
     // midnight went on treating yesterday as today: the clock tiers resumed on a stale day and
@@ -318,11 +360,12 @@ final class TodayModel {
         radiusKm: asked.radiusKm
       )
       guard mine == generation else { return }
-      state = .ready(
+      let ready = State.ready(
         listModel(
           answer: answer,
           filters: asked,
           favourites: favourites,
+          leading: leadingFavourites(holdingOrder: holdingOrder),
           horizon: metadata,
           today: today,
           at: time,
@@ -330,6 +373,11 @@ final class TodayModel {
         ),
         metadata
       )
+      if animated {
+        withAnimation(.snappy(duration: 0.3)) { state = ready }
+      } else {
+        state = ready
+      }
     } catch {
       guard mine == generation else { return }
       state = .failed(String(describing: error))
@@ -364,9 +412,9 @@ final class TodayModel {
   /// `generation` already makes a late answer harmless, but a superseded query still ran to
   /// completion against the store — one full day's read per keystroke, all but the last thrown
   /// away. Cancelling makes the re-ask-on-every-change choice cheap without caching anything.
-  private func startRefresh() {
+  private func startRefresh(holdingOrder: Bool = false, animated: Bool = false) {
     pendingRefresh?.cancel()
-    pendingRefresh = Task { await refresh() }
+    pendingRefresh = Task { await refresh(holdingOrder: holdingOrder, animated: animated) }
   }
 
   /// Look for a newer published store, and install it if there is one.

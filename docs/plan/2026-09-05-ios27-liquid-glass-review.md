@@ -163,6 +163,9 @@ screenshot set was pixel-identical to the new one for exactly that reason.
 | Glass map card | `lab.glassCard` | `.glassEffect(.regular.interactive())`, `.materialize` transition, no shadow | `.regularMaterial` + shadow |
 | Symbol motion | `lab.symbolMotion` | heart draws on/off, filter glyph replace + bounce | plain swaps |
 | Links open in | `lab.linkOpener` (picker) | `safari` (default): `SFSafariViewController` full screen, prewarmed; `sheet`: the same as a pull-down page sheet; `web`: SwiftUI `WebView` in the app's own glass bars | `external`: the Safari app |
+| Favourite row | `lab.favouriteMove` (picker) | `hold` (default): the heart appears in place, nothing moves; the favourites-first order is applied when the reader scrolls back to the top, changes day/filter, or relaunches; `never`: favourites never lead | `move`: the row slides to the front of its tier at once (the old behaviour, now animated instead of cut) |
+| Pool map arrives | `lab.poolMapArrival` (picker) | `afterPush` (default): the screen pushes at once over a flat ground, the `Map` is built one beat later and fades in | `withPush`: the `Map` is in the pushed screen's first frame, so the tap waits for it |
+| Preload keyboard | `lab.keyboardWarmup` | a hidden field takes and resigns first responder once after the answer is on screen, so the first tap on search skips UIKit's first-keyboard bring-up | the first search tap pays it |
 
 ### The pool screen is a map (decided the same evening; two switches deleted)
 
@@ -329,6 +332,79 @@ least code, and it follows the reader's Safari settings and the iOS 27 glass sli
 `sheet` is worth a second look on a phone if the map behind it turns out to matter more than
 the page height. `web` earns its keep only if the app ever needs to act on the page (inject a
 timetable parser, keep the bar's own controls) — not today.
+
+### Performance review (2026-09-06; three more switches)
+
+The complaint, in the owner's words: a spinner and a search box at launch "when it loads
+data"; tapping the search box "takes few seconds, it lags"; opening a pool's details lags
+more; is there I/O blocking, or no lazy loading? And a favourite swiped mid-list is "pushed on
+top of list and disappears from current view".
+
+**What was measured, and how.**
+
+1. *The rule layer, on the host* (a throwaway `swift test` probe against the bundled store,
+   since deleted): open the store 2 ms; `metadata` + `pools` < 1 ms; one full day's `answer`
+   2.6 ms cold, 1.0 ms warm; `listModel` 0.5 ms; `dayRibbon` for all 57 rows 0.5 ms;
+   `a11yBlocks` for all rows 2 ms; the 400 day chips 3 ms; one pool's `facility` (six reads)
+   0.2–0.5 ms and its `detailSections` under 0.15 ms; a thousand catalog renders 1–7 ms; a
+   thousand formatted distances 1.7 ms. **There is no I/O on the scrolling path and nothing to
+   lazy-load**: every store read runs inside the `Store` actor, off the main thread, and the
+   whole answer costs less than one frame. The "no cache, re-query on every keystroke" choice
+   in `TodayModel` is confirmed cheap.
+2. *The app, driven in the simulator with Time Profiler attached* (`xctrace record --attach`
+   on the simulator's process while `BehaviourTests`-style code drove it; Debug). Two lessons
+   about the method before the numbers: XCUITest's own accessibility snapshots dominate the
+   main thread in any window where the test polls (`.exists`, `waitForExistence`), so those
+   stacks (`XCT*`, `_accessibilityUserTestingSnapshot*`) have to be excluded before the app's
+   own cost is visible; and `pgrep -x SwimZH` finds the app on whichever booted simulator ran
+   it last, so the attach must match the device's UDID in the process path. With the harness
+   excluded, the app's own main-thread work per interaction: **opening search ~120 ms, all of
+   it UIKit's first keyboard bring-up** (`_showKeyboardIgnoringPolicyDelegate`,
+   `UIInputWindowController`), not one sample in this app's code; **opening a pool ~40 ms**
+   (the navigation transition and the map's engine); **the favourite swipe and tap ~30 ms**
+   (the swipe animation, one collection-view layout). Launch to the first row is 4.4 s under
+   XCUITest, of which the store load and first list is ~0.2 s; the rest is process launch,
+   dyld and the Swift runtime (a quarter of the app's own launch samples are
+   `swift_conformsToProtocol*` scanning, the well-known debug-build cost).
+
+So the seconds felt on a phone are not this app's CPU work, and not disk. What they most
+plausibly are: **first-use system bills** (the keyboard's first show, MapKit's first live
+`Map` frame — both paid on the main thread at the moment of the tap), **a Debug build on a
+device** (`-Onone` SwiftUI and the conformance scan above are several times slower than
+Release; the scheme's Run action is Debug), and **rendering** (Liquid Glass sampling a list of
+57 canvases, a glass panel over a live map), which a simulator's Mac GPU does not reproduce.
+The honest next measurement is on the phone: Instruments → Time Profiler + Hangs on a
+**Release** build, or the Xcode Organizer's hang reports after a TestFlight build.
+
+**What changed.**
+
+- *Launch.* The `.loading` state is the launch colour and nothing else: no spinner (the store
+  answers in milliseconds, and the HIG reserves progress indication for waits a reader can
+  feel), and no search bar — `.searchable` moved from the stack onto the READY screen, so the
+  bottom bar arrives with the rows it searches rather than a beat before them over nothing.
+- *Search.* `KeyboardWarmup` (behind `lab.keyboardWarmup`, default on): after the answer is
+  on screen, a zero-alpha `UITextField` takes and resigns first responder once, which loads
+  the input system without showing it. The first tap on search then costs what the second
+  always did. Same shape as `MapWarmup`.
+- *Pool screen.* `lab.poolMapArrival` (default `afterPush`): SwiftUI must render a pushed
+  screen's first frame before the push can begin, and that frame held a live `Map`. Now the
+  first frame is a flat ground in the launch colour with the panel and the pool's name already
+  on it; the push starts at once; the `Map` is built 450 ms later and fades in. `withPush` is
+  the previous behaviour, for comparison. The map is still never resized (`PoolStage`).
+- *Favourites.* `lab.favouriteMove` (default `hold`). The kit's `listModel` gained a
+  `leading:` set — WHICH favourites lead their tier — separate from `favourites` — which rows
+  wear the heart. `TodayModel` holds `leading` at the order on screen across a heart toggle,
+  and catches it up on the next refresh the reader causes or when the list arrives back at its
+  top (`listReachedTop` — an arrival, not a state, so a row is never moved from under a
+  thumb). `move` keeps the old instant reorder but publishes it inside an animation so the
+  row slides rather than cuts; `never` drops favourites-first ordering altogether.
+  `BehaviourTests.testFavouritingARowKeepsItWhereItIs` drives the hold and the settle.
+
+Recommendation: keep all three defaults. `hold` is the only one of the three favourite
+behaviours in which a swipe changes exactly one row; `afterPush` makes the tap answer before
+the map does, which is what Apple Maps and Photos do with their own heavy content; the
+keyboard preload is invisible when it works and costs one hidden field once per launch.
+Judge the "few seconds" again on a Release build before deciding anything else.
 
 ## Recommended order
 

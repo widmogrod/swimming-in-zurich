@@ -29,6 +29,18 @@ enum Lab {
   /// while the reader looks at the pool's own page. See `LinkOpener`.
   static let linkOpener = "lab.linkOpener"
 
+  // THE PERFORMANCE REVIEW'S THREE (2026-09-06). Each answers one complaint with two or three
+  // behaviours to feel side by side; none changes what the app knows, only when it moves.
+
+  /// WHEN a row moves after its heart is toggled. A picker: see `FavouriteMove`.
+  static let favouriteMove = "lab.favouriteMove"
+  /// WHEN the pool screen's map is built: in the pushed screen's first frame, or once the
+  /// push has landed. A picker: see `PoolMapArrival`.
+  static let poolMapArrival = "lab.poolMapArrival"
+  /// The keyboard is loaded once, unseen, after the answer is on screen, so the first tap on
+  /// search does not pay UIKit's first-keyboard bill. See `KeyboardWarmup`.
+  static let keyboardWarmup = "lab.keyboardWarmup"
+
   // DECIDED, and deleted as the header says a decided switch must be: `lab.heroExtends` (the
   // pool screen's hero map under the bar) and `lab.heroStage` (that map opening to fill the
   // screen). The owner chose the open map as the pool screen itself — see `PoolStage` — so
@@ -37,7 +49,48 @@ enum Lab {
   /// The BOOLEAN switches — the ones `typeLaunchArguments` retypes. `stripStyle` is a string
   /// and is deliberately not here: `"flat" as NSString).boolValue` is `false`, which would turn
   /// a named style into a `Bool` no reader ever asked for.
-  static let keys = [glassCard, symbolMotion]
+  static let keys = [glassCard, symbolMotion, keyboardWarmup]
+
+  /// A boolean switch, read outside a view — `@AppStorage` is for bodies. Absent means ON,
+  /// which is the header's rule: a fresh install shows the proposal.
+  static func isOn(_ key: String, in defaults: UserDefaults = .standard) -> Bool {
+    defaults.object(forKey: key) == nil ? true : defaults.bool(forKey: key)
+  }
+
+  /// What happens to a row when its heart is toggled. The complaint: swipe a row to favourite
+  /// it mid-list, and the whole list rebuilds with that row sorted to the front of its tier — it
+  /// leaves the screen, and every row under it jumps up by its height.
+  ///  * `hold` — the heart appears in place and NOTHING moves. The favourites-first order is
+  ///    applied the next time the reader is not mid-list: when they scroll back to the top,
+  ///    change the day or a filter, or relaunch. The default: a swipe changes one row.
+  ///  * `move` — the row moves to the front of its tier at once, as before, but ANIMATED so it
+  ///    is seen to slide rather than to vanish. Kept for comparison: the old behaviour minus
+  ///    the cut.
+  ///  * `never` — favourites never lead. The heart and the favourites-only filter are the
+  ///    whole feature; the list stays nearest-first whatever is marked.
+  enum FavouriteMove: String, CaseIterable {
+    case hold, move, never
+    static let `default`: FavouriteMove = .hold
+
+    /// Read outside a view, on each toggle, so a change in Settings applies to the next swipe.
+    static func current(in defaults: UserDefaults = .standard) -> FavouriteMove {
+      defaults.string(forKey: Lab.favouriteMove).flatMap(FavouriteMove.init) ?? .default
+    }
+  }
+
+  /// When the pool screen builds its map. The complaint: tapping a row pauses before the push.
+  /// SwiftUI must render the destination's FIRST frame before the push can begin, and that
+  /// frame held a live `Map` — MapKit's renderer, tiles and the location dot — so the pause
+  /// was the map, paid before anything moved.
+  ///  * `afterPush` — the screen pushes at once over a plain ground in the launch colour; the
+  ///    map is built once the push has landed and fades in. The tap answers immediately, and
+  ///    the map arrives a beat later. The default.
+  ///  * `withPush` — the map is in the first frame, as before. Nothing fades in, and the tap
+  ///    waits for the map.
+  enum PoolMapArrival: String, CaseIterable {
+    case afterPush, withPush
+    static let `default`: PoolMapArrival = .afterPush
+  }
 
   /// The three bottom bars. The reader's complaint was that the bar's controls do not press
   /// and drag like Apple's own in iOS 27: the list/map segmented picker draws a flat thumb
