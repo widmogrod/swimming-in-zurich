@@ -140,6 +140,26 @@ final class BehaviourTests: XCTestCase {
       "typing a pool's name did not narrow the list")
   }
 
+  func testSearchFromTheMapStaysOnTheMapAndSuggestsNames() {
+    // The reader on the map who taps search wants to search THAT map, not be taken to the
+    // list — and expects names to be offered as they type. Picking one completes the field
+    // and the map shows that pool alone.
+    modeSegment(1).tap()
+    XCTAssertTrue(find("poolMap").waitForExistence(timeout: 10), "no map to search")
+    searchControl.tap()
+    let field = app.searchFields.firstMatch
+    XCTAssertTrue(field.waitForExistence(timeout: 5), "search opened no field over the map")
+    field.typeText("Hallenbad")
+    let suggestion = find("searchSuggestion")
+    XCTAssertTrue(suggestion.waitForExistence(timeout: 5), "typing offered no pool name")
+    let name = suggestion.label
+    suggestion.tap()
+    XCTAssertTrue(
+      waitFor { field.value as? String == name }, "picking a suggestion did not complete it")
+    XCTAssertTrue(find("poolMap").waitForExistence(timeout: 5), "search left the map")
+    XCTAssertFalse(find("poolRow").exists, "search took the reader to the list")
+  }
+
   // MARK: - The row
 
   func testFavouritingARowKeepsItWhereItIs() {

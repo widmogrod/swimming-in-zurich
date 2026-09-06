@@ -72,6 +72,11 @@ struct TodayView: View {
   /// different question from the one it is for.
   @State private var tab: TabPage = .list
 
+  /// The content tab the reader was on last — list or map — so that the SEARCH tab searches
+  /// that page rather than always the list. Tapping search from the map used to land on the
+  /// list: the reader wanted to search the map they were looking at, with the field over it.
+  @State private var searchedContent: TabPage = .list
+
   /// `Lab.filterPlace`: the filter as a pill above the bar, or as a tab of its own.
   @AppStorage(Lab.filterPlace) private var filterPlace = Lab.FilterPlace.default
 
@@ -132,21 +137,7 @@ struct TodayView: View {
         Label(Message("nav.list"), systemImage: Icon.list, localized)
       }
       Tab(value: TabPage.map) {
-        NavigationStack {
-          ready { list, _ in
-            // The SAME sections the list is drawing, pinned by the roster's coordinates. See
-            // `SwimZHKit.poolPins`.
-            PoolMapView(pins: poolPins(list.sections, geo: model.geoByPool))
-              // ALWAYS up on the map: there is no scroll there to yield it to, and a strip
-              // left hidden by the last list scroll would take the day picker away from a
-              // screen that cannot get it back.
-              .safeAreaBar(edge: .top) {
-                DayStrip(chips: model.chips, selection: $model.filters.day)
-              }
-          }
-          .toolbarVisibility(.hidden, for: .navigationBar)
-          .navigationDestination(for: Route.self, destination: screen)
-        }
+        NavigationStack { mapPage(searchable: false) }
       } label: {
         Label(Message("nav.map"), systemImage: Icon.map, localized)
       }
@@ -164,8 +155,18 @@ struct TodayView: View {
         }
       }
       Tab(value: TabPage.search, role: .search) {
-        NavigationStack { findPage(searchable: true) }
+        // The page the reader came from, with the field over it — see `searchedContent`.
+        NavigationStack {
+          if searchedContent == .map {
+            mapPage(searchable: true)
+          } else {
+            findPage(searchable: true)
+          }
+        }
       }
+    }
+    .onChange(of: tab) { _, tab in
+      if tab == .list || tab == .map { searchedContent = tab }
     }
     .tabBarMinimizeBehavior(.onScrollDown)
     // Selecting the search tab IS the request to search: the bar becomes the field at once,
@@ -208,12 +209,63 @@ struct TodayView: View {
     if searchable {
       // ON THE READY PAGE, not on the stack: attached one level up it drew the search field
       // over the loading state — a field for a list that was not there yet.
-      page.searchable(
-        text: $model.filters.search,
-        prompt: Text(Message("nav.findAPool"), localized))
+      searching(page)
     } else {
       page
     }
+  }
+
+  /// The map page: the same answer as the list, pinned by the roster's coordinates
+  /// (`SwimZHKit.poolPins`), under the day strip.
+  @ViewBuilder
+  private func mapPage(searchable: Bool) -> some View {
+    let page =
+      ready { list, _ in
+        PoolMapView(pins: poolPins(list.sections, geo: model.geoByPool))
+          // ALWAYS up on the map: there is no scroll there to yield it to, and a strip left
+          // hidden by the last list scroll would take the day picker away from a screen that
+          // cannot get it back.
+          .safeAreaBar(edge: .top) {
+            DayStrip(chips: model.chips, selection: $model.filters.day)
+          }
+      }
+      .toolbarVisibility(.hidden, for: .navigationBar)
+      .navigationDestination(for: Route.self, destination: screen)
+    if searchable {
+      searching(page)
+    } else {
+      page
+    }
+  }
+
+  /// The search field over a page, with pool names as suggestions — the autocomplete the
+  /// reader expects over a map. The suggestions are the roster's names through the kit's own
+  /// search rule (`browsePools`, the same predicate the list uses), so a name that would match
+  /// is a name that will; picking one completes the field and the page shows that pool.
+  /// A query that IS a name gets no suggestions, so the list of them makes way for the result.
+  private func searching(_ page: some View) -> some View {
+    page
+      .searchable(
+        text: $model.filters.search,
+        prompt: Text(Message("nav.findAPool"), localized)
+      )
+      .searchSuggestions {
+        ForEach(suggestions) { pool in
+          // A pool's NAME is a proper noun and is never translated.
+          Text(verbatim: pool.name)
+            .searchCompletion(pool.name)
+            .accessibilityIdentifier("searchSuggestion")
+        }
+      }
+  }
+
+  private var suggestions: [PoolRecord] {
+    let query = model.filters.search
+    guard !query.isEmpty else { return [] }
+    return Array(
+      browsePools(model.pools, kind: nil, search: query)
+        .filter { $0.name != query }
+        .prefix(8))
   }
 
   /// Every destination a stack has, in one place. A `switch` over VIEWS, not over sentences
