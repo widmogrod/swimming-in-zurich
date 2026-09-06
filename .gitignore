@@ -72,3 +72,6 @@ vendor/bundle/
 # See the Gemfile: a lock authored on Apple's system Ruby 2.6 resolves gems the CI
 # runner's Ruby 3.3 cannot install, so the version floor is pinned in the Gemfile instead.
 Gemfile.lock
+
+# One developer's device-signing team, included by apps/ios/App/Device.xcconfig if present
+apps/ios/App/Local.xcconfig

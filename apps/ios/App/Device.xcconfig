@@ -1,0 +1,17 @@
+// Device.xcconfig — where a DEVELOPER's own signing lives, out of the committed project.
+//
+// The project signs NOTHING (`CODE_SIGNING_ALLOWED = NO` on every target), which is what lets
+// the CI simulator job build on a runner with no certificate and no account, and what
+// `test_the_project_needs_no_signing_identity` pins. Running on a real iPhone needs a team and
+// automatic signing — one developer's account, which does not belong in the repo. So they go in
+// `Local.xcconfig` beside this file, git-ignored, included here only if it exists:
+//
+//     CODE_SIGNING_ALLOWED[sdk=iphoneos*] = YES
+//     CODE_SIGNING_REQUIRED[sdk=iphoneos*] = YES
+//     CODE_SIGN_IDENTITY[sdk=iphoneos*] = Apple Development
+//     CODE_SIGN_STYLE = Automatic
+//     DEVELOPMENT_TEAM = <your team id>
+//
+// The `[sdk=iphoneos*]` conditions keep the simulator unsigned even on that developer's Mac.
+
+#include? "Local.xcconfig"
