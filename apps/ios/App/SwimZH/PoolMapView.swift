@@ -48,13 +48,11 @@ import SwimZHKit
 struct PoolMapView: View {
   @Environment(\.localized) private var localized
   let pins: PinSet
-  /// The pool whose facts are open beside this map, or nil. Set only by the STAGE wide layout
-  /// (`TodayView`), where the facts live in a column over the map rather than on a screen of
+  /// The pool whose facts are open beside this map, or nil. Set only by the wide window
+  /// (`WideShell`), where the facts live in a column over the map rather than on a screen of
   /// their own: the map flies to the pool when one opens and back to the whole answer when it
   /// closes. Any card that was up is dropped — the column is already saying more than it did.
   var focus: String? = nil
-  /// How wide the map is framed around a focused pool. The stage's (`Lab.WideFocus`).
-  var focusSpanMetres: Double = minimumMapSpanMetres
   /// What a tapped PIN does when there is a column beside the map to open a pool in: the
   /// STAGE hands the pool straight to its column's stack, in ONE tap, and no card is raised —
   /// the column is the card. Nil — the phone — and a pin raises `PinCard`, whose whole face is
@@ -142,9 +140,13 @@ struct PoolMapView: View {
       return withAnimation(.smooth(duration: 0.45)) { frame() }
     }
     selectedID = id
+    // The answer's own minimum span, centred on the pool: the pool is plainly the one meant,
+    // and the pools around it stay on the map to compare. Chosen 2026-09-06 over the phone
+    // pool-screen's 700 m, which lost the neighbours.
     withAnimation(.smooth(duration: 0.45)) {
       point(
-        at: MapFrame(centre: pin.point, tallMetres: focusSpanMetres, wideMetres: focusSpanMetres))
+        at: MapFrame(
+          centre: pin.point, tallMetres: minimumMapSpanMetres, wideMetres: minimumMapSpanMetres))
     }
   }
 

@@ -60,7 +60,7 @@
       "reason": "(b) an axis tick — HH:MM off the store's own clock values"
     },
     {
-      "file": "TodayView.swift",
+      "file": "CompactShell.swift",
       "expression": "pool.name",
       "reason": "(a) the pool's own name, a proper noun — a search suggestion"
     },
@@ -100,17 +100,17 @@
       "reason": "(b) an hour tick on the day tail — a two-digit number, no words"
     },
     {
-      "file": "TodayView.swift",
+      "file": "AnswerList.swift",
       "expression": "localized.format.storeDate(key)",
       "reason": "(b) a `meta` date key formatted for the reader; `stampRow` omits the whole row when the store carries no stamp"
     },
     {
-      "file": "TodayView.swift",
+      "file": "AnswerList.swift",
       "expression": "localized.format.storeInstant(metadata.builtAt)",
       "reason": "(b) `meta.built_at` formatted for the reader; the row is omitted when the store carries no stamp"
     },
     {
-      "file": "TodayView.swift",
+      "file": "AnswerList.swift",
       "expression": "localized.format.dateTime(checkedAt)",
       "reason": "(b) the time of the last manifest check, a Date the model recorded, formatted"
     },

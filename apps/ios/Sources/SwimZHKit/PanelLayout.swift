@@ -15,62 +15,87 @@
 
 import Foundation
 
-/// The three heights the panel rests at, as fractions of the screen it sits in.
+/// The three heights a drawer rests at. Which drawer — the pool screen's facts panel or the
+/// wide window's floating list column — is a `DetentScale`: the SAME three rests, the same
+/// drag rules, different fractions. One type, so the two drawers cannot drift into two rules.
 ///
-/// `peek` shows the pool's name, its answer, its three numbers and its actions and leaves the
-/// map the point of the screen; `half` shows the first facts; `tall` is for reading, and leaves
-/// a band of map at the top so the screen never stops being a map. `peek` grew from 0.36 when
-/// the glance strip arrived: at 0.36 the action captions were cut off under it, which the
-/// driven test now checks by geometry.
-public enum PanelDetent: CaseIterable, Sendable, Equatable {
+/// For the panel: `peek` shows the pool's name, its answer, its three numbers and its actions
+/// and leaves the map the point of the screen; `half` shows the first facts; `tall` is for
+/// reading, and leaves a band of map at the top so the screen never stops being a map.
+public enum Detent: CaseIterable, Sendable, Equatable {
   case peek
   case half
   case tall
 
-  public var fraction: Double {
-    switch self {
-    case .peek: return 0.42
-    case .half: return 0.55
-    case .tall: return 0.9
-    }
-  }
-
-  /// The panel's height at this rest, on a screen `total` points tall.
-  public func height(in total: Double) -> Double {
-    total * fraction
+  /// The drawer's height at this rest, on a screen `total` points tall.
+  public func height(in total: Double, scale: DetentScale) -> Double {
+    total * scale.fraction(self)
   }
 }
 
-/// How far past its lowest or highest rest the panel may be dragged, as a share of the excess:
-/// a finger that drags 100 points past the end moves the panel 25. The panel follows the finger
-/// enough to feel held and little enough to say "this is the end".
-public let panelOverdragShare: Double = 0.25
+/// A drawer's three rests as fractions of the height it sits in.
+public struct DetentScale: Sendable, Equatable {
+  public let peek: Double
+  public let half: Double
+  public let tall: Double
 
-/// The panel's visible height during a drag.
+  public init(peek: Double, half: Double, tall: Double) {
+    self.peek = peek
+    self.half = half
+    self.tall = tall
+  }
+
+  /// The pool screen's facts panel. `peek` grew from 0.36 when the glance strip arrived: at
+  /// 0.36 the action captions were cut off under it, which the driven test now checks by
+  /// geometry. `tall` stops short of the top so a band of map always shows.
+  public static let panel = DetentScale(peek: 0.42, half: 0.55, tall: 0.9)
+  /// The wide window's floating list column, anchored to the bottom: `peek` is the day strip
+  /// and the first rows, `tall` the whole height — a list is what the column is for.
+  public static let column = DetentScale(peek: 0.3, half: 0.55, tall: 1)
+
+  public func fraction(_ detent: Detent) -> Double {
+    switch detent {
+    case .peek: return peek
+    case .half: return half
+    case .tall: return tall
+    }
+  }
+}
+
+/// How far past its lowest or highest rest a drawer may be dragged, as a share of the excess:
+/// a finger that drags 100 points past the end moves the drawer 25. The drawer follows the
+/// finger enough to feel held and little enough to say "this is the end".
+public let detentOverdragShare: Double = 0.25
+
+/// A drawer's visible height during a drag.
 ///
 /// `resting` is the height of the detent the drag started from; `drag` is the finger's vertical
-/// travel, positive DOWNWARD (so a downward drag shrinks the panel). Between the lowest and the
-/// highest rest the panel follows the finger exactly; beyond either it follows at
-/// `panelOverdragShare`, so it can never be dragged off the screen or over the top of it.
-public func panelVisibleHeight(resting: Double, drag: Double, in total: Double) -> Double {
-  let floor = PanelDetent.peek.height(in: total)
-  let ceiling = PanelDetent.tall.height(in: total)
+/// travel, positive DOWNWARD (so a downward drag shrinks the drawer). Between the lowest and the
+/// highest rest the drawer follows the finger exactly; beyond either it follows at
+/// `detentOverdragShare`, so it can never be dragged off the screen or over the top of it.
+public func detentVisibleHeight(
+  resting: Double, drag: Double, in total: Double, scale: DetentScale
+) -> Double {
+  let floor = Detent.peek.height(in: total, scale: scale)
+  let ceiling = Detent.tall.height(in: total, scale: scale)
   let wanted = resting - drag
-  if wanted > ceiling { return ceiling + (wanted - ceiling) * panelOverdragShare }
-  if wanted < floor { return floor - (floor - wanted) * panelOverdragShare }
+  if wanted > ceiling { return ceiling + (wanted - ceiling) * detentOverdragShare }
+  if wanted < floor { return floor - (floor - wanted) * detentOverdragShare }
   return wanted
 }
 
-/// The rest a lifted finger lands the panel on: the detent nearest to where the drag was HEADED,
+/// The rest a lifted finger lands a drawer on: the detent nearest to where the drag was HEADED,
 /// not where it was — `projectedDrag` is the finger's travel extrapolated by its velocity, the
 /// way the scroll view's own deceleration would carry it. A quick flick therefore skips a rest
-/// the finger never reached, which is what a flick means.
-public func panelDetent(
-  from detent: PanelDetent, projectedDrag: Double, in total: Double
-) -> PanelDetent {
-  let wanted = detent.height(in: total) - projectedDrag
-  return PanelDetent.allCases.min {
-    abs($0.height(in: total) - wanted) < abs($1.height(in: total) - wanted)
+/// the finger never reached, which is what a flick means. Never off the screen: a drag headed
+/// far below the lowest rest lands on the lowest rest.
+public func detentLanding(
+  from detent: Detent, projectedDrag: Double, in total: Double, scale: DetentScale
+) -> Detent {
+  let wanted = detent.height(in: total, scale: scale) - projectedDrag
+  return Detent.allCases.min {
+    abs($0.height(in: total, scale: scale) - wanted)
+      < abs($1.height(in: total, scale: scale) - wanted)
   } ?? detent
 }
 
@@ -84,23 +109,25 @@ public let panelDismissBeyond: Double = 120
 
 /// What letting go does: settle on a rest, or leave the screen.
 public enum PanelRelease: Equatable, Sendable {
-  case settle(PanelDetent)
+  case settle(Detent)
   case dismiss
 }
 
 /// Where a lifted finger leaves the panel. `dismiss` only from the LOWEST rest, and only when
 /// the drag was headed further than `panelDismissBeyond` below it; otherwise the nearest rest,
-/// as `panelDetent`. Two pulls to leave, never one: a big pull from higher up lands on the
+/// as `detentLanding`. Two pulls to leave, never one: a big pull from higher up lands on the
 /// smallest size and stops there, so a reader closing the facts to see the map cannot overshoot
 /// out of the screen — "to the minimal size first, then to the list when pulled further".
 public func panelRelease(
-  from detent: PanelDetent, projectedDrag: Double, in total: Double
+  from detent: Detent, projectedDrag: Double, in total: Double
 ) -> PanelRelease {
-  let wanted = detent.height(in: total) - projectedDrag
-  if detent == .peek, wanted < PanelDetent.peek.height(in: total) - panelDismissBeyond {
+  let scale = DetentScale.panel
+  let wanted = detent.height(in: total, scale: scale) - projectedDrag
+  if detent == .peek, wanted < Detent.peek.height(in: total, scale: scale) - panelDismissBeyond {
     return .dismiss
   }
-  return .settle(panelDetent(from: detent, projectedDrag: projectedDrag, in: total))
+  return .settle(
+    detentLanding(from: detent, projectedDrag: projectedDrag, in: total, scale: scale))
 }
 
 /// How far the facts list must be pulled past its top, at the tallest rest, before letting go

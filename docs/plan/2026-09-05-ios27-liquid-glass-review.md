@@ -575,3 +575,26 @@ on return from Settings; tests pass `-lab.<key> value`):
   mini), `testFoldingKeepsTheOpenPool` (a Max on its side, then upright, then on its side).
 - Follow-up not done: under `tabs` the top tab bar still overlaps the column's top; only
   `column` solves that, which is why it is the default.
+
+### The wide Lab decided; the find screen split in two shells (2026-09-06, night)
+
+"current defaults look good, so everything else in lab can be removed."
+
+- **Decided:** `stage`, `column`, `neighbourhood`. `Lab.swift`, `Settings.bundle`, the
+  `phone` control layout, the `tabs` chrome (and `FilterPage`'s wide-width branch that served
+  only it, plus `formMaximumWidth`) and the `pool` focus span are deleted, with the two driven
+  tests that launched them. No Lab remains in the app.
+- **`TodayView` split.** At 860 lines it held eight jobs and 37 size-class / Lab branch points.
+  It is now the FORK only (size class → shell, the shared `contentPath`, the fold, launch
+  work), plus what both shells share: `Route` and `RouteScreen`, `StoreStates` (the store's
+  three states), a `routed` / `bare` pair and `FilterPage(model:)`. The shells:
+  `CompactShell` (the tab bar and its three stacks, `.searchable` and the suggestions),
+  `WideShell` (the stage: map + `StageColumn`, the column's side and width, `ColumnControls`
+  with the popover), and `AnswerList` (the rows under the day strip, the strip's yield and the
+  pulled-for controls — one list for both shells, so they cannot render the answer two ways).
+  The tab and searched-content state now live in `CompactShell` and are simply rebuilt after a
+  fold; `mapPath` stays on `TodayView` because the fold reads it after the shell is gone.
+- **One `Detent`.** `ColumnDetent` was `PanelDetent` with three other numbers. The kit now has
+  `Detent` (peek / half / tall) and a `DetentScale` (`.panel`, `.column`), with
+  `detentVisibleHeight` / `detentLanding` shared by `PoolPanel` and `StageColumn`;
+  `panelRelease` (the dismiss rule) stays panel-only.

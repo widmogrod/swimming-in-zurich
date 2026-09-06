@@ -16,11 +16,6 @@ public let listColumnMaximumWidth: Double = 440
 /// the map — the reason the window's width is worth having — is always the larger part.
 public let listColumnShare: Double = 0.44
 
-/// The widest a settings-style form is worth: a row whose label sits at one edge and whose
-/// value sits at the other reads as two facts once they are a hand's width apart. The filter
-/// form in a wide window is held to this and centred.
-public let formMaximumWidth: Double = 600
-
 /// How tall the filters popover is: the whole form — three sections and their headers — at
 /// the default text size, so opening it never opens onto a scroll.
 public let formPopoverHeight: Double = 560
@@ -34,56 +29,12 @@ public func listColumnWidth(in windowWidth: Double) -> Double {
   min(listColumnMaximumWidth, max(listColumnMinimumWidth, windowWidth * listColumnShare))
 }
 
-// MARK: - The column's own gestures: how tall it is, and which side it is on
+// MARK: - The column's own gestures: which side it is on
 
-/// The three heights the stage's floating column rests at, as shares of the height it has.
-///
-/// The same idea as the phone drawer's `PanelDetent`, with its own numbers: the column is
-/// anchored to the BOTTOM of the window and its content is laid out once at full height, so a
-/// shorter column shows the TOP of the list — the search field, the day strip, the headline —
-/// and gives the rest of its height back to the map.
-///  * `tall` — the whole height. The default: a list is what the column is for.
-///  * `half` — enough rows to compare a few pools, half the map back.
-///  * `peek` — the search field and the day strip: the controls, and nearly all of the map.
-public enum ColumnDetent: CaseIterable, Sendable, Equatable {
-  case peek
-  case half
-  case tall
-
-  public var fraction: Double {
-    switch self {
-    case .peek: return 0.3
-    case .half: return 0.55
-    case .tall: return 1
-    }
-  }
-
-  public func height(in total: Double) -> Double { total * fraction }
-}
-
-/// The column's visible height during a drag — the drawer's rule with the column's rests.
-/// `drag` is the finger's vertical travel, positive DOWNWARD; a downward drag shrinks the
-/// column. Beyond either rest the column follows at `panelOverdragShare`.
-public func columnVisibleHeight(resting: Double, drag: Double, in total: Double) -> Double {
-  let floor = ColumnDetent.peek.height(in: total)
-  let ceiling = ColumnDetent.tall.height(in: total)
-  let wanted = resting - drag
-  if wanted > ceiling { return ceiling + (wanted - ceiling) * panelOverdragShare }
-  if wanted < floor { return floor - (floor - wanted) * panelOverdragShare }
-  return wanted
-}
-
-/// The rest a lifted finger lands the column on: the nearest to where the drag was HEADED
-/// (`projectedDrag`, the finger's travel extrapolated by its velocity), so a flick skips a rest
-/// the finger never reached. Never a dismissal: the column is the list, and the list stays.
-public func columnDetent(
-  from detent: ColumnDetent, projectedDrag: Double, in total: Double
-) -> ColumnDetent {
-  let wanted = detent.height(in: total) - projectedDrag
-  return ColumnDetent.allCases.min {
-    abs($0.height(in: total) - wanted) < abs($1.height(in: total) - wanted)
-  } ?? detent
-}
+/// The column's three rests are `Detent` under `DetentScale.column` — the phone drawer's own
+/// rules (`detentVisibleHeight`, `detentLanding`), anchored to the BOTTOM of the window with the
+/// content laid out once at full height, so a shorter column shows the TOP of the list — the day
+/// strip, the headline — and gives the rest of its height back to the map.
 
 /// Which edge of the window the column sits against.
 public enum ColumnSide: Sendable, Equatable {

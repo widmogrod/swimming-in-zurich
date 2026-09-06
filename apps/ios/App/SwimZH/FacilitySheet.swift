@@ -59,7 +59,7 @@ struct FacilitySheet: View {
 
   /// Which of the panel's three heights it rests at. It starts at the smallest: the reader
   /// opened a pool, and the panel exists to say what it is while getting out of the map's way.
-  @State private var detent: PanelDetent = .peek
+  @State private var detent: Detent = .peek
   /// How many times the reader has asked for the pool back under the pin. A count rather than a
   /// flag because the same request twice is two requests, and a flag cannot say the second.
   @State private var homeRequests = 0

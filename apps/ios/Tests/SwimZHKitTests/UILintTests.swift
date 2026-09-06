@@ -54,8 +54,9 @@ struct UILintTests {
     let files = try Self.appFiles()
     #expect(files.count >= 12, "found \(files.map(\.name))")
     for expected in [
-      "TodayView.swift", "DayStrip.swift", "FilterBar.swift", "PoolRowView.swift",
-      "RibbonCanvas.swift", "LaneGanttView.swift", "FacilitySheet.swift",
+      "TodayView.swift", "CompactShell.swift", "WideShell.swift", "AnswerList.swift",
+      "DayStrip.swift", "FilterBar.swift", "PoolRowView.swift", "RibbonCanvas.swift",
+      "LaneGanttView.swift", "FacilitySheet.swift",
     ] {
       #expect(files.contains { $0.name == expected }, "missing \(expected)")
     }
@@ -373,7 +374,7 @@ struct UILintTests {
     }
     // ...and the app target really is one of the scanned trees, so this cannot pass by reading
     // the package alone.
-    #expect(literals.contains { $0.0 == "TodayView.swift" })
+    #expect(literals.contains { $0.0 == "AnswerList.swift" })
   }
 
   @Test("an interpolated key is built from a prefix the catalog actually has")
@@ -839,7 +840,7 @@ struct UILintTests {
     // control that did not press or drag like Apple's. A tab bar's selection is the system's
     // own lens, and `Tab(role: .search)` turns the bar itself into the field, so nothing here
     // arranges a search control any more.
-    let file = try #require(try Self.appFiles().first { $0.name == "TodayView.swift" })
+    let file = try #require(try Self.appFiles().first { $0.name == "CompactShell.swift" })
     let code = Self.code(file.text)
     #expect(code.contains("TabView(selection:"), "the find screen is not a tab bar")
     #expect(code.contains("role: .search)"), "search is not a tab of the bar")
@@ -971,7 +972,7 @@ struct UILintTests {
 
   @Test("the filter bar is attached with safeAreaBar, never safeAreaInset or an overlay")
   func filterBarUsesSafeAreaBar() throws {
-    let view = try #require(try Self.appFiles().first { $0.name == "TodayView.swift" })
+    let view = try #require(try Self.appFiles().first { $0.name == "AnswerList.swift" })
     let code = Self.code(view.text)
     // `safeAreaBar` is the ONLY one that extends the scroll edge effect under the bar; the
     // other two float a rectangle over clipped content.
@@ -981,8 +982,13 @@ struct UILintTests {
 
   @Test("nothing pins the chrome open, and both bars hang off the SCROLLING view")
   func chromeYieldsToContent() throws {
-    let view = try #require(try Self.appFiles().first { $0.name == "TodayView.swift" })
-    let code = Self.code(view.text)
+    // The find screen is two files since the wide-window split: the phone's shell (the tab
+    // bar, the search field) and the answer list under it (the strip, the scroll rule); the
+    // bar-hiding `bare()` is shared from `TodayView.swift`. Read as one.
+    let shell = try #require(try Self.appFiles().first { $0.name == "CompactShell.swift" })
+    let list = try #require(try Self.appFiles().first { $0.name == "AnswerList.swift" })
+    let fork = try #require(try Self.appFiles().first { $0.name == "TodayView.swift" })
+    let code = Self.code(shell.text) + Self.code(list.text) + Self.code(fork.text)
     #expect(code.contains(".searchable("))
 
     // This lint used to REQUIRE `.navigationBarDrawer(displayMode: .always)`, on the reading
@@ -1011,7 +1017,8 @@ struct UILintTests {
     // one overflow button — the same height the title cost, saying nothing. The controls moved
     // to the bottom bar and the bar went with them.
     #expect(
-      code.contains(".toolbarVisibility(.hidden, for: .navigationBar)"),
+      code.contains("toolbarVisibility(.hidden, for: .navigationBar)")
+        && Self.code(shell.text).contains(".bare()"),
       "the find screen has a navigation bar again — that is ~50 points of the list")
     // ...and nothing is behind an ellipsis. Two destinations, neither of them a rarely-wanted
     // variant of anything, were costing two taps each and a bar to hang the menu on.
@@ -1067,7 +1074,7 @@ struct UILintTests {
 
   @Test("the list is a `List`, and a pull exists only where it can answer")
   func listAndNoFakeRefresh() throws {
-    let view = try #require(try Self.appFiles().first { $0.name == "TodayView.swift" })
+    let view = try #require(try Self.appFiles().first { $0.name == "AnswerList.swift" })
     let code = Self.code(view.text)
     #expect(code.contains("List {"), "the rows must be a List — .swipeActions needs one")
     #expect(!code.contains("LazyVStack"))
@@ -1094,7 +1101,7 @@ struct UILintTests {
     // The real-file direction, pinned first: the lint must actually be finding elements in the
     // screen it exists to police. A scanner that returned nothing would satisfy every
     // expectation in the loop below forever.
-    let view = try #require(try Self.appFiles().first { $0.name == "TodayView.swift" })
+    let view = try #require(try Self.appFiles().first { $0.name == "AnswerList.swift" })
     #expect(
       forEachBodies(in: Self.code(view.text)).count >= 3,
       "the laziness lint found no ForEach elements in the list screen — it is scanning nothing"

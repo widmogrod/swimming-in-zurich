@@ -1,12 +1,12 @@
 // StageColumn.swift — the list, floating over the map in the STAGE wide layout.
 //
-// In a wide window under `Lab.WideLayout.stage`, the map is the whole screen and the list
+// In a wide window (`WideShell`), the map is the whole screen and the list
 // rides over it in this card: the same answer, the same rows, the same day strip, with the map
 // live behind it at every moment. A tapped pool's facts replace the list INSIDE the card
 // (`PoolPresentation.column`) while the map flies to the pool — Apple Maps on iPad.
 //
 // THE CARD MOVES, by the handle at its top. Dragged DOWN it shrinks to one of three rests
-// (`ColumnDetent`: the whole height, half, or just the search field and the day strip) and
+// (`Detent` on `DetentScale.column`: the whole height, half, or just the day strip) and
 // gives the map the height back; dragged UP it grows again. Flicked ACROSS the screen it goes
 // to the other side (`ColumnSide`), for a left hand, a right hand, or a pool that happens to be
 // under it — and the map's framing follows (`TodayView` insets the map by the side). The rules
@@ -40,7 +40,7 @@ struct StageColumn<Content: View>: View {
   @ViewBuilder let content: () -> Content
 
   /// Which of the three heights the card rests at. It starts tall: the list is the point.
-  @State private var detent: ColumnDetent = .tall
+  @State private var detent: Detent = .tall
   /// The finger's travel during a drag of the handle. Zero at rest.
   @State private var drag: CGSize = .zero
 
@@ -49,8 +49,9 @@ struct StageColumn<Content: View>: View {
   var body: some View {
     GeometryReader { geo in
       let total = geo.size.height
-      let visible = columnVisibleHeight(
-        resting: detent.height(in: total), drag: drag.height, in: total)
+      let visible = detentVisibleHeight(
+        resting: detent.height(in: total, scale: .column), drag: drag.height, in: total,
+        scale: .column)
       VStack(spacing: 0) {
         handle(in: total)
         content()
@@ -104,7 +105,8 @@ struct StageColumn<Content: View>: View {
               from: side, projectedDrag: projected.width, columnWidth: columnWidth,
               margin: Design.Space.gutter, in: windowWidth)
           } else {
-            detent = columnDetent(from: detent, projectedDrag: projected.height, in: total)
+            detent = detentLanding(
+              from: detent, projectedDrag: projected.height, in: total, scale: .column)
           }
           drag = .zero
         }

@@ -16,12 +16,6 @@ struct WideLayoutTests {
     #expect(listColumnWidth(in: 600) == listColumnMinimumWidth)
   }
 
-  @Test("a form is held narrower than a wide window and wider than the list column")
-  func formWidth() {
-    #expect(formMaximumWidth > listColumnMaximumWidth)
-    #expect(formMaximumWidth < 744)
-  }
-
   @Test("the column stops growing past its ceiling, so a 13-inch window is mostly map")
   func ceiling() {
     #expect(listColumnWidth(in: 1366) == listColumnMaximumWidth)
@@ -31,27 +25,20 @@ struct WideLayoutTests {
 
 @Suite("The column's height and side")
 struct ColumnGestureTests {
-  @Test("the column follows the finger between its rests and resists beyond them")
-  func visibleHeight() {
+  @Test("the column is the phone drawer's rules on its own scale, reaching the whole height")
+  func scale() {
     let total = 800.0
-    let tall = ColumnDetent.tall.height(in: total)
-    #expect(columnVisibleHeight(resting: tall, drag: 100, in: total) == 700)
-    // Past the top: a quarter of the excess.
-    #expect(columnVisibleHeight(resting: tall, drag: -100, in: total) == 825)
-    // Past the bottom: the same.
-    let peek = ColumnDetent.peek.height(in: total)
-    #expect(columnVisibleHeight(resting: peek, drag: 100, in: total) == peek - 25)
-  }
-
-  @Test("a flick lands on the rest it was headed for, and never leaves the screen")
-  func release() {
-    let total = 800.0
-    #expect(columnDetent(from: .tall, projectedDrag: 300, in: total) == .half)
-    #expect(columnDetent(from: .tall, projectedDrag: 600, in: total) == .peek)
-    #expect(columnDetent(from: .peek, projectedDrag: -600, in: total) == .tall)
-    // Headed far below the lowest rest: still the lowest rest, not gone.
-    #expect(columnDetent(from: .peek, projectedDrag: 900, in: total) == .peek)
-    #expect(columnDetent(from: .tall, projectedDrag: 10, in: total) == .tall)
+    let scale = DetentScale.column
+    #expect(Detent.tall.height(in: total, scale: scale) == total)
+    #expect(
+      Detent.peek.height(in: total, scale: scale) < Detent.half.height(in: total, scale: scale))
+    // Dragged 100 down from tall: 700. Past the top: a quarter of the excess.
+    #expect(detentVisibleHeight(resting: total, drag: 100, in: total, scale: scale) == 700)
+    #expect(detentVisibleHeight(resting: total, drag: -100, in: total, scale: scale) == 825)
+    // A flick lands on the rest it was headed for, and never leaves the screen.
+    #expect(detentLanding(from: .tall, projectedDrag: 300, in: total, scale: scale) == .half)
+    #expect(detentLanding(from: .tall, projectedDrag: 600, in: total, scale: scale) == .peek)
+    #expect(detentLanding(from: .peek, projectedDrag: 900, in: total, scale: scale) == .peek)
   }
 
   @Test("the column changes side only when its centre crosses the middle")

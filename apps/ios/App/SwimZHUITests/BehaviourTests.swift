@@ -751,20 +751,9 @@ final class BehaviourTests: XCTestCase {
 
   // MARK: - A wide window: an unfolded phone, an iPad, a landscape Max
 
-  /// The `Lab.wideLayout` key, spelled out because this target links no app code.
-  private let wideLayoutKey = "lab.wideLayout"
-
   /// Whether the window is wide enough for the regular size class. Below it every wide test is
   /// SKIPPED rather than passed: a phone in portrait proves nothing about the unfolded layout.
   private var windowIsWide: Bool { app.windows.firstMatch.frame.width >= 600 }
-
-  /// Launch again with Lab arguments, from the same clean start.
-  private func relaunch(arguments: [String]) {
-    app.terminate()
-    app.launchArguments += arguments
-    app.launch()
-    XCTAssertTrue(find("poolRow").waitForExistence(timeout: 30), "no row after relaunch")
-  }
 
   func testAWideWindowIsAMapWithTheListFloatingOverItAndAPoolOpensInTheCard() throws {
     // The default wide layout, the STAGE: the map is the screen, the list floats over it in a
@@ -911,19 +900,6 @@ final class BehaviourTests: XCTestCase {
     XCTAssertGreaterThan(column.frame.height, tall.height * 0.9, "the column did not grow back")
   }
 
-  func testThePhoneLayoutIsTheControlInAWideWindow() throws {
-    try XCTSkipUnless(windowIsWide, "a compact window has no wide layout to prove")
-    relaunch(arguments: ["-\(wideLayoutKey)", "phone"])
-    XCTAssertFalse(find("poolMap").exists, "the control layout shows a map beside the list")
-  }
-
-  func testTheTabBarChromeIsTheControlOnTheStage() throws {
-    try XCTSkipUnless(windowIsWide, "a compact window has no wide layout to prove")
-    relaunch(arguments: ["-lab.wideChrome", "tabs"])
-    XCTAssertTrue(find("stageColumn").waitForExistence(timeout: 10), "no floating column")
-    XCTAssertFalse(find("filtersButton").exists, "the column bar's button is up under tabs")
-  }
-
   func testFoldingKeepsTheOpenPool() throws {
     // THE FOLD, stood in for by a rotation: a Max is compact upright and regular on its side.
     // A pool opened wide must still be open narrow, and the other way round — the screen
@@ -933,8 +909,12 @@ final class BehaviourTests: XCTestCase {
     addTeardownBlock { XCUIDevice.shared.orientation = .portrait }
     XCUIDevice.shared.orientation = .landscapeLeft
     XCTAssertTrue(find("poolRow").waitForExistence(timeout: 10))
-    try XCTSkipUnless(windowIsWide, "this device is not wide on its side")
-    XCTAssertTrue(find("poolMap").waitForExistence(timeout: 10), "not wide on its side")
+    // The SIZE CLASS decides, and a plain iPhone 17 on its side is 874 points wide yet still
+    // COMPACT — only the Max is regular in landscape — so a width guard cannot tell the two
+    // apart. The wide layout's map appearing is the test of regular width; without it there
+    // is no fold to drive here (the iPad mini tests prove the wide layout itself).
+    try XCTSkipUnless(
+      find("poolMap").waitForExistence(timeout: 10), "this device is not wide on its side")
     find("poolRow").tap()
     XCTAssertTrue(find("poolFacts").waitForExistence(timeout: 10), "the pool did not open")
     // Folded: the SAME route is the phone's pool screen — a map with the facts in a drawer.

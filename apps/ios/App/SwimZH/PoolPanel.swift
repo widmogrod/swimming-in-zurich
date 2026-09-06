@@ -1,7 +1,7 @@
 // PoolPanel.swift — the facts drawer over the pool screen's map.
 //
 // A card that rises from the bottom of the map and rests at one of three heights
-// (`PanelDetent`), dragged between them by the finger. It is PART OF THE SCREEN, not a
+// (`Detent` on `DetentScale.panel`), dragged between them by the finger. It is PART OF THE SCREEN, not a
 // presented sheet, and the driven app is why: presented as a `.sheet`, the facts lingered
 // over the list for the length of their own dismissal after the back button had already
 // popped the screen; went opaque (black, in dark mode) the moment they reached the top; and
@@ -18,7 +18,7 @@
 // THE GESTURE, as the owner asked for it: pull the drawer down anywhere and it comes down to
 // its smallest size first; pull on past that and let go, and the screen goes back to the list.
 // The rules — how far the card follows past its ends, which rest a lifted finger lands on, and
-// when letting go leaves — are `SwimZHKit.panelVisibleHeight`, `panelRelease(from:)` and
+// when letting go leaves — are `SwimZHKit.detentVisibleHeight`, `panelRelease(from:)` and
 // `panelCollapses(listPull:)`, tested; this file reads them. A drag that starts sideways is
 // not the drawer's: it is left alone so the system's edge swipe can have it.
 //
@@ -37,7 +37,7 @@ import SwiftUI
 import SwimZHKit
 
 struct PoolPanel<Header: View, Facts: View>: View {
-  @Binding var detent: PanelDetent
+  @Binding var detent: Detent
   /// Pulled down past the smallest rest and let go: the screen is done with. See the header.
   let onDismiss: () -> Void
   @ViewBuilder let header: () -> Header
@@ -56,7 +56,10 @@ struct PoolPanel<Header: View, Facts: View>: View {
     GeometryReader { geo in
       let total = geo.size.height
       let visible =
-        risen ? panelVisibleHeight(resting: detent.height(in: total), drag: drag, in: total) : 0
+        risen
+        ? detentVisibleHeight(
+          resting: detent.height(in: total, scale: .panel), drag: drag, in: total, scale: .panel)
+        : 0
       VStack(spacing: 0) {
         handle
         header()
@@ -64,7 +67,8 @@ struct PoolPanel<Header: View, Facts: View>: View {
       }
       // The content is laid out ONCE, at the tallest rest; nothing inside re-measures.
       .frame(
-        width: geo.size.width - 2 * Design.Space.row, height: PanelDetent.tall.height(in: total),
+        width: geo.size.width - 2 * Design.Space.row,
+        height: Detent.tall.height(in: total, scale: .panel),
         alignment: .top
       )
       // ...and the CARD is the visible window onto it, so all four corners are the card's own
