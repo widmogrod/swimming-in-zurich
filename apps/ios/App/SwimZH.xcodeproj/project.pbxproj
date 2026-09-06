@@ -38,6 +38,7 @@
 		1A000000000000000000053 /* LaneGanttView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A000000000000000000052 /* LaneGanttView.swift */; };
 		1A000000000000000000055 /* FacilitySheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A000000000000000000054 /* FacilitySheet.swift */; };
 		1A000000000000000000057 /* FacilitySheetLoader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A000000000000000000056 /* FacilitySheetLoader.swift */; };
+		1A0000000000000000000E3 /* PoolGlance.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A0000000000000000000E2 /* PoolGlance.swift */; };
 		1A000000000000000000059 /* AccessTypesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A000000000000000000058 /* AccessTypesView.swift */; };
 		1A000000000000000000062 /* BehaviourTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A000000000000000000061 /* BehaviourTests.swift */; };
 		1A0000000000000000000B1 /* Lab.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A0000000000000000000B0 /* Lab.swift */; };
@@ -102,6 +103,7 @@
 		1A000000000000000000052 /* LaneGanttView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LaneGanttView.swift; sourceTree = "<group>"; };
 		1A000000000000000000054 /* FacilitySheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FacilitySheet.swift; sourceTree = "<group>"; };
 		1A000000000000000000056 /* FacilitySheetLoader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FacilitySheetLoader.swift; sourceTree = "<group>"; };
+		1A0000000000000000000E2 /* PoolGlance.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PoolGlance.swift; sourceTree = "<group>"; };
 		1A000000000000000000058 /* AccessTypesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccessTypesView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -181,6 +183,7 @@
 				1A000000000000000000052 /* LaneGanttView.swift */,
 				1A000000000000000000054 /* FacilitySheet.swift */,
 				1A000000000000000000056 /* FacilitySheetLoader.swift */,
+				1A0000000000000000000E2 /* PoolGlance.swift */,
 				1A000000000000000000058 /* AccessTypesView.swift */,
 			);
 			path = SwimZH;
@@ -397,6 +400,7 @@
 				1A000000000000000000053 /* LaneGanttView.swift in Sources */,
 				1A000000000000000000055 /* FacilitySheet.swift in Sources */,
 				1A000000000000000000057 /* FacilitySheetLoader.swift in Sources */,
+				1A0000000000000000000E3 /* PoolGlance.swift in Sources */,
 				1A000000000000000000059 /* AccessTypesView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

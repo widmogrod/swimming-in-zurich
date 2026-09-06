@@ -106,9 +106,11 @@ struct FacilitySheet: View {
     } else if let detail {
       List {
         Section {
-          PoolHeader(detail: detail, row: row, point: point, isToday: isToday)
-            .listRowBackground(Color.clear)
-            .listRowSeparator(.hidden)
+          PoolHeader(
+            detail: detail, row: row, point: point, isToday: isToday, live: live, asOf: asOf
+          )
+          .listRowBackground(Color.clear)
+          .listRowSeparator(.hidden)
         }
         facts(detail)
       }
@@ -169,8 +171,10 @@ struct FacilitySheet: View {
   @ViewBuilder
   private var panelHeader: some View {
     if let detail {
-      PoolHeader(detail: detail, row: row, point: point, isToday: isToday)
-        .padding(.horizontal, Design.Space.gutter)
+      PoolHeader(
+        detail: detail, row: row, point: point, isToday: isToday, live: live, asOf: asOf
+      )
+      .padding(.horizontal, Design.Space.gutter)
     } else {
       VStack(alignment: .leading, spacing: Design.Space.gutter) {
         // A pool's name is a proper noun, never translated and never truncated.

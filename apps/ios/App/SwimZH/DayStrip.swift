@@ -21,9 +21,10 @@
 // which is exactly the pair SwiftUI morphs between. The border and the today rule stay: colour
 // is never the only channel.
 //
-// One thing survives from a discarded candidate, behind `Lab.stripEntry`: how a chip ARRIVES
-// as the strip is scrolled. The system-button variant's glass materialised as each new day came
-// on screen, and the owner missed exactly that; `Lab.StripEntry` says what each choice changes.
+// One thing survives from a discarded candidate: a chip ARRIVES as the strip is scrolled — it
+// scales and fades up under a `.scrollTransition`, driven by the scroll itself. The system-
+// button variant's glass materialised as each new day came on screen and the owner missed
+// exactly that; of the materialize transition and this one, this one was chosen (2026-09-06).
 
 import SwiftUI
 import SwimZHKit
@@ -52,7 +53,6 @@ struct DayStrip: View {
     self._position = State(
       initialValue: ScrollPosition(id: selection.wrappedValue, anchor: .center))
   }
-  @AppStorage(Lab.stripEntry) private var stripEntry = Lab.StripEntry.default
   /// The namespace the morphing selection lives in. One id, `selectionGlassID`, ever in it.
   @Namespace private var glassNamespace
   private let selectionGlassID = "selection"
@@ -143,12 +143,12 @@ struct DayStrip: View {
     // and the 44 pt rule is satisfied on paper only.
     .contentShape(Rectangle())
     .buttonStyle(.plain)
-    // `Lab.StripEntry.scroll`: the chip scales and fades up as the scroll brings it in. The
-    // other two entries are a property of the glass, applied in `ChipSurface`.
+    // The chip scales and fades up as the scroll brings it in — driven by the scroll, so a
+    // chip half in view is half arrived.
     .scrollTransition(.interactive, axis: .horizontal) { content, phase in
       content
-        .opacity(stripEntry == .scroll && !phase.isIdentity ? 0.5 : 1)
-        .scaleEffect(stripEntry == .scroll && !phase.isIdentity ? 0.85 : 1)
+        .opacity(phase.isIdentity ? 1 : 0.5)
+        .scaleEffect(phase.isIdentity ? 1 : 0.85)
     }
     .accessibilityLabel(Text(verbatim: chip.accessibilityLabel))
     .accessibilityAddTraits(chip.day == selection ? [.isSelected, .isButton] : .isButton)
@@ -177,7 +177,7 @@ struct DayStrip: View {
     .overlay(chipBorder(chip))
     .overlay(alignment: .bottom) { todayMarker(chip) }
     .modifier(
-      ChipSurface(chip: chip, selection: selection, entry: stripEntry) { selectionGlass }
+      ChipSurface(chip: chip, selection: selection) { selectionGlass }
     )
   }
 
@@ -212,14 +212,9 @@ struct DayStrip: View {
   /// glass of its own (`.identity`) and instead sits on the one tinted `selectionGlass` — one
   /// glass layer per chip, so glass never samples glass, and the layer that moves is the one
   /// with the id.
-  ///
-  /// The glass's own transition is `Lab.StripEntry`'s: `.materialize` is what a chip scrolling
-  /// into a lazy stack shows, and what the tap's glass swap shows too; `.matchedGeometry` is
-  /// the container's default, under which an id-less chip simply appears.
   private struct ChipSurface<Selection: View>: ViewModifier {
     let chip: DayChip
     let selection: String
-    let entry: Lab.StripEntry
     @ViewBuilder let selectionGlass: () -> Selection
 
     private var isSelected: Bool { chip.day == selection }
@@ -230,7 +225,6 @@ struct DayStrip: View {
           isSelected ? .identity : .regular.interactive(),
           in: .rect(cornerRadius: Design.Radius.control)
         )
-        .glassEffectTransition(entry == .materialize ? .materialize : .matchedGeometry)
         .background {
           if isSelected {
             selectionGlass()

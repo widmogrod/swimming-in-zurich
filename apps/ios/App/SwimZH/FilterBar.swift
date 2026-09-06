@@ -1,132 +1,21 @@
-// FilterBar.swift — the filter control and the form behind it.
+// FilterBar.swift — the Filters tab and the form on it.
 //
-// NOBODY HERE PAINTS GLASS. The filter control rides the SYSTEM's chrome — the tab bar's bottom
-// accessory, or a tab of its own — so the system draws its glass and its scroll edge effect.
-// That is the whole lesson of the iOS 26 guidance: you do not apply the material, you use the
-// chrome that already has it. A `.glassEffect(` anywhere in the app target outside the two
-// allowlisted floating controls means something is being hand-built again.
+// NOBODY HERE PAINTS GLASS. The filters are a TAB of the system's bar, so the system draws its
+// glass and its scroll edge effect. That is the whole lesson of the iOS 26 guidance: you do not
+// apply the material, you use the chrome that already has it. A `.glassEffect(` anywhere in the
+// app target outside the two allowlisted floating controls means something is being hand-built
+// again.
 //
-// The control is a summary plus a button; the controls live in a form. That mirrors the web,
-// where the phone's sticky summary row IS the disclosure for the drawer — a filter bar that
-// permanently occupied six controls' worth of a phone screen would cost more list than it is
-// worth. The form is ONE view, `FilterForm`, wrapped two ways: `FilterSheet` (a sheet with Done)
-// and `FilterPage` (a tab) — `Lab.FilterPlace` is the choice between them.
+// A tab, decided 2026-09-06 over a pill above the bar that opened a sheet: the bar is pure,
+// every control in it is a tab, and a change on the page has already applied by the time the
+// reader chooses another tab — there is nothing to confirm and nothing to dismiss. The form is
+// a plain `Form` of standard controls; the place picker pushes a searchable list.
 
 import SwiftUI
 import SwimZHKit
 
-/// The filter control, as the tab bar's bottom accessory (`Lab.FilterPlace.accessory`).
-///
-/// It used to be a full-width capsule in a `safeAreaBar` of its own, carrying the headline
-/// sentence on a second line — two rows tall, and stacked under the system's search field.
-/// Then a toolbar item beside that field. Now the pill ABOVE the tab bar, the slot Music's
-/// mini-player uses: the system draws it, minimises it beside the bar as the list scrolls, and
-/// tells this view which of the two it is showing (`tabViewBottomAccessoryPlacement`). Expanded,
-/// the pill carries the current filter summary — the answer's context, riding with the bar;
-/// inline, there is room for the word and the glyph alone.
-struct FilterButton: View {
-  @Binding var filters: Filters
-  let kinds: [String]
-  /// The phone's own position. Threaded down rather than reached for, so this file has no
-  /// opinion about Core Location and the sheet can be previewed without one.
-  let location: any LocationFixing
-  /// Measure from the phone. `async` because it is a device that takes a moment to answer, and
-  /// the row has to be able to say so while it does.
-  let onUseMyLocation: () async -> Void
-  /// Measure from a named place, or from nowhere. Separate from a plain binding because
-  /// choosing a preset must ALSO stop the device preference — see `TodayModel.useNamedPlace`.
-  let onUseNamedPlace: (Place?) -> Void
-
-  @Environment(\.localized) private var localized
-  @State private var showingFilters = false
-  /// `Lab.symbolMotion`: the glyph fills with a symbol replace and bounces when the list is
-  /// narrowed, rather than swapping between two frames.
-  @AppStorage(Lab.symbolMotion) private var symbolMotion = true
-  /// Expanded above the bar, or inline beside the minimised bar. Nil outside an accessory.
-  @Environment(\.tabViewBottomAccessoryPlacement) private var placement
-
-  var body: some View {
-    Button {
-      showingFilters = true
-    } label: {
-      HStack(spacing: Design.Space.tight) {
-        glyph
-        Text(Message("mobile.filters"), localized)
-          .fontWeight(.medium)
-        if placement != .inline, !filters.summaryTags.isEmpty {
-          Text(.joined(filters.summaryTags), localized)
-            .foregroundStyle(.secondary)
-            .lineLimit(1)
-        }
-      }
-      .frame(maxWidth: .infinity)
-      .contentShape(Rectangle())
-    }
-    .buttonStyle(.plain)
-    // The value, not the label, is what changes — so a reader who has narrowed the list hears
-    // WHAT it is narrowed to, rather than the word "Filters" twice.
-    .accessibilityValue(Text(.joined(filters.summaryTags), localized))
-    .accessibilityIdentifier("filterButton")
-    .sheet(isPresented: $showingFilters) {
-      FilterSheet(
-        filters: $filters, kinds: kinds, location: location,
-        onUseMyLocation: onUseMyLocation, onUseNamedPlace: onUseNamedPlace)
-    }
-  }
-
-  /// The one filter glyph, filled when something is narrowed. With the switch on the fill
-  /// REPLACES rather than swaps and the glyph bounces once, so the change is seen rather than
-  /// inferred; off, the plain two-frame swap this button has always made.
-  @ViewBuilder
-  private var glyph: some View {
-    let image = Image(systemName: filters.isNarrowed ? Icon.filterActive : Icon.filter)
-    if symbolMotion {
-      image
-        .contentTransition(.symbolEffect(.replace))
-        .symbolEffect(.bounce, value: filters.isNarrowed)
-        .animation(.default, value: filters.isNarrowed)
-    } else {
-      image
-    }
-  }
-}
-
-/// The controls, as a sheet: the form under an inline title, with Done. Presented by
-/// `FilterButton`.
-struct FilterSheet: View {
-  @Environment(\.localized) private var localized
-  @Binding var filters: Filters
-  let kinds: [String]
-  let location: any LocationFixing
-  let onUseMyLocation: () async -> Void
-  let onUseNamedPlace: (Place?) -> Void
-  @Environment(\.dismiss) private var dismiss
-
-  var body: some View {
-    NavigationStack {
-      FilterForm(
-        filters: $filters, kinds: kinds, location: location, onUseMyLocation: onUseMyLocation,
-        onUseNamedPlace: onUseNamedPlace
-      )
-      .navigationTitle(Text(Message("mobile.filters"), localized))
-      .navigationBarTitleDisplayMode(.inline)
-      .toolbar {
-        ToolbarItem(placement: .confirmationAction) {
-          Button {
-            dismiss()
-          } label: {
-            Text(Message("action.done"), localized)
-          }
-        }
-      }
-    }
-    .presentationDetents([.medium, .large])
-  }
-}
-
-/// The controls, as a TAB (`Lab.FilterPlace.tab`): the same form as a page of its own, in its
-/// own stack. Nothing to dismiss — the reader leaves by choosing another tab, and every change
-/// has already applied.
+/// The Filters tab: the form as a page of its own, in its own stack. Nothing to dismiss — the
+/// reader leaves by choosing another tab, and every change has already applied.
 struct FilterPage: View {
   @Environment(\.localized) private var localized
   @Binding var filters: Filters

@@ -230,7 +230,10 @@ struct UILintTests {
     let code = Self.code(sheet.text)
     #expect(!code.contains(".navigationTitle("), "the bar names the pool the panel already names")
     #expect(!code.contains("Text(detail.poolID)"))
-    #expect(code.contains("PoolHeader(detail: detail"), "the panel does not open on the header")
+    // Whitespace-blind: the call wraps once it carries the live reading, and a lint about
+    // which view opens the panel has no business pinning where the formatter breaks a line.
+    let flat = code.replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
+    #expect(flat.contains("PoolHeader( detail: detail"), "the panel does not open on the header")
 
     let header = try #require(try Self.appFiles().first { $0.name == "PoolHeader.swift" })
     let hero = Self.code(header.text)
@@ -843,9 +846,8 @@ struct UILintTests {
     #expect(
       code.contains(".tabBarMinimizeBehavior(.onScrollDown)"),
       "the bar no longer minimises as the list scrolls")
-    #expect(
-      code.contains(".tabViewBottomAccessory("),
-      "the filter control has left the bar's accessory slot")
+    #expect(code.contains("Tab(value: TabPage.filters)"), "the filters are no longer a tab")
+    #expect(!code.contains(".tabViewBottomAccessory("), "the filter pill above the bar is back")
     // ...and the old bar is not being rebuilt beside it.
     #expect(!code.contains("ToolbarItem(placement: .bottomBar)"), "a bottom toolbar is back")
     #expect(!code.contains(".pickerStyle(.segmented)"), "the segmented list/map picker is back")

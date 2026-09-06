@@ -13,8 +13,13 @@
 //     and never arriving at.
 //  2. WHEN, as the same ribbon the row drew, for the same reason: it is the one part of the
 //     answer a table genuinely cannot say.
-//  3. WHAT TO DO ABOUT IT. Directions, phone, website. A swimmer reading a pool's screen is
-//     usually about to go there, and none of the three was reachable as an action.
+//  3. WHAT TO DO ABOUT IT. Directions, phone, website — and the lane plan, for the seven pools
+//     that publish one. A swimmer reading a pool's screen is usually about to go there, and
+//     none of the three was reachable as an action.
+//
+// And between 1 and 2, THE NUMBERS: water temperature, pool length, lane count — `PoolGlance`,
+// the strip the owner asked for when the three sat as rows below the address. The contact rows
+// the buttons already act on moved down the list in the same change (`detailSections`).
 //
 // WHERE IT IS is the screen itself: `PoolStage`, the map this panel rides over. A picture of
 // the map used to be the header's first item; it grew into the whole screen and the picture
@@ -37,12 +42,17 @@ struct PoolHeader: View {
   /// Where the pool is, for the Directions action. The map itself is the screen, not this view.
   let point: GeoPoint?
   let isToday: Bool
+  /// The live water reading, for the glance strip — the same value the facts list gets, so
+  /// the two cannot say two temperatures. See `FacilitySheet.live`.
+  let live: LiveTemp?
+  let asOf: Date
 
   var body: some View {
     VStack(alignment: .leading, spacing: Design.Space.gutter) {
       VStack(alignment: .leading, spacing: Design.Space.snug) {
         title
         verdict
+        PoolGlance(facts: glanceFacts(detail, live: live, at: asOf, in: localized))
       }
       ribbon
       PoolActions(detail: detail, point: point)
@@ -116,7 +126,8 @@ struct PoolHeader: View {
   }
 }
 
-/// The three things a swimmer standing outside a pool actually does.
+/// The things a swimmer standing outside a pool actually does — and, for a pool that publishes
+/// one, the lane plan they check before deciding to.
 ///
 /// Round, labelled, and each at least `Design.hitTarget` — the pattern Contacts and Maps use for
 /// exactly this, and the reason it is a row of buttons rather than three more table rows: a
@@ -136,6 +147,7 @@ struct PoolActions: View {
       directions
       call
       website
+      lanePlan
       Spacer(minLength: 0)
     }
     .accessibilityElement(children: .contain)
@@ -177,6 +189,39 @@ struct PoolActions: View {
     }
   }
 
+  /// The Belegungsplan: ONE button when the pool publishes one plan, a menu of basin names
+  /// when it publishes several (Oerlikon: the 50 m basin and the diving basin), nothing when
+  /// it publishes none — same rule as Call. The URL opens through `openURL`, so it lands in
+  /// whatever `Lab.linkOpener` chose, exactly like the website.
+  @ViewBuilder
+  private var lanePlan: some View {
+    let plans = lanePlanLinks(detail).compactMap { link in
+      URL(string: link.url).map { (link: link, url: $0) }
+    }
+    if plans.count == 1, let plan = plans.first {
+      ActionButton(caption: Message("basin.fact.lanePlan"), symbol: Icon.lanePlan) {
+        openURL(plan.url)
+      }
+      .accessibilityIdentifier("lanePlanButton")
+    } else if plans.count > 1 {
+      Menu {
+        ForEach(plans, id: \.link.id) { plan in
+          Button {
+            openURL(plan.url)
+          } label: {
+            // A basin's name is the pool's own word for it.
+            Text(verbatim: plan.link.basinName)
+          }
+        }
+      } label: {
+        ActionGlyph(caption: Message("basin.fact.lanePlan"), symbol: Icon.lanePlan)
+      }
+      .buttonStyle(.plain)
+      .accessibilityLabel(Text(Message("basin.fact.lanePlan"), localized))
+      .accessibilityIdentifier("lanePlanButton")
+    }
+  }
+
   private var websiteURL: URL? { detail.url.flatMap { URL(string: $0) } }
 
   /// The kit builds the string; this only turns it into a `URL`. The escaping and the
@@ -196,18 +241,30 @@ struct ActionButton: View {
 
   var body: some View {
     Button(action: action) {
-      VStack(spacing: Design.Space.tight) {
-        Image(systemName: symbol)
-          .foregroundStyle(.tint)
-          .frame(width: Design.hitTarget, height: Design.hitTarget)
-          .background(.tint.opacity(ChipColor.idleFill), in: Circle())
-        Text(caption, localized)
-          .font(.actionCaption)
-          .foregroundStyle(.secondary)
-      }
-      .contentShape(Rectangle())
+      ActionGlyph(caption: caption, symbol: symbol)
     }
     .buttonStyle(.plain)
     .accessibilityLabel(Text(caption, localized))
+  }
+}
+
+/// The look of one action — a filled glyph in a tinted circle, its word underneath — apart
+/// from what pressing it does, so a `Menu` can wear it as well as a `Button`.
+struct ActionGlyph: View {
+  @Environment(\.localized) private var localized
+  let caption: Message
+  let symbol: String
+
+  var body: some View {
+    VStack(spacing: Design.Space.tight) {
+      Image(systemName: symbol)
+        .foregroundStyle(.tint)
+        .frame(width: Design.hitTarget, height: Design.hitTarget)
+        .background(.tint.opacity(ChipColor.idleFill), in: Circle())
+      Text(caption, localized)
+        .font(.actionCaption)
+        .foregroundStyle(.secondary)
+    }
+    .contentShape(Rectangle())
   }
 }

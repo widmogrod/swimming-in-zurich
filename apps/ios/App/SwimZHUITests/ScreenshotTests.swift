@@ -84,8 +84,6 @@ final class ScreenshotTests: XCTestCase {
     for key in labKeys {
       app.launchArguments += ["-\(key)", "NO"]
     }
-    // The pickers: their previous looks are the named choices.
-    app.launchArguments += ["-lab.stripEntry", "none"]
     launch()
     try walk(prefix: "old-")
   }
@@ -112,10 +110,10 @@ final class ScreenshotTests: XCTestCase {
 
     // 3 — the filters. This is where the women-only / age-limit story lives, which is the part
     // of this app a general "pools near me" listing does not get right.
-    find("filterButton").tap()
-    XCTAssertTrue(find("dayStrip").waitForExistence(timeout: 10), "the filters never opened")
+    app.tabBars.firstMatch.buttons.element(boundBy: 2).tap()
+    XCTAssertTrue(find("measureFrom").waitForExistence(timeout: 10), "the filters never opened")
     capture("03-filters")
-    closeSheet()
+    app.tabBars.firstMatch.buttons.element(boundBy: 0).tap()
 
     // 4 — one pool, opened. The BOTTOM of the row, because that is the gesture
     // `testTheWholeRowOpensThePool` pins; the name at the top was once the only part that
@@ -152,7 +150,7 @@ final class ScreenshotTests: XCTestCase {
 
   /// Leave whatever is on top, by its navigation bar's leading button.
   ///
-  /// This is the gesture `testTheFilterButtonOpensASheetOnBothScreens` already uses, and it is
+  /// This is the gesture `BehaviourTests` already uses to leave a pushed screen, and it is
   /// here because the first draft swiped the sheet down instead: the drag did nothing, and the
   /// run failed with "never got back to the list" after photographing two screens. A dismissal
   /// the behaviour suite already proves is the one to copy.

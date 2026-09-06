@@ -21,48 +21,6 @@
 		</dict>
 		<dict>
 			<key>Type</key>
-			<string>PSMultiValueSpecifier</string>
-			<key>Title</key>
-			<string>Day strip: new days arrive</string>
-			<key>Key</key>
-			<string>lab.stripEntry</string>
-			<key>DefaultValue</key>
-			<string>materialize</string>
-			<key>Titles</key>
-			<array>
-				<string>Glass materialises (like a system button)</string>
-				<string>Scale and fade in with the scroll</string>
-				<string>Pop in (previous look)</string>
-			</array>
-			<key>Values</key>
-			<array>
-				<string>materialize</string>
-				<string>scroll</string>
-				<string>none</string>
-			</array>
-		</dict>
-		<dict>
-			<key>Type</key>
-			<string>PSMultiValueSpecifier</string>
-			<key>Title</key>
-			<string>Filters</string>
-			<key>Key</key>
-			<string>lab.filterPlace</string>
-			<key>DefaultValue</key>
-			<string>accessory</string>
-			<key>Titles</key>
-			<array>
-				<string>Pill above the tab bar</string>
-				<string>A tab of its own</string>
-			</array>
-			<key>Values</key>
-			<array>
-				<string>accessory</string>
-				<string>tab</string>
-			</array>
-		</dict>
-		<dict>
-			<key>Type</key>
 			<string>PSToggleSwitchSpecifier</string>
 			<key>Title</key>
 			<string>Glass map card</string>
@@ -153,6 +111,28 @@
 			<array>
 				<string>afterPush</string>
 				<string>withPush</string>
+			</array>
+		</dict>
+		<dict>
+			<key>Type</key>
+			<string>PSMultiValueSpecifier</string>
+			<key>Title</key>
+			<string>Pool numbers at a glance</string>
+			<key>Key</key>
+			<string>lab.glance</string>
+			<key>DefaultValue</key>
+			<string>tiles</string>
+			<key>Titles</key>
+			<array>
+				<string>Three tiles under the name (default)</string>
+				<string>One line under the name</string>
+				<string>Only in the list below (previous)</string>
+			</array>
+			<key>Values</key>
+			<array>
+				<string>tiles</string>
+				<string>line</string>
+				<string>none</string>
 			</array>
 		</dict>
 		<dict>

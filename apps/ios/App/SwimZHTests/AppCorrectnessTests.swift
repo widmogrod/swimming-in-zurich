@@ -117,20 +117,20 @@ struct LabSwitchTests {
     #expect(AppStorage(wrappedValue: true, Lab.symbolMotion).wrappedValue == true)
   }
 
-  @Test("a `-lab.stripEntry none` launch argument reaches @AppStorage as the named choice")
-  func launchArgumentPicksAStripEntry() {
-    // A STRING key, and deliberately not retyped: `("none" as NSString).boolValue` is `false`,
-    // so had `stripEntry` been in `Lab.keys` every named choice would have read as a Bool.
+  @Test("a `-lab.favouriteMove never` launch argument reaches @AppStorage as the named choice")
+  func launchArgumentPicksAStringChoice() {
+    // A STRING key, and deliberately not retyped: `("never" as NSString).boolValue` is `false`,
+    // so had a picker been in `Lab.keys` every named choice would have read as a Bool.
     let defaults = UserDefaults.standard
     let before = defaults.volatileDomain(forName: UserDefaults.argumentDomain)
     defer { defaults.setVolatileDomain(before, forName: UserDefaults.argumentDomain) }
     var arguments = before
-    arguments[Lab.stripEntry] = "none"
+    arguments[Lab.favouriteMove] = "never"
     defaults.setVolatileDomain(arguments, forName: UserDefaults.argumentDomain)
     Lab.typeLaunchArguments(in: defaults)
     #expect(
-      AppStorage(wrappedValue: Lab.StripEntry.default, Lab.stripEntry).wrappedValue == .none)
-    #expect(!Lab.keys.contains(Lab.stripEntry))
-    #expect(!Lab.keys.contains(Lab.filterPlace))
+      AppStorage(wrappedValue: Lab.FavouriteMove.default, Lab.favouriteMove).wrappedValue
+        == .never)
+    #expect(!Lab.keys.contains(Lab.favouriteMove))
   }
 }

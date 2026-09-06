@@ -95,8 +95,11 @@ extension Font {
   /// table of label/value pairs this app shipped first.
   static let heroTitle = Font.title.weight(.bold)
   static let heroSubtitle = Font.subheadline
-  /// The label under one of the three round actions.
+  /// The label under one of the round actions.
   static let actionCaption = Font.caption2.weight(.medium)
+  /// The glance strip: a number the eye finds before reading, and the caption naming it.
+  static let glanceValue = Font.title3.weight(.semibold)
+  static let glanceCaption = Font.caption2
 }
 
 // MARK: - Glyphs
@@ -135,6 +138,8 @@ enum Icon {
   static let directions = "arrow.triangle.turn.up.right.circle.fill"
   static let call = "phone.fill"
   static let website = "safari.fill"
+  /// The basin's Belegungsplan — the week's lane timetable, opened as the pool publishes it.
+  static let lanePlan = "calendar.day.timeline.left"
   /// A pool, on a map.
   static let pin = "mappin.circle.fill"
   /// The pool screen's one map control: bring a panned map back to the pool.

@@ -63,7 +63,7 @@ struct TodayView: View {
   /// an arrival from a rest. See `listReachedTop`.
   @State private var listAtTop = true
 
-  /// The tab bar's pages. `filters` exists only under `Lab.FilterPlace.tab`.
+  /// The tab bar's pages.
   enum TabPage: Hashable {
     case list, map, filters, search
   }
@@ -76,9 +76,6 @@ struct TodayView: View {
   /// that page rather than always the list. Tapping search from the map used to land on the
   /// list: the reader wanted to search the map they were looking at, with the field over it.
   @State private var searchedContent: TabPage = .list
-
-  /// `Lab.filterPlace`: the filter as a pill above the bar, or as a tab of its own.
-  @AppStorage(Lab.filterPlace) private var filterPlace = Lab.FilterPlace.default
 
   /// The reader's text size, for one purpose only: how tall the strip is, which is what sets
   /// the gap between the two thresholds that hide and show it. Read the same way `DayStrip`
@@ -118,18 +115,10 @@ struct TodayView: View {
 
   /// The tab bar. The selection is the bar's own glass lens; the search tab turns the bar into
   /// the field; the bar minimises as the list scrolls down, which is the same instinct the day
-  /// strip's yielding follows. Under `Lab.FilterPlace.accessory` the filter rides above the bar
-  /// as the bottom accessory (the Music mini-player's slot); under `.tab` it is a page.
+  /// strip's yielding follows. The filters are a TAB — a page, not a sheet — chosen over a pill
+  /// above the bar (`tabViewBottomAccessory`, the Music mini-player's slot) on 2026-09-06: the
+  /// bar is pure, every control in it is a tab, and the glyph fills when something is narrowed.
   private var tabShell: some View {
-    tabs.tabViewBottomAccessory(isEnabled: filterPlace == .accessory) {
-      FilterButton(
-        filters: $model.filters, kinds: model.kinds, location: model.location,
-        onUseMyLocation: { await model.useMyLocation() },
-        onUseNamedPlace: { model.useNamedPlace($0) })
-    }
-  }
-
-  private var tabs: some View {
     TabView(selection: $tab) {
       Tab(value: TabPage.list) {
         NavigationStack { findPage(searchable: false) }
@@ -141,18 +130,16 @@ struct TodayView: View {
       } label: {
         Label(Message("nav.map"), systemImage: Icon.map, localized)
       }
-      if filterPlace == .tab {
-        Tab(value: TabPage.filters) {
-          FilterPage(
-            filters: $model.filters, kinds: model.kinds, location: model.location,
-            onUseMyLocation: { await model.useMyLocation() },
-            onUseNamedPlace: { model.useNamedPlace($0) })
-        } label: {
-          // The glyph fills when something is narrowed, as the button's does.
-          Label(
-            Message("mobile.filters"),
-            systemImage: model.filters.isNarrowed ? Icon.filterActive : Icon.filter, localized)
-        }
+      Tab(value: TabPage.filters) {
+        FilterPage(
+          filters: $model.filters, kinds: model.kinds, location: model.location,
+          onUseMyLocation: { await model.useMyLocation() },
+          onUseNamedPlace: { model.useNamedPlace($0) })
+      } label: {
+        // The glyph fills when something is narrowed.
+        Label(
+          Message("mobile.filters"),
+          systemImage: model.filters.isNarrowed ? Icon.filterActive : Icon.filter, localized)
       }
       Tab(value: TabPage.search, role: .search) {
         // The page the reader came from, with the field over it — see `searchedContent`.

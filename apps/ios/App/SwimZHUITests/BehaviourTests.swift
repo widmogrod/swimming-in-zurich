@@ -293,20 +293,9 @@ final class BehaviourTests: XCTestCase {
     XCTAssertTrue(find("dayStrip").exists, "the day strip is not on the find screen")
   }
 
-  func testTheDayStripSelectsADayUnderEveryEntryEffect() throws {
-    // `Lab.stripEntry` defaults to one arrival effect, so every other test here drives that
-    // one. This one relaunches with each of the others and proves a chip still selects under
-    // it: a chip is a button, and the chosen one carries `.isSelected`.
-    for entry in ["scroll", "none"] {
-      try selectsADay(stripEntry: entry)
-    }
-  }
-
-  func testTheFilterTabOpensTheFiltersToo() {
-    // `Lab.filterPlace` defaults to the pill above the bar, which every other test drives.
-    // Under `tab` the filters are the third tab, and the form must be the same one.
-    app.terminate()
-    relaunch(withLab: "lab.filterPlace", value: "tab")
+  func testTheFilterTabShowsTheFormAndTheListIsOneTabAway() {
+    // The filters are the third tab: a page, not a sheet, so there is nothing to confirm —
+    // choosing the list again is the way back, with every change already applied.
     modeSegment(2).tap()
     XCTAssertTrue(
       find("measureFrom").waitForExistence(timeout: 5), "the filter tab shows no filter form")
@@ -326,10 +315,8 @@ final class BehaviourTests: XCTestCase {
       find("poolRow").waitForExistence(timeout: 30), "the list never showed a pool row")
   }
 
-  private func selectsADay(stripEntry: String) throws {
-    app.terminate()
-    relaunch(withLab: "lab.stripEntry", value: stripEntry)
-
+  func testTheDayStripSelectsADay() throws {
+    // A chip is a button, and the chosen one carries `.isSelected`.
     let strip = find("dayStrip")
     XCTAssertTrue(strip.waitForExistence(timeout: 5), "the day strip is not on the find screen")
     // The chip AFTER the selected one, not the strip's second: the strip opens centred on the
@@ -356,26 +343,6 @@ final class BehaviourTests: XCTestCase {
     XCTAssertTrue(
       waitFor { chip(nextLabel).isSelected }, "tapping the next chip did not select it")
     XCTAssertFalse(chip(previousLabel).isSelected, "the previous chip is still selected too")
-  }
-
-  // MARK: - The filter pill
-
-  func testTheFilterPillOpensTheSheetFromTheListAndTheMap() {
-    // The pill rides ABOVE the tab bar, on every tab: one tap to the same sheet from the list
-    // and from the map, and Done gives the screen back.
-    find("filterButton").tap()
-    XCTAssertTrue(
-      find("measureFrom").waitForExistence(timeout: 5),
-      "the filter pill did not open the sheet on the list")
-    app.navigationBars.buttons.firstMatch.tap()
-    XCTAssertTrue(waitForDisappearance(of: find("measureFrom")), "Done did not close the sheet")
-
-    modeSegment(1).tap()
-    XCTAssertTrue(find("poolMap").waitForExistence(timeout: 10), "the map never appeared")
-    find("filterButton").tap()
-    XCTAssertTrue(
-      find("measureFrom").waitForExistence(timeout: 5),
-      "the filter pill did not open the sheet on the map")
   }
 
   func testTheColourLegendIsReachableFromTheList() {
@@ -481,6 +448,49 @@ final class BehaviourTests: XCTestCase {
     XCTAssertGreaterThan(recentre.frame.minX, back.frame.maxX, "the pin button is not opposite")
     recentre.tap()
     XCTAssertTrue(panel.exists, "recentring the map lost the panel")
+  }
+
+  func testThePoolScreenLeadsWithTheNumbersAndOffersTheLanePlan() {
+    // "Temperature, number of lanes and lane length — at a glance; currently it's buried
+    // somewhere below. And a link to the lane plan when the pool has one." The pool opened
+    // here is one whose ROW offers a lane plan, because a pool without one must show no
+    // button — the same rule as Call for a pool without a phone — and that pool cannot
+    // prove the button exists.
+    let disclosure = find("laneDisclosure")
+    guard disclosure.waitForExistence(timeout: 10) else {
+      return XCTFail("no row in the fixture store offers a lane plan")
+    }
+    // The row the disclosure sits in, by GEOMETRY: `containing(_:identifier:)` does not see
+    // through a `.contain` element, so the rows are walked for the one around the button.
+    let rowWithPlan = all("poolRow").allElementsBoundByIndex.first {
+      $0.frame.contains(disclosure.frame)
+    }
+    guard let rowWithPlan else {
+      let frames = all("poolRow").allElementsBoundByIndex.map { "\($0.frame)" }
+      return XCTFail("the lane disclosure \(disclosure.frame) sits in no row: \(frames)")
+    }
+    // The TOP of the row — its bottom is the disclosure, which expands instead of opening.
+    rowWithPlan.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.1)).tap()
+    XCTAssertTrue(find("poolPanel").waitForExistence(timeout: 10), "the pool screen never opened")
+    let lanePlan = find("lanePlanButton")
+    XCTAssertTrue(
+      lanePlan.waitForExistence(timeout: 5), "a pool with a lane plan offers no way to it")
+    XCTAssertTrue(lanePlan.isHittable, "the lane plan button is not reachable")
+    // The numbers sit in the header — ABOVE the facts list, which is what "at a glance" means:
+    // visible at the drawer's smallest rest, before any scroll.
+    let glance = find("poolGlance")
+    XCTAssertTrue(
+      glance.waitForExistence(timeout: 5), "the pool screen shows no numbers at a glance")
+    XCTAssertLessThan(
+      glance.frame.minY, lanePlan.frame.minY, "the numbers are below the actions, not at a glance")
+    XCTAssertGreaterThan(
+      glance.frame.minY, find("poolPanel").frame.minY, "the numbers are not in the panel")
+    // Every fact on the strip is still a row below — the strip is a second reading, not a move.
+    // A screen the owner can compare: one frame per Lab shape, attached to the run.
+    let shot = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
+    shot.name = "glance-\(ProcessInfo.processInfo.arguments.contains("line") ? "line" : "tiles")"
+    shot.lifetime = .keepAlways
+    add(shot)
   }
 
   func testThePoolScreenSaysItsNameOnceAtATime() {
@@ -646,9 +656,9 @@ final class BehaviourTests: XCTestCase {
     let before = firstRowDistance()
     XCTAssertNotNil(before, "no row shows a distance — is a place selected at all?")
 
-    find("filterButton").tap()
+    modeSegment(2).tap()
     let measureFrom = find("measureFrom")
-    XCTAssertTrue(measureFrom.waitForExistence(timeout: 5), "the filter sheet has no place row")
+    XCTAssertTrue(measureFrom.waitForExistence(timeout: 5), "the filter tab has no place row")
     measureFrom.tap()
     let row = find("useMyLocation")
     XCTAssertTrue(row.waitForExistence(timeout: 5), "the place list offers no way to use it")
@@ -657,9 +667,9 @@ final class BehaviourTests: XCTestCase {
     // the sheet is where the explanation would live. So the test closes it, as a reader would.
     XCTAssertTrue(
       waitFor { self.find("useMyLocation").isEnabled }, "the row never came out of `.locating`")
-    // Back out of the place list, then out of the sheet.
+    // Back out of the place list, then back to the list tab.
     app.navigationBars.buttons.firstMatch.tap()
-    app.navigationBars.buttons.firstMatch.tap()
+    modeSegment(0).tap()
 
     // The distances must have MOVED. Not to a particular number: the fixture store's pools and
     // the simulated position are both free to change, and a test pinned to "0.8 km" would fail
