@@ -81,6 +81,36 @@ public struct Format: Equatable, Sendable {
     date.formatted(styled(Date.FormatStyle(date: .long, time: .omitted)))
   }
 
+  /// A date with its time — "23 July 2026 at 14:32" — for the moments the data section names:
+  /// when the store was built, when it was last checked against the published one.
+  public func dateTime(_ date: Date) -> String {
+    date.formatted(styled(Date.FormatStyle(date: .long, time: .shortened)))
+  }
+
+  /// One of the store's ISO 8601 instants (`meta.built_at`, a source's `fetched_at`), as a
+  /// `Date`. Python's `isoformat()` writes MICROSECONDS (`11:46:11.464339+02:00`) and
+  /// Foundation's ISO parser accepts exactly three fractional digits or none, so the fraction
+  /// is dropped before parsing: nothing on a screen shows sub-second time. Nil for a stamp
+  /// that is not an instant at all.
+  public static func instant(_ iso: String) -> Date? {
+    let trimmed = iso.replacing(/\.\d+/, with: "")
+    return try? Date(trimmed, strategy: .iso8601)
+  }
+
+  /// One of the store's ISO instants, as words — or, exactly as `storeDate`, the stamp itself
+  /// when it will not parse, so a wrong store is visible rather than blank.
+  public func storeInstant(_ iso: String) -> String {
+    guard let date = Self.instant(iso) else { return iso }
+    return dateTime(date)
+  }
+
+  /// The DAY of one of the store's ISO instants — "23 July 2026" — for a source's fetch stamp,
+  /// where the hour is noise.
+  public func storeInstantDay(_ iso: String) -> String {
+    guard let instant = Self.instant(iso) else { return iso }
+    return date(instant)
+  }
+
   /// One of the store's own date keys (`yyyy-MM-dd`), as words in the reader's language.
   ///
   /// The store writes machine dates — `meta.gold_valid_as_of`, `meta.horizon_end`,

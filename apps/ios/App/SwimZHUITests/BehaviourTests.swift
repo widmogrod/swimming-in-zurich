@@ -49,6 +49,9 @@ final class BehaviourTests: XCTestCase {
   /// rather than imported: the UI test target links no app code, so this is the one place the
   /// two have to agree by hand, and `LocationSourceKeyTests` in the package asserts they do.
   private let locationPreferenceKey = "swimzh.useMyLocation"
+  /// `TodayModel.automaticCheckKey` — the app process's constant, spelled here because a UI
+  /// test cannot import the app.
+  private let automaticCheckKey = "swimzh.autoCheck"
 
   /// One element by identifier, whatever SwiftUI decided to call its type.
   ///
@@ -70,12 +73,12 @@ final class BehaviourTests: XCTestCase {
   /// the moment it moved into the list itself: a `List` is lazy, so an off-screen row is not in
   /// the hierarchy at all and `.exists` is false on a screen that is plainly showing. The mode
   /// picker is in the toolbar, which is always resident.
-  private var onTheFindScreen: XCUIElement { find("viewMode") }
+  private var onTheFindScreen: XCUIElement { app.tabBars.firstMatch }
 
-  /// The two segments of that picker. A `Picker` gives its options no identifiers of their own,
-  /// so they are reached by position — and the ORDER is the contract: list first, map second.
+  /// The tabs of that bar. A `Tab` label is a sentence in the running language, so they are
+  /// reached by position — and the ORDER is the contract: list first, map second.
   private func modeSegment(_ index: Int) -> XCUIElement {
-    app.segmentedControls.firstMatch.buttons.element(boundBy: index)
+    app.tabBars.firstMatch.buttons.element(boundBy: index)
   }
 
   /// The search control the system draws for us. It is NOT ours, so it has no identifier of
@@ -115,13 +118,14 @@ final class BehaviourTests: XCTestCase {
       "the search field opened in the top half — it is collapsing into the navigation bar again")
 
     // The system's own control, so it is found by ITS label rather than one of our catalog's —
-    // the one place in this file where a label is the right query.
-    let close = app.buttons.matching(NSPredicate(format: "label == %@", "close")).firstMatch
+    // the one place in this file where a label is the right query. Case-insensitively: the
+    // toolbar's field said "close", the search tab's field says "Close".
+    let close = app.buttons.matching(NSPredicate(format: "label ==[c] %@", "close")).firstMatch
     XCTAssertTrue(close.waitForExistence(timeout: 5), "search has no visible way out")
     close.tap()
     XCTAssertTrue(
       onTheFindScreen.waitForExistence(timeout: 8),
-      "closing search did not give the navigation bar back")
+      "closing search did not give the tab bar back")
   }
 
   func testTypingInSearchNarrowsTheList() {
@@ -139,7 +143,63 @@ final class BehaviourTests: XCTestCase {
       "typing a pool's name did not narrow the list")
   }
 
+  func testSearchFromTheMapStaysOnTheMapAndSuggestsNames() {
+    // The reader on the map who taps search wants to search THAT map, not be taken to the
+    // list — and expects names to be offered as they type. Picking one completes the field
+    // and the map shows that pool alone.
+    modeSegment(1).tap()
+    XCTAssertTrue(find("poolMap").waitForExistence(timeout: 10), "no map to search")
+    searchControl.tap()
+    let field = app.searchFields.firstMatch
+    XCTAssertTrue(field.waitForExistence(timeout: 5), "search opened no field over the map")
+    field.typeText("Hallenbad")
+    let suggestion = find("searchSuggestion")
+    XCTAssertTrue(suggestion.waitForExistence(timeout: 5), "typing offered no pool name")
+    let name = suggestion.label
+    suggestion.tap()
+    XCTAssertTrue(
+      waitFor { field.value as? String == name }, "picking a suggestion did not complete it")
+    XCTAssertTrue(find("poolMap").waitForExistence(timeout: 5), "search left the map")
+    XCTAssertFalse(find("poolRow").exists, "search took the reader to the list")
+  }
+
   // MARK: - The row
+
+  func testFavouritingARowKeepsItWhereItIs() {
+    // THE SWIPE THAT MADE A ROW VANISH. Marking a row rebuilt the list with that row sorted to
+    // the front of its tier: it left the screen, and every row under it jumped up by its
+    // height. Under `Lab.FavouriteMove.hold` (the default) the heart appears in place and the
+    // order waits — it is applied when the reader comes back to the top of the list, which is
+    // where the front of a tier is.
+    let rows = all("poolRow")
+    XCTAssertGreaterThan(rows.count, 2, "not enough rows on screen to hold one in place")
+    let second = rows.element(boundBy: 1)
+    let name = second.label
+    second.swipeRight()
+    let action = find("favouriteAction")
+    XCTAssertTrue(action.waitForExistence(timeout: 5), "swiping a row offered no favourite")
+    action.tap()
+    // The row is still the second row: nothing moved.
+    let held = expectation(
+      for: NSPredicate { _, _ in rows.element(boundBy: 1).label == name }, evaluatedWith: nil)
+    XCTAssertEqual(XCTWaiter().wait(for: [held], timeout: 5), .completed, "the row moved")
+    // Leave the top and come back: the held order is applied now, on screen. The row is at
+    // the front of its tier — which is the first row, or still the second when the second
+    // row already led a tier of its own.
+    app.swipeUp()
+    app.swipeDown()
+    app.swipeDown()
+    let settled = expectation(
+      for: NSPredicate { _, _ in
+        rows.element(boundBy: 0).label == name || rows.element(boundBy: 1).label == name
+      }, evaluatedWith: nil)
+    XCTAssertEqual(XCTWaiter().wait(for: [settled], timeout: 8), .completed, "the row was lost")
+    // Put it back, so the next launch's order is the one every other test assumes.
+    let favourite = rows.element(boundBy: 0).label == name ? rows.element(boundBy: 0) : second
+    favourite.swipeRight()
+    XCTAssertTrue(action.waitForExistence(timeout: 5))
+    action.tap()
+  }
 
   func testTheWholeRowOpensThePool() {
     let row = find("poolRow")
@@ -236,35 +296,95 @@ final class BehaviourTests: XCTestCase {
     XCTAssertTrue(find("dayStrip").exists, "the day strip is not on the find screen")
   }
 
-  // MARK: - The two screens that filter
-
-  func testTheFilterButtonOpensASheetOnBothScreens() {
-    find("filterButton").tap()
+  func testTheFilterTabShowsTheFormAndTheListIsOneTabAway() {
+    // The filters are the third tab: a page, not a sheet, so there is nothing to confirm —
+    // choosing the list again is the way back, with every change already applied.
+    modeSegment(2).tap()
     XCTAssertTrue(
-      app.navigationBars.buttons.firstMatch.waitForExistence(timeout: 5),
-      "the filter sheet did not open on the find screen")
-    app.navigationBars.buttons.firstMatch.tap()
-
-    openAllPools()
-    // The BROWSER's own row first. This assertion used to be the filter button alone — which
-    // exists on both screens, so the test went on passing for a whole run in which
-    // `openAllPools` was tapping the glass bar and never leaving the find screen. An assertion
-    // that cannot tell the two screens apart is not testing the sentence it claims to.
-    XCTAssertTrue(
-      find("browserRow").waitForExistence(timeout: 10), "the browser never opened")
-    XCTAssertTrue(
-      find("filterButton").waitForExistence(timeout: 5),
-      "the all-pools browser has no filter button in the same place")
+      find("measureFrom").waitForExistence(timeout: 5), "the filter tab shows no filter form")
+    modeSegment(0).tap()
+    XCTAssertTrue(find("poolRow").waitForExistence(timeout: 10), "no way back to the list")
   }
 
-  func testTheBrowserOpensAPoolToo() {
-    openAllPools()
-    let row = find("browserRow")
-    XCTAssertTrue(row.waitForExistence(timeout: 10), "the browser listed nothing")
-    row.tap()
+  func testTheDayStripSelectsADay() throws {
+    // A chip is a button, and the chosen one carries `.isSelected`.
+    let strip = find("dayStrip")
+    XCTAssertTrue(strip.waitForExistence(timeout: 5), "the day strip is not on the find screen")
+    // The chip AFTER the selected one, not the strip's second: the strip opens centred on the
+    // selected day, so on a store older than a screen of days the first chips are scrolled off
+    // to the left and cannot be hit. The neighbour of the selected chip is always on screen.
+    let chips = strip.buttons
+    XCTAssertGreaterThan(chips.count, 1, "the strip has fewer than two chips to choose between")
+    let selectedIndex = (0..<chips.count).first { chips.element(boundBy: $0).isSelected }
+    let current = try XCTUnwrap(selectedIndex, "no chip is selected on the find screen")
+    XCTAssertLessThan(current + 1, chips.count, "the selected day is the last chip")
+    let next = chips.element(boundBy: current + 1)
+    XCTAssertFalse(next.isSelected, "the next chip is selected before anything was tapped")
+    // BY THE LABEL READ OFF THE CHIP, not by index. The strip is a LAZY stack that scrolls to
+    // centre the new selection, so after the tap a different set of chips is materialised and
+    // `boundBy:` names a different day — a hierarchy dump showed the tapped day selected while
+    // the index-based query said it was not. The label is whatever the running language
+    // rendered, so this is still not a test that knows any sentence.
+    let previousLabel = chips.element(boundBy: current).label
+    let nextLabel = next.label
+    next.tap()
+    func chip(_ label: String) -> XCUIElement {
+      strip.buttons.matching(NSPredicate(format: "label == %@", label)).firstMatch
+    }
     XCTAssertTrue(
-      waitForDisappearance(of: find("browserRow")),
-      "a browser row did not push the pool's sheet")
+      waitFor { chip(nextLabel).isSelected }, "tapping the next chip did not select it")
+    XCTAssertFalse(chip(previousLabel).isSelected, "the previous chip is still selected too")
+  }
+
+  func testPullingTheListChecksForNewerDataAndSaysWhatItFound() {
+    // The pull's contract: it ALWAYS answers. The app is launched with the automatic check
+    // off, so the check row under the answer is absent until the reader pulls — which is what
+    // makes its appearance the pull's doing and not the launch's. Which sentence it says
+    // (up to date, newer data installed, could not check) depends on the runner's network and
+    // on what is published; the claim here is that a sentence and a time appear at all.
+    app.terminate()
+    app.launchArguments += ["-\(automaticCheckKey)", "NO"]
+    app.launch()
+    XCTAssertTrue(find("poolRow").waitForExistence(timeout: 10), "no list to pull on")
+    let check = find("dataCheck")
+    XCTAssertTrue(scrollTo(find("legendLink")), "the data section was not reachable")
+    XCTAssertFalse(check.exists, "the check row was there before anyone pulled")
+    // Back to the TOP — the headline, not merely the first pool row: a drag on a list that is
+    // still scrolled down only scrolls it, and the first attempt at this test proved exactly
+    // that with a screenshot.
+    let headline = find("headline")
+    for _ in 0..<25 where !headline.isHittable { app.swipeDown() }
+    XCTAssertTrue(headline.isHittable, "could not scroll the list back to its top")
+
+    // From the MIDDLE of the list, not its top edge: the day strip rides the top safe-area
+    // bar, and a drag that begins under it lands on the strip's own horizontal scroller.
+    let list = app.collectionViews.firstMatch
+    let start = list.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.45))
+    let end = list.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.98))
+    start.press(forDuration: 0.3, thenDragTo: end, withVelocity: .slow, thenHoldForDuration: 0.5)
+
+    XCTAssertTrue(scrollTo(check), "pulling the list produced no check row")
+    XCTAssertTrue(
+      check.waitForExistence(timeout: 20), "the pull spun and said nothing")
+  }
+
+  func testTheAboutScreenSaysWhoWhatAndHow() {
+    // Who made it, what state the pool data is in, how to help — and a BUTTON that checks for
+    // newer data and reports, for the reader who never pulls. Launched with the automatic
+    // check off so the check row is provably the button's.
+    app.terminate()
+    app.launchArguments += ["-\(automaticCheckKey)", "NO"]
+    app.launch()
+    XCTAssertTrue(scrollTo(find("aboutLink")), "the About link is not reachable from the list")
+    find("aboutLink").tap()
+    XCTAssertTrue(find("aboutPoolCount").waitForExistence(timeout: 5), "no pool count")
+    XCTAssertTrue(find("freshSource").exists, "no per-source provenance rows")
+    XCTAssertTrue(scrollTo(find("aboutRepository")), "no way to the source code")
+    XCTAssertFalse(find("dataCheck").exists, "a check row before any check")
+    let button = find("checkNow")
+    XCTAssertTrue(scrollTo(button), "no check button")
+    button.tap()
+    XCTAssertTrue(find("dataCheck").waitForExistence(timeout: 20), "the button said nothing")
   }
 
   func testTheColourLegendIsReachableFromTheList() {
@@ -337,28 +457,96 @@ final class BehaviourTests: XCTestCase {
     XCTAssertTrue(waitForDisappearance(of: find("poolMap")), "the map stayed under the list")
   }
 
-  // MARK: - The pool screen: not a table
+  // MARK: - The pool screen: a map, with the facts in a panel
 
-  func testThePoolScreenOpensOnThePoolAndNotOnATable() {
+  func testThePoolScreenOpensOnTheMapWithTheFactsInAPanel() {
     // "When I click on a pool I'm shown a table." It was true — the screen opened on a `List`
-    // whose first row was a label/value pair for the address. It opens on the pool now: where
-    // it is, what it is called, what the answer was, and what you can DO about it.
+    // whose first row was a label/value pair for the address. Then it opened on a picture of
+    // the map over that list. It opens on the MAP now: full screen, the pool's facts in a
+    // panel over it, and what you can DO about it reachable from the panel.
     find("poolRow").tap()
     XCTAssertTrue(
-      find("heroMap").waitForExistence(timeout: 10),
+      find("poolStage").waitForExistence(timeout: 10),
       "the pool screen does not open on a map of the pool")
+    let panel = find("poolPanel")
+    XCTAssertTrue(panel.waitForExistence(timeout: 5), "the facts are not in a panel")
+    XCTAssertGreaterThan(
+      panel.frame.height, app.frame.height / 5, "the panel is too small to hold the facts")
     XCTAssertTrue(
-      find("directionsButton").exists,
+      find("directionsButton").waitForExistence(timeout: 5),
       "the pool screen offers no way to get to the pool")
+    // The recentre control is a BAR item: the system's glass, at the back button's height and
+    // size, on the opposite side. Floated over the map it sat lower and larger than the back
+    // button beside it, which is what the owner saw first.
+    let recentre = find("poolStageRecentre")
+    XCTAssertTrue(recentre.exists, "no way back to the pool once panned")
+    // Its LEVEL is asserted, not its height: the element behind the identifier is the glyph's
+    // button inside the bar item, and the glass capsule the system draws around it is the
+    // back button's — the screenshot shows the two the same size, the tree does not.
+    let back = app.navigationBars.firstMatch.buttons.firstMatch
+    XCTAssertEqual(
+      recentre.frame.midY, back.frame.midY, accuracy: 1,
+      "the pin button is not at the back button's height")
+    XCTAssertGreaterThan(recentre.frame.minX, back.frame.maxX, "the pin button is not opposite")
+    recentre.tap()
+    XCTAssertTrue(panel.exists, "recentring the map lost the panel")
+  }
+
+  func testThePoolScreenLeadsWithTheNumbersAndOffersTheLanePlan() {
+    // "Temperature, number of lanes and lane length — at a glance; currently it's buried
+    // somewhere below. And a link to the lane plan when the pool has one." The pool opened
+    // is one whose ROW offers a lane plan, because a pool without one must show no button —
+    // the same rule as Call for a pool without a phone — and cannot prove it.
+    do {
+      let shape = "line"
+      let disclosure = find("laneDisclosure")
+      guard disclosure.waitForExistence(timeout: 10) else {
+        return XCTFail("no row in the fixture store offers a lane plan")
+      }
+      // The row the disclosure belongs to, by GEOMETRY: `poolRow` is the row's LINK — the name
+      // and the answer — and the ribbon and the disclosure hang under it outside that element,
+      // so the row above the button, nearest to it, is its own.
+      let rowWithPlan = all("poolRow").allElementsBoundByIndex
+        .filter { $0.frame.maxY <= disclosure.frame.minY }
+        .max { $0.frame.maxY < $1.frame.maxY }
+      guard let rowWithPlan else { return XCTFail("the lane disclosure hangs under no row") }
+      rowWithPlan.tap()
+      let panel = find("poolPanel")
+      XCTAssertTrue(panel.waitForExistence(timeout: 10), "[\(shape)] the pool screen never opened")
+      let lanePlan = find("lanePlanButton")
+      XCTAssertTrue(
+        lanePlan.waitForExistence(timeout: 5),
+        "[\(shape)] a pool with a lane plan offers no way to it")
+      XCTAssertTrue(lanePlan.isHittable, "[\(shape)] the lane plan button is not reachable")
+      // The numbers sit in the header — ABOVE the actions, which is what "at a glance" means:
+      // visible at the drawer's smallest rest, before any scroll.
+      let glance = find("poolGlance")
+      XCTAssertTrue(
+        glance.waitForExistence(timeout: 5),
+        "[\(shape)] the pool screen shows no numbers at a glance")
+      XCTAssertLessThan(
+        glance.frame.minY, lanePlan.frame.minY, "[\(shape)] the numbers are below the actions")
+      XCTAssertGreaterThan(
+        glance.frame.minY, panel.frame.minY, "[\(shape)] the numbers left the panel")
+      // ...and the strip did not push the actions out of the smallest rest: the first frame
+      // of the (since deleted) tiles had every caption cut off under the panel's bottom edge.
+      XCTAssertLessThanOrEqual(
+        lanePlan.frame.maxY, panel.frame.maxY, "[\(shape)] the actions are cut off at the peek")
+      sleep(1)
+      let shot = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
+      shot.name = "glance-\(shape)"
+      shot.lifetime = .keepAlways
+      add(shot)
+    }
   }
 
   func testThePoolScreenSaysItsNameOnceAtATime() {
-    // The screen opened with the pool's name in the navigation bar AND at `heroTitle` six
-    // points under it — the same word twice. Neither copy could simply be deleted: the hero is
-    // what makes the push continuous with the row you tapped, and an empty bar on a scrolled
-    // screen leaves a chevron with nothing to say what you are looking at.
+    // The screen once opened with the pool's name in the navigation bar AND at `heroTitle`
+    // six points under it — the same word twice. The panel says it now, and the bar over the
+    // map says nothing: with the panel always present the name never scrolls away, so a bar
+    // title would be the duplication back.
     find("poolRow").tap()
-    XCTAssertTrue(find("heroMap").waitForExistence(timeout: 10), "the pool screen never opened")
+    XCTAssertTrue(find("poolPanel").waitForExistence(timeout: 10), "the pool screen never opened")
 
     let bar = app.navigationBars.firstMatch
     XCTAssertTrue(bar.waitForExistence(timeout: 5), "the pool screen has no navigation bar")
@@ -367,16 +555,84 @@ final class BehaviourTests: XCTestCase {
     // is drawn. What the reader can actually see is the label.
     XCTAssertEqual(
       bar.staticTexts.count, 0,
-      "the bar is stating the name while the hero is still showing it — that is twice")
+      "the bar is stating the name while the panel is showing it — that is twice")
+    // ...and the back button is still there and still works with the panel up, or the map is
+    // a screen with no way out.
+    let back = bar.buttons.firstMatch
+    XCTAssertTrue(back.exists, "the map screen has no way back")
+    back.tap()
+    XCTAssertTrue(find("poolRow").waitForExistence(timeout: 10), "back did not return to the list")
+  }
 
-    // ...and it must take the name over once the hero has gone, or the screen names no pool.
-    app.swipeUp()
-    app.swipeUp()
-    let named = expectation(
-      for: NSPredicate(format: "count > 0"), evaluatedWith: bar.staticTexts)
-    XCTAssertEqual(
-      XCTWaiter().wait(for: [named], timeout: 8), .completed,
-      "scrolling past the hero left the bar empty — nothing on screen names the pool")
+  func testSwipingFromTheLeadingEdgeGoesBack() {
+    // The map takes every pan it is given, and with the map edge to edge that included the
+    // system's swipe-back — the only way out was the button. `FacilitySheet.backSwipeEdge`
+    // keeps a strip of the leading edge free of the map so the swipe works again.
+    find("poolRow").tap()
+    XCTAssertTrue(find("poolStage").waitForExistence(timeout: 10), "the pool screen never opened")
+    let edge = app.coordinate(withNormalizedOffset: CGVector(dx: 0.005, dy: 0.4))
+    edge.press(forDuration: 0.05, thenDragTo: edge.withOffset(CGVector(dx: 320, dy: 0)))
+    XCTAssertTrue(
+      find("poolRow").waitForExistence(timeout: 8), "a swipe from the leading edge did not go back")
+  }
+
+  func testDraggingTheDrawerAnywhereMovesItAndDoesNotLeaveTheScreen() {
+    // THE GESTURE THE OWNER ASKED FOR, first half: a drag anywhere on the drawer — not only its
+    // handle — moves the drawer between its sizes and stays on the pool screen. With the zoom
+    // push this screen used to have, the same drag shrank the whole screen back toward the
+    // list and hid the bar on the way.
+    find("poolRow").tap()
+    let panel = find("poolPanel")
+    XCTAssertTrue(panel.waitForExistence(timeout: 10), "the pool screen never opened")
+    let restingTop = panel.frame.minY
+    // Up, from the middle of the drawer's body.
+    let body = panel.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.6))
+    body.press(
+      forDuration: 0.05, thenDragTo: body.withOffset(CGVector(dx: 0, dy: -260)),
+      withVelocity: .slow, thenHoldForDuration: 0.1)
+    XCTAssertTrue(
+      waitFor { panel.frame.minY < restingTop - 100 }, "the drawer did not rise when dragged")
+    XCTAssertTrue(find("poolStage").exists, "dragging the drawer up left the pool screen")
+    // ...and a LONG pull down from up there, on the header: all the way back to the smallest
+    // size and no further — two pulls to leave, never one. (A 260-point pull was tried first
+    // and stepped it down exactly one size, which is the rule working, not failing.)
+    let raised = panel.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.1))
+    raised.press(
+      forDuration: 0.05, thenDragTo: raised.withOffset(CGVector(dx: 0, dy: 600)),
+      withVelocity: .slow, thenHoldForDuration: 0.1)
+    XCTAssertTrue(
+      waitFor { abs(panel.frame.minY - restingTop) < 20 },
+      "the drawer did not come back down to its smallest size: rest \(restingTop), now "
+        + "\(panel.frame.minY), on the pool screen: \(find("poolStage").exists)")
+    XCTAssertTrue(find("poolStage").exists, "a moderate pull down left the pool screen")
+    XCTAssertTrue(find("directionsButton").exists, "the drawer lost its actions on the way")
+  }
+
+  func testPullingTheDrawerPastItsSmallestSizeGoesBack() {
+    // Second half: from its smallest size, pulling the drawer on down and letting go is the way
+    // out — back to the list, the way a place card in Maps goes.
+    find("poolRow").tap()
+    let panel = find("poolPanel")
+    XCTAssertTrue(panel.waitForExistence(timeout: 10), "the pool screen never opened")
+    let grab = panel.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.3))
+    grab.press(
+      forDuration: 0.05, thenDragTo: grab.withOffset(CGVector(dx: 0, dy: 500)),
+      withVelocity: .slow, thenHoldForDuration: 0.1)
+    XCTAssertTrue(
+      find("poolRow").waitForExistence(timeout: 8),
+      "pulling the drawer past its smallest size did not go back to the list")
+  }
+
+  func testSwipingFromTheLeadingEdgeOverTheDrawerGoesBack() {
+    // The edge swipe must work where the finger lands on the DRAWER too, not only on the map:
+    // the drawer's own drag took those swipes until the edge strip was raised above it.
+    find("poolRow").tap()
+    XCTAssertTrue(find("poolPanel").waitForExistence(timeout: 10), "the pool screen never opened")
+    let edge = app.coordinate(withNormalizedOffset: CGVector(dx: 0.005, dy: 0.85))
+    edge.press(forDuration: 0.05, thenDragTo: edge.withOffset(CGVector(dx: 320, dy: 0)))
+    XCTAssertTrue(
+      find("poolRow").waitForExistence(timeout: 8),
+      "a swipe from the leading edge over the drawer did not go back")
   }
 
   func testThePoolScreenActionsAreRealControls() {
@@ -387,6 +643,24 @@ final class BehaviourTests: XCTestCase {
     // pressable and is 20 points across is the defect this app has already shipped once.
     XCTAssertGreaterThanOrEqual(directions.frame.height, 44, "the action is too small to hit")
     XCTAssertGreaterThanOrEqual(directions.frame.width, 44, "the action is too small to hit")
+  }
+
+  // MARK: - The pool's own page
+
+  func testTheWebsiteOpensInsideTheApp() {
+    // The website action used to hand the address to Safari and put the app in the
+    // background. The in-app sheet must put a page on screen with the app still in front.
+    do {
+      let opener = "sheet"
+      find("poolRow").tap()
+      let website = find("websiteButton")
+      XCTAssertTrue(website.waitForExistence(timeout: 10), "\(opener): no website action")
+      website.tap()
+      XCTAssertTrue(
+        app.webViews.firstMatch.waitForExistence(timeout: 20),
+        "\(opener): no page opened inside the app")
+      XCTAssertEqual(app.state, .runningForeground, "\(opener): the app left the foreground")
+    }
   }
 
   // MARK: - The phone's own position
@@ -419,9 +693,9 @@ final class BehaviourTests: XCTestCase {
     let before = firstRowDistance()
     XCTAssertNotNil(before, "no row shows a distance — is a place selected at all?")
 
-    find("filterButton").tap()
+    modeSegment(2).tap()
     let measureFrom = find("measureFrom")
-    XCTAssertTrue(measureFrom.waitForExistence(timeout: 5), "the filter sheet has no place row")
+    XCTAssertTrue(measureFrom.waitForExistence(timeout: 5), "the filter tab has no place row")
     measureFrom.tap()
     let row = find("useMyLocation")
     XCTAssertTrue(row.waitForExistence(timeout: 5), "the place list offers no way to use it")
@@ -430,9 +704,9 @@ final class BehaviourTests: XCTestCase {
     // the sheet is where the explanation would live. So the test closes it, as a reader would.
     XCTAssertTrue(
       waitFor { self.find("useMyLocation").isEnabled }, "the row never came out of `.locating`")
-    // Back out of the place list, then out of the sheet.
+    // Back out of the place list, then back to the list tab.
     app.navigationBars.buttons.firstMatch.tap()
-    app.navigationBars.buttons.firstMatch.tap()
+    modeSegment(0).tap()
 
     // The distances must have MOVED. Not to a particular number: the fixture store's pools and
     // the simulated position are both free to change, and a test pinned to "0.8 km" would fail
@@ -463,19 +737,6 @@ final class BehaviourTests: XCTestCase {
 
   // MARK: - Helpers
 
-  /// The whole roster, in one tap from the bottom bar.
-  ///
-  /// IT USED TO SCROLL, and the reason it no longer does is worth keeping. When the link lived
-  /// at the end of the fifty-seven-row list, this helper had to swipe to the row BELOW it —
-  /// stopping the moment `allPoolsLink` merely entered the hierarchy left it at the very bottom
-  /// edge, under the floating bar, so the tap landed on glass and the browser never opened.
-  /// That helper took about fifty-five seconds per test and was load-dependent, which is what
-  /// measured the real defect: the control was twenty-five swipes from the reader too. It went
-  /// back to the toolbar, and this went back to a tap.
-  private func openAllPools() {
-    find("allPoolsLink").tap()
-  }
-
   /// Swipe until the element is in the hierarchy, or give up. A lazy `List` does not build a
   /// row it is not showing, so "scroll to it" is the only way to assert anything about one.
   @discardableResult
@@ -486,6 +747,186 @@ final class BehaviourTests: XCTestCase {
       swipes += 1
     }
     return element.exists
+  }
+
+  // MARK: - A wide window: an unfolded phone, an iPad, a landscape Max
+
+  /// Whether the window is wide enough for the regular size class. Below it every wide test is
+  /// SKIPPED rather than passed: a phone in portrait proves nothing about the unfolded layout.
+  private var windowIsWide: Bool { app.windows.firstMatch.frame.width >= 600 }
+
+  func testAWideWindowIsAMapWithTheListFloatingOverItAndAPoolOpensInTheCard() throws {
+    // The default wide layout, the STAGE: the map is the screen, the list floats over it in a
+    // glass card, and a tapped pool's facts take the card while the map — the SAME map, its
+    // other pins kept — flies to the pool. Never a second map over the first.
+    try XCTSkipUnless(windowIsWide, "a compact window has no wide layout to prove")
+    XCTAssertTrue(find("stageColumn").waitForExistence(timeout: 10), "no floating column")
+    XCTAssertTrue(find("poolMap").exists, "the stage has no map under the column")
+    // The column chrome: no tab bar anywhere, and NO control row at rest — the card opens on
+    // the day strip. A pull past the top brings the search field and the filters button, on
+    // one row; the filters open as a popover, which goes away on a tap outside it.
+    XCTAssertFalse(app.tabBars.firstMatch.exists, "a tab bar is up over the column")
+    XCTAssertFalse(find("columnSearch").exists, "the search row is resident, not pulled for")
+    let rowTop = find("poolRow").coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.2))
+    rowTop.press(forDuration: 0.1, thenDragTo: rowTop.withOffset(CGVector(dx: 0, dy: 300)))
+    let filters = find("filtersButton")
+    XCTAssertTrue(filters.waitForExistence(timeout: 5), "the pull brought no filters button")
+    let search = find("columnSearch")
+    XCTAssertTrue(search.exists, "the pull brought no search field")
+    XCTAssertEqual(
+      search.frame.midY, filters.frame.midY, accuracy: 2,
+      "the search field and the filters button are not on one row")
+    XCTAssertLessThan(
+      search.frame.minY - find("stageColumn").frame.minY, 80,
+      "empty glass above the column's controls")
+    filters.tap()
+    XCTAssertTrue(find("measureFrom").waitForExistence(timeout: 5), "the filters did not open")
+    app.coordinate(withNormalizedOffset: CGVector(dx: 0.9, dy: 0.9)).tap()
+    XCTAssertTrue(waitForDisappearance(of: find("measureFrom")), "the popover did not close")
+    let pinsBefore = all("mapPin").count + all("mapCluster").count
+    find("poolRow").tap()
+    XCTAssertTrue(
+      find("poolFacts").waitForExistence(timeout: 10), "the facts did not open in the card")
+    XCTAssertFalse(find("poolStage").exists, "a second map opened over the stage's map")
+    XCTAssertTrue(find("poolMap").exists, "the stage's map went away")
+    sleep(1)
+    XCTAssertGreaterThan(
+      all("mapPin").count + all("mapCluster").count, 1,
+      "flying to the pool lost every other pin (had \(pinsBefore) before)")
+    // A PIN is the other way to a pool, and on the stage it is ONE tap: the pool opens in the
+    // card, no floating pin card in between. The map is zoomed to a neighbourhood now, so a
+    // single pin is on screen — the assertion is not optional here.
+    app.navigationBars.firstMatch.buttons.firstMatch.tap()
+    XCTAssertTrue(find("poolRow").waitForExistence(timeout: 10), "the list did not come back")
+    let pins = all("mapPin")
+    XCTAssertTrue(pins.firstMatch.waitForExistence(timeout: 5), "no single pin on the map")
+    // The last one: the first may be the pool just closed, whose pin is still marked.
+    pins.element(boundBy: pins.count - 1).tap()
+    XCTAssertTrue(
+      find("poolFacts").waitForExistence(timeout: 10), "tapping a pin did not open the pool")
+    XCTAssertFalse(find("pinCard").exists, "the stage raised a phone pin card")
+  }
+
+  func testOnTheStageEveryPinOpensItsPoolInTheCard() throws {
+    // "Clicking on pins does not work" (owner, 2026-09-06). Driven pin by pin: the FIRST pin at
+    // rest, a second pin while the first pool is open, and a pin after coming back — each must
+    // put a DIFFERENT pool's facts in the card, and the name in the card must be the pin's.
+    try XCTSkipUnless(windowIsWide, "a compact window has no wide layout to prove")
+    XCTAssertTrue(find("stageColumn").waitForExistence(timeout: 10), "no floating column")
+    let pins = all("mapPin")
+    XCTAssertTrue(pins.firstMatch.waitForExistence(timeout: 5), "no single pin on the map")
+    let first = pins.element(boundBy: 0)
+    let firstName = first.label
+    first.tap()
+    XCTAssertTrue(find("poolFacts").waitForExistence(timeout: 10), "the first pin did nothing")
+    XCTAssertTrue(
+      app.staticTexts[firstName].waitForExistence(timeout: 5),
+      "the card does not name the pin's pool (\(firstName))")
+    // A second pin, with the first pool open: the card must switch. The pins regroup once the
+    // fly-in settles, so give them the beat; a pool with no single neighbour in 1.5 km is a
+    // fact about Zürich, not a failure, and the switch is then proved from the city view below.
+    sleep(2)
+    if let second = all("mapPin").allElementsBoundByIndex.first(where: { $0.label != firstName }) {
+      let secondName = second.label
+      second.tap()
+      XCTAssertTrue(
+        app.staticTexts[secondName].waitForExistence(timeout: 10),
+        "the second pin did not switch the card to \(secondName)")
+    }
+    // Back to the list, then a DIFFERENT pin from the city view, straight over the open list.
+    app.navigationBars.firstMatch.buttons.firstMatch.tap()
+    XCTAssertTrue(find("poolRow").waitForExistence(timeout: 10), "the list did not come back")
+    sleep(2)
+    let again = try XCTUnwrap(
+      all("mapPin").allElementsBoundByIndex.first(where: { $0.label != firstName }),
+      "no other single pin on the city view")
+    let againName = again.label
+    again.tap()
+    XCTAssertTrue(
+      app.staticTexts[againName].waitForExistence(timeout: 10),
+      "a pin after coming back did not open \(againName)")
+    // ...and with THAT pool open, the first pin again, if the fly-in left it a single pin: the
+    // card must switch back. Queried LIVE, not from the snapshot above — the map regroups as
+    // it flies, and an element from before the flight may no longer exist.
+    sleep(2)
+    let firstAgain = all("mapPin").matching(NSPredicate(format: "label == %@", firstName))
+      .firstMatch
+    if firstAgain.exists {
+      firstAgain.tap()
+      XCTAssertTrue(
+        app.staticTexts[firstName].waitForExistence(timeout: 10),
+        "tapping the first pin again did not switch the card back to \(firstName)")
+    }
+  }
+
+  func testTheColumnShrinksByItsHandleAndFlicksToTheOtherSide() throws {
+    // "The sidebar should allow reducing its height or moving to a different side of the screen
+    // just by flicking or dragging a finger." Dragged down by its handle it gets shorter and
+    // the list is still there; flicked across, it is on the other side; flicked back, it is
+    // back.
+    try XCTSkipUnless(windowIsWide, "a compact window has no wide layout to prove")
+    let column = find("stageColumn")
+    XCTAssertTrue(column.waitForExistence(timeout: 10), "no floating column")
+    let tall = column.frame
+    // The handle is the card's top edge.
+    let handle = column.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.02))
+    handle.press(
+      forDuration: 0.1,
+      thenDragTo: handle.withOffset(CGVector(dx: 0, dy: tall.height * 0.6)))
+    sleep(1)
+    XCTAssertLessThan(column.frame.height, tall.height * 0.75, "the column did not shrink")
+    XCTAssertTrue(find("poolRow").exists, "shrinking the column lost the list")
+    // Across the screen.
+    let shortHandle = column.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.05))
+    shortHandle.press(
+      forDuration: 0.1,
+      thenDragTo: shortHandle.withOffset(CGVector(dx: app.frame.width * 0.6, dy: 0)))
+    sleep(1)
+    XCTAssertGreaterThan(
+      column.frame.midX, app.frame.midX, "the column did not move to the other side")
+    // And back.
+    let farHandle = column.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.05))
+    farHandle.press(
+      forDuration: 0.1,
+      thenDragTo: farHandle.withOffset(CGVector(dx: -app.frame.width * 0.6, dy: 0)))
+    sleep(1)
+    XCTAssertLessThan(column.frame.midX, app.frame.midX, "the column did not come back")
+    // Grown again by its handle.
+    let backHandle = column.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.05))
+    backHandle.press(
+      forDuration: 0.1,
+      thenDragTo: backHandle.withOffset(CGVector(dx: 0, dy: -tall.height * 0.8)))
+    sleep(1)
+    XCTAssertGreaterThan(column.frame.height, tall.height * 0.9, "the column did not grow back")
+  }
+
+  func testFoldingKeepsTheOpenPool() throws {
+    // THE FOLD, stood in for by a rotation: a Max is compact upright and regular on its side.
+    // A pool opened wide must still be open narrow, and the other way round — the screen
+    // changes shape, never place.
+    // A teardown block, not `defer`: a failed assertion halts the test before a `defer` runs,
+    // and a device left on its side makes every later phone test run wide and fail.
+    addTeardownBlock { XCUIDevice.shared.orientation = .portrait }
+    XCUIDevice.shared.orientation = .landscapeLeft
+    XCTAssertTrue(find("poolRow").waitForExistence(timeout: 10))
+    // The SIZE CLASS decides, and a plain iPhone 17 on its side is 874 points wide yet still
+    // COMPACT — only the Max is regular in landscape — so a width guard cannot tell the two
+    // apart. The wide layout's map appearing is the test of regular width; without it there
+    // is no fold to drive here (the iPad mini tests prove the wide layout itself).
+    try XCTSkipUnless(
+      find("poolMap").waitForExistence(timeout: 10), "this device is not wide on its side")
+    find("poolRow").tap()
+    XCTAssertTrue(find("poolFacts").waitForExistence(timeout: 10), "the pool did not open")
+    // Folded: the SAME route is the phone's pool screen — a map with the facts in a drawer.
+    XCUIDevice.shared.orientation = .portrait
+    XCTAssertTrue(
+      find("poolStage").waitForExistence(timeout: 10), "folding closed the open pool")
+    XCTAssertFalse(find("poolRow").exists, "the list is still beside the pool when narrow")
+    // Unfolded again: the facts are back in the card, over the map, with the list a tap away.
+    XCUIDevice.shared.orientation = .landscapeLeft
+    XCTAssertTrue(
+      find("poolFacts").waitForExistence(timeout: 10), "unfolding closed the open pool")
+    XCTAssertTrue(find("poolMap").exists, "unfolding lost the map")
   }
 
   private func waitForDisappearance(of element: XCUIElement) -> Bool {

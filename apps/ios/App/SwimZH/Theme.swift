@@ -46,6 +46,9 @@ enum Design {
     static let control: Double = 12
     static let swatch: Double = 4
     static let mark: Double = 2
+    /// A card that floats over a whole screen — the facts panel over the pool's map. The
+    /// system's own floating sheet wears this order of curve, and the panel replaces one.
+    static let panel: Double = 28
   }
 
   /// The HIG's minimum comfortable target. Every control the app draws itself is at least this
@@ -92,7 +95,7 @@ extension Font {
   /// table of label/value pairs this app shipped first.
   static let heroTitle = Font.title.weight(.bold)
   static let heroSubtitle = Font.subheadline
-  /// The label under one of the three round actions.
+  /// The label under one of the round actions.
   static let actionCaption = Font.caption2.weight(.medium)
 }
 
@@ -113,27 +116,25 @@ enum Icon {
   /// two different pictures for one sentence was the plainest inconsistency in the app.
   static let noMatch = "magnifyingglass"
   static let browse = "ellipsis.circle"
-  /// THE WHOLE ROSTER, and it must not be `list.bullet`. That is the mode picker's "list"
-  /// segment, and when this button rejoined the bottom bar the two sat four inches apart
-  /// wearing the same picture — a reader looking at that bar saw one icon twice and had no way
-  /// to tell which one showed the pools for today and which one showed all of them. `Icon`
-  /// exists to make that visible, and `glyphsAreDistinct` now makes it fail a build.
-  ///
-  /// A grid rather than another list: the roster is every pool at once, not a ranked answer.
-  static let allPools = "square.grid.2x2"
   /// The colour legend — an explanation, not a question.
   static let legend = "info.circle"
+  static let about = "figure.pool.swim"
+  static let repository = "chevron.left.forwardslash.chevron.right"
+  static let issue = "exclamationmark.bubble"
+  static let city = "building.columns"
+  static let author = "person"
+  static let checkNow = "arrow.clockwise"
   static let favourite = "heart"
   static let unfavourite = "heart.slash"
   static let favouriteMark = "heart.fill"
   static let expand = "chevron.down"
   static let collapse = "chevron.up"
   static let storeError = "xmark.icloud"
+  static let clearSearch = "xmark.circle.fill"
   static let beyondHorizon = "calendar.badge.exclamationmark"
   static let fairWeather = "sun.max"
   static let selected = "checkmark"
-  /// The two ways of looking at ONE answer. Never a third glyph for "the list": the browse
-  /// button already owns `allPools`, and the segmented control switches between these two.
+  /// The two ways of looking at ONE answer — the first two tabs.
   static let map = "map"
   static let list = "list.bullet"
   /// The three things a swimmer standing on the pavement actually wants from a pool's screen.
@@ -141,8 +142,12 @@ enum Icon {
   static let directions = "arrow.triangle.turn.up.right.circle.fill"
   static let call = "phone.fill"
   static let website = "safari.fill"
+  /// The basin's Belegungsplan — the week's lane timetable, opened as the pool publishes it.
+  static let lanePlan = "calendar.day.timeline.left"
   /// A pool, on a map.
   static let pin = "mappin.circle.fill"
+  /// The pool screen's one map control: bring a panned map back to the pool.
+  static let backToPool = "mappin.and.ellipse"
 }
 
 /// The day strip's own colours, kept here with the rest.

@@ -15,6 +15,23 @@ import Testing
 
 @testable import SwimZH
 
+/// A model over the BUNDLED store and nothing else.
+///
+/// `TodayModel()` reads `StoreHost.standard()`, which prefers a store the app has INSTALLED into
+/// Application Support — and the test host is the real app, whose launch `refreshStore` installs
+/// the latest published store before a single test here runs. Every assertion in these suites
+/// is against `Store.bundled()`'s own horizon, so the model must read the same file: a scratch
+/// directory holds no installed store, and the host falls back to the bundled one. Went red on
+/// 2026-09-07, the first morning a store newer than the fixture was published — the model opened
+/// on a horizon that started after the day the tests were asking about.
+@MainActor
+func bundledStoreModel(location: (any LocationFixing)? = nil) throws -> TodayModel {
+  let directory = FileManager.default.temporaryDirectory
+    .appending(path: "swimzh-bundled-\(UUID().uuidString)")
+  try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+  return TodayModel(location: location, host: try StoreHost.standard(directory: directory))
+}
+
 @Suite("Bundled store, inside the app")
 struct BundledStoreTests {
   @Test("the store ships in the app bundle and answers there")
@@ -49,7 +66,7 @@ struct BundledStoreTests {
     let noon = try #require(
       ZurichClock.instant(day: horizonStart, at: TimeOfDay(hour: 12, minute: 0))
     )
-    let model = TodayModel()
+    let model = try bundledStoreModel()
     await model.load(now: noon)
     guard case .ready(let list, _) = model.state else {
       Issue.record("the model did not become ready: \(model.state)")
@@ -103,7 +120,7 @@ struct BundledStoreTests {
     // The day is derived from the store's own horizon, exactly as the package suites do.
     // A hardcoded date would turn every fixture refresh into an unrelated red here.
     let horizonStart = try await Store.bundled().metadata().horizonStart
-    let model = TodayModel()
+    let model = try bundledStoreModel()
     let day = try #require(
       ZurichClock.instant(day: horizonStart, at: TimeOfDay(hour: 12, minute: 0))
     )
@@ -139,7 +156,7 @@ struct BundledStoreTests {
       ZurichClock.instant(day: tomorrow, at: TimeOfDay(hour: 0, minute: 20))
     )
 
-    let model = TodayModel()
+    let model = try bundledStoreModel()
     await model.load(now: lateLastNight)
     #expect(model.today == meta.horizonStart)
     #expect(model.chips.first(where: \.isToday)?.day == meta.horizonStart)
@@ -174,7 +191,7 @@ struct BundledStoreTests {
     let morning = try #require(
       ZurichClock.instant(day: meta.horizonStart, at: TimeOfDay(hour: 7, minute: 30))
     )
-    let model = TodayModel()
+    let model = try bundledStoreModel()
     await model.load(now: morning)
     guard case .ready(let today, _) = model.state else {
       Issue.record("the model did not become ready: \(model.state)")

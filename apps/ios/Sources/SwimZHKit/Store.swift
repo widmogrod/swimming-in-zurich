@@ -66,6 +66,22 @@ public struct StoreMetadata: Equatable, Sendable {
   public let horizonEnd: String
   public let goldValidAsOf: String
   public let contentHash: String
+  /// Per-source provenance from `meta.source_freshness`: which of the build's sources were
+  /// fetched by that build and which were kept stale. Empty on a pre-lake store.
+  public let sourceFreshness: [SourceFreshness]
+
+  public init(
+    schemaVersion: Int, builtAt: String, horizonStart: String, horizonEnd: String,
+    goldValidAsOf: String, contentHash: String, sourceFreshness: [SourceFreshness] = []
+  ) {
+    self.schemaVersion = schemaVersion
+    self.builtAt = builtAt
+    self.horizonStart = horizonStart
+    self.horizonEnd = horizonEnd
+    self.goldValidAsOf = goldValidAsOf
+    self.contentHash = contentHash
+    self.sourceFreshness = sourceFreshness
+  }
 
   /// Whether a Zurich day key is inside the published horizon. A date beyond it is an
   /// explicit state in the UI — "beyond the published horizon" — and is deliberately
@@ -238,7 +254,8 @@ public actor Store {
       horizonStart: values["horizon_start"] ?? "",
       horizonEnd: values["horizon_end"] ?? "",
       goldValidAsOf: values["gold_valid_as_of"] ?? "",
-      contentHash: values["content_hash"] ?? ""
+      contentHash: values["content_hash"] ?? "",
+      sourceFreshness: SourceFreshness.decodeList(values["source_freshness"] ?? "")
     )
   }
 

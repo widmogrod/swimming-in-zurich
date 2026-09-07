@@ -223,8 +223,12 @@ public func detailSections(
   at now: Date = Date()
 ) -> [DetailSection] {
   let format = localized.format
+  // ORDER. The pool's own words and its schedule state first; then what it costs, when and
+  // what is in it; the contact strings LAST but one. Address, phone and website open the
+  // sheet no longer: the header's action buttons already act on all three, so as rows they
+  // are the same facts a second time, and the owner asked for them pushed down.
   return [
-    section("where", "detail.section.where", whereRows(detail)),
+    section("about", "detail.fact.about", aboutRows(detail)),
     section("admission", "detail.section.admission", admissionRows(detail, person, format)),
     section("season", "detail.section.season", seasonRows(detail, format)),
     section(
@@ -241,6 +245,7 @@ public func detailSections(
     section("rentals", "detail.section.rentals", detail.rentals.map { rentalRow($0, format) }),
     section(
       "lanes", "detail.section.lanes", detail.lanePanels.flatMap { lanePanelRows($0, format) }),
+    section("where", "detail.section.where", whereRows(detail)),
     section("source", "detail.section.provenance", provenanceRows(detail, format)),
   ].compactMap { $0 }
 }
@@ -263,6 +268,13 @@ private func whereRows(_ detail: FacilityDetail) -> [DetailRow] {
   if let url = detail.url, !url.isEmpty {
     rows.append(DetailRow(id: "url", label: .key("detail.fact.website"), value: .verbatim(url)))
   }
+  return rows
+}
+
+/// The pool in its own words, and whether the app knows its schedule — the two rows that say
+/// what KIND of answer the rest of the sheet is.
+private func aboutRows(_ detail: FacilityDetail) -> [DetailRow] {
+  var rows: [DetailRow] = []
   if let description = detail.description, !description.isEmpty {
     // The pool's own blurb, in the pool's own language. Untranslated by policy, like a notice.
     // The ONLY prose row this sheet has: every other value is a few words wide.

@@ -309,11 +309,20 @@ public actor StoreHost {
 
   /// The app's wiring: the package's bundled store, installed into Application Support.
   public static func standard() throws -> StoreHost {
+    try standard(directory: try StoreLocation.directory())
+  }
+
+  /// The bundled store, installed into `directory` — the app's wiring with the one thing a test
+  /// needs to vary, so an app-hosted test can drive a refresh end to end in a scratch directory.
+  public static func standard(directory: URL) throws -> StoreHost {
     guard let bundled = Bundle.module.url(forResource: "ios", withExtension: "sqlite") else {
       throw StoreError.missingBundledStore
     }
-    return StoreHost(bundled: bundled, directory: try StoreLocation.directory())
+    return StoreHost(bundled: bundled, directory: directory)
   }
+
+  /// The offline floor's own file — so a test can serve its bytes as "the published store".
+  public var bundledPath: URL { bundled }
 
   public var installedPath: URL {
     directory.appending(path: StoreLocation.storeName, directoryHint: .notDirectory)

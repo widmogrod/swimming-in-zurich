@@ -1,0 +1,26 @@
+// Device.xcconfig — where a DEVELOPER's own signing lives, out of the committed project.
+//
+// The project signs NOTHING (`CODE_SIGNING_ALLOWED = NO` on every target), which is what lets
+// the CI simulator job build on a runner with no certificate and no account, and what
+// `test_the_project_needs_no_signing_identity` pins. Running on a real iPhone needs a team and
+// automatic signing — one developer's account, which does not belong in the repo. So they go in
+// `Local.xcconfig` beside this file, git-ignored, included here only if it exists:
+//
+//     CODE_SIGNING_ALLOWED[sdk=iphoneos*] = YES
+//     CODE_SIGNING_REQUIRED[sdk=iphoneos*] = YES
+//     CODE_SIGN_IDENTITY[sdk=iphoneos*] = Apple Development
+//     CODE_SIGN_STYLE = Automatic
+//     DEVELOPMENT_TEAM = <your team id>
+//
+// The `[sdk=iphoneos*]` conditions keep the simulator unsigned even on that developer's Mac.
+
+// THE DEFAULTS LIVE HERE, NOT IN THE PROJECT FILE, and the order matters. A build setting
+// written on a target in `project.pbxproj` beats every xcconfig, so a `CODE_SIGNING_ALLOWED =
+// NO` on the target would win over Local.xcconfig's `[sdk=iphoneos*] = YES` and the device
+// build would ship unsigned — "The executable is not codesigned" at install (seen 2026-09-06).
+// In an xcconfig the LAST assignment wins, so the include comes after the defaults.
+CODE_SIGNING_ALLOWED = NO
+CODE_SIGNING_REQUIRED = NO
+CODE_SIGN_IDENTITY =
+
+#include? "Local.xcconfig"

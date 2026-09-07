@@ -124,6 +124,20 @@ struct StripLayoutTests {
     }
   }
 
+  @Test("the list REACHES its top only on the way back, never while resting there")
+  func reachingTheTopIsAnArrival() {
+    // The moment a held favourite may move to the front of its tier. Firing on the state
+    // would move a row the instant it was marked whenever the list was already at rest at the
+    // top — the very jump the hold exists to prevent.
+    #expect(listIsAtTop(scrolled: 0))
+    #expect(listIsAtTop(scrolled: stripShowsWithin - 1))
+    #expect(!listIsAtTop(scrolled: stripShowsWithin))
+    #expect(listReachedTop(scrolled: 0, wasAtTop: false))
+    #expect(!listReachedTop(scrolled: 0, wasAtTop: true))
+    #expect(!listReachedTop(scrolled: 300, wasAtTop: false))
+    #expect(!listReachedTop(scrolled: 300, wasAtTop: true))
+  }
+
   @Test("between them nothing changes, so the strip cannot flap")
   func theBandHolds() {
     let height = stripLayout(for: .large, width: 400).stripHeight
@@ -141,42 +155,5 @@ struct StripLayoutTests {
     // it — the loop would have come back exactly where the layout is already under most strain.
     let height = stripLayout(for: size, width: 400).stripHeight
     #expect(stripHidesBeyond(stripHeight: height) - stripShowsWithin > height)
-  }
-}
-
-@Suite("When the pool screen's bar states the name")
-struct PoolTitleTests {
-  static let nameBottom: Double = 200
-
-  @Test("at the top the hero owns the name and the bar says nothing")
-  func atTheTopTheBarIsEmpty() {
-    #expect(!poolTitleShows(scrolled: 0, nameBottom: Self.nameBottom, showing: false))
-    // ...even if it was showing: scrolling back up must give the hero its name back.
-    #expect(!poolTitleShows(scrolled: 0, nameBottom: Self.nameBottom, showing: true))
-  }
-
-  @Test("once the hero's name has gone the bar takes it over")
-  func pastTheNameTheBarTakesOver() {
-    #expect(poolTitleShows(scrolled: 260, nameBottom: Self.nameBottom, showing: false))
-  }
-
-  @Test("a finger resting on the boundary does not flicker the title")
-  func theBandHolds() {
-    // Inside the band the answer is whatever it already was, so a scroll that hovers on the
-    // threshold cannot strobe the bar.
-    let inside = Self.nameBottom - poolTitleBand / 2
-    #expect(poolTitleShows(scrolled: inside, nameBottom: Self.nameBottom, showing: true))
-    #expect(!poolTitleShows(scrolled: inside, nameBottom: Self.nameBottom, showing: false))
-  }
-
-  @Test("a taller name at an accessibility size hands over later, not sooner")
-  func aTallerNameHandsOverLater() {
-    // The reason `nameBottom` is a parameter. At an accessibility text size the hero's name is
-    // far taller, and a fixed threshold would put the name in the bar while it was still on
-    // screen — the exact duplication this rule exists to remove, at the size where the screen
-    // has least room for it.
-    let scrolled: Double = 240
-    #expect(poolTitleShows(scrolled: scrolled, nameBottom: 200, showing: false))
-    #expect(!poolTitleShows(scrolled: scrolled, nameBottom: 420, showing: false))
   }
 }

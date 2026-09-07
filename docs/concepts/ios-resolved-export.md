@@ -63,8 +63,12 @@ A store is not only a file the build produces; once it can be **downloaded**, it
 back out of the finished store rather than remembered:
 
 ```
-{schema_version, built_at, horizon_end, url, sha256, bytes}
+{schema_version, built_at, horizon_end, url, sha256, bytes, freshness[]}
 ```
+
+`freshness[]` is the store's own `meta.source_freshness` — `[{source, fetched_at, status}]` from the
+lake's silver headers — and the client reads the same list back out of the installed store to name
+the sources a build could not refresh (`SwimZHKit/DataStatus.swift`, the rows under the answer).
 
 `make ios-release` produces both in one run and **requires** `IOS_STORE_URL` — a manifest with no URL
 is refused (exit 2) rather than given a placeholder, because a placeholder is a URL that silently

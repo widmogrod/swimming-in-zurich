@@ -272,16 +272,26 @@ public struct ListModel: Equatable, Sendable {
 /// So the clock tiers ONLY when `answer.day == today`. On any other day every pool with
 /// sessions lands in `Tier.scheduled`, whose verdict states the day's hours and claims nothing
 /// about the present.
+///
+/// `leading` is WHICH favourites lead their tier, and it is separate from `favourites` — which
+/// rows wear the heart — on purpose. The two used to be one value, so a swipe that favourited a
+/// row rebuilt the list with that row sorted to the top of its section: it left the reader's
+/// view, and every row under it jumped up by its height. Holding `leading` at the order the
+/// reader is looking at lets the heart appear in place and the reorder wait for a moment the
+/// reader is not mid-list (`TodayModel` decides when). Defaulted to `favourites`, so a caller
+/// that wants the old behaviour — favourites lead the instant they are marked — changes nothing.
 public func listModel(
   answer: Answer,
   filters: Filters,
   favourites: Favourites,
+  leading: Favourites? = nil,
   horizon: StoreMetadata,
   today: String,
   at time: TimeOfDay,
   format: Format
 ) -> ListModel {
   let isToday = answer.day == today
+  let leading = leading ?? favourites
   guard horizon.covers(day: answer.day) else {
     return ListModel(
       day: answer.day,
@@ -296,8 +306,8 @@ public func listModel(
     )
   }
   let rows = poolRows(
-    answer: answer, filters: filters, favourites: favourites, isToday: isToday, at: time,
-    format: format)
+    answer: answer, filters: filters, favourites: favourites, leading: leading, isToday: isToday,
+    at: time, format: format)
   let model = ListModel(
     day: answer.day,
     sections: sections(from: rows),
@@ -327,6 +337,7 @@ private func poolRows(
   answer: Answer,
   filters: Filters,
   favourites: Favourites,
+  leading: Favourites,
   isToday: Bool,
   at time: TimeOfDay,
   format: Format
@@ -335,7 +346,7 @@ private func poolRows(
     answer: answer, filters: filters, favourites: favourites, isToday: isToday, at: time,
     format: format)
   rows += ghostRows(answer: answer, filters: filters, favourites: favourites)
-  return rows.sorted(by: rowOrder)
+  return rows.sorted { rowOrder($0, $1, leading: leading) }
 }
 
 private func sessionRows(
@@ -542,8 +553,14 @@ private func startOrder(_ lhs: SwimOption, _ rhs: SwimOption) -> Bool {
 /// An UNKNOWN distance sorts LAST, never as zero: a pool that publishes no coordinates is not
 /// the closest one. The name tiebreak makes the order total, so the list is stable between
 /// rebuilds of the same day and SwiftUI does not reshuffle rows under the user's thumb.
-private func rowOrder(_ lhs: PoolRow, _ rhs: PoolRow) -> Bool {
-  if lhs.isFavourite != rhs.isFavourite { return lhs.isFavourite }
+///
+/// "Favourites" here means `leading` — the set the ORDER follows — not the row's own heart.
+/// See `listModel`: the two part company for exactly as long as a just-marked row is being
+/// held where the reader can see it.
+private func rowOrder(_ lhs: PoolRow, _ rhs: PoolRow, leading: Favourites) -> Bool {
+  let lhsLeads = leading.contains(lhs.poolID)
+  let rhsLeads = leading.contains(rhs.poolID)
+  if lhsLeads != rhsLeads { return lhsLeads }
   let left = lhs.distanceKm ?? .infinity
   let right = rhs.distanceKm ?? .infinity
   if left != right { return left < right }

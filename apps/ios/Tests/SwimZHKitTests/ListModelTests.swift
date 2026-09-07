@@ -532,6 +532,38 @@ struct ListModelTests {
     #expect(only.openToYouCount == 1)
   }
 
+  @Test("a held order keeps a just-marked favourite where it was, heart and all")
+  func heldOrderKeepsTheRowInPlace() {
+    // THE SWIPE THAT MADE A ROW VANISH. Marking a row mid-list rebuilt the model with that row
+    // sorted to the front of its tier, so it left the screen and every row under it jumped.
+    // `leading` is the order the reader is looking at; `favourites` is what wears the heart.
+    let answer = Self.answer(options: [
+      Self.option(pool: "near", from: 11, to: 13, distanceKm: 0.2),
+      Self.option(pool: "mid", from: 11, to: 13, distanceKm: 2),
+      Self.option(pool: "loved", from: 11, to: 13, distanceKm: 8),
+    ])
+    let held = listModel(
+      answer: answer, filters: Filters(day: answer.day), favourites: Favourites(["loved"]),
+      leading: Favourites(), horizon: Self.horizon, today: answer.day, at: Self.noon,
+      format: Self.en.format)
+    #expect(held.sections[0].rows.map(\.poolID) == ["near", "mid", "loved"])
+    #expect(held.sections[0].rows.map(\.isFavourite) == [false, false, true])
+    // The favourites-only filter reads the HEART, not the order, so a held row is still shown.
+    let only = listModel(
+      answer: answer, filters: Filters(day: answer.day, favouritesOnly: true),
+      favourites: Favourites(["loved"]), leading: Favourites(), horizon: Self.horizon,
+      today: answer.day, at: Self.noon, format: Self.en.format)
+    #expect(only.sections.flatMap(\.rows).map(\.poolID) == ["loved"])
+    // And a row that has STOPPED being a favourite still leads while the order is held: the
+    // hold is symmetric, or un-marking would be the jump in the other direction.
+    let unmarked = listModel(
+      answer: answer, filters: Filters(day: answer.day), favourites: Favourites(),
+      leading: Favourites(["loved"]), horizon: Self.horizon, today: answer.day, at: Self.noon,
+      format: Self.en.format)
+    #expect(unmarked.sections[0].rows.map(\.poolID) == ["loved", "near", "mid"])
+    #expect(!unmarked.sections[0].rows[0].isFavourite)
+  }
+
   @Test("favourites round-trip through their stored string, tolerantly")
   func favouritesEncoding() {
     var favourites = Favourites()

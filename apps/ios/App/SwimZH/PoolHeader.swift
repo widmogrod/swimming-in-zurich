@@ -1,29 +1,34 @@
-// PoolHeader.swift — the top of a pool's screen, and the reason it stopped being a table.
+// PoolHeader.swift — the top of a pool's panel, and the reason the screen stopped being a table.
 //
 // "When I click on a pool I'm shown a table." That was literally true: the screen opened on a
 // `List` of label/value pairs, whose first row was the address. Nothing on it connected to the
 // row that had just been tapped, nothing on it could be acted on, and the pool's own answer —
 // the sentence the list had spent a row saying — was not there at all.
 //
-// So the screen opens on the pool instead. Four things, in the order a swimmer wants them:
+// So the panel opens on the pool instead. Three things, in the order a swimmer wants them:
 //
-//  1. WHERE IT IS, as a picture. A map, not the string "Mythenquai 95" — the address is still
-//     below in the facts, where a string belongs.
-//  2. WHAT IT IS CALLED, at the size a screen about one thing can afford, with the pool's own
+//  1. WHAT IT IS CALLED, at the size a screen about one thing can afford, with the pool's own
 //     answer under it — the SAME `Verdict` the list row drew, so the push is continuous rather
 //     than a change of subject. This is what the zoom transition was always animating towards
 //     and never arriving at.
-//  3. WHEN, as the same ribbon the row drew, for the same reason: it is the one part of the
+//  2. WHEN, as the same ribbon the row drew, for the same reason: it is the one part of the
 //     answer a table genuinely cannot say.
-//  4. WHAT TO DO ABOUT IT. Directions, phone, website. A swimmer reading a pool's screen is
-//     usually about to go there, and none of the three was reachable as an action.
+//  3. WHAT TO DO ABOUT IT. Directions, phone, website — and the lane plan, for the seven pools
+//     that publish one. A swimmer reading a pool's screen is usually about to go there, and
+//     none of the three was reachable as an action.
 //
-// The rest of the screen — every published fact, every caveat — is unchanged below it, still
+// And between 1 and 2, THE NUMBERS: water temperature, pool length, lane count — `PoolGlance`,
+// the strip the owner asked for when the three sat as rows below the address. The contact rows
+// the buttons already act on moved down the list in the same change (`detailSections`).
+//
+// WHERE IT IS is the screen itself: `PoolStage`, the map this panel rides over. A picture of
+// the map used to be the header's first item; it grew into the whole screen and the picture
+// went (see `PoolStage`). The address is still below in the facts, where a string belongs.
+//
+// The rest of the panel — every published fact, every caveat — is unchanged below it, still
 // built by `SwimZHKit.detailSections` and still covered by `FieldCoverageTests`. Nothing was
-// removed to make room; the header does not repeat a single row that follows it, which is why
-// the address is a map here and a string there.
+// removed to make room; the header does not repeat a single row that follows it.
 
-import MapKit
 import SwiftUI
 import SwimZHKit
 
@@ -34,54 +39,25 @@ struct PoolHeader: View {
   /// browser, which pushes the same screen from the roster — see `SwimZHKit.findRow`. The
   /// verdict and the ribbon are then omitted rather than invented.
   let row: PoolRow?
+  /// Where the pool is, for the Directions action. The map itself is the screen, not this view.
   let point: GeoPoint?
   let isToday: Bool
+  /// The live water reading, for the glance strip — the same value the facts list gets, so
+  /// the two cannot say two temperatures. See `FacilitySheet.live`.
+  let live: LiveTemp?
+  let asOf: Date
 
   var body: some View {
     VStack(alignment: .leading, spacing: Design.Space.gutter) {
-      map
       VStack(alignment: .leading, spacing: Design.Space.snug) {
         title
         verdict
+        PoolGlance(facts: glanceFacts(detail, live: live, at: asOf, in: localized))
       }
       ribbon
       PoolActions(detail: detail, point: point)
     }
     .padding(.bottom, Design.Space.row)
-  }
-
-  /// The pool, on a map, at a span the kit chooses. `.allowsHitTesting(false)` on purpose: this
-  /// is a picture of where the pool is, and a map that panned under a finger scrolling the
-  /// facts below would fight the screen it is part of. Getting to a real map is the Directions
-  /// action, which hands the whole job to Maps.
-  @ViewBuilder
-  private var map: some View {
-    if let point {
-      Map(
-        initialPosition: .region(
-          MKCoordinateRegion(
-            center: CLLocationCoordinate2D(latitude: point.lat, longitude: point.lon),
-            latitudinalMeters: poolMapSpanMetres, longitudinalMeters: poolMapSpanMetres)),
-        interactionModes: []
-      ) {
-        Annotation(
-          detail.name,
-          coordinate: CLLocationCoordinate2D(
-            latitude: point.lat, longitude: point.lon)
-        ) {
-          Image(systemName: Icon.pin)
-            .font(.heroTitle)
-            .foregroundStyle(.tint)
-            .accessibilityHidden(true)
-        }
-        .annotationTitles(.hidden)
-      }
-      .frame(height: heroMapHeight)
-      .clipShape(RoundedRectangle(cornerRadius: Design.Radius.control))
-      .allowsHitTesting(false)
-      .accessibilityHidden(true)
-      .accessibilityIdentifier("heroMap")
-    }
   }
 
   private var title: some View {
@@ -150,11 +126,8 @@ struct PoolHeader: View {
   }
 }
 
-/// How tall the header's map is. Not a `Design.Space` — those are the rhythm between two pieces
-/// of text, and this is the size of a picture.
-let heroMapHeight: Double = 150
-
-/// The three things a swimmer standing outside a pool actually does.
+/// The things a swimmer standing outside a pool actually does — and, for a pool that publishes
+/// one, the lane plan they check before deciding to.
 ///
 /// Round, labelled, and each at least `Design.hitTarget` — the pattern Contacts and Maps use for
 /// exactly this, and the reason it is a row of buttons rather than three more table rows: a
@@ -174,9 +147,13 @@ struct PoolActions: View {
       directions
       call
       website
+      lanePlan
       Spacer(minLength: 0)
     }
     .accessibilityElement(children: .contain)
+    // Safari's connection to the pool's host, opened while the reader is still reading the
+    // panel, so the website button shows a page and not a spinner. See `LinkOpener`.
+    .prewarmingLink(websiteURL)
   }
 
   @ViewBuilder
@@ -206,11 +183,46 @@ struct PoolActions: View {
 
   @ViewBuilder
   private var website: some View {
-    if let raw = detail.url, let url = URL(string: raw) {
+    if let url = websiteURL {
       ActionButton(caption: Message("detail.fact.website"), symbol: Icon.website) { openURL(url) }
         .accessibilityIdentifier("websiteButton")
     }
   }
+
+  /// The Belegungsplan: ONE button when the pool publishes one plan, a menu of basin names
+  /// when it publishes several (Oerlikon: the 50 m basin and the diving basin), nothing when
+  /// it publishes none — same rule as Call. The URL opens through `openURL`, so it lands in
+  /// whatever `Lab.linkOpener` chose, exactly like the website.
+  @ViewBuilder
+  private var lanePlan: some View {
+    let plans = lanePlanLinks(detail).compactMap { link in
+      URL(string: link.url).map { (link: link, url: $0) }
+    }
+    if plans.count == 1, let plan = plans.first {
+      ActionButton(caption: Message("basin.fact.lanePlan"), symbol: Icon.lanePlan) {
+        openURL(plan.url)
+      }
+      .accessibilityIdentifier("lanePlanButton")
+    } else if plans.count > 1 {
+      Menu {
+        ForEach(plans, id: \.link.id) { plan in
+          Button {
+            openURL(plan.url)
+          } label: {
+            // A basin's name is the pool's own word for it.
+            Text(verbatim: plan.link.basinName)
+          }
+        }
+      } label: {
+        ActionGlyph(caption: Message("basin.fact.lanePlan"), symbol: Icon.lanePlan)
+      }
+      .buttonStyle(.plain)
+      .accessibilityLabel(Text(Message("basin.fact.lanePlan"), localized))
+      .accessibilityIdentifier("lanePlanButton")
+    }
+  }
+
+  private var websiteURL: URL? { detail.url.flatMap { URL(string: $0) } }
 
   /// The kit builds the string; this only turns it into a `URL`. The escaping and the
   /// locale-independent coordinate formatting are rules with a test — see `mapsDirectionsURL`,
@@ -229,18 +241,30 @@ struct ActionButton: View {
 
   var body: some View {
     Button(action: action) {
-      VStack(spacing: Design.Space.tight) {
-        Image(systemName: symbol)
-          .foregroundStyle(.tint)
-          .frame(width: Design.hitTarget, height: Design.hitTarget)
-          .background(.tint.opacity(ChipColor.idleFill), in: Circle())
-        Text(caption, localized)
-          .font(.actionCaption)
-          .foregroundStyle(.secondary)
-      }
-      .contentShape(Rectangle())
+      ActionGlyph(caption: caption, symbol: symbol)
     }
     .buttonStyle(.plain)
     .accessibilityLabel(Text(caption, localized))
+  }
+}
+
+/// The look of one action — a filled glyph in a tinted circle, its word underneath — apart
+/// from what pressing it does, so a `Menu` can wear it as well as a `Button`.
+struct ActionGlyph: View {
+  @Environment(\.localized) private var localized
+  let caption: Message
+  let symbol: String
+
+  var body: some View {
+    VStack(spacing: Design.Space.tight) {
+      Image(systemName: symbol)
+        .foregroundStyle(.tint)
+        .frame(width: Design.hitTarget, height: Design.hitTarget)
+        .background(.tint.opacity(ChipColor.idleFill), in: Circle())
+      Text(caption, localized)
+        .font(.actionCaption)
+        .foregroundStyle(.secondary)
+    }
+    .contentShape(Rectangle())
   }
 }

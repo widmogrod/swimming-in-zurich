@@ -28,6 +28,14 @@ final class ScreenshotTests: XCTestCase {
     // A screenshot set that silently changes its pool ORDER between runs is one nobody can
     // review by looking at it.
     app.launchArguments += ["-swimzh.useMyLocation", "NO"]
+    // NOT launched here: each test below launches, because one of them adds arguments first.
+  }
+
+  /// The Lab switches, spelled out for the same reason the location key is: this target links
+  /// no app code. `Lab.swift` keeps every iOS 27 experiment behind one of these, defaulting to
+  /// the new look; `-key NO` at launch is how a test asks for the previous one.
+  ///
+  private func launch() {
     app.launch()
     XCTAssertTrue(
       find("poolRow").waitForExistence(timeout: 30), "the list never showed a pool row")
@@ -58,6 +66,12 @@ final class ScreenshotTests: XCTestCase {
   /// five walks back to the same place — and any per-test ordering surprise would show up as a
   /// screenshot of the wrong screen rather than as a failure. One walk, in listing order.
   func testCaptureTheAppStoreSet() throws {
+    launch()
+    try walk(prefix: "")
+  }
+
+  private func walk(prefix: String) throws {
+    func capture(_ name: String) { self.capture(prefix + name) }
     // 1 — the answer the app exists to give: every pool, nearest first, for today.
     capture("01-find")
 
@@ -78,30 +92,47 @@ final class ScreenshotTests: XCTestCase {
 
     // 3 — the filters. This is where the women-only / age-limit story lives, which is the part
     // of this app a general "pools near me" listing does not get right.
-    find("filterButton").tap()
-    XCTAssertTrue(find("dayStrip").waitForExistence(timeout: 10), "the filters never opened")
+    app.tabBars.firstMatch.buttons.element(boundBy: 2).tap()
+    XCTAssertTrue(find("measureFrom").waitForExistence(timeout: 10), "the filters never opened")
     capture("03-filters")
-    closeSheet()
+    app.tabBars.firstMatch.buttons.element(boundBy: 0).tap()
 
     // 4 — one pool, opened. The BOTTOM of the row, because that is the gesture
     // `testTheWholeRowOpensThePool` pins; the name at the top was once the only part that
     // navigated, so tapping the middle would photograph a path a reader may not have.
     find("poolRow").coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.9)).tap()
-    XCTAssertTrue(find("heroMap").waitForExistence(timeout: 15), "the pool never opened")
+    XCTAssertTrue(find("poolStage").waitForExistence(timeout: 15), "the pool never opened")
+    // Let the map's tiles and the panel settle before the frame is taken.
+    _ = find("poolPanel").waitForExistence(timeout: 5)
+    sleep(2)
     capture("04-pool")
+
     closeSheet()
 
-    // 5 — the map. Segment 1 by position, because a `Picker` gives its options no identifiers
-    // and list-then-map is the order `BehaviourTests` pins as the contract.
-    XCTAssertTrue(find("viewMode").waitForExistence(timeout: 10), "no view-mode control")
-    app.segmentedControls.firstMatch.buttons.element(boundBy: 1).tap()
+    // 5 — the map. The tab bar's second tab, by position: list-then-map is the order
+    // `BehaviourTests` pins as the contract.
+    XCTAssertTrue(app.tabBars.firstMatch.waitForExistence(timeout: 10), "no tab bar")
+    app.tabBars.firstMatch.buttons.element(boundBy: 1).tap()
     XCTAssertTrue(find("poolMap").waitForExistence(timeout: 15), "the map never appeared")
     capture("05-map")
+
+    // 6 — a pin's card, the surface `Lab.glassCard` is about. The gesture is the one
+    // `testTheMapDrawsTheAnswerAndOpensAPool` pins: a single pin raises a card, a group only
+    // zooms. Whether a single pin is on screen at the opening zoom depends on the answer and on
+    // where the pools overlap, so a map showing only groups is a shot we skip, not a failure —
+    // the behaviour test already owns the assertion that a pin raises a card.
+    let pin = find("mapPin")
+    if pin.waitForExistence(timeout: 10) {
+      pin.tap()
+      if find("pinCard").waitForExistence(timeout: 5) {
+        capture("06-map-card")
+      }
+    }
   }
 
   /// Leave whatever is on top, by its navigation bar's leading button.
   ///
-  /// This is the gesture `testTheFilterButtonOpensASheetOnBothScreens` already uses, and it is
+  /// This is the gesture `BehaviourTests` already uses to leave a pushed screen, and it is
   /// here because the first draft swiped the sheet down instead: the drag did nothing, and the
   /// run failed with "never got back to the list" after photographing two screens. A dismissal
   /// the behaviour suite already proves is the one to copy.

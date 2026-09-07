@@ -135,6 +135,7 @@ ios-sim-test:  ## Build + test the app target in the simulator (also runs the si
 	cd apps/ios && xcodebuild -project App/SwimZH.xcodeproj -scheme SwimZH \
 		-destination '$(IOS_DESTINATION)' \
 		-skip-testing:SwimZHUITests/ScreenshotTests \
+		-collect-test-diagnostics never \
 		test
 
 ios-qa:  ## Swift chain: locale check -> format lint -> build -> test+coverage -> CRAP -> gate tests -> simulator test

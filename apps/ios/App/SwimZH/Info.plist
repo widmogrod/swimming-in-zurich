@@ -25,5 +25,18 @@
 		<key>UIColorName</key>
 		<string>LaunchBackground</string>
 	</dict>
+	<!--
+	  The second thing here (2026-09-06): where the published store's manifest lives. This is
+	  the ONE switch that turns the weekly refresh and the list's pull-to-check on; without it
+	  the app never downloads a store and offers no pull. The URL is what
+	  `.github/workflows/publish-store.yml` writes into `manifest.json` (`IOS_STORE_URL`), on
+	  GitHub Pages. `https` only — `RefreshConfiguration.manifestURL` refuses anything else.
+	-->
+	<!-- Read by the About screen ("Made by"). Apple's own key, so it is also what Finder and
+	     the App Store show; a NAME lives here, in data, and not as a literal in a Swift file. -->
+	<key>NSHumanReadableCopyright</key>
+	<string>© 2026 Gabriel Habryn</string>
+	<key>SWIMZHStoreManifestURL</key>
+	<string>https://widmogrod.github.io/swimming-in-zurich/manifest.json</string>
 </dict>
 </plist>

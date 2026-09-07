@@ -12,6 +12,19 @@
 //    decorative". They mark where content passes under a bar; nothing passes under this strip.
 //  * `.sensoryFeedback(.selection, trigger:)` on the selected day, so a chip change feels like
 //    a picker rather than a tap on glass.
+//
+// And the iOS 27 look, DECIDED 2026-09-06 out of four candidates (flat, and three glass
+// behaviours that differed in what a tap did): the chips are Liquid Glass and the selection
+// MORPHS. The selected tint is not a property of the chip — it is a separate glass view, drawn
+// behind whichever chip is selected and carrying one `glassEffectID`. When the selection moves,
+// that view leaves one chip and appears under the next inside the same `GlassEffectContainer`,
+// which is exactly the pair SwiftUI morphs between. The border and the today rule stay: colour
+// is never the only channel.
+//
+// One thing survives from a discarded candidate: a chip ARRIVES as the strip is scrolled — it
+// scales and fades up under a `.scrollTransition`, driven by the scroll itself. The system-
+// button variant's glass materialised as each new day came on screen and the owner missed
+// exactly that; of the materialize transition and this one, this one was chosen (2026-09-06).
 
 import SwiftUI
 import SwimZHKit
@@ -22,7 +35,27 @@ struct DayStrip: View {
   @Binding var selection: String
 
   @Environment(\.dynamicTypeSize) private var dynamicTypeSize
-  @State private var position = ScrollPosition(idType: String.self)
+  /// Starts ON the selected day. The strip's chips begin at the store's first day, and the
+  /// selection is today — which, on a store a week or two old, is a dozen chips to the right.
+  /// The first screenshot of the glass strip showed no selected chip at all, because it was
+  /// off-screen: the position was only ever scrolled on a CHANGE of selection.
+  @State private var position: ScrollPosition
+  /// Set by a chip's tap and cleared by the change it causes. A TAPPED chip is on screen by
+  /// definition, and centring it anyway made the whole strip lurch under the finger — the
+  /// reader's own tap moved the date away from where they pressed. So only a selection that
+  /// came from ELSEWHERE (the model picking a covered day) scrolls the strip; a tap never does.
+  /// Scrolling is the reader's, tapping is not allowed to scroll for them.
+  @State private var selectionCameFromTap = false
+
+  init(chips: [DayChip], selection: Binding<String>) {
+    self.chips = chips
+    self._selection = selection
+    self._position = State(
+      initialValue: ScrollPosition(id: selection.wrappedValue, anchor: .center))
+  }
+  /// The namespace the morphing selection lives in. One id, `selectionGlassID`, ever in it.
+  @Namespace private var glassNamespace
+  private let selectionGlassID = "selection"
 
   private var typeSize: TypeSize { TypeSize(dynamicTypeSize) }
 
@@ -40,8 +73,20 @@ struct DayStrip: View {
     }
     .accessibilityIdentifier("dayStrip")
     .sensoryFeedback(.selection, trigger: selection)
+    // Declared here rather than started in the chip's action: the morph needs the selection
+    // change to be one animated transaction, and this is what makes it one.
+    .animation(.snappy(duration: 0.3), value: selection)
     .onChange(of: selection) { _, day in
-      position.scrollTo(id: day, anchor: .center)
+      if selectionCameFromTap {
+        selectionCameFromTap = false
+      } else {
+        position.scrollTo(id: day, anchor: .center)
+      }
+    }
+    // ...and when the chips ARRIVE. The strip can be built before the model has its chips, in
+    // which case the initial position names an id nothing has laid out yet and is dropped.
+    .onChange(of: chips.count, initial: true) { _, _ in
+      position.scrollTo(id: selection, anchor: .center)
     }
   }
 
@@ -61,30 +106,50 @@ struct DayStrip: View {
 
   private func strip(_ layout: StripLayout) -> some View {
     ScrollView(.horizontal) {
-      LazyHStack(spacing: Design.Space.row) {
-        ForEach(chips) { chip in
-          chipButton(chip, layout: layout)
-        }
-      }
-      .scrollTargetLayout()
-      .padding(.horizontal)
+      chipRow(layout)
+        .scrollTargetLayout()
+        .padding(.horizontal)
     }
     .scrollIndicators(.hidden)
     .scrollTargetBehavior(.viewAligned)
     .scrollPosition($position)
     .scrollEdgeEffectHidden(for: .horizontal)
+    // The press lens of interactive glass SWELLS the chip past its frame, and a scroll view
+    // clips to its bounds — so the swollen chip was cut off along the strip's bottom edge.
+    // Nothing else in the strip overflows, so the clip protected nothing.
+    .scrollClipDisabled()
+  }
+
+  /// The chips, in a `GlassEffectContainer` — adjacent glass shapes are blended by the
+  /// container, and the morph only happens inside one.
+  private func chipRow(_ layout: StripLayout) -> some View {
+    GlassEffectContainer(spacing: Design.Space.row) {
+      LazyHStack(spacing: Design.Space.row) {
+        ForEach(chips) { chip in
+          chipButton(chip, layout: layout)
+        }
+      }
+    }
   }
 
   private func chipButton(_ chip: DayChip, layout: StripLayout) -> some View {
     Button {
+      selectionCameFromTap = true
       selection = chip.day
     } label: {
       chipLabel(chip, layout: layout)
     }
-    .buttonStyle(.plain)
     // The whole chip is the target, gaps included — without this only the glyphs are tappable
     // and the 44 pt rule is satisfied on paper only.
     .contentShape(Rectangle())
+    .buttonStyle(.plain)
+    // The chip scales and fades up as the scroll brings it in — driven by the scroll, so a
+    // chip half in view is half arrived.
+    .scrollTransition(.interactive, axis: .horizontal) { content, phase in
+      content
+        .opacity(phase.isIdentity ? 1 : 0.5)
+        .scaleEffect(phase.isIdentity ? 1 : 0.85)
+    }
     .accessibilityLabel(Text(verbatim: chip.accessibilityLabel))
     .accessibilityAddTraits(chip.day == selection ? [.isSelected, .isButton] : .isButton)
   }
@@ -104,9 +169,29 @@ struct DayStrip: View {
         .minimumScaleFactor(0.8)
     }
     .frame(width: layout.chipWidth, height: layout.stripHeight)
-    .background(chipBackground(chip), in: .rect(cornerRadius: Design.Radius.control))
+    // The border and the today rule are CONTENT, applied before the surface: a glass surface
+    // composites over anything overlaid after it, and the first glass screenshot showed a
+    // selected chip with no border and a today chip with no rule — the two second channels a
+    // reader who cannot tell the tints apart depends on. Inside the content they draw on top
+    // of the glass, and the flat variant does not care about the order.
     .overlay(chipBorder(chip))
     .overlay(alignment: .bottom) { todayMarker(chip) }
+    .modifier(
+      ChipSurface(chip: chip, selection: selection) { selectionGlass }
+    )
+  }
+
+  /// The selection, as glass. It exists ONLY behind the selected chip, so moving the selection
+  /// removes it from one chip and inserts it under another in the same transaction — the two
+  /// events a shared `glassEffectID` morphs between. The tint is the same one the flat variant
+  /// paints, so the two looks agree on which colour means "chosen".
+  private var selectionGlass: some View {
+    Color.clear
+      .glassEffect(
+        .regular.tint(ChipColor.selected.opacity(ChipColor.selectedFill)).interactive(),
+        in: .rect(cornerRadius: Design.Radius.control)
+      )
+      .glassEffectID(selectionGlassID, in: glassNamespace)
   }
 
   /// The chip's caption: the today WORD (ours) or the weekday (the formatter's).
@@ -123,17 +208,33 @@ struct DayStrip: View {
     }
   }
 
-  /// A TINTED background rather than a filled one, so the label keeps `.primary` and its
-  /// contrast is the system's problem in both appearances. A saturated fill would force a
-  /// hardcoded light-on-dark label colour, which is the literal the lint bans.
-  private func chipBackground(_ chip: DayChip) -> Color {
-    chip.day == selection
-      ? ChipColor.selected.opacity(ChipColor.selectedFill)
-      : ChipColor.idle.opacity(ChipColor.idleFill)
+  /// The chip's surface: an idle chip is plain interactive glass; the selected chip carries no
+  /// glass of its own (`.identity`) and instead sits on the one tinted `selectionGlass` — one
+  /// glass layer per chip, so glass never samples glass, and the layer that moves is the one
+  /// with the id.
+  private struct ChipSurface<Selection: View>: ViewModifier {
+    let chip: DayChip
+    let selection: String
+    @ViewBuilder let selectionGlass: () -> Selection
+
+    private var isSelected: Bool { chip.day == selection }
+
+    func body(content: Content) -> some View {
+      content
+        .glassEffect(
+          isSelected ? .identity : .regular.interactive(),
+          in: .rect(cornerRadius: Design.Radius.control)
+        )
+        .background {
+          if isSelected {
+            selectionGlass()
+          }
+        }
+    }
   }
 
   /// Selection is carried by a border as well as a tint — a second channel, for a reader who
-  /// cannot separate the two accents.
+  /// cannot separate the two accents. It stays in the glass variant for the same reason.
   @ViewBuilder
   private func chipBorder(_ chip: DayChip) -> some View {
     if chip.day == selection {

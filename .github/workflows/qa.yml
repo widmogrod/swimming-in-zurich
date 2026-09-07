@@ -78,14 +78,20 @@ jobs:
   # Makefile could leave CI silently testing something else. The steps stay separate so a red
   # run names the gate that failed; only the commands are shared.
   ios-qa:
-    runs-on: macos-latest
+    # The app targets iOS 27 ONLY (deployment target 27.0, no #available branches), so the
+    # job needs an iOS 27 simulator. `macos-latest` (macos-26) ships Xcode 26.6 and iOS 26.x
+    # simulators only — every ios-qa run since the target was raised on 2026-09-06 died at
+    # "Unable to find a destination" with NO iOS simulator on the list. GitHub's `xcode-27`
+    # preview image (actions/runner-images#14404) has Xcode 27 beta as its default and only
+    # Xcode; it is marked preview, so a red run here may be the image rather than the app —
+    # read the failing step before blaming the code.
+    runs-on: xcode-27
     steps:
       - uses: actions/checkout@v4
 
-      # The chain needs iOS 26 and Swift 6.2 (`isolated deinit`); the runner image ships
-      # several Xcodes and does not always default to the newest.
-      - name: Select Xcode
-        run: sudo xcode-select -s /Applications/Xcode_26.app || xcodebuild -version
+      # The image's one Xcode is already the default; this only records which one ran.
+      - name: Show Xcode
+        run: xcodebuild -version
 
       # The CRAP gate below is Python — beside scripts/crap.py, one interpreter the repo
       # already has, and no build of its own before the chain can run it — so this job

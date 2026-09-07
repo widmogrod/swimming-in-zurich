@@ -12,6 +12,7 @@
 
 import Foundation
 import OSLog
+import SwiftUI
 import SwimZHKit
 
 @MainActor
@@ -38,10 +39,38 @@ final class TodayModel {
 
   /// `location` is defaulted so no call site changes; a test passes a double that can hold a
   /// fix open across the reader's second tap. See `LocationFixing`.
-  init(localized: Localized = .current, location: (any LocationFixing)? = nil) {
+  ///
+  /// `host`, `manifestURL` and `fetcher` are the store-refresh seam, defaulted to the app's:
+  /// the bundled store in Application Support, the manifest URL from `Info.plist`, and the
+  /// kit's own transport (named nowhere in this target — `nil` lets `StoreHost.refresh` supply
+  /// its default). A test hands in a scratch host, a fixed URL and a stub.
+  init(
+    localized: Localized = .current, location: (any LocationFixing)? = nil,
+    host: StoreHost? = nil,
+    manifestURL: URL? = RefreshConfiguration.manifestURL(Bundle.main.infoDictionary),
+    fetcher: (any HTTPFetching)? = nil
+  ) {
     self.localized = localized
     self.location = location ?? LocationSource()
+    self.host = host
+    self.manifestURL = manifestURL
+    self.fetcher = fetcher
   }
+
+  /// Where the release manifest is published, if anywhere. Nil means the app never reaches the
+  /// network for a store — and the list offers no pull, because a pull that cannot check
+  /// anything is the do-nothing gesture `TodayView`'s header refuses.
+  private let manifestURL: URL?
+  private let fetcher: (any HTTPFetching)?
+
+  var canCheckForUpdates: Bool { manifestURL != nil }
+
+  /// What the last check for a newer store concluded, and when. Rendered under the answer;
+  /// `.unchecked` until a check has run, so nothing is claimed before it is known.
+  private(set) var dataStatus: DataStatus = .unchecked
+  /// Whether a check is in flight — the About screen's button shows progress from it. The
+  /// pull has the list's own spinner and does not read it.
+  private(set) var isChecking = false
 
   private static let log = Logger(subsystem: "ch.swimzh.app", category: "store")
 
@@ -69,7 +98,7 @@ final class TodayModel {
   }
 
   private var store: Store?
-  private var metadata: StoreMetadata?
+  private(set) var metadata: StoreMetadata?
   /// Owns the connection and the swap. NOT a `Store` any more: the store in use may be the
   /// bundled one or a downloaded one, and only one type may decide which — see `StoreHost`.
   private var host: StoreHost?
@@ -81,6 +110,10 @@ final class TodayModel {
   /// worth of times.
   private var lastRefreshAttempt: Date?
   private var favourites: Favourites = Favourites()
+  /// The favourites the list is currently ORDERED by — `favourites` as of the last refresh
+  /// that was allowed to reorder. The two differ only while `Lab.FavouriteMove.hold` is
+  /// holding a just-toggled row where the reader can see it; see `toggleFavourite`.
+  private var leadingFavourites: Favourites = Favourites()
   /// Set only while `load` installs the initial filters, so that assignment's `didSet` does not
   /// race the first `refresh`. It deliberately does NOT cover a refresh in flight: a keystroke
   /// arriving mid-query must not be swallowed.
@@ -196,10 +229,34 @@ final class TodayModel {
     return try? await store.facility(poolID: poolID, on: filters.day)
   }
 
+  /// Toggle the heart. The row STAYS PUT — decided 2026-09-06 over an animated move to the
+  /// front of its tier and over never leading with favourites at all.
+  ///
+  /// The ORDER is left exactly as the reader sees it: the rebuilt model differs
+  /// from the one on screen in one row's heart and nothing else, so SwiftUI updates one row.
+  /// The favourites-first order is caught up by `settleFavouriteOrder` — the next refresh the
+  /// reader causes, or their return to the top of the list.
   func toggleFavourite(_ poolID: String) {
     favourites.toggle(poolID)
     UserDefaults.standard.set(favourites.encoded, forKey: Self.favouritesKey)
-    startRefresh()
+    startRefresh(holdingOrder: true)
+  }
+
+  /// Apply the favourites-first order the reader's swipes have been held back from.
+  ///
+  /// Called when the list arrives back at its top (`listReachedTop`), which is where the front
+  /// of a tier is — so a row that moves does so on screen and animated, never out from under a
+  /// thumb mid-list. A no-op when nothing is held, which is almost always.
+  func settleFavouriteOrder() {
+    guard leadingFavourites != favourites else { return }
+    startRefresh(animated: true)
+  }
+
+  /// Which favourites the rows are ORDERED by, for this refresh: the order on screen, until a
+  /// refresh that is not itself a heart toggle catches it up.
+  private func leadingFavourites(holdingOrder: Bool) -> Favourites {
+    if !holdingOrder { leadingFavourites = favourites }
+    return leadingFavourites
   }
 
   /// One pool's live water temperature, asked for when its sheet opens.
@@ -247,6 +304,7 @@ final class TodayModel {
       self.metadata = metadata
       favourites = Favourites.decode(
         UserDefaults.standard.string(forKey: Self.favouritesKey) ?? "")
+      leadingFavourites = favourites
       updateToday(now)
       // From the ROSTER, not from one day's answer: an answer is already narrowed by the
       // radius, so a kind filter built from it would silently lose the kinds that happen to be
@@ -288,7 +346,11 @@ final class TodayModel {
 
   /// Re-ask the store for the current filters. `now` supplies only the wall-clock time of day —
   /// the one clock input the client may reason about (invariant E1).
-  func refresh(now: Date = Date()) async {
+  ///
+  /// `holdingOrder` is a heart toggle asking the rows to stay where they are (see
+  /// `toggleFavourite`); `animated` publishes the answer inside an animation, so a row that
+  /// does move is seen to slide. Neither changes what the answer says.
+  func refresh(now: Date = Date(), holdingOrder: Bool = false, animated: Bool = false) async {
     guard let store, let metadata else { return }
     // BEFORE anything else. `today` was captured once at launch, so an app left open across
     // midnight went on treating yesterday as today: the clock tiers resumed on a stale day and
@@ -318,11 +380,12 @@ final class TodayModel {
         radiusKm: asked.radiusKm
       )
       guard mine == generation else { return }
-      state = .ready(
+      let ready = State.ready(
         listModel(
           answer: answer,
           filters: asked,
           favourites: favourites,
+          leading: leadingFavourites(holdingOrder: holdingOrder),
           horizon: metadata,
           today: today,
           at: time,
@@ -330,6 +393,11 @@ final class TodayModel {
         ),
         metadata
       )
+      if animated {
+        withAnimation(.snappy(duration: 0.3)) { state = ready }
+      } else {
+        state = ready
+      }
     } catch {
       guard mine == generation else { return }
       state = .failed(String(describing: error))
@@ -364,9 +432,9 @@ final class TodayModel {
   /// `generation` already makes a late answer harmless, but a superseded query still ran to
   /// completion against the store — one full day's read per keystroke, all but the last thrown
   /// away. Cancelling makes the re-ask-on-every-change choice cheap without caching anything.
-  private func startRefresh() {
+  private func startRefresh(holdingOrder: Bool = false, animated: Bool = false) {
     pendingRefresh?.cancel()
-    pendingRefresh = Task { await refresh() }
+    pendingRefresh = Task { await refresh(holdingOrder: holdingOrder, animated: animated) }
   }
 
   /// Look for a newer published store, and install it if there is one.
@@ -380,10 +448,37 @@ final class TodayModel {
   /// manifest is worth acting on, whether a downloaded file may be trusted, and the order of
   /// the swap. This method sequences; it decides nothing.
   func refreshStore(now: Date = Date()) async {
-    guard let host, shouldRefreshStore(lastAttempt: lastRefreshAttempt, now: now) else { return }
+    guard Self.automaticCheckEnabled, shouldRefreshStore(lastAttempt: lastRefreshAttempt, now: now)
+    else { return }
+    await checkForUpdates(now: now)
+  }
+
+  /// `-swimzh.autoCheck NO` as a launch argument turns the AUTOMATIC check off — the reader's
+  /// pull is untouched. Exists for one reason: a driven test that pulls the list has to be able
+  /// to tell the pull's answer from the launch check's, and the two are otherwise the same row.
+  /// The same shape as `LocationSource.preferredKey`; a shipped app never sets it.
+  static let automaticCheckKey = "swimzh.autoCheck"
+  private static var automaticCheckEnabled: Bool {
+    UserDefaults.standard.object(forKey: automaticCheckKey) == nil
+      || UserDefaults.standard.bool(forKey: automaticCheckKey)
+  }
+
+  /// The reader's own check — the pull. Never throttled: they asked, so the manifest is
+  /// fetched now, and what it says is shown (`dataStatus`) rather than only logged. The
+  /// automatic check shares this path, so the row under the answer is filled in by launch and
+  /// foreground too, quietly.
+  func checkForUpdates(now: Date = Date()) async {
+    guard let host, !isChecking else { return }
     lastRefreshAttempt = now
-    let outcome = await host.refresh(
-      manifestURL: RefreshConfiguration.manifestURL(Bundle.main.infoDictionary), now: now)
+    isChecking = true
+    defer { isChecking = false }
+    let outcome: RefreshOutcome
+    if let fetcher {
+      outcome = await host.refresh(manifestURL: manifestURL, fetcher: fetcher, now: now)
+    } else {
+      outcome = await host.refresh(manifestURL: manifestURL, now: now)
+    }
+    dataStatus = DataStatus(check: dataCheck(after: outcome), checkedAt: now)
     switch outcome {
     case .skipped(let reason):
       // Logged, not shown. An operator debugging a botched upload needs the reason; a swimmer

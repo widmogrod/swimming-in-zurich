@@ -40,7 +40,6 @@ struct PoolRowView: View {
   /// claim about a day nobody is in, which is the bug class this app has already shipped twice.
   let isToday: Bool
   let isExpanded: Bool
-  let namespace: Namespace.ID
   let onToggleFavourite: () -> Void
   let onToggleExpanded: () -> Void
 
@@ -75,6 +74,9 @@ struct PoolRowView: View {
       // The app's own tint, not the row's TIER colour. A swipe action that changes colour from
       // row to row reads as a different action, and tier colour means something else here.
       .tint(.accentColor)
+      // For `BehaviourTests`, which swipes a row and presses this: by identifier, never by
+      // its five-language label.
+      .accessibilityIdentifier("favouriteAction")
     }
     // A HEART IS A PHYSICAL ACT. `.sensoryFeedback` rather than a `UIImpactFeedbackGenerator`:
     // it is declarative, it costs no UIKit import in a SwiftUI target, and it obeys the
@@ -102,7 +104,10 @@ struct PoolRowView: View {
       .contentShape(Rectangle())
     }
     .buttonStyle(.plain)
-    .matchedTransitionSource(id: row.poolID, in: namespace)
+    // NO zoom transition source any more. The pool screen is a map with a draggable drawer, and
+    // a zoom-pushed screen's drag-to-dismiss hijacked every downward drag on that drawer (and
+    // hid the bar while it did). The plain push keeps the system's edge swipe and leaves the
+    // drawer its gesture. See `PoolPanel`.
     // The four clauses, on the ONE element that both reads them and navigates.
     .accessibilityLabel(Text(verbatim: accessibilityLabel))
     // The swipe action, said out loud. VoiceOver surfaces swipe actions on a plain row; this
@@ -128,6 +133,10 @@ struct PoolRowView: View {
         .fixedSize(horizontal: false, vertical: true)
       Spacer(minLength: Design.Space.tight)
       favouriteMark
+        // The transition below only runs inside an animated transaction, and the toggle
+        // arrives from a swipe action that starts none — so the mark's own change is the
+        // thing animated.
+        .animation(.default, value: isFavourite)
       Image(systemName: row.mark.symbol)
         .foregroundStyle(row.mark.accent)
         .accessibilityLabel(Text(row.mark.voiceOverLabel, localized))
@@ -214,13 +223,19 @@ struct PoolRowView: View {
   @ViewBuilder
   private var favouriteMark: some View {
     if isFavourite {
-      Image(systemName: Icon.favouriteMark)
+      favouriteGlyph
         .font(.rowFact)
         // The app's TINT, not the row's tier colour: a heart is not a time of day, and tier
         // colour is the vocabulary that says when a session runs.
         .foregroundStyle(.tint)
         .accessibilityLabel(Text(Message("action.favourite"), localized))
     }
+  }
+
+  /// The heart, drawn on when it arrives and off when it goes — a symbol transition rather
+  /// than the default fade, so the mark moves the way the haptic says it does.
+  private var favouriteGlyph: some View {
+    Image(systemName: Icon.favouriteMark).transition(.symbolEffect(.drawOn))
   }
 
   private var verdict: some View {

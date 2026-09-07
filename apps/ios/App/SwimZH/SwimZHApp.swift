@@ -28,6 +28,9 @@ struct SwimZHApp: App {
     WindowGroup {
       TodayView()
         .environment(\.localized, localized)
+        // Every `Link` and `openURL` in the app resolves through this one seam, so a web
+        // address opens INSIDE the app (`Lab.linkOpener`) and `tel:` still dials.
+        .linkOpening()
     }
   }
 }

@@ -41,8 +41,8 @@
     },
     {
       "file": "FacilitySheet.swift",
-      "expression": "detail.name",
-      "reason": "(a) the pool's own name, a proper noun"
+      "expression": "name",
+      "reason": "(a) the pool's own name, a proper noun, said by the panel while its facts load"
     },
     {
       "file": "FacilitySheet.swift",
@@ -60,9 +60,9 @@
       "reason": "(b) an axis tick — HH:MM off the store's own clock values"
     },
     {
-      "file": "PoolsBrowser.swift",
+      "file": "CompactShell.swift",
       "expression": "pool.name",
-      "reason": "(a) the pool's own name, a proper noun"
+      "reason": "(a) the pool's own name, a proper noun — a search suggestion"
     },
     {
       "file": "PoolRowView.swift",
@@ -100,9 +100,19 @@
       "reason": "(b) an hour tick on the day tail — a two-digit number, no words"
     },
     {
-      "file": "TodayView.swift",
+      "file": "AnswerList.swift",
       "expression": "localized.format.storeDate(key)",
       "reason": "(b) a `meta` date key formatted for the reader; `stampRow` omits the whole row when the store carries no stamp"
+    },
+    {
+      "file": "AnswerList.swift",
+      "expression": "localized.format.storeInstant(metadata.builtAt)",
+      "reason": "(b) `meta.built_at` formatted for the reader; the row is omitted when the store carries no stamp"
+    },
+    {
+      "file": "AnswerList.swift",
+      "expression": "localized.format.dateTime(checkedAt)",
+      "reason": "(b) the time of the last manifest check, a Date the model recorded, formatted"
     },
     {
       "file": "PoolMapView.swift",
@@ -145,9 +155,34 @@
       "reason": "(a) the pool's own name, on a single pin and on the card it raises"
     },
     {
-      "file": "FacilitySheet.swift",
-      "expression": "\"\"",
-      "reason": "(b) the empty title the bar wears while the hero still owns the name; an empty string is not a sentence"
+      "file": "PoolHeader.swift",
+      "expression": "plan.link.basinName",
+      "reason": "(a) a basin's name is the pool's own word for it (\"Sprungbecken\"), the menu item for its lane plan"
+    },
+    {
+      "file": "AboutView.swift",
+      "expression": "appName",
+      "reason": "(a) the bundle's display name, a proper noun from Info.plist"
+    },
+    {
+      "file": "AboutView.swift",
+      "expression": "localized.format.storeInstant(metadata.builtAt)",
+      "reason": "(b) `meta.built_at` formatted for the reader"
+    },
+    {
+      "file": "AboutView.swift",
+      "expression": "localized.format.dateTime(checkedAt)",
+      "reason": "(b) the time of the last manifest check, formatted"
+    },
+    {
+      "file": "AboutView.swift",
+      "expression": "localized.format.storeDate(key)",
+      "reason": "(b) a `meta` date key formatted for the reader; the row is omitted when empty"
+    },
+    {
+      "file": "AboutView.swift",
+      "expression": "copyright",
+      "reason": "(a) NSHumanReadableCopyright from Info.plist — a name and a year, never translated"
     }
   ]
 }

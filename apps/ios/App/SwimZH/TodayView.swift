@@ -1,189 +1,139 @@
 // TodayView.swift — the primary screen: "where can I swim?", end to end.
 //
 // The view decides nothing. `SwimZHKit` produces a `ListModel` — sections, rows, verdicts,
-// banners, counts, the beyond-horizon flag — and this file lays it out. That split is the
+// banners, counts, the beyond-horizon flag — and the app lays it out. That split is the
 // plan's governing constraint: the app target is outside the CRAP gate and a SwiftUI body
 // cannot be unit-tested at all, so a rule placed here is a rule nothing measures.
 //
-// The iOS 26 adoptions, each with its reason:
-//  * `.searchable` reached from the toolbar (`.searchToolbarBehavior(.minimize)`) — on iPhone
-//    iOS 26 already draws the field at the bottom, so the control shares the system's bar with
-//    the filter button instead of adding a surface. THE ALL-POOLS BROWSER NOW DOES THE SAME.
-//    It used to pin its field open with `navigationBarDrawer(displayMode: .always)` — the very
-//    form a lint bans on this screen for pinning the chrome — so the app searched two different
-//    ways depending on which list you were looking at.
-//  * the filter bar via `safeAreaBar(edge:)` — see `FilterBar.swift`.
-//  * `List`, not `LazyVStack`: not for speed (both are lazy, and 57 rows is noise either way)
-//    but for `.swipeActions` and system row and section styling.
-//  * NO `.refreshable`: since S5 the store CAN be updated, but not by pulling on a list. The
-//    published store changes weekly and the check runs at launch and on foreground; a
-//    pull-to-refresh would spin for a second and, on all but one day in seven, change nothing.
-//    A gesture that usually does nothing is a gesture that teaches the reader to distrust it.
+// THIS FILE IS THE FORK, and the fork has one input: the horizontal SIZE CLASS.
+//  * compact — a phone, a folded phone, a Split View slice: `CompactShell`, a system tab bar
+//    (List, Map, Filters, Search), each tab its own stack.
+//  * regular — an unfolded phone, an iPad, a landscape Max: `WideShell`, the map as the whole
+//    screen with the list floating over it in a glass column. No tab bar: the regular-width
+//    `TabView` floats at the top centre, exactly where the column is, and cannot be moved.
+// Never the device idiom, never a screen size. Apple ships no fold API in the iOS 27 SDK
+// (checked: nothing in the SwiftUI or UIKit interfaces names a hinge, a fold or a posture);
+// what an unfolded phone will report is what every wide window reports today, so the size
+// class is the whole test. Decided 2026-09-06 against two alternatives (a stretched phone
+// layout, and the tab bar kept in a wide window), both built, felt on the iPad mini, and
+// deleted — see `docs/plan/2026-09-05-ios27-liquid-glass-review.md`.
+//
+// Both shells share: the model, the `Route` enum and its one `RouteScreen`, `StoreStates` (the
+// three states of the store), and `AnswerList` (the rows under the day strip). The content
+// stack's PATH is one `@State` here, bound to the compact list page and to the wide column, so
+// a pool open when the phone unfolds is still open after — the screen changes shape, not place.
 //
 // Every sentence on this screen is a `Message` from the package, rendered by the one
 // `Localized` in the environment (see `Localization.swift`). There is not a single
-// user-visible literal left here, and the two that look like one (`metadata.goldValidAsOf`,
-// `metadata.horizonEnd`) are the store's own date KEYS put through `Format.storeDate` — they
-// were shipped raw at first, which read as `2026-08-24` in all five languages.
+// user-visible literal in any of these files.
 
 import SwiftUI
 import SwimZHKit
 
-/// Everywhere this stack can go.
+/// Everywhere a stack can go.
 ///
 /// ONE route type, and every push is a value of it. The stack used to mix the two: rows pushed a
 /// `String` into a `navigationDestination`, while the browse menu pushed destination VIEWS. That
-/// is not a style difference — `BehaviourTests.testTheBrowserOpensAPoolToo` caught what it does.
-/// Tapping a pool inside the all-pools browser pushed the sheet AND re-activated the menu's
-/// view-based link, so the browser landed back on top of the sheet you had just opened. Mixing
-/// the two forms in one stack is the bug; this enum is the fix.
+/// is not a style difference — a pool tapped inside the old all-pools browser pushed the sheet
+/// AND re-activated the menu's view-based link, so the browser landed back on top of the sheet
+/// you had just opened. Mixing the two forms in one stack is the bug; this enum is the fix.
 enum Route: Hashable {
   case pool(String)
-  case allPools
   case legend
-}
-
-/// The two ways of drawing ONE answer.
-///
-/// A MODE, not a destination: switching does not push, does not change the day, the radius, the
-/// filters or the search, and cannot show a pool the other one hides — both are handed the same
-/// finished `[ListSection]`. That is the whole reason it is a segmented control in the bar
-/// rather than a third entry beside "All pools": a control that stays put and re-renders what is
-/// already on screen is a different promise from one that takes you somewhere.
-enum ViewMode: Hashable {
-  case list
-  case map
+  case about
 }
 
 struct TodayView: View {
-  @Environment(\.localized) private var localized
   @State private var model = TodayModel()
-  /// The zoom transition's namespace. BOTH halves are required and neither works alone: the row
-  /// carries `matchedTransitionSource(id:in:)`, the destination carries
-  /// `navigationTransition(.zoom(sourceID:in:))`, and they meet on this namespace.
-  @Namespace private var zoom
 
   /// Foregrounding is the only moment a refresh is worth attempting beyond launch: the store is
   /// republished weekly, so anything more eager would be a wakeup that learns nothing.
   @Environment(\.scenePhase) private var scenePhase
 
-  /// Whether the day strip is on screen. View state rather than model state: nothing outside
-  /// this screen has an opinion about it, and the DECISION it holds is the kit's.
-  @State private var showsStrip = true
+  /// THE size-class, not the device — see the header.
+  @Environment(\.horizontalSizeClass) private var sizeClass
+  private var isWide: Bool { sizeClass == .regular }
 
-  /// List or map. View state: nothing outside this screen has an opinion about it, and it
-  /// deliberately does NOT persist — an app that reopened on the map would be answering a
-  /// different question from the one it is for.
-  @State private var mode: ViewMode = .list
-
-  /// The reader's text size, for one purpose only: how tall the strip is, which is what sets
-  /// the gap between the two thresholds that hide and show it. Read the same way `DayStrip`
-  /// reads it, through the same bridge.
-  @Environment(\.dynamicTypeSize) private var dynamicTypeSize
-
-  private var stripHeight: Double {
-    stripLayout(for: TypeSize(dynamicTypeSize), width: 0).stripHeight
-  }
+  /// The content stack: the list page's pushes in a compact window, the column's in a wide
+  /// one. ONE path for both, which is what carries an open pool across a fold or unfold.
+  @State private var contentPath: [Route] = []
+  /// The map tab's own stack, compact only. Held HERE rather than in `CompactShell` because the
+  /// fold reads it after the shell is gone — see `onChange(of: isWide)`.
+  @State private var mapPath: [Route] = []
 
   var body: some View {
-    NavigationStack {
-      content
-        // NO NAVIGATION BAR ON THIS SCREEN, and the two halves of that arrived together.
-        //
-        // First the TITLE went: it spelled the day out while the strip underneath drew the
-        // same fact — one thing said twice, costing a row of a phone screen for the copy you
-        // cannot tap. That left a full bar holding one overflow button, and a band of empty
-        // glass above the strip is worse than the title was: it costs the same height and says
-        // nothing at all. So the button went to the bottom bar with the other two controls,
-        // and the bar it was keeping alive went with it. The strip now starts at the top of the
-        // screen, and the rows get the ~50 points back.
-        .toolbarVisibility(.hidden, for: .navigationBar)
-        // No placement argument, and deliberately so. On iOS 26 the search field ALREADY lives
-        // at the bottom on iPhone — that is the platform's own placement, not something to be
-        // arranged. The two attempts that fought it both added a surface: `.minimize` UNDER a
-        // custom bar of ours, and an `isPresented` binding that left the field resident anyway,
-        // stacked below. What was wrong was the custom bar, not the modifier: with the filter
-        // control moved into the system's own bottom bar, `.minimize` collapses the field into
-        // the same bar. The all-pools browser says exactly this, in the same two modifiers.
-        .searchable(
-          text: $model.filters.search,
-          prompt: Text(Message("nav.findAPool"), localized)
-        )
-        // Collapsed to a glyph rather than a resident field. Both were driven and screenshotted:
-        // resident puts a full-width field in the bottom bar for a control most sessions never
-        // use, and neither form changes what happens WHEN you open it — see the toolbar below.
-        .searchToolbarBehavior(.minimize)
-        .navigationDestination(for: Route.self, destination: screen)
-    }
-    .task {
-      await model.load()
-      // A fix for a reader who already chose one, and never a prompt — see
-      // `TodayModel.locateIfChosenBefore`. After the answer, for the same reason the store
-      // refresh is: the app's promise is an answer the moment it opens.
-      await model.locateIfChosenBefore()
-      // AFTER the screen has answered. The refresh is a background nicety; making the first
-      // answer wait on a network round trip would trade the app's whole premise — an answer
-      // with no network — for a store that is at most seven days fresher.
-      await model.refreshStore()
-    }
-    .onChange(of: scenePhase) { _, phase in
-      guard phase == .active else { return }
-      Task { await model.refreshStore() }
-      Task { await model.refreshLocation() }
-    }
+    shell
+      .task {
+        await model.load()
+        // A fix for a reader who already chose one, and never a prompt — see
+        // `TodayModel.locateIfChosenBefore`. After the answer, for the same reason the store
+        // refresh is: the app's promise is an answer the moment it opens.
+        await model.locateIfChosenBefore()
+        // MapKit's first map in a process costs a few hundred milliseconds of framework and GPU
+        // set-up, and the first pool tapped used to pay it as a frozen push. Paid here instead,
+        // off the answer's critical path — see `MapWarmup`.
+        await MapWarmup.warm()
+        // The keyboard's first show is the same kind of bill, paid by the first tap on search.
+        // See `KeyboardWarmup`.
+        await KeyboardWarmup.warm()
+        // AFTER the screen has answered. The refresh is a background nicety; making the first
+        // answer wait on a network round trip would trade the app's whole premise — an answer
+        // with no network — for a store that is at most seven days fresher.
+        await model.refreshStore()
+      }
+      .onChange(of: scenePhase) { _, phase in
+        guard phase == .active else { return }
+        Task { await model.refreshStore() }
+        Task { await model.refreshLocation() }
+      }
+      // THE FOLD. Going wide takes the map tab away (the map is on screen anyway), so a reader
+      // on it lands on the list — with whatever they had pushed from the map carried over, so
+      // unfolding over a pool keeps that pool. Going compact brings the tab back and the path
+      // is already the list's.
+      .onChange(of: isWide) { _, wide in
+        guard wide else { return }
+        if contentPath.isEmpty { contentPath = mapPath }
+        mapPath = []
+      }
   }
 
-  /// LIST OR MAP, and it is the one control on this screen that is neither a search nor a
-  /// filter.
-  ///
-  /// A segmented picker rather than the single toggling button Maps uses, and the reason is the
-  /// complaint it answers: a button whose glyph changes cannot say whether it shows where you
-  /// are or where you would go. Two segments, one of them lit, says it without a word — and the
-  /// words are there anyway for VoiceOver.
-  private var modePicker: some View {
-    Picker(selection: $mode) {
-      Label(Message("nav.list"), systemImage: Icon.list, localized).tag(ViewMode.list)
-      Label(Message("nav.map"), systemImage: Icon.map, localized).tag(ViewMode.map)
-    } label: {
-      Text(Message("nav.map"), localized)
-    }
-    .pickerStyle(.segmented)
-    .accessibilityIdentifier("viewMode")
-  }
-
-  /// The whole roster, one tap away.
-  ///
-  /// IT HAS MOVED TWICE, and the second move was a mistake this session's own tests measured.
-  /// It began as an overflow-menu item (two taps, and a navigation bar kept alive to hang the
-  /// menu on), became a bottom-bar button, and was then pushed into the END OF THE LIST to make
-  /// room for the list/map picker. That last one read as tidy — the roster is reference, like
-  /// the colour legend beside it — and was wrong for a reason a screenshot cannot show: the
-  /// list is fifty-seven pools long, so "one tap" had become twenty-five swipes and a tap.
-  ///
-  /// What measured it was `BehaviourTests`. Two tests that merely needed to REACH this control
-  /// spent about a minute each scrolling to it, and both became load-dependent — passing alone,
-  /// failing inside a full suite run, because a row still decelerating is a row a tap misses. A
-  /// test that has to work that hard to reach a control is describing the reader's problem.
-  ///
-  /// The bar had room all along: search sits at the leading edge and the picker in the middle,
-  /// so this joins the filter in the trailing group — which is where it was before the picker
-  /// arrived. The colour legend STAYS in the list, because a note about what the colours mean
-  /// genuinely belongs where the colours are.
-  private var allPoolsButton: some View {
-    NavigationLink(value: Route.allPools) {
-      Label(Message("nav.allPools"), systemImage: Icon.allPools, localized)
-    }
-    .accessibilityIdentifier("allPoolsLink")
-  }
-
-  /// Every destination this stack has, in one place. A `switch` over VIEWS, not over sentences
-  /// — `noStateToStringInTheApp` bans the second, and this is the first.
   @ViewBuilder
-  private func screen(_ route: Route) -> some View {
+  private var shell: some View {
+    if isWide {
+      WideShell(model: model, path: $contentPath)
+    } else {
+      CompactShell(model: model, contentPath: $contentPath, mapPath: $mapPath)
+    }
+  }
+}
+
+// MARK: - What both shells share
+
+/// Every destination a stack has, in one place. A `switch` over VIEWS, not over sentences —
+/// `noStateToStringInTheApp` bans the second, and this is the first.
+struct RouteScreen: View {
+  let route: Route
+  let model: TodayModel
+
+  var body: some View {
+    destination
+      // A pushed screen is its own place: the pool screen is a full map with a drawer at the
+      // bottom, and a tab bar drawn over that drawer is two bars fighting for the thumb. Photos
+      // does the same on a photo. The edge swipe and the back button are the ways home. (A
+      // wide window has no tab bar for this to hide.)
+      .toolbarVisibility(.hidden, for: .tabBar)
+  }
+
+  @ViewBuilder
+  private var destination: some View {
     switch route {
     case .pool(let poolID):
       FacilitySheetLoader(
-        poolID: poolID, day: model.filters.day, person: model.filters.person,
+        poolID: poolID,
+        // The name from the answer's row when there is one, else from the roster — both are
+        // already in memory, which is what lets the screen say the name before its facts load.
+        name: model.row(poolID)?.poolName ?? model.pools.first { $0.id == poolID }?.name ?? "",
+        day: model.filters.day, person: model.filters.person,
         // The row the user tapped, the pool's place, and whether the answer is for today —
         // the three things that turn a table of published facts into a screen about a pool.
         // See `PoolHeader`.
@@ -191,19 +141,64 @@ struct TodayView: View {
         load: { await model.facility($0) },
         live: { await model.liveTemperature(poiid: $0) }
       )
-      .navigationTransition(.zoom(sourceID: poolID, in: zoom))
-    case .allPools:
-      PoolsBrowser(pools: model.pools)
+      // IDENTITY FOLLOWS THE POOL. In a wide window a pin REPLACES the open pool in the column's
+      // path — same depth, different value — and without this SwiftUI kept the screen's state
+      // (its loaded facts, its live reading) and showed the OLD pool under the new route:
+      // "clicking on pins does not work". A new pool is a new screen.
+      .id(poolID)
+    // A PLAIN push, deliberately: the zoom transition this route had gives the pushed screen
+    // a drag-to-dismiss on every downward pan, which hijacked the drawer's own drag and hid
+    // the bar while it did (see `PoolPanel`). The plain push keeps the edge swipe.
     case .legend:
       AccessTypesView()
+    case .about:
+      AboutView(
+        poolCount: model.pools.count, metadata: model.metadata, status: model.dataStatus,
+        canCheck: model.canCheckForUpdates, isChecking: model.isChecking,
+        check: { await model.checkForUpdates() })
     }
   }
+}
 
-  @ViewBuilder
-  private var content: some View {
+extension View {
+  /// The one `navigationDestination` every stack has. Attached by the STACK's root, so a page
+  /// knows nothing about which stack it is in.
+  func routed(_ model: TodayModel) -> some View {
+    navigationDestination(for: Route.self) { RouteScreen(route: $0, model: model) }
+  }
+
+  /// A page with NO navigation bar. The TITLE went first: it spelled the day out while the
+  /// strip underneath drew the same fact — one thing said twice, costing a row of a phone
+  /// screen for the copy you cannot tap. That left a full bar holding one overflow button, and
+  /// a band of empty glass above the strip is worse than the title was. The strip starts at
+  /// the top of the screen, and the rows get the ~50 points back.
+  func bare() -> some View {
+    toolbarVisibility(.hidden, for: .navigationBar)
+  }
+}
+
+extension FilterPage {
+  /// The filters over the model. Both shells present the same page — as a tab on the phone,
+  /// as a popover in a wide window — and this is the one place its six arguments are spelled.
+  init(model: TodayModel) {
+    self.init(
+      filters: Bindable(model).filters, kinds: model.kinds, location: model.location,
+      onUseMyLocation: { await model.useMyLocation() },
+      onUseNamedPlace: { model.useNamedPlace($0) })
+  }
+}
+
+/// The three states of the store, with the READY one drawn by the caller — each surface draws
+/// a ready store differently, and the other two states the same.
+struct StoreStates<Drawn: View>: View {
+  @Environment(\.localized) private var localized
+  let model: TodayModel
+  @ViewBuilder let draw: (ListModel, StoreMetadata) -> Drawn
+
+  var body: some View {
     switch model.state {
     case .loading:
-      // THE SAME COLOUR THE LAUNCH SCREEN IS, and this is a flicker rather than a nicety.
+      // THE SAME COLOUR THE LAUNCH SCREEN IS, AND NOTHING ON IT — no spinner, and no bar.
       // Launch runs through three surfaces — the launch screen, this, then the list — and
       // until now they were three different colours: the launch screen was BLANK WHITE (an
       // empty `UILaunchScreen` dict, so white even on a phone in dark mode), this view took
@@ -215,9 +210,13 @@ struct TodayView: View {
       // 0.05. What the reader actually waits through is the 1.3 s BEFORE any of our code runs
       // — dyld, the Swift runtime, SwiftUI — and the launch screen owns all of it. So the one
       // thing worth doing is making that screen look like the app rather than like nothing.
-      ProgressView()
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color("LaunchBackground"))
+      //
+      // The spinner went with the performance review: the store answers in a few
+      // milliseconds (every read measured under 3 ms), so the wheel showed for a frame or
+      // two and read as "the app is loading something" about an app that was not. The HIG
+      // reserves progress indication for waits a reader can feel.
+      Color("LaunchBackground")
+        .ignoresSafeArea()
     case .failed(let diagnostic):
       // The DIAGNOSTIC is not shown. It is a `StoreError`'s own English detail — an SQL table
       // name and a row id — which is a developer's sentence, not a reader's, and S3b shipped
@@ -241,252 +240,13 @@ struct TodayView: View {
       // rather than showing up as a slow one.
       .onAppear { LaunchSignpost.shared.dataOnScreen() }
     case .ready(let list, let metadata):
-      screen(list, metadata)
+      draw(list, metadata)
         // Here, and nowhere earlier: this is the first moment REAL data is on screen. The
-        // `.loading` spinner above is a frame the user cannot read, and closing the
+        // `.loading` ground above is a frame the user cannot read, and closing the
         // measurement there would report an excellent launch and a false one.
         .onAppear { LaunchSignpost.shared.dataOnScreen() }
     }
   }
-
-  private func screen(_ list: ListModel, _ metadata: StoreMetadata) -> some View {
-    // Both bars attach to the SCROLLING view, never to a wrapper around it. A `VStack` here
-    // was the whole defect: the navigation bar collapses its title, and the system paints its
-    // scroll edge effect — the Liquid Glass — in response to the scroll view DIRECTLY under
-    // it. Given a stack whose first child is a static strip, it has nothing to respond to, so
-    // the title never shrank, neither bar got glass, and the screen opened with a third of
-    // itself already spent.
-    drawn(list, metadata)
-      .safeAreaBar(edge: .top) {
-        // Present only while it is wanted. Reading DOWN the list takes it away and gives the
-        // rows its height; the smallest pull back up returns it, so changing day never costs a
-        // scroll to the top of fifty rows. Whether it shows is `SwimZHKit.stripShouldShow` —
-        // a rule, and a rule in a `body` is one nothing measures.
-        stripIfShown
-          .animation(.snappy(duration: 0.22), value: showsStrip)
-      }
-      // The strip is ALWAYS up on the map: there is no scroll there to yield it to, and a
-      // strip left hidden by the last list scroll would take the day picker away from a screen
-      // that cannot get it back.
-      .onChange(of: mode) { _, _ in showsStrip = true }
-      // ONE bottom bar, drawn by the system: the filter control shares its glass with the
-      // search field rather than floating above it. A `safeAreaBar` of our own here is what
-      // produced two stacked surfaces and left rows hidden behind them — the system insets
-      // the scroll view for its own toolbar, and cannot for ours.
-      .animation(.smooth(duration: 0.28), value: mode)
-      // The same feedback the day strip gives for the same kind of act: a selection moved. The
-      // strip has had it since S3b; the mode switch is the second control on this screen that
-      // changes what you are looking at without going anywhere.
-      .sensoryFeedback(.selection, trigger: mode)
-      .toolbar {
-        // THE SEARCH FIELD, PLACED. `.searchToolbarBehavior(.minimize)` says the field is
-        // collapsed; it does not say WHERE, and the answer was the NAVIGATION bar — the field
-        // collapsed into the same top pill as the browse menu, so opening search took that bar
-        // over and the menu went with it. That is the defect a reader reported after every
-        // gate here was green. `DefaultToolbarItem` is what actually moves the system's own
-        // search item down beside the filter, which this file's comments had claimed since S3b.
-        DefaultToolbarItem(kind: .search, placement: .bottomBar)
-        // Spacer BETWEEN them: search at the leading edge, the filter at the trailing one.
-        ToolbarSpacer(.flexible, placement: .bottomBar)
-        ToolbarItem(placement: .bottomBar) { modePicker }
-        ToolbarSpacer(.flexible, placement: .bottomBar)
-        ToolbarItem(placement: .bottomBar) { allPoolsButton }
-        ToolbarItem(placement: .bottomBar) {
-          FilterButton(
-            filters: $model.filters, kinds: model.kinds, location: model.location,
-            onUseMyLocation: { await model.useMyLocation() },
-            onUseNamedPlace: { model.useNamedPlace($0) })
-        }
-      }
-  }
-
-  @ViewBuilder
-  private var stripIfShown: some View {
-    if showsStrip {
-      DayStrip(chips: model.chips, selection: $model.filters.day)
-        .transition(.move(edge: .top).combined(with: .opacity))
-    }
-  }
-
-  /// Read the scroll, ask the kit, record the answer.
-  ///
-  /// It does NOT call `withAnimation`. This runs on every frame of a scroll, and starting an
-  /// animation from in here is how the app stopped ever reporting itself idle; the animation is
-  /// declared on the bar instead, against this one value.
-  private func strip(scrolledTo scrolled: Double) {
-    let shows = stripShouldShow(
-      scrolled: scrolled, stripHeight: stripHeight, showing: showsStrip)
-    guard shows != showsStrip else { return }
-    showsStrip = shows
-  }
-
-  /// The answer, in whichever mode is selected.
-  ///
-  /// A `switch` over VIEWS — the same shape `screen(_ route:)` uses, and for the same reason:
-  /// this file maps a state onto a rendering and never onto a sentence.
-  @ViewBuilder
-  private func drawn(_ list: ListModel, _ metadata: StoreMetadata) -> some View {
-    switch mode {
-    case .list:
-      listOrEmpty(list, metadata)
-        // Measured from the TOP OF THE CONTENT, not from the scroll view's own offset: hiding
-        // the strip shrinks the top inset by its whole height and moves the raw offset by the
-        // same amount, which is a jump in exactly the direction that would re-show it. See
-        // `stripShouldShow`.
-        .onScrollGeometryChange(for: Double.self) { geometry in
-          geometry.contentOffset.y + geometry.contentInsets.top
-        } action: { _, scrolled in
-          strip(scrolledTo: scrolled)
-        }
-        .transition(.opacity)
-    case .map:
-      // The SAME sections the list is drawing, pinned by the roster's coordinates. See
-      // `SwimZHKit.poolPins`.
-      PoolMapView(pins: poolPins(list.sections, geo: model.geoByPool))
-        .transition(.opacity)
-    }
-  }
-
-  @ViewBuilder
-  private func listOrEmpty(_ list: ListModel, _ metadata: StoreMetadata) -> some View {
-    if list.beyondHorizon {
-      beyondHorizon(metadata)
-    } else if list.isEmpty {
-      // "Nothing matched" is NOT "everything is closed", and the wording says so: an empty
-      // result is about the filters, and the remedy is in the user's hands.
-      ContentUnavailableView {
-        Label {
-          Text(Message("combo.noPoolsMatch"), localized)
-        } icon: {
-          // The SAME glyph the browser's empty state uses. One sentence, one picture: the
-          // two screens shipped `magnifyingglass` and the filter icon for the same words.
-          Image(systemName: Icon.noMatch)
-        }
-      } description: {
-        Text(Message("state.none.body.phone"), localized)
-      }
-    } else {
-      answerList(list, metadata)
-    }
-  }
-
-  /// The fifth day state, and it is the WHOLE SCREEN's state rather than any pool's: past the
-  /// horizon there are no rows at all, so nothing here may read as a closure.
-  private func beyondHorizon(_ metadata: StoreMetadata) -> some View {
-    ContentUnavailableView {
-      Label {
-        Text(Message("state.beyondHorizon"), localized)
-      } icon: {
-        Image(systemName: Icon.beyondHorizon)
-      }
-    } description: {
-      Text(
-        Message(
-          "state.beyondHorizon.body", ["date": localized.format.storeDate(metadata.horizonEnd)]),
-        localized)
-    }
-  }
-
-  private func answerList(_ list: ListModel, _ metadata: StoreMetadata) -> some View {
-    // The list reserves a top margin for chrome that is no longer resident there — the search
-    // field moved into the toolbar — which left a whole row of empty screen under the day
-    // strip. Reclaimed deliberately, not by nudging paddings until it looked right.
-    List {
-      // The headline is a FACT, not a control, so it belongs in the content the eye reads
-      // first — not riding in the chrome. It lived in the old filter bar, which is what made
-      // that bar two lines tall and left it unable to share a row with anything.
-      Text(list.headline, localized)
-        .font(.screenHeadline)
-        // The count ROLLS rather than cutting when the day changes. `.numericText()` is the one
-        // content transition that understands digits, and this is the only line in the app
-        // whose leading token is one. It costs nothing on the branches with no number in them.
-        .contentTransition(.numericText())
-        .animation(.snappy(duration: 0.3), value: list.day)
-        .listRowSeparator(.hidden)
-        .listRowBackground(Color.clear)
-        .listRowInsets(
-          .init(
-            top: 0, leading: Design.Space.gutter, bottom: 0, trailing: Design.Space.gutter)
-        )
-        .frame(maxWidth: .infinity, alignment: .leading)
-      banners(list)
-      ForEach(list.sections) { section in
-        Section {
-          // ONE view per element, always. A `ForEach` element that resolves to a VARIABLE
-          // number of views forces `List` to build every row's body just to learn the
-          // identifiers (WWDC23 10160) — the laziness this screen must not lose as S3b adds
-          // the expandable Gantt. `PoolRowView` is that one view; the lint keeps it that way.
-          ForEach(section.rows) { row in
-            PoolRowView(
-              row: row,
-              isFavourite: model.isFavourite(row.poolID),
-              isToday: list.isToday,
-              isExpanded: model.isExpanded(row.poolID),
-              namespace: zoom,
-              onToggleFavourite: { model.toggleFavourite(row.poolID) },
-              onToggleExpanded: { model.toggleExpanded(row.poolID) }
-            )
-          }
-        } header: {
-          Label(section.title, systemImage: section.tier.symbol, localized)
-        }
-      }
-      provenance(metadata)
-    }
-    .listStyle(.insetGrouped)
-    // Inset-grouped sections default to about forty points of air between them. On a screen
-    // whose whole job is a ranked list of six tiers, that is a row of pools spent on gaps.
-    .listSectionSpacing(.compact)
-    .contentMargins(.top, Design.Space.row, for: .scrollContent)
-  }
-
-  @ViewBuilder
-  private func banners(_ list: ListModel) -> some View {
-    if !list.banners.isEmpty {
-      Section {
-        ForEach(list.banners) { banner in
-          BannerView(banner: banner)
-        }
-      }
-    }
-  }
-
-  private func provenance(_ metadata: StoreMetadata) -> some View {
-    Section {
-      // The VALUES are the store's own date KEYS (`2026-08-24`), so they go through
-      // `Format.storeDate` before a reader sees them — the same fact the browser renders as
-      // "24 August 2026". Shipping the key itself was a five-language regression hiding inside
-      // a `Text(verbatim:)` that looked, correctly, like a value.
-      // Each row is shown only when the store actually carries the stamp: the exporter writes
-      // `gold_valid_as_of or ""`, and "Data from" followed by nothing is a blank where a fact
-      // should be. An absent stamp means no row, not an empty one.
-      stampRow(metadata.goldValidAsOf, label: "meta.dataFrom")
-      stampRow(metadata.horizonEnd, label: "meta.answersThrough")
-      // The ribbon's colour key, reachable from the screen the ribbons are on. It was two taps
-      // deep inside an overflow menu — a legend nobody finds is a legend that is not there,
-      // and without it the day tail's colours cannot be read at all.
-      // The colour key, at the end of the answer — where the colours are. Its neighbour here
-      // used to be the all-pools link; see `allPoolsButton` for why that one went back to the
-      // bar and this one did not.
-      NavigationLink(value: Route.legend) {
-        Label(Message("nav.accessTypes"), systemImage: Icon.legend, localized)
-      }
-      .accessibilityIdentifier("legendLink")
-    } footer: {
-      Text(Message("meta.offlineNote"), localized)
-    }
-  }
-
-  /// One dated row from `meta`, or nothing at all when the store carries no stamp.
-  @ViewBuilder
-  private func stampRow(_ key: String, label: String) -> some View {
-    if !key.isEmpty {
-      LabeledContent(
-        content: { Text(verbatim: localized.format.storeDate(key)) },
-        label: { Text(Message(label), localized) })
-    }
-  }
-
 }
 
 // S2's `TodayView.statusLabel` is GONE, deliberately.

@@ -152,31 +152,21 @@ public func stripShouldShow(scrolled: Double, stripHeight: Double, showing: Bool
   return showing
 }
 
-// MARK: - When the pool screen's bar states the name
+// MARK: - Arriving back at the top
 
-/// Clear air on either side of the moment the navigation bar takes over the name.
-///
-/// SMALLER THAN THE DAY STRIP'S BAND, and for a reason worth writing down: the strip's band has
-/// to be wider than the strip itself, because hiding it shrinks the scroll view's inset by its
-/// own height and moves the offset in exactly the direction that would re-show it. That is a
-/// feedback loop, and the band is what breaks it. A title has no such loop — the bar is already
-/// there, and filling it in changes no layout at all — so this band is only about a finger
-/// resting on the boundary, and twenty-four points is plenty for that.
-public let poolTitleBand: Double = 24
+/// Whether the list is at its top — the same band the strip is always shown within, so "at the
+/// top" means one thing on this screen rather than two numbers that drift apart.
+public func listIsAtTop(scrolled: Double) -> Bool {
+  scrolled < stripShowsWithin
+}
 
-/// Whether the pool screen's navigation bar should state the pool's name.
+/// Whether the list has JUST come back to its top: it is there now and was not a moment ago.
 ///
-/// The screen opens on the name at `Font.heroTitle`, which is the largest thing on it. Putting
-/// the same name in the bar at the same time is the same word twice, six points apart — so the
-/// bar stays empty until its own copy is the ONLY one, which is the standard iOS behaviour a
-/// large title gets for free and a hand-built hero does not.
-///
-/// `nameBottom` is how far down the content the hero's name ends, measured by the caller rather
-/// than assumed here: it depends on the map above it and on the reader's text size, and a fixed
-/// number would hand the name over too early at an accessibility size — exactly where the
-/// duplication is most cramped.
-public func poolTitleShows(scrolled: Double, nameBottom: Double, showing: Bool) -> Bool {
-  if scrolled > nameBottom { return true }
-  if scrolled < nameBottom - poolTitleBand { return false }
-  return showing
+/// An arrival, not a state. A favourite marked while the reader is reading the list is held in
+/// place (see `listModel`'s `leading`); the moment it may move to the front of its tier is when
+/// the reader returns to the top, where the front is. Firing on the STATE instead — "at the top"
+/// — would move a row the instant it was marked whenever the list happened to be at rest at
+/// the top, which is the jump the hold exists to prevent.
+public func listReachedTop(scrolled: Double, wasAtTop: Bool) -> Bool {
+  listIsAtTop(scrolled: scrolled) && !wasAtTop
 }

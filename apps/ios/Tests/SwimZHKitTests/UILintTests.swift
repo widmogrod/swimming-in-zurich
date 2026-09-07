@@ -54,8 +54,9 @@ struct UILintTests {
     let files = try Self.appFiles()
     #expect(files.count >= 12, "found \(files.map(\.name))")
     for expected in [
-      "TodayView.swift", "DayStrip.swift", "FilterBar.swift", "PoolRowView.swift",
-      "RibbonCanvas.swift", "LaneGanttView.swift", "FacilitySheet.swift",
+      "TodayView.swift", "CompactShell.swift", "WideShell.swift", "AnswerList.swift",
+      "DayStrip.swift", "FilterBar.swift", "PoolRowView.swift", "RibbonCanvas.swift",
+      "LaneGanttView.swift", "FacilitySheet.swift",
     ] {
       #expect(files.contains { $0.name == expected }, "missing \(expected)")
     }
@@ -200,12 +201,19 @@ struct UILintTests {
 
   // MARK: - The zoom transition, and the sheet's rendered identity
 
-  @Test("the zoom transition has BOTH halves — neither works alone")
-  func zoomTransitionIsComplete() throws {
-    let row = try #require(try Self.appFiles().first { $0.name == "PoolRowView.swift" })
-    #expect(Self.code(row.text).contains(".matchedTransitionSource(id:"))
-    let view = try #require(try Self.appFiles().first { $0.name == "TodayView.swift" })
-    #expect(Self.code(view.text).contains(".navigationTransition(.zoom(sourceID:"))
+  @Test("the pool screen is pushed plainly — a zoom's drag-to-dismiss fought the drawer")
+  func poolPushIsNotAZoom() throws {
+    // This lint used to demand BOTH halves of a zoom transition. The pool screen is a map with
+    // a draggable drawer now, and a zoom-pushed screen owns a drag-to-dismiss on every downward
+    // pan: driven, every drag on the drawer's body shrank the whole screen toward the list and
+    // hid the bar on the way. Neither half may come back without that fight being settled.
+    for file in try Self.appFiles() {
+      let code = Self.code(file.text)
+      #expect(
+        !code.contains(".navigationTransition(.zoom("),
+        "\(file.name) zoom-pushes a screen; the drawer's drag cannot survive it")
+      #expect(!code.contains(".matchedTransitionSource(id:"), "\(file.name) has a zoom source")
+    }
   }
 
   @Test("the detail sheet renders the pool's NAME, which is why its id stays omitted")
@@ -214,28 +222,24 @@ struct UILintTests {
     // heading — so this lint is its evidence, and the reason `facility_id` is deliberately NOT
     // claimed rendered (see `FieldCoverage.deliberatelyOmitted`).
     //
-    // IT USED TO PIN THE NAVIGATION TITLE, and that stopped being the whole truth: the name is
-    // rendered at `heroTitle` in `PoolHeader` and the bar states it only once that has scrolled
-    // away, so a lint demanding an unconditional `.navigationTitle(Text(verbatim: detail.name))`
-    // would now be demanding the duplication back. Both halves are checked instead — the hero
-    // is where the reader meets the name, the bar is what keeps it after that — because either
-    // one alone leaves a screen that can be looking at a pool without ever naming it.
+    // IT USED TO PIN THE NAVIGATION TITLE, then a conditional one that took over once a hero
+    // had scrolled away. The screen is a map now with the facts in a panel that never scrolls
+    // away, so the name lives in ONE place: `PoolHeader`, at `heroTitle`, inside the panel the
+    // sheet presents. The bar over the map carries no title — a title there would be the same
+    // word twice, six points apart, which is the duplication two earlier versions fought.
     let sheet = try #require(try Self.appFiles().first { $0.name == "FacilitySheet.swift" })
     let code = Self.code(sheet.text)
-    #expect(
-      code.contains("showsTitle ? Text(verbatim: detail.name)"),
-      "the bar never takes the name over, so a scrolled screen names no pool")
+    #expect(!code.contains(".navigationTitle("), "the bar names the pool the panel already names")
     #expect(!code.contains("Text(detail.poolID)"))
+    // Whitespace-blind: the call wraps once it carries the live reading, and a lint about
+    // which view opens the panel has no business pinning where the formatter breaks a line.
+    let flat = code.replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
+    #expect(flat.contains("PoolHeader( detail: detail"), "the panel does not open on the header")
 
     let header = try #require(try Self.appFiles().first { $0.name == "PoolHeader.swift" })
     let hero = Self.code(header.text)
     #expect(
       hero.contains("Text(verbatim: detail.name)"), "the pool screen no longer opens on a name")
-    // ...and the bar's copy is CONDITIONAL. Without this the two could quietly both be
-    // unconditional again, which is the defect the pair exists to prevent rather than describe.
-    #expect(
-      code.contains("poolTitleShows("),
-      "the bar states the name unconditionally again — that is the same word twice")
   }
 
   @Test("the sheet asks for a live reading, and hands it to the rule that words it")
@@ -246,7 +250,8 @@ struct UILintTests {
     let sheet = try #require(try Self.appFiles().first { $0.name == "FacilitySheet.swift" })
     #expect(Self.code(sheet.text).contains("live: live"), "the sheet drops the live reading")
 
-    let loader = try #require(try Self.appFiles().first { $0.name == "PoolsBrowser.swift" })
+    let loader = try #require(
+      try Self.appFiles().first { $0.name == "FacilitySheetLoader.swift" })
     let code = Self.code(loader.text)
     #expect(code.contains("await live(detail?.baditickerPOIID)"), "nothing fetches a reading")
     // The age is a fact about the clock, so the sheet must re-ask while it is open and on
@@ -369,7 +374,7 @@ struct UILintTests {
     }
     // ...and the app target really is one of the scanned trees, so this cannot pass by reading
     // the package alone.
-    #expect(literals.contains { $0.0 == "TodayView.swift" })
+    #expect(literals.contains { $0.0 == "AnswerList.swift" })
   }
 
   @Test("an interpolated key is built from a prefix the catalog actually has")
@@ -828,27 +833,26 @@ struct UILintTests {
     }
   }
 
-  @Test("both lists of pools reach search and filters the same way")
-  func theTwoListsShareOneIdiom() throws {
-    // They push the same destination and answer the same question about the same roster. One
-    // pinned its search field and hung its filter off a top-bar MENU while the other reached
-    // search from the bar and opened a filter SHEET — wearing the same glyph for both.
-    for name in ["TodayView.swift", "PoolsBrowser.swift"] {
-      let file = try #require(try Self.appFiles().first { $0.name == name })
-      let code = Self.code(file.text)
-      #expect(code.contains(".searchToolbarBehavior(.minimize)"), "\(name): search is resident")
-      #expect(
-        code.contains("ToolbarItem(placement: .bottomBar)"),
-        "\(name): the filter control is not in the system's bottom bar")
-      // AND THE SEARCH FIELD IS ACTUALLY DOWN THERE WITH IT. `.minimize` says the field is
-      // collapsed, not where: without this item it collapses into the NAVIGATION bar, next to
-      // the browse menu, and opening search takes that bar over so the menu disappears. Every
-      // comment in both files claimed the two shared one bar while they did not — which is
-      // exactly the class of claim a lint has to carry, because prose cannot be run.
-      #expect(
-        code.contains("DefaultToolbarItem(kind: .search, placement: .bottomBar)"),
-        "\(name): search collapses into the top bar, not the bar the filter is in")
-    }
+  @Test("the find screen's bottom is the system tab bar, with search as a tab")
+  func theFindScreenIsATabBar() throws {
+    // DECIDED 2026-09-06 after three bars were felt on a phone. The bottom toolbar's segmented
+    // list/map picker drew a flat thumb inside the bar's glass — glass over glass, the one
+    // control that did not press or drag like Apple's. A tab bar's selection is the system's
+    // own lens, and `Tab(role: .search)` turns the bar itself into the field, so nothing here
+    // arranges a search control any more.
+    let file = try #require(try Self.appFiles().first { $0.name == "CompactShell.swift" })
+    let code = Self.code(file.text)
+    #expect(code.contains("TabView(selection:"), "the find screen is not a tab bar")
+    #expect(code.contains("role: .search)"), "search is not a tab of the bar")
+    #expect(
+      code.contains(".tabBarMinimizeBehavior(.onScrollDown)"),
+      "the bar no longer minimises as the list scrolls")
+    #expect(code.contains("Tab(value: TabPage.filters)"), "the filters are no longer a tab")
+    #expect(!code.contains(".tabViewBottomAccessory("), "the filter pill above the bar is back")
+    // ...and the old bar is not being rebuilt beside it.
+    #expect(!code.contains("ToolbarItem(placement: .bottomBar)"), "a bottom toolbar is back")
+    #expect(!code.contains(".pickerStyle(.segmented)"), "the segmented list/map picker is back")
+    #expect(!code.contains(".searchToolbarBehavior("), "search is being placed by hand again")
   }
 
   @Test("every screen's title is inline")
@@ -923,25 +927,52 @@ struct UILintTests {
       "the tapped block's own sentence is not rendered — the tap is dead again")
   }
 
-  @Test("`.glassEffect()` is applied nowhere; the system paints the bar")
+  /// The files allowed to paint glass, each for a stated reason. Both are the NAVIGATION
+  /// layer's own floating controls, which is exactly what the HIG says glass is for:
+  ///
+  ///  * `DayStrip.swift` — the strip rides a top `safeAreaBar` and changes the QUESTION, not
+  ///    the answer. Its chips are chrome, beside a bottom bar the system already draws in glass;
+  ///    flat tinted rectangles above glass controls were the one surface a version behind.
+  ///  * `PoolMapView.swift` — the pin card floats over a map, next to `MapUserLocationButton`,
+  ///    which IS glass. The card never overlaps the bottom bar (it sits inside the safe area),
+  ///    so "glass cannot sample glass" does not apply, and a material there was the one surface
+  ///    on that screen that ignores the reader's iOS 27 Liquid Glass slider.
+  ///
+  ///  * `PoolPanel.swift` — the facts panel floats over the pool screen's map, the same case
+  ///    as the pin card. It replaced a system sheet that was glass at every height but the
+  ///    last; its rows are opaque grouped cells, so the glass carries only the card's margins
+  ///    and the header the name sits in.
+  ///
+  /// `PoolStage.swift` floats a control over that map and is NOT here: it is
+  /// `.buttonStyle(.glass)`, the system's own glass button, which paints no surface of ours.
+  ///
+  /// Rows, sheets and forms stay banned: they are the content layer.
+  static let glassFiles: Set<String> = [
+    "DayStrip.swift", "PoolMapView.swift", "PoolPanel.swift", "StageColumn.swift",
+  ]
+
+  @Test("`.glassEffect()` is applied only in the navigation-layer files that may")
   func nothingPaintsItsOwnGlass() throws {
     // The HIG: "Don't use Liquid Glass in the content layer", and "glass can not sample other
-    // glass" — so a second glass surface renders inconsistently against the first. The filter
-    // bar is the app's one bar, and it is the only place this may appear.
-    // Stronger than it used to be. This once permitted ONE hand-painted glass surface — the
-    // custom filter bar — and banned the rest. That bar is gone: the filter control is a
-    // toolbar item, so the SYSTEM paints its glass, in its own bar, with the scroll edge
-    // effect that comes with it. The app now paints none at all, which is the whole lesson of
-    // the iOS 26 guidance: you do not apply the material, you use the chrome that already has
-    // it. A `.glassEffect(` reappearing here means something is being hand-built again.
-    for file in try Self.appFiles() where Self.code(file.text).contains(".glassEffect(") {
-      Issue.record("\(file.name) paints its own glass; the system paints the toolbar's")
+    // glass" — so a second glass surface renders inconsistently against the first. The system
+    // paints the bars; the app may paint glass only on the two floating controls named in
+    // `glassFiles`, and a `.glassEffect(` anywhere else means something is being hand-built.
+    for file in try Self.appFiles()
+    where Self.code(file.text).contains(".glassEffect(") && !Self.glassFiles.contains(file.name) {
+      Issue.record("\(file.name) paints its own glass; only \(Self.glassFiles.sorted()) may")
+    }
+    // ...and the allowlist cannot rot into exemptions for code that no longer paints anything.
+    for name in Self.glassFiles {
+      let file = try #require(try Self.appFiles().first { $0.name == name })
+      #expect(
+        Self.code(file.text).contains(".glassEffect("),
+        "\(name) is allowlisted for glass and paints none — drop it from `glassFiles`")
     }
   }
 
   @Test("the filter bar is attached with safeAreaBar, never safeAreaInset or an overlay")
   func filterBarUsesSafeAreaBar() throws {
-    let view = try #require(try Self.appFiles().first { $0.name == "TodayView.swift" })
+    let view = try #require(try Self.appFiles().first { $0.name == "AnswerList.swift" })
     let code = Self.code(view.text)
     // `safeAreaBar` is the ONLY one that extends the scroll edge effect under the bar; the
     // other two float a rectangle over clipped content.
@@ -951,8 +982,13 @@ struct UILintTests {
 
   @Test("nothing pins the chrome open, and both bars hang off the SCROLLING view")
   func chromeYieldsToContent() throws {
-    let view = try #require(try Self.appFiles().first { $0.name == "TodayView.swift" })
-    let code = Self.code(view.text)
+    // The find screen is two files since the wide-window split: the phone's shell (the tab
+    // bar, the search field) and the answer list under it (the strip, the scroll rule); the
+    // bar-hiding `bare()` is shared from `TodayView.swift`. Read as one.
+    let shell = try #require(try Self.appFiles().first { $0.name == "CompactShell.swift" })
+    let list = try #require(try Self.appFiles().first { $0.name == "AnswerList.swift" })
+    let fork = try #require(try Self.appFiles().first { $0.name == "TodayView.swift" })
+    let code = Self.code(shell.text) + Self.code(list.text) + Self.code(fork.text)
     #expect(code.contains(".searchable("))
 
     // This lint used to REQUIRE `.navigationBarDrawer(displayMode: .always)`, on the reading
@@ -962,19 +998,10 @@ struct UILintTests {
     #expect(
       !code.contains("displayMode: .always"),
       "`.always` pins the search field open; the default yields it on scroll")
-    // Search is REACHED, not resident. `.searchToolbarBehavior(.minimize)` did that, but on a
-    // screen that already owns a bottom bar it added a SECOND stacked bottom surface. The
-    // property that matters is that the field is presented on demand and the control lives in
-    // the bar the thumb is already near — so the lint checks that, not a modifier name.
-    #expect(
-      code.contains(".searchToolbarBehavior(.minimize)"),
-      "the search field is reached from the toolbar, never resident in a row of its own")
-    // ONE bottom bar, and it is the system's. Two custom attempts stacked a second surface
-    // under the field iOS 26 already draws at the bottom; the filter control is a toolbar
-    // item now, so it shares that bar and the system insets the list for both.
-    #expect(
-      code.contains("ToolbarItem(placement: .bottomBar)"),
-      "the filter control shares the system's bottom bar with the search field")
+    // Search is REACHED, not resident: it is a TAB of the system's bar, and the bar itself
+    // becomes the field on demand (`theFindScreenIsATabBar` pins the bar). ONE bottom bar,
+    // and it is the system's: two custom attempts stacked a second surface under the field
+    // iOS 26 already draws at the bottom, so the filter control rides the bar's own accessory.
     #expect(
       !code.contains(".safeAreaBar(edge: .bottom)"),
       "a bar of our own at the bottom stacks under the system's search field")
@@ -990,7 +1017,8 @@ struct UILintTests {
     // one overflow button — the same height the title cost, saying nothing. The controls moved
     // to the bottom bar and the bar went with them.
     #expect(
-      code.contains(".toolbarVisibility(.hidden, for: .navigationBar)"),
+      code.contains("toolbarVisibility(.hidden, for: .navigationBar)")
+        && Self.code(shell.text).contains(".bare()"),
       "the find screen has a navigation bar again — that is ~50 points of the list")
     // ...and nothing is behind an ellipsis. Two destinations, neither of them a rarely-wanted
     // variant of anything, were costing two taps each and a bar to hang the menu on.
@@ -1044,15 +1072,22 @@ struct UILintTests {
     #expect(!code.contains("ScrollViewReader"))
   }
 
-  @Test("the list is a `List`, and nothing pretends to refresh a bundled store")
+  @Test("the list is a `List`, and a pull exists only where it can answer")
   func listAndNoFakeRefresh() throws {
-    let view = try #require(try Self.appFiles().first { $0.name == "TodayView.swift" })
+    let view = try #require(try Self.appFiles().first { $0.name == "AnswerList.swift" })
     let code = Self.code(view.text)
     #expect(code.contains("List {"), "the rows must be a List — .swipeActions needs one")
     #expect(!code.contains("LazyVStack"))
-    // The store is bundle-only until S5. A pull-to-refresh would spin and change nothing,
-    // which is a lie told with an animation.
-    #expect(!code.contains(".refreshable"))
+    // Until 2026-09-06 this asserted NO `.refreshable` at all: the store is republished weekly,
+    // and a pull that spins and changes nothing is a lie told with an animation. The pull now
+    // exists, on two conditions this keeps: it is attached ONLY behind `PullToCheck`'s
+    // `enabled` gate (no manifest URL, no gesture), and it always reports what it found
+    // (`dataStatus`), so it never spins in silence.
+    let sites = code.ranges(of: ".refreshable").count
+    #expect(sites == 1, "expected exactly one `.refreshable`, behind PullToCheck; found \(sites)")
+    #expect(code.contains("if enabled {\n      content.refreshable"), "the pull lost its gate")
+    #expect(code.contains("PullToCheck(enabled: model.canCheckForUpdates)"))
+    #expect(code.contains("model.dataStatus.check"), "the pull's answer is no longer rendered")
   }
 
   // MARK: - Acceptance 5: List laziness, structurally
@@ -1066,7 +1101,7 @@ struct UILintTests {
     // The real-file direction, pinned first: the lint must actually be finding elements in the
     // screen it exists to police. A scanner that returned nothing would satisfy every
     // expectation in the loop below forever.
-    let view = try #require(try Self.appFiles().first { $0.name == "TodayView.swift" })
+    let view = try #require(try Self.appFiles().first { $0.name == "AnswerList.swift" })
     #expect(
       forEachBodies(in: Self.code(view.text)).count >= 3,
       "the laziness lint found no ForEach elements in the list screen — it is scanning nothing"

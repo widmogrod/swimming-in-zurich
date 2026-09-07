@@ -12,6 +12,7 @@
 // why the checks live in the app-hosted target — `swift test` never builds an app bundle.
 
 import Foundation
+import SwiftUI
 import Testing
 
 import SwimZHKit
@@ -82,17 +83,21 @@ struct AppCorrectnessTests {
     #expect((manifest["NSPrivacyCollectedDataTypes"] as? [Any])?.isEmpty == true)
   }
 
-  @Test("the shipped app configures no store manifest, so it downloads nothing by default")
-  func noManifestIsConfigured() {
-    // Where a published store is HOSTED is out of this repo's scope, so the URL is
-    // configuration and the shipped build carries none: this app fetches a live water
-    // temperature when a sheet is opened and otherwise reaches nothing at all. Turning the
-    // weekly refresh on is a deliberate `Info.plist` edit, and this test is what makes that
-    // edit visible rather than incidental.
+  @Test("the shipped app points at the published store manifest, over https, on our own host")
+  func theManifestIsConfigured() throws {
+    // Until 2026-09-06 this asserted the OPPOSITE — no URL, downloads nothing — because hosting
+    // was out of scope. The store is now published by `publish-store.yml` to GitHub Pages, and
+    // the URL in the base `Info.plist` is what turns the weekly refresh and the list's
+    // pull-to-check on. Three claims, each a way the edit could go quietly wrong: the key is
+    // there, it parses as `https` (the kit refuses `http`, and this test says so before a
+    // device does), and it names OUR host — a typo would be a pull that says "could not check"
+    // forever, and a foreign host would be a store nobody here built.
     //
     // `Bundle.main` matters here: the same assertion in the package's own suite would be about
     // the TEST RUNNER's plist, which is nobody's app.
-    #expect(Self.info[RefreshConfiguration.infoKey] == nil)
-    #expect(RefreshConfiguration.manifestURL(Self.info) == nil)
+    let url = try #require(RefreshConfiguration.manifestURL(Self.info))
+    #expect(url.scheme == "https")
+    #expect(url.host() == "widmogrod.github.io")
+    #expect(url.lastPathComponent == "manifest.json")
   }
 }

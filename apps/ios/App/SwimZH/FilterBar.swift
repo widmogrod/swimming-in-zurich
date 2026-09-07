@@ -1,63 +1,37 @@
-// FilterBar.swift — the floating filter bar and the sheet behind it.
+// FilterBar.swift — the Filters tab and the form on it.
 //
-// NOBODY HERE PAINTS GLASS, and the comment that used to say this file was the one place
-// allowed to describes an app that no longer exists. The filter control is a toolbar item, so
-// the SYSTEM draws its bar, its Liquid Glass and its scroll edge effect. That is the whole
-// lesson of the iOS 26 guidance: you do not apply the material, you use the chrome that already
-// has it. The lint is now a flat ban — a `.glassEffect(` anywhere in the app target means
-// something is being hand-built again.
+// NOBODY HERE PAINTS GLASS. The filters are a TAB of the system's bar, so the system draws its
+// glass and its scroll edge effect. That is the whole lesson of the iOS 26 guidance: you do not
+// apply the material, you use the chrome that already has it. A `.glassEffect(` anywhere in the
+// app target outside the two allowlisted floating controls means something is being hand-built
+// again.
 //
-// The bar itself is a summary plus a button; the controls live in a sheet. That mirrors the
-// web, where the phone's sticky summary row IS the disclosure for the drawer — a filter bar
-// that permanently occupied six controls' worth of a phone screen would cost more list than it
-// is worth.
+// A tab, decided 2026-09-06 over a pill above the bar that opened a sheet: the bar is pure,
+// every control in it is a tab, and a change on the page has already applied by the time the
+// reader chooses another tab — there is nothing to confirm and nothing to dismiss. The form is
+// a plain `Form` of standard controls; the place picker pushes a searchable list.
 
 import SwiftUI
 import SwimZHKit
 
-/// The filter control, as ONE toolbar item.
-///
-/// It used to be a full-width capsule in a `safeAreaBar` of its own, carrying the headline
-/// sentence on a second line. That made it two rows tall and unable to share a bar with
-/// anything — so when iOS 26 drew its search field at the bottom (which is where iPhone
-/// search now lives), the two stacked, and the rows underneath were hidden behind both.
-///
-/// As a toolbar item it shares the system's bar, and its glass, with the search field. The
-/// headline moved into the list, where a fact belongs.
-struct FilterButton: View {
+/// The Filters tab: the form as a page of its own, in its own stack. Nothing to dismiss — the
+/// reader leaves by choosing another tab, and every change has already applied.
+struct FilterPage: View {
+  @Environment(\.localized) private var localized
   @Binding var filters: Filters
   let kinds: [String]
-  /// The phone's own position. Threaded down rather than reached for, so this file has no
-  /// opinion about Core Location and the sheet can be previewed without one.
   let location: any LocationFixing
-  /// Measure from the phone. `async` because it is a device that takes a moment to answer, and
-  /// the row has to be able to say so while it does.
   let onUseMyLocation: () async -> Void
-  /// Measure from a named place, or from nowhere. Separate from a plain binding because
-  /// choosing a preset must ALSO stop the device preference — see `TodayModel.useNamedPlace`.
   let onUseNamedPlace: (Place?) -> Void
 
-  @Environment(\.localized) private var localized
-  @State private var showingFilters = false
-
   var body: some View {
-    Button {
-      showingFilters = true
-    } label: {
-      Label {
-        Text(Message("mobile.filters"), localized)
-      } icon: {
-        Image(systemName: filters.isNarrowed ? Icon.filterActive : Icon.filter)
-      }
-    }
-    // The value, not the label, is what changes — so a reader who has narrowed the list hears
-    // WHAT it is narrowed to, rather than the word "Filters" twice.
-    .accessibilityValue(Text(.joined(filters.summaryTags), localized))
-    .accessibilityIdentifier("filterButton")
-    .sheet(isPresented: $showingFilters) {
-      FilterSheet(
-        filters: $filters, kinds: kinds, location: location,
-        onUseMyLocation: onUseMyLocation, onUseNamedPlace: onUseNamedPlace)
+    NavigationStack {
+      FilterForm(
+        filters: $filters, kinds: kinds, location: location, onUseMyLocation: onUseMyLocation,
+        onUseNamedPlace: onUseNamedPlace
+      )
+      .navigationTitle(Text(Message("mobile.filters"), localized))
+      .navigationBarTitleDisplayMode(.inline)
     }
   }
 }
@@ -65,58 +39,43 @@ struct FilterButton: View {
 /// The controls. A plain `Form`, deliberately: every one of these is a standard system control,
 /// and the system already knows how to lay them out at every text size, in both appearances and
 /// under VoiceOver.
-struct FilterSheet: View {
+struct FilterForm: View {
   @Environment(\.localized) private var localized
   @Binding var filters: Filters
   let kinds: [String]
   let location: any LocationFixing
   let onUseMyLocation: () async -> Void
   let onUseNamedPlace: (Place?) -> Void
-  @Environment(\.dismiss) private var dismiss
 
   var body: some View {
-    NavigationStack {
-      Form {
-        // iOS 26 renders a section header EXACTLY as it is written — it no longer
-        // upper-cases them — so these read as sentence-case headings in every language, and
-        // the catalogs were audited for entries that had relied on the system shouting.
-        Section {
-          genderPicker
-          agePicker
-        } header: {
-          Text(Message("filter.section.who"), localized)
-        }
-        Section {
-          placePicker
-          radiusPicker
-        } header: {
-          Text(Message("filter.section.where"), localized)
-        }
-        Section {
-          Toggle(isOn: $filters.eligibleOnly) {
-            Text(Message("filter.eligibleOnly.toggle"), localized)
-          }
-          Toggle(isOn: $filters.favouritesOnly) {
-            Text(Message("filter.favouritesOnly.toggle"), localized)
-          }
-          kindPicker
-        } header: {
-          Text(Message("filter.section.what"), localized)
-        }
+    Form {
+      // iOS 26 renders a section header EXACTLY as it is written — it no longer
+      // upper-cases them — so these read as sentence-case headings in every language, and
+      // the catalogs were audited for entries that had relied on the system shouting.
+      Section {
+        genderPicker
+        agePicker
+      } header: {
+        Text(Message("filter.section.who"), localized)
       }
-      .navigationTitle(Text(Message("mobile.filters"), localized))
-      .navigationBarTitleDisplayMode(.inline)
-      .toolbar {
-        ToolbarItem(placement: .confirmationAction) {
-          Button {
-            dismiss()
-          } label: {
-            Text(Message("action.done"), localized)
-          }
+      Section {
+        placePicker
+        radiusPicker
+      } header: {
+        Text(Message("filter.section.where"), localized)
+      }
+      Section {
+        Toggle(isOn: $filters.eligibleOnly) {
+          Text(Message("filter.eligibleOnly.toggle"), localized)
         }
+        Toggle(isOn: $filters.favouritesOnly) {
+          Text(Message("filter.favouritesOnly.toggle"), localized)
+        }
+        kindPicker
+      } header: {
+        Text(Message("filter.section.what"), localized)
       }
     }
-    .presentationDetents([.medium, .large])
   }
 
   private var genderPicker: some View {

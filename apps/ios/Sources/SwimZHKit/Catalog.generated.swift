@@ -64,6 +64,34 @@ extension Catalog {
       parameters: [
         Parameter(name: "owner", kind: .text)
       ], isPlural: false),
+    "about.checkNow": Entry(parameters: [], isPlural: false),
+    "about.checking": Entry(parameters: [], isPlural: false),
+    "about.contribute": Entry(parameters: [], isPlural: false),
+    "about.contributeNote": Entry(parameters: [], isPlural: false),
+    "about.data": Entry(parameters: [], isPlural: false),
+    "about.dataNote": Entry(parameters: [], isPlural: false),
+    "about.dataSource": Entry(parameters: [], isPlural: false),
+    "about.issues": Entry(parameters: [], isPlural: false),
+    "about.madeBy": Entry(parameters: [], isPlural: false),
+    "about.poolCount": Entry(
+      parameters: [
+        Parameter(name: "count", kind: .integer)
+      ], isPlural: true),
+    "about.repository": Entry(parameters: [], isPlural: false),
+    "about.source.fresh": Entry(
+      parameters: [
+        Parameter(name: "date", kind: .text)
+      ], isPlural: false),
+    "about.source.stale": Entry(
+      parameters: [
+        Parameter(name: "date", kind: .text)
+      ], isPlural: false),
+    "about.title": Entry(parameters: [], isPlural: false),
+    "about.version": Entry(
+      parameters: [
+        Parameter(name: "version", kind: .text),
+        Parameter(name: "build", kind: .text),
+      ], isPlural: false),
     "access.accompanied": Entry(parameters: [], isPlural: false),
     "access.accompanied.desc": Entry(parameters: [], isPlural: false),
     "access.adults": Entry(parameters: [], isPlural: false),
@@ -89,13 +117,18 @@ extension Catalog {
     "access.women.desc": Entry(parameters: [], isPlural: false),
     "accessTypes.footer": Entry(parameters: [], isPlural: false),
     "accessTypes.title": Entry(parameters: [], isPlural: false),
+    "action.back": Entry(parameters: [], isPlural: false),
+    "action.backToPool": Entry(parameters: [], isPlural: false),
     "action.call": Entry(parameters: [], isPlural: false),
     "action.directions": Entry(parameters: [], isPlural: false),
     "action.done": Entry(parameters: [], isPlural: false),
     "action.favourite": Entry(parameters: [], isPlural: false),
+    "action.forward": Entry(parameters: [], isPlural: false),
     "action.hideLanePlan": Entry(parameters: [], isPlural: false),
     "action.openInMaps": Entry(parameters: [], isPlural: false),
+    "action.openInSafari": Entry(parameters: [], isPlural: false),
     "action.openSettings": Entry(parameters: [], isPlural: false),
+    "action.reload": Entry(parameters: [], isPlural: false),
     "action.showLanePlan": Entry(parameters: [], isPlural: false),
     "action.unfavourite": Entry(parameters: [], isPlural: false),
     "admission.free": Entry(parameters: [], isPlural: false),
@@ -378,6 +411,10 @@ extension Catalog {
       ], isPlural: false),
     "gantt.reserved": Entry(parameters: [], isPlural: false),
     "gantt.title": Entry(parameters: [], isPlural: false),
+    "glance.lanes": Entry(parameters: [], isPlural: false),
+    "glance.length": Entry(parameters: [], isPlural: false),
+    "glance.water.nominal": Entry(parameters: [], isPlural: false),
+    "glance.water.stale": Entry(parameters: [], isPlural: false),
     "header.copied": Entry(parameters: [], isPlural: false),
     "header.copyAria": Entry(parameters: [], isPlural: false),
     "header.copyLink": Entry(parameters: [], isPlural: false),
@@ -499,8 +536,19 @@ extension Catalog {
         Parameter(name: "count", kind: .integer)
       ], isPlural: true),
     "meta.answersThrough": Entry(parameters: [], isPlural: false),
+    "meta.builtAt": Entry(parameters: [], isPlural: false),
+    "meta.check.appUpdateNeeded": Entry(parameters: [], isPlural: false),
+    "meta.check.couldNotCheck": Entry(parameters: [], isPlural: false),
+    "meta.check.upToDate": Entry(parameters: [], isPlural: false),
+    "meta.check.updated": Entry(parameters: [], isPlural: false),
     "meta.dataFrom": Entry(parameters: [], isPlural: false),
     "meta.offlineNote": Entry(parameters: [], isPlural: false),
+    "meta.offlineNote.pull": Entry(parameters: [], isPlural: false),
+    "meta.staleSource": Entry(
+      parameters: [
+        Parameter(name: "source", kind: .text),
+        Parameter(name: "date", kind: .text),
+      ], isPlural: false),
     "mobile.filters": Entry(parameters: [], isPlural: false),
     "mobile.lanePlan": Entry(parameters: [], isPlural: false),
     "mobile.lanesUntil": Entry(
@@ -540,6 +588,7 @@ extension Catalog {
       parameters: [
         Parameter(name: "hhmm", kind: .text)
       ], isPlural: false),
+    "nav.about": Entry(parameters: [], isPlural: false),
     "nav.accessTypes": Entry(parameters: [], isPlural: false),
     "nav.allPools": Entry(parameters: [], isPlural: false),
     "nav.browse": Entry(parameters: [], isPlural: false),
@@ -674,6 +723,7 @@ extension Catalog {
       ], isPlural: false),
     "sources.label": Entry(parameters: [], isPlural: false),
     "sources.lanePlan": Entry(parameters: [], isPlural: false),
+    "sources.lanePlans": Entry(parameters: [], isPlural: false),
     "sources.official": Entry(parameters: [], isPlural: false),
     "sources.pdf": Entry(parameters: [], isPlural: false),
     "sources.pdfLabel": Entry(
@@ -681,6 +731,8 @@ extension Catalog {
         Parameter(name: "label", kind: .text)
       ], isPlural: false),
     "sources.prices": Entry(parameters: [], isPlural: false),
+    "sources.roster": Entry(parameters: [], isPlural: false),
+    "sources.schedules": Entry(parameters: [], isPlural: false),
     "state.beyondHorizon": Entry(parameters: [], isPlural: false),
     "state.beyondHorizon.body": Entry(
       parameters: [
