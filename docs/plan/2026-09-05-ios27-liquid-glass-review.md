@@ -267,8 +267,10 @@ Not behind a switch:
   that were pixel for pixel the new one, and a marker attachment proved the variable never
   reached the runner.
 
-Both sets, plus the Home Screen icon in light and dark, are in
-`docs/appstore/lab-2026-09-05/` (`01-…06` new look, `old-01-…old-06` previous look).
+Both sets, plus the Home Screen icon in light and dark, sat in `docs/appstore/lab-2026-09-05/`
+until 2026-09-07, when they were deleted as stale (14 MB of a look the app no longer has —
+every switch they compared is decided, the tab bar and the wide layout came after). The
+current set is whatever `make ios-screenshots` writes to `dist/screenshots/`.
 
 Two things the screenshots caught that reading the code did not:
 - `.backgroundExtensionEffect()` inside a `List` row extended nothing; the hero reaches under
