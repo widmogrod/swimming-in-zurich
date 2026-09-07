@@ -28,7 +28,7 @@ struct TodayModelReloadTests {
     // have cost us the branch that puts something there in the first place. A model whose
     // `filters.day` stayed `""` would ask the store about no day at all.
     let meta = try await Store.bundled().metadata()
-    let model = TodayModel()
+    let model = try bundledStoreModel()
     #expect(model.filters.day.isEmpty, "the never-loaded sentinel changed")
 
     await model.load(now: try noonOnHorizonStart(meta))
@@ -52,7 +52,7 @@ struct TodayModelReloadTests {
     // invariant — a position we do not have must never render as a distance — broken through the
     // back door, with nothing on screen to say so.
     let meta = try await Store.bundled().metadata()
-    let model = TodayModel()
+    let model = try bundledStoreModel()
     let now = try noonOnHorizonStart(meta)
     await model.load(now: now)
 
@@ -103,7 +103,7 @@ struct TodayModelReloadTests {
     // other side — the day on screen is moved OUTSIDE it, which is the identical input to the
     // clamp (`!metadata.covers(day: filters.day)`).
     let meta = try await Store.bundled().metadata()
-    let model = TodayModel()
+    let model = try bundledStoreModel()
     let now = try noonOnHorizonStart(meta)
     await model.load(now: now)
 
@@ -140,7 +140,7 @@ struct TodayModelReloadTests {
     // lands on the far side of the reader's second tap. Now only the counter can save it.
     let meta = try await Store.bundled().metadata()
     let location = HeldFix()
-    let model = TodayModel(location: location)
+    let model = try bundledStoreModel(location: location)
     await model.load(now: try noonOnHorizonStart(meta))
     let wasPreferred = model.location.preferred
 
@@ -179,7 +179,7 @@ struct TodayModelReloadTests {
     // installs NOTHING, ever. The counter must block only the superseded fix.
     let meta = try await Store.bundled().metadata()
     let location = HeldFix()
-    let model = TodayModel(location: location)
+    let model = try bundledStoreModel(location: location)
     await model.load(now: try noonOnHorizonStart(meta))
 
     let here = GeoPoint(lat: 47.3450, lon: 8.5340)
