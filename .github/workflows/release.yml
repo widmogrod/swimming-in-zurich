@@ -54,8 +54,9 @@ jobs:
     needs: publish
     # Same image as `ios-qa` in qa.yml, for the same reason: the app targets iOS 27 ONLY, and
     # `macos-latest` (macos-26) carries no Xcode 27 at all — an archive there fails on the SDK
-    # before signing is even reached. `xcode-27` ships the 27.0 Release Candidate build
-    # (actions/runner-images#14718) as its default and only Xcode, so nothing is selected.
+    # before signing is even reached. `xcode-27` has ONE Xcode, so nothing is selected; which
+    # build it is (beta 6 until the image is rebuilt with the RC toolset merged in
+    # actions/runner-images#14718) is what "Show Xcode" records for the shipped archive.
     runs-on: xcode-27
     steps:
       - uses: actions/checkout@v4

@@ -49,8 +49,8 @@ Glass without `#available` branches. iOS 26 devices keep 0.1.3.
   a city page that is temporarily down no longer aborts the whole build — the store ships with
   that source marked stale and `/health` says so.
 - **CI archives on Xcode 27.** Both the QA job and the release job run on GitHub's `xcode-27`
-  image, which carries the 27.0 Release Candidate build (`actions/runner-images#14718`). 0.1.3
-  was archived with Xcode 26 and cannot be rebuilt that way any more.
+  image, the only hosted image with an iOS 27 SDK. 0.1.3 was archived with Xcode 26 and cannot
+  be rebuilt that way any more.
 - The all-pools browser and the Lab switches used to compare the old and new looks on a phone
   were removed once every look was decided.
 
@@ -138,9 +138,12 @@ Wymaga iOS 27.
 
 ## Before tagging
 
-- `ios-qa` on this branch must be green on the `xcode-27` image and its "Show Xcode" step must
-  print a 27.0 build, not `27A5252f` (beta 6). The image README still badges `xcode-27` as
-  "preview"; that is the image's support status, and a red run may still be the image.
+- **Which Xcode 27 the image has.** GitHub merged the Release Candidate toolset (`27A266a`) into
+  `xcode-27` on 2026-09-11 (`actions/runner-images#14718`), but the deployed image still
+  reported beta 6 (`27A5252f`) on PR #14's green `ios-qa` run of 2026-09-16. App Store Connect
+  accepts uploads built with a release-quality SDK only, so before tagging check the
+  "Show Xcode" line of the latest `ios-qa` run: `27A266a` (or later) means go; `27A5252f` means
+  wait for the image rebuild, or the upload will be rejected for a beta SDK.
 - The release job has not run on `xcode-27` yet. `release.yml`'s own header records that a
   `dry_run` skips the two Apple-facing steps: run one anyway, because the archive and signing are
   exactly what changed image.
