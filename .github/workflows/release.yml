@@ -6,7 +6,7 @@
 # Two jobs. `publish` IS `publish-store.yml`, shared verbatim with the weekly `refresh.yml`: it
 # builds gold.sqlite from the live network, projects the iOS store and its manifest, and deploys
 # both to Pages so the URL in the app's Info.plist resolves. `app` then archives, signs, uploads
-# and submits, on macOS.
+# and submits, on the `xcode-27` macOS image.
 #
 # WHAT `dry_run` CANNOT TELL YOU, which cost four failed releases to learn: it SKIPS the Ruby and
 # upload steps — the two that talk to Apple — and it runs from a BRANCH where a release runs from
@@ -52,14 +52,17 @@ jobs:
   # ---------------------------------------------------------------------------------------
   app:
     needs: publish
-    runs-on: macos-latest
+    # Same image as `ios-qa` in qa.yml, for the same reason: the app targets iOS 27 ONLY, and
+    # `macos-latest` (macos-26) carries no Xcode 27 at all — an archive there fails on the SDK
+    # before signing is even reached. `xcode-27` ships the 27.0 Release Candidate build
+    # (actions/runner-images#14718) as its default and only Xcode, so nothing is selected.
+    runs-on: xcode-27
     steps:
       - uses: actions/checkout@v4
 
-      # Same reason as `ios-qa` in qa.yml: the chain needs iOS 26 and Swift 6.2, and the runner
-      # image does not always default to the newest Xcode.
-      - name: Select Xcode
-        run: sudo xcode-select -s /Applications/Xcode_26.app || xcodebuild -version
+      # The image's one Xcode is already the default; this only records which one shipped.
+      - name: Show Xcode
+        run: xcodebuild -version
 
       - name: Set up Node
         uses: actions/setup-node@v4

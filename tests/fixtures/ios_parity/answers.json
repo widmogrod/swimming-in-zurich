@@ -1927,9 +1927,7 @@
         }
       ],
       "statuses": [],
-      "warnings": [
-        "calendar data not available for 2027; holiday-dependent schedules may be inaccurate"
-      ]
+      "warnings": []
     },
     {
       "pool_id": "hallenbad-oerlikon",
@@ -1992,9 +1990,7 @@
         }
       ],
       "statuses": [],
-      "warnings": [
-        "calendar data not available for 2027; holiday-dependent schedules may be inaccurate"
-      ]
+      "warnings": []
     },
     {
       "pool_id": "schulschwimmanlage-aemtler",
@@ -2012,9 +2008,7 @@
           "detail_params": {}
         }
       ],
-      "warnings": [
-        "calendar data not available for 2027; holiday-dependent schedules may be inaccurate"
-      ]
+      "warnings": []
     },
     {
       "pool_id": "hallenbad-city",
@@ -2060,9 +2054,7 @@
         }
       ],
       "statuses": [],
-      "warnings": [
-        "calendar data not available for 2027; holiday-dependent schedules may be inaccurate"
-      ]
+      "warnings": []
     },
     {
       "pool_id": "hallenbad-oerlikon",
@@ -2125,9 +2117,7 @@
         }
       ],
       "statuses": [],
-      "warnings": [
-        "calendar data not available for 2027; holiday-dependent schedules may be inaccurate"
-      ]
+      "warnings": []
     },
     {
       "pool_id": "schulschwimmanlage-aemtler",
@@ -2145,9 +2135,7 @@
           "detail_params": {}
         }
       ],
-      "warnings": [
-        "calendar data not available for 2027; holiday-dependent schedules may be inaccurate"
-      ]
+      "warnings": []
     },
     {
       "pool_id": "hallenbad-city",
@@ -2193,9 +2181,7 @@
         }
       ],
       "statuses": [],
-      "warnings": [
-        "calendar data not available for 2027; holiday-dependent schedules may be inaccurate"
-      ]
+      "warnings": []
     },
     {
       "pool_id": "hallenbad-oerlikon",
@@ -2258,9 +2244,7 @@
         }
       ],
       "statuses": [],
-      "warnings": [
-        "calendar data not available for 2027; holiday-dependent schedules may be inaccurate"
-      ]
+      "warnings": []
     },
     {
       "pool_id": "schulschwimmanlage-aemtler",
@@ -2278,9 +2262,7 @@
           "detail_params": {}
         }
       ],
-      "warnings": [
-        "calendar data not available for 2027; holiday-dependent schedules may be inaccurate"
-      ]
+      "warnings": []
     }
   ]
 }

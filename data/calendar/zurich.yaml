@@ -5,9 +5,14 @@
 # before relying on them; school-holiday weeks in particular shift year to year.
 #   - Public holidays (canton ZH): zh.ch
 #   - School holidays (Volksschule Stadt Zürich): stadt-zuerich.ch / schulferien.org
-# valid_as_of: 2026-07-18
+# valid_as_of: 2026-09-16
+#
+# 2027: public holidays seeded (fixed dates + the Easter-derived four, Easter Sunday 2027-03-28).
+# 2027 school holidays are NOT seeded yet — no scraped rule is term-scoped today (the scraper
+# emits DayScope.ALWAYS), so nothing in the shipped store reads them; add them from the
+# city's 2027 Ferienplan when a term-scoped source lands.
 
-known_years: [2026]
+known_years: [2026, 2027]
 
 public_holidays:
   - { date: "2026-01-01", name: "Neujahr" }
@@ -20,6 +25,16 @@ public_holidays:
   - { date: "2026-08-01", name: "Bundesfeier" }
   - { date: "2026-12-25", name: "Weihnachten" }
   - { date: "2026-12-26", name: "Stephanstag" }
+  - { date: "2027-01-01", name: "Neujahr" }
+  - { date: "2027-01-02", name: "Berchtoldstag" }
+  - { date: "2027-03-26", name: "Karfreitag" }
+  - { date: "2027-03-29", name: "Ostermontag" }
+  - { date: "2027-05-01", name: "Tag der Arbeit" }
+  - { date: "2027-05-06", name: "Auffahrt" }
+  - { date: "2027-05-17", name: "Pfingstmontag" }
+  - { date: "2027-08-01", name: "Bundesfeier" }
+  - { date: "2027-12-25", name: "Weihnachten" }
+  - { date: "2027-12-26", name: "Stephanstag" }
 
 school_holidays:
   - { name: "Sportferien", start: "2026-02-09", end: "2026-02-20" }
