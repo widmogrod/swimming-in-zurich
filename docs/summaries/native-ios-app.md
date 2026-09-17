@@ -95,8 +95,11 @@ per-body timing, device launch under 1 s, and the live-water row on screen in an
 
 ## Owed before a first release
 
-1. Seed **2027** into `data/calendar/zurich.yaml` — 269 of the first export's 400 days already fall
-   outside `known_years`, and ship warned.
+1. ~~Seed **2027** into `data/calendar/zurich.yaml`~~ — 269 of the first export's 400 days fell
+   outside `known_years` and shipped warned. Done 2026-09-16 for the **public holidays** (the
+   fixed dates plus the four Easter-derived ones); the 2027 **school holidays** are still
+   unseeded, deliberately: the scraper emits every rule as `DayScope.ALWAYS`, so no shipped
+   rule reads them. Add them from the city's 2027 Ferienplan when a term-scoped source lands.
 2. Eyeball the `CA92.1` privacy reason in a browser (documentation-verified, not human-verified).
 3. ~~Host `manifest.json` + the store, and set `SWIMZHStoreManifestURL`.~~ Done 2026-09-06: `publish-store.yml` publishes to GitHub Pages and the base `Info.plist` names that manifest.
 4. Have a native speaker read the Polish and German catalogs.

@@ -34,6 +34,7 @@ from typing import Any
 from zoneinfo import ZoneInfo
 
 import pytest
+import yaml
 
 from swimzh.cli import build, main
 from swimzh.core.errors import ProviderSpecific
@@ -131,9 +132,7 @@ class _Export:
     aliases: tuple[tuple[str, str], ...]
 
 
-@pytest.fixture(scope="module")
-def exported(gold_db: Path, tmp_path_factory: pytest.TempPathFactory) -> _Export:
-    out = tmp_path_factory.mktemp("ios") / "ios.sqlite"
+def _export_from(gold_db: Path, out: Path) -> _Export:
     with sqlite3.connect(gold_db) as conn:
         result = export_ios(conn, out, today=TODAY, days=FULL_DAYS)
         assert isinstance(result, Ok), result
@@ -148,8 +147,52 @@ def exported(gold_db: Path, tmp_path_factory: pytest.TempPathFactory) -> _Export
 
 
 @pytest.fixture(scope="module")
+def exported(gold_db: Path, tmp_path_factory: pytest.TempPathFactory) -> _Export:
+    return _export_from(gold_db, tmp_path_factory.mktemp("ios") / "ios.sqlite")
+
+
+@pytest.fixture(scope="module")
 def store(exported: _Export) -> Iterator[sqlite3.Connection]:
     conn = sqlite3.connect(exported.path)
+    conn.row_factory = sqlite3.Row
+    yield conn
+    conn.close()
+
+
+@pytest.fixture(scope="module")
+def narrow_exported(tmp_path_factory: pytest.TempPathFactory) -> _Export:
+    """The same export over a calendar cut down to TODAY's year, so the 400-day horizon runs
+    past `known_years` no matter how far `data/calendar/zurich.yaml` has been seeded.
+
+    E2's property — a day the calendar does not cover is EXPORTED, with the coverage warning,
+    never withheld — used to be proved against the committed calendar, which happened to stop
+    at 2026. The calendar is reseeded a year at a time (2027 landed 2026-09-16), and each
+    reseed would otherwise silently turn the property's tests into no-ops: `uncovered_days`
+    would be 0 and the `calendar_coverage` code would never occur. The narrow calendar keeps
+    the uncovered year in the horizon by construction."""
+    data_dir = tmp_path_factory.mktemp("data-narrow")
+    shutil.copytree(DATA_DIR, data_dir, dirs_exist_ok=True)
+    calendar_path = data_dir / "calendar" / "zurich.yaml"
+    calendar = yaml.safe_load(calendar_path.read_text(encoding="utf-8"))
+    year = str(TODAY.year)
+    calendar["known_years"] = [TODAY.year]
+    calendar["public_holidays"] = [
+        h for h in calendar["public_holidays"] if str(h["date"]).startswith(year)
+    ]
+    calendar["school_holidays"] = [
+        h for h in calendar["school_holidays"] if str(h["start"]).startswith(year)
+    ]
+    calendar_path.write_text(yaml.safe_dump(calendar, allow_unicode=True), encoding="utf-8")
+    db = data_dir / "gold.sqlite"
+    assert build(db_path=db, data_dir=data_dir, clients=recorded_build_clients()) == 0
+    exported = _export_from(db, data_dir / "ios.sqlite")
+    assert not exported.calendar.covers(TODAY + timedelta(days=FULL_DAYS - 1))
+    return exported
+
+
+@pytest.fixture(scope="module")
+def narrow_store(narrow_exported: _Export) -> Iterator[sqlite3.Connection]:
+    conn = sqlite3.connect(narrow_exported.path)
     conn.row_factory = sqlite3.Row
     yield conn
     conn.close()
@@ -444,18 +487,22 @@ def test_a_pool_day_with_sessions_carries_no_day_row(store: sqlite3.Connection) 
 
 
 def test_every_baked_warning_renders_back_to_the_live_warning(
-    exported: _Export, store: sqlite3.Connection
+    narrow_exported: _Export, narrow_store: sqlite3.Connection
 ) -> None:
     """`day_warning` stores a CODE + params so the client can say it in its own language;
-    rendering it must reproduce `QueryResult.warnings` verbatim, in order."""
+    rendering it must reproduce `QueryResult.warnings` verbatim, in order.
+
+    Over the NARROW calendar, so that the horizon holds an uncovered year and the
+    `calendar_coverage` arm of the renderer is exercised whatever the committed calendar
+    has been seeded with."""
     baked: dict[str, list[str]] = {}
-    for row in _rows(store, "SELECT date, code, params FROM day_warning ORDER BY rowid"):
+    for row in _rows(narrow_store, "SELECT date, code, params FROM day_warning ORDER BY rowid"):
         baked.setdefault(row["date"], []).append(
             render_warning(row["code"], json.loads(row["params"]))
         )
-    for day, result in _sweep(exported):
+    for day, result in _sweep(narrow_exported):
         assert tuple(baked.get(day.isoformat(), ())) == result.warnings, day
-    seen_codes = {r["code"] for r in _rows(store, "SELECT code FROM day_warning")}
+    seen_codes = {r["code"] for r in _rows(narrow_store, "SELECT code FROM day_warning")}
     # Both codes really occur in the horizon — otherwise the renderer's second arm is untested.
     assert seen_codes == {"calendar_coverage", "holiday_hours_unverified"}
 
@@ -612,14 +659,15 @@ def test_there_is_no_feature_day_table(store: sqlite3.Connection) -> None:
 
 
 def test_the_horizon_is_fixed_at_400_days_regardless_of_calendar_coverage(
-    exported: _Export,
+    narrow_exported: _Export,
 ) -> None:
     """E2: the export bakes the full horizon even where the calendar has no data, exactly as
-    `/swim` serves those dates (with the warning) rather than withholding them."""
-    report = exported.report
+    `/swim` serves those dates (with the warning) rather than withholding them. Over the
+    NARROW calendar, which is what guarantees the horizon has days without data."""
+    report = narrow_exported.report
     assert report.horizon_start == TODAY
     assert report.horizon_end == TODAY + timedelta(days=FULL_DAYS - 1)
-    uncovered = [d for d in horizon(TODAY, FULL_DAYS) if not exported.calendar.covers(d)]
+    uncovered = [d for d in horizon(TODAY, FULL_DAYS) if not narrow_exported.calendar.covers(d)]
     assert report.uncovered_days == len(uncovered) > 0
     print(f"\n{report.uncovered_days} of {FULL_DAYS} horizon days are outside calendar coverage")
     # Those days are EXPORTED, not withheld — the whole point of E2.
@@ -806,7 +854,9 @@ _REGENERATE = os.environ.get("SWIMZH_REGENERATE_IOS_PARITY") == "1"
 
 #: 3 pools × 5 dates × 3 personas — the golden answers S2's Swift `answer(...)` must reproduce.
 #: The pools are the ones with the richest data (lane plans, a tariff, a girls-only session); the
-#: dates straddle an ordinary weekday, a Sunday, a public holiday and an UNSEEDED calendar year.
+#: dates straddle an ordinary weekday, a Sunday, a public holiday and the following calendar
+#: year (unseeded when the fixture was first cut; seeded since 2026-09-16, so that case now
+#: carries no coverage warning — the narrow-calendar tests above keep that arm proved).
 _PARITY_POOLS = ("hallenbad-city", "hallenbad-oerlikon", "schulschwimmanlage-aemtler")
 _PARITY_DATES = ("2026-08-24", "2026-09-17", "2026-11-15", "2026-12-25", "2027-01-05")
 _PARITY_PERSONAS: tuple[tuple[str, Gender | None, int | None], ...] = (

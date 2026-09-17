@@ -8,6 +8,13 @@
 // The dates are DISCOVERED by walking the store's horizon, never hardcoded. The committed
 // store's horizon moves with every regeneration, and a pinned "2026-12-25" would turn a data
 // refresh into a red test about nothing.
+//
+// The one exception is `calendar_coverage`. Since 2026-09-16 the committed calendar is seeded
+// through 2027 and the fixture's horizon ends inside it, so no day of the bundled store carries
+// that code any more — and the bundled store is the very file the app ships (one file, one code
+// path), so it cannot be handed a fake uncovered day either. That case is proved on an `Answer`
+// built by hand with the params the exporter writes (`etl/ios_export._warning_rows`); the
+// Python side keeps the export's own arm proved over a narrow calendar.
 
 import Foundation
 import Testing
@@ -33,16 +40,27 @@ struct BannerTests {
     return nil
   }
 
+  /// An answer carrying a warning with `code`: discovered in the store where the store can
+  /// carry it, built by hand for the code the seeded calendar has made impossible there.
+  static func answer(warning code: String) async throws -> Answer {
+    if code == DayWarning.calendarCoverage {
+      return Answer(
+        day: "2028-01-01", options: [], statuses: [], notices: [],
+        warnings: [DayWarning(code: code, params: ["year": "2028"])])
+    }
+    return try #require(
+      await firstDay { $0.warnings.contains { $0.code == code } },
+      "no day in the horizon carries \(code) — the store or the export changed"
+    )
+  }
+
   @Test(
     "both warning codes the export emits produce a banner",
     arguments: [
       DayWarning.calendarCoverage, DayWarning.holidayHoursUnverified,
     ])
   func warningCodesProduceBanners(code: String) async throws {
-    let answer = try #require(
-      await Self.firstDay { $0.warnings.contains { $0.code == code } },
-      "no day in the horizon carries \(code) — the store or the export changed"
-    )
+    let answer = try await Self.answer(warning: code)
     let banner = try #require(
       banners(for: answer, format: Self.en.format).first { $0.code == code })
     #expect(banner.kind == .warning)

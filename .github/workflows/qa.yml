@@ -79,12 +79,17 @@ jobs:
   # run names the gate that failed; only the commands are shared.
   ios-qa:
     # The app targets iOS 27 ONLY (deployment target 27.0, no #available branches), so the
-    # job needs an iOS 27 simulator. `macos-latest` (macos-26) ships Xcode 26.6 and iOS 26.x
+    # job needs an iOS 27 simulator. `macos-latest` (macos-26) ships Xcode 26.x and iOS 26.x
     # simulators only — every ios-qa run since the target was raised on 2026-09-06 died at
     # "Unable to find a destination" with NO iOS simulator on the list. GitHub's `xcode-27`
-    # preview image (actions/runner-images#14404) has Xcode 27 beta as its default and only
-    # Xcode; it is marked preview, so a red run here may be the image rather than the app —
-    # read the failing step before blaming the code.
+    # image (actions/runner-images#14404) is the ONE hosted image with Xcode 27. Its toolset
+    # moved from beta 6 (27A5252f) to the 27.0 Release Candidate (27A266a) on 2026-09-11
+    # (actions/runner-images#14718), but the image is rebuilt on its own cadence: on
+    # 2026-09-16 the deployed image still reported 27A5252f. The "Show Xcode" step below is
+    # the record of which build a run actually got — read it before reading anything else.
+    # The README still badges the image "preview"; that is the image's support status, so a
+    # red run here may be the image rather than the app: read the failing step before
+    # blaming the code. `release.yml` archives on the same image, for the same reason.
     runs-on: xcode-27
     steps:
       - uses: actions/checkout@v4
