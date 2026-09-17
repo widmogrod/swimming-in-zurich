@@ -101,5 +101,10 @@ so it does not stall in "Waiting for Export Compliance".
 
 ## Screenshots
 
-Required: **at least one 6.9" iPhone screenshot, 1320 × 2868**. Apple scales that set down to the
-other sizes, so one device family is enough.
+Required: **at least one 6.9" iPhone screenshot, 1320 × 2868**, AND — since the target declares
+iPad (`TARGETED_DEVICE_FAMILY = "1,2"`, 0.2.0 onwards) — **at least one 12.9"/13" iPad Pro
+screenshot, 2064 × 2752** (2048 × 2732 is also accepted). Apple scales each set down within its
+own family, never across families: the v0.2.0 submission was refused with "App screenshot
+missing (APP_IPAD_PRO_3GEN_129)". Both sets come from `make ios-screenshots` (see the Makefile
+for the iPad invocation), captured between 09:00 and 21:00 so the first shot does not read
+"Nothing more open to you today".
