@@ -237,7 +237,11 @@ ios-release:  ## Build the release store + manifest.json (IOS_STORE_URL=https://
 #     make ios-screenshots IOS_SHOT_SIM="iPad Pro 13-inch (M5)" IOS_SHOT_DIR=dist/screenshots-ipad
 #
 # `IOS_SHOT_RESULT` follows `IOS_SHOT_DIR`, so the two runs keep separate result bundles.
-IOS_SHOT_SIM ?= iPhone 17 Pro Max
+#
+# The phone is named for the SIMULATOR SET Xcode ships, not for a device Apple sells: Xcode 27's
+# iOS 27 runtime has no "iPhone 17 Pro Max" (the 6.9" device is "iPhone 18 Pro Max", and its
+# frames measure the required 1320 x 2868). A stale name here fails the run before it starts.
+IOS_SHOT_SIM ?= iPhone 18 Pro Max
 IOS_SHOT_DIR ?= dist/screenshots
 IOS_SHOT_RESULT := $(IOS_SHOT_DIR).xcresult
 
