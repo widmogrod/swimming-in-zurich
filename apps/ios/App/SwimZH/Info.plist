@@ -38,5 +38,16 @@
 	<string>© 2026 Gabriel Habryn</string>
 	<key>SWIMZHStoreManifestURL</key>
 	<string>https://widmogrod.github.io/swimming-in-zurich/manifest.json</string>
+	<!--
+	  Export compliance, answered IN THE BINARY (2026-09-29). The app uses no encryption beyond
+	  the exempt HTTPS. Without this key every uploaded build sits in TestFlight as "Missing
+	  Compliance" — invisible to every tester — until someone answers the question by hand in
+	  App Store Connect, or until `fastlane`'s submit-for-review step sends the same answer. The
+	  v0.2.0 release failed BETWEEN upload and submit, which is exactly how build 0.2.0 (10)
+	  stalled. With the key here the answer travels with the IPA, so TestFlight is "Ready to
+	  Test" the moment processing finishes, whatever happens to the steps after the upload.
+	-->
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
 </dict>
 </plist>
