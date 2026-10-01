@@ -227,11 +227,23 @@ ios-release:  ## Build the release store + manifest.json (IOS_STORE_URL=https://
 # `ios-sim-test` above: it runs on a 6.9" device the rest of the chain does not use, and it
 # proves no behaviour of its own — `BehaviourTests` already owns every gesture it performs.
 #
-# 6.9" IS THE ONLY SIZE APPLE STILL REQUIRES (1320 x 2868); it scales that set down for
-# every smaller device, so one simulator is the whole submission.
-IOS_SHOT_SIM ?= iPhone 17 Pro Max
+# TWO SETS, because the target declares iPad. 6.9" (1320 x 2868) is scaled down for every
+# smaller iPhone, so one phone simulator covers the phones — but since TARGETED_DEVICE_FAMILY
+# became "1,2" (b830dc8) App Store Connect also refuses a submission without a 12.9"/13" iPad
+# set: the v0.2.0 release uploaded its build and then failed on exactly that. The walk forks on
+# the size class, so the same target captures either family; run it twice:
+#
+#     make ios-screenshots                                                       # the phones
+#     make ios-screenshots IOS_SHOT_SIM="iPad Pro 13-inch (M5)" IOS_SHOT_DIR=dist/screenshots-ipad
+#
+# `IOS_SHOT_RESULT` follows `IOS_SHOT_DIR`, so the two runs keep separate result bundles.
+#
+# The phone is named for the SIMULATOR SET Xcode ships, not for a device Apple sells: Xcode 27's
+# iOS 27 runtime has no "iPhone 17 Pro Max" (the 6.9" device is "iPhone 18 Pro Max", and its
+# frames measure the required 1320 x 2868). A stale name here fails the run before it starts.
+IOS_SHOT_SIM ?= iPhone 18 Pro Max
 IOS_SHOT_DIR ?= dist/screenshots
-IOS_SHOT_RESULT := dist/screenshots.xcresult
+IOS_SHOT_RESULT := $(IOS_SHOT_DIR).xcresult
 
 ios-screenshots:  ## Capture the App Store screenshot set into dist/screenshots/
 	# THE APP'S CLOCK IS THE HOST'S, and there is no seam to fake it — `TodayModel.load(now:)`

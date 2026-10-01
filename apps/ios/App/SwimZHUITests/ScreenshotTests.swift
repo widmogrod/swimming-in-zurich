@@ -11,6 +11,14 @@
 // capture is `make ios-screenshots`, which also sets the status bar to Apple's 09:41 and pulls
 // the attachments out of the result bundle.
 //
+// TWO DEVICE FAMILIES, ONE WALK. Since the target declares iPad (TARGETED_DEVICE_FAMILY 1,2, for
+// the unfolded-phone layout) App Store Connect refuses a submission without a 12.9"/13" iPad set
+// as well — the v0.2.0 release of 2026-09-17 uploaded its build and then died on exactly that.
+// On a wide window the app has no tab bar: the map IS the screen, the list floats over it, the
+// filters are pulled for and open as a popover, and a pool takes the card while the same map
+// flies to it. So the walk forks on the size class after the two shots both layouts share,
+// driving the wide half with the gestures `BehaviourTests`' wide-window tests already pin.
+//
 // QUERIES ARE BY IDENTIFIER, NEVER BY LABEL — the same rule as `BehaviourTests`, for the same
 // reason: every sentence in this app is one of five languages.
 
@@ -70,6 +78,9 @@ final class ScreenshotTests: XCTestCase {
     try walk(prefix: "")
   }
 
+  /// The same rule `BehaviourTests` uses: regular width is the wide layout, whatever the idiom.
+  private var windowIsWide: Bool { app.windows.firstMatch.frame.width >= 600 }
+
   private func walk(prefix: String) throws {
     func capture(_ name: String) { self.capture(prefix + name) }
     // 1 — the answer the app exists to give: every pool, nearest first, for today.
@@ -88,6 +99,11 @@ final class ScreenshotTests: XCTestCase {
         capture("02-lanes")
       }
       disclosure.tap()
+    }
+
+    if windowIsWide {
+      try walkWide(capture: capture)
+      return
     }
 
     // 3 — the filters. This is where the women-only / age-limit story lives, which is the part
@@ -128,6 +144,36 @@ final class ScreenshotTests: XCTestCase {
         capture("06-map-card")
       }
     }
+  }
+
+  /// The wide window's half of the set, after the two shots both layouts share.
+  ///
+  /// Four shots, not six: on the stage the map is already in `01-find`, and a pin opens the pool
+  /// in the SAME card `04-pool` shows (`testAWideWindowIsAMapWithTheListFloatingOverIt…` pins
+  /// that there is no phone-style pin card here), so `05-map` and `06-map-card` would be two
+  /// more photographs of screens already in the set.
+  private func walkWide(capture: (String) -> Void) throws {
+    // 3 — the filters: pulled for (the control row is not resident on the stage), then a
+    // popover, closed by a tap outside it. Both gestures are the behaviour test's.
+    let rowTop = find("poolRow").coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.2))
+    rowTop.press(forDuration: 0.1, thenDragTo: rowTop.withOffset(CGVector(dx: 0, dy: 300)))
+    let filters = find("filtersButton")
+    XCTAssertTrue(filters.waitForExistence(timeout: 5), "the pull brought no filters button")
+    filters.tap()
+    XCTAssertTrue(find("measureFrom").waitForExistence(timeout: 5), "the filters did not open")
+    capture("03-filters")
+    app.coordinate(withNormalizedOffset: CGVector(dx: 0.9, dy: 0.9)).tap()
+
+    // 4 — one pool, in the card, with the map flown to it. The row, not the map: a pin is the
+    // same destination and the row is the gesture the compact walk photographs too.
+    let row = find("poolRow")
+    XCTAssertTrue(row.waitForExistence(timeout: 10), "the list did not come back")
+    row.tap()
+    XCTAssertTrue(
+      find("poolFacts").waitForExistence(timeout: 10), "the facts did not open in the card")
+    // Let the fly-in and the tiles settle before the frame is taken.
+    sleep(3)
+    capture("04-pool")
   }
 
   /// Leave whatever is on top, by its navigation bar's leading button.
