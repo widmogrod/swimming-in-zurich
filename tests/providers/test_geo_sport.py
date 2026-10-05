@@ -237,8 +237,10 @@ def test_every_other_cleaned_field_takes_the_same_rule() -> None:
 
 def test_committed_wfs_fixtures_keep_raw_sentinels_and_parse_to_absence() -> None:
     """The raw-asymmetry pin: the committed fixtures KEEP the WFS's literal "NULL" values (50 of
-    them, all on `infrastruktur`), and parsing them yields NO field anywhere whose value is the
-    string "NULL" — the exact 50 pools whose catalog entry loses its description."""
+    them, all on `infrastruktur` — published as `";NULL"` since the 2026-10 WFS refresh, the
+    `;` being the separator `_clean` already folds), and parsing them yields NO field anywhere
+    whose value is the string "NULL" — the exact 50 pools whose catalog entry loses its
+    description."""
     raw_sentinels = 0
     parsed_absent = 0
     for path in sorted(WFS_FIXTURES.glob("*.json")):
@@ -247,7 +249,8 @@ def test_committed_wfs_fixtures_keep_raw_sentinels_and_parse_to_absence() -> Non
         assert isinstance(result, Ok), result
         features = json.loads(raw)["features"]
         for feature, pool in zip(features, result.value, strict=True):
-            if feature["properties"].get("infrastruktur") == "NULL":
+            raw_infrastruktur = feature["properties"].get("infrastruktur") or ""
+            if raw_infrastruktur.replace(";", " ").strip() == "NULL":
                 raw_sentinels += 1
                 assert pool.description is None, pool.source_id
                 parsed_absent += 1
@@ -288,6 +291,8 @@ def test_committed_wfs_snapshot_urls_are_repaired_or_byte_identical() -> None:
             else:
                 assert pool.url == source
                 seen_other += 1
-    assert seen_sportamt == 15, seen_sportamt  # 17 sportamt entries − katzensee (http) − the slug
+    # 16 sportamt entries − katzensee (http) − the slug. (17 until 2026-10, when the WFS moved
+    # `maennerbad-schanzengraben` onto the city's own sommerbaeder page.)
+    assert seen_sportamt == 14, seen_sportamt
     assert seen_slug_repair == 1, seen_slug_repair
     assert seen_other > 0

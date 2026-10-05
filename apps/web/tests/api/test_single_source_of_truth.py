@@ -122,7 +122,7 @@ def test_swim_emits_freshness_statuses_live_for_catalog_pools(gold_db: Path) -> 
     # carrying one is REPLACED by its seasonal status — `open_unscheduled` at this mid-September
     # instant — never doubled as a `no_source` ghost. The 18 are the 14 school pools on the
     # shared overview URL, the two `flussbad-unterer-letten` entries that share a URL, and
-    # `seebad-enge` + `freibad-dolder`.)
+    # `seebad-enge` + `dolder-wellenbad`.)
     assert len(schedule_less) == 18, sorted(schedule_less)
     assert not any(name.startswith("Planschbecken") for name in schedule_less)
     # A scheduled pool (City appears among the options) is never also a freshness status.
@@ -158,8 +158,8 @@ def test_pools_expose_the_derived_freshness(gold_db: Path) -> None:
     assert pools["schulschwimmanlage-aemtler"]["freshness"] == "scraped"
     assert pools["schulschwimmanlage-hardau"]["freshness"] == "no_source"
     # An outdoor pool IS scraped now, unless it is one of the two whose operator page no parser
-    # understands — `freibad-dolder` stays `no_source`, and it is NOT `awaiting_scrape`: the
+    # understands — `dolder-wellenbad` stays `no_source`, and it is NOT `awaiting_scrape`: the
     # `freshness_of` kind test deliberately did not widen with `_SCRAPEABLE_KINDS`.
     assert pools["freibad-heuried"]["freshness"] == "scraped"
-    assert pools["freibad-dolder"]["freshness"] == "no_source"
+    assert pools["dolder-wellenbad"]["freshness"] == "no_source"
     assert sum(1 for p in pools.values() if p["freshness"] != "scraped") == 31

@@ -52,7 +52,7 @@ WFS_FIXTURES = FIXTURES / "wfs"
 # Deliberately absent, and each absence is a real exclusion rather than an oversight:
 # `schulschwimmanlage_borrweg.html` (borrweg carries the shared overview URL) and
 # `flussbad_unterer_letten.html` (unterer-letten shares one URL with its `-flussteil` twin) —
-# neither is a declared source, so neither is ever fetched. `seebad-enge` and `freibad-dolder` are
+# neither is a declared source, so neither is ever fetched. `seebad-enge` and `dolder-wellenbad` are
 # excluded by `etl.scrape._UNPARSEABLE_OPERATOR_PAGES` and have no fixture at all.
 _PAGE_BY_FILENAME: dict[str, str] = {
     "city.html": "hallenbad_city.html",
@@ -81,6 +81,9 @@ _PAGE_BY_FILENAME: dict[str, str] = {
     "flussbad-oberer-letten": "flussbad_oberer_letten.html",
     "frauenbad": "frauenbad.html",
     "maennerbad": "maennerbad.html",
+    # 2026-10: the WFS moved Männerbad Schanzengraben off `sportamt.ch/maennerbad` onto the city's
+    # own sommerbaeder page — the saved fixture IS that page (the sportamt slug 302'd to it).
+    "schanzengraben.html": "maennerbad.html",
     # The ONE registered SHARED source (sharedsource-fanout S3): the Planschbecken overview,
     # fetched once by `scrape_shared_sources` and fanned out to its 13 members. Without this
     # route the empty-page fallback would fail the shared parse and abort every offline build.
@@ -113,10 +116,10 @@ _PAGE_BY_FILENAME: dict[str, str] = {
 _LANE_PDF = "city-schwimmerbecken.pdf"
 _PRICE_FIXTURE = "preise_abos.html"
 
-# The reconstructed per-layer snapshot above carries `poi_id: null` (catalog.json, from which it
-# was reshaped, never captured `poi_id`). The one place a REAL WFS `poi_id` is recorded is the
-# indoor `geo_sport` cassette (hb001–hb007) — the fixture S5b's `geo_sport_id`-from-`poi_id`
-# sourcing test replays to prove the id flows onto the spine.
+# Since 2026-10-05 the per-layer fixtures are the WFS's RAW bodies lifted straight out of the
+# re-recorded roster cassette (no longer reshaped from catalog.json), so they carry every real
+# `poi_id`. The indoor `geo_sport` cassette (hb001–hb007) is the older, independent recording S5b's
+# `geo_sport_id`-from-`poi_id` sourcing test replays to prove the id flows onto the spine.
 _GEO_SPORT_INDOOR_CASSETTE = (
     Path(__file__).resolve().parent
     / "cassettes"

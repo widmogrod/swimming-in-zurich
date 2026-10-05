@@ -69,7 +69,9 @@ from swimzh.etl.catalog import build_catalog
 from swimzh.etl.ios_export import DEFAULT_DAYS, ExportReport, export_ios, write_manifest
 from swimzh.etl.lane_plans import (
     UndiscoveredSource,
+    authored_lane_urls,
     scrape_lane_plans,
+    split_misses,
     undiscovered_authored,
 )
 from swimzh.etl.refresh import Refreshed, refresh_source
@@ -483,7 +485,9 @@ def _fetch_lane_plans(
 
     Fail-fast, as typed `Err`s: an authored `lane_plan_source.url` its pool page fails to advertise
     (`authored − discovered` non-empty) is a HARD abort carrying the typed cause, never a silent
-    drop; a discovered lane source that fails to fetch/parse aborts carrying its `ProviderError`.
+    drop; a discovered lane source that fails to fetch/parse aborts carrying its `ProviderError`
+    **iff some basin binds that URL** — a discovered sheet no basin claims (a non-lane PDF the page
+    advertises from the same folder) is audited and skipped, since it could never reach gold.
     """
     discovery = discover_pages(page_client, pages)
     # A page fetch failure is audited; it only ABORTS if it stranded an authored source (caught by
@@ -505,8 +509,15 @@ def _fetch_lane_plans(
         )
         return Err(cause)
     report = scrape_lane_plans(lane_client, discovery.links)
-    if report.misses:
-        miss = report.misses[0]
+    misses = split_misses(report.misses, authored_lane_urls(facilities))
+    for unbound in misses.unbound:
+        print(
+            f"lane sheet skipped (bound to no basin): {unbound.source_url}: "
+            f"{describe(unbound.cause)}",
+            file=sys.stderr,
+        )
+    if misses.bound:
+        miss = misses.bound[0]
         print(
             f"lane scrape aborted: lane source {miss.source_url} failed: {describe(miss.cause)}",
             file=sys.stderr,

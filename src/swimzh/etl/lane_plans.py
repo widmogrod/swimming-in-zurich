@@ -9,9 +9,14 @@ page advertises it, so the fetch-set is re-derived every run and cannot go stale
 Errors-as-values, then fail-fast (S4): each discovered URL is fetched + parsed independently. A
 success yields one or more ``ParsedPlan``s (a stacked sheet stacks several basins) stamped with
 the URL they came from. A fetch/parse failure is NOT swallowed and is NOT persisted as a hole: it
-is recorded as a typed ``LanePlanMiss(source_url, cause)`` which ``scrape-lanes`` turns into a
-whole-run **abort** (non-zero, gold left content-unchanged), carrying the real ``ProviderError``.
-There is no longer a ``LanePlanUnavailable`` written for a failed source.
+is recorded as a typed ``LanePlanMiss(source_url, cause)``. ``split_misses`` then sorts the misses
+by whether any basin **binds** the URL: a miss on an authored ``lane_plan_source.url`` is a
+whole-run **abort** (non-zero, gold left content-unchanged), carrying the real ``ProviderError``;
+a miss on a sheet no basin claims is an **audit line only** — such a sheet could never reach gold
+(an unbound plan is already a non-fatal ``UnboundPlan`` downstream), so a city page advertising a
+non-lane sheet in the same folder (Hallenbad City's ``city-sporthalle.pdf``, a sports-hall booking
+grid with no ``Bahnen`` row, 2026-10) must not take the build down with it. There is no longer a
+``LanePlanUnavailable`` written for a failed source.
 
 The URL->basin binding is NOT made here: this module only fetches + parses and stamps the
 ``source_url``. Binding is a deterministic URL-keyed join performed in ``etl/silver.py`` against
@@ -90,6 +95,34 @@ class LanePlanMiss:
 
     source_url: str
     cause: ProviderError
+
+
+def authored_lane_urls(facilities: Sequence[Facility]) -> frozenset[str]:
+    """Every ``lane_plan_source.url`` some basin declares — the set of URLs whose sheet gold
+    actually needs."""
+    return frozenset(
+        basin.lane_plan_source.url
+        for facility in facilities
+        for basin in facility.basins
+        if basin.lane_plan_source is not None
+    )
+
+
+@dataclass(frozen=True, slots=True)
+class SplitMisses:
+    """``LanePlanReport.misses`` sorted by consequence: ``bound`` misses sit on a URL some basin
+    declares (fatal — gold would lose a declared fact); ``unbound`` misses sit on a discovered
+    sheet no basin claims (audit only — it could never have reached gold)."""
+
+    bound: tuple[LanePlanMiss, ...]
+    unbound: tuple[LanePlanMiss, ...]
+
+
+def split_misses(misses: Sequence[LanePlanMiss], authored: frozenset[str]) -> SplitMisses:
+    """Partition the misses by whether their URL is an authored binding (order preserved)."""
+    bound = tuple(m for m in misses if m.source_url in authored)
+    unbound = tuple(m for m in misses if m.source_url not in authored)
+    return SplitMisses(bound=bound, unbound=unbound)
 
 
 @dataclass(frozen=True, slots=True)

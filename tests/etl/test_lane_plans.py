@@ -11,8 +11,9 @@ from pathlib import Path
 
 import httpx
 
-from swimzh.core.errors import HttpStatus
+from swimzh.core.errors import HttpStatus, SchemaMismatch
 from swimzh.core.http import HttpClient, RetryPolicy
+from swimzh.core.result import Err
 from swimzh.domain.models import (
     Basin,
     BasinId,
@@ -25,11 +26,15 @@ from swimzh.domain.models import (
     Provenance,
 )
 from swimzh.etl.lane_plans import (
+    LanePlanMiss,
     UndiscoveredSource,
+    authored_lane_urls,
     fetch_set,
     scrape_lane_plans,
+    split_misses,
     undiscovered_authored,
 )
+from swimzh.providers.belegungsplan import parse_belegungsplan_sheet
 from swimzh.providers.page_provider import DiscoveredLink
 
 FIXTURES = Path(__file__).resolve().parents[1] / "providers" / "fixtures"
@@ -179,3 +184,42 @@ def test_source_docstrings_do_not_carry_stale_reconciliation_claims() -> None:
         assert "intentionally not made" not in text
     assert "url-keyed inner join" in (silver.__doc__ or "").casefold()
     assert "binding is not made here" in (lane_plans.__doc__ or "").casefold()
+
+
+# --- unbound misses are audit, bound misses are fatal (2026-10 city-sporthalle regression) ---
+
+SPORTHALLE_URL = "https://example.test/city-sporthalle.pdf"
+SPORTHALLE_BYTES = (FIXTURES / "city-sporthalle.pdf").read_bytes()
+
+
+def test_sports_hall_sheet_is_a_typed_schema_mismatch_not_a_plan() -> None:
+    # The city files a sports-hall booking grid (Halle 1 / Halle 2, no "Bahnen" row) under the
+    # same belegungsplaene/ folder as the pool sheets, so discovery fetches it. The parser must
+    # refuse it with a typed cause — never fabricate lanes out of a hall grid.
+    result = parse_belegungsplan_sheet(SPORTHALLE_BYTES)
+    assert isinstance(result, Err)
+    assert isinstance(result.error, SchemaMismatch)
+    assert "Bahnen" in result.error.detail
+
+
+def test_split_misses_keeps_only_authored_urls_fatal() -> None:
+    facility = _facility_with_sources("hallenbad-city", ("city-50m", CITY_URL))
+    cause = SchemaMismatch(source="belegungsplan", detail="no 'Bahnen' lane-count row")
+    hall = LanePlanMiss(source_url=SPORTHALLE_URL, cause=cause)
+    pool = LanePlanMiss(source_url=CITY_URL, cause=cause)
+
+    split = split_misses((hall, pool), authored_lane_urls([facility]))
+    assert split.unbound == (hall,)  # audited, never aborts
+    assert split.bound == (pool,)  # a declared source that drifts still aborts
+
+
+def test_scrape_with_an_unbound_hall_sheet_still_yields_the_pool_plan() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith("city-sporthalle.pdf"):
+            return httpx.Response(200, content=SPORTHALLE_BYTES)
+        return httpx.Response(200, content=CITY_BYTES)
+
+    links = (_link("hallenbad-city", CITY_URL), _link("hallenbad-city", SPORTHALLE_URL))
+    report = scrape_lane_plans(_client(handler), links)
+    assert [p.source_url for p in report.plans] == [CITY_URL]
+    assert [m.source_url for m in report.misses] == [SPORTHALLE_URL]

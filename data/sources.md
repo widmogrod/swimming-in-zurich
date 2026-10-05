@@ -55,7 +55,7 @@ to the https form would be followed transparently anyway.
 
 ## The two operator pages we do NOT scrape
 
-`seebad-enge` (`tonttu.ch`) and `freibad-dolder` (`doldersports.com`) are the only two pools whose
+`seebad-enge` (`tonttu.ch`) and `dolder-wellenbad` (`doldersports.com`) are the only two pools whose
 roster URL points at a private operator rather than the city. Both are `lake`/`outdoor` and hold
 UNSHARED urls, so the kind and shared-url tests admit them; `etl/scrape.py`'s
 `_UNPARSEABLE_OPERATOR_PAGES` excludes them **by pool id**, with the reason. Neither publishes a

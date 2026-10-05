@@ -56,13 +56,13 @@ class ScheduleFreshness(StrEnum):
     `SCHOOL`, `OUTDOOR`, `LAKE` and `RIVER` are all deliberately absent from the kind test in
     `freshness_of`, even though `etl.scrape.declared_sources` scrapes pools of every one of them.
     `AWAITING_SCRAPE` promises a schedule is coming, and for these kinds only *some* pools are
-    declared sources: 4 of the 18 Schulschwimmanlagen (the other 14 share one overview URL),
-    and outdoor/lake/river all but `flussbad-unterer-letten` + `-flussteil` (which share a URL and
-    so can NEVER be declared sources) and `seebad-enge` + `freibad-dolder` (whose operator pages no
+    declared sources: 4 of the 18 Schulschwimmanlagen (the other 14 share one overview URL), and
+    outdoor/lake/river all but `flussbad-unterer-letten` + `-flussteil` (which share a URL and so
+    can NEVER be declared sources) and `seebad-enge` + `dolder-wellenbad` (whose operator pages no
     parser understands). A pool of these kinds that IS scraped carries rules and so reads `SCRAPED`
-    from the blob itself — the widening buys nothing and would flip the four exceptions to a
-    promise no scrape will ever keep. The URL-sharing test that would decide it properly is
-    unavailable here: `Facility` carries no URL.
+    from the blob itself — the widening buys nothing and would flip the four exceptions to a promise
+    no scrape will ever keep. The URL-sharing test that would decide it properly is unavailable
+    here: `Facility` carries no URL.
 
     A non-`SCRAPED` pool is a first-class honest state, never "closed" and never a `/swim` option.
     """
