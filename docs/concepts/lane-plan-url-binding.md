@@ -79,6 +79,14 @@ posture is fail-fast, so no such per-basin failure is persisted today.
 fail-fast posture of [[discovery-driven-providers]]), not scoped to the basin — the older "the facility still
 builds with a lane hole" behaviour is gone.
 
+**Except for a sheet no basin binds.** Discovery takes *every* PDF under the `belegungsplaene/` folder, and
+the city also files non-lane sheets there (2026-10: Hallenbad City's `city-sporthalle.pdf`, a sports-hall
+booking grid with no `Bahnen` row). `etl/lane_plans.split_misses` sorts each miss by whether an authored
+`lane_plan_source.url` claims it: a **bound** miss aborts as above; an **unbound** miss is one audit line
+(`lane sheet skipped (bound to no basin): <url>: <cause>`) and the build continues — such a sheet could
+never reach gold anyway (a parsed-but-unbound plan is already the non-fatal `UnboundPlan`). A declared
+source that drifts to the same shape still aborts, because its URL is bound.
+
 Do **not** conflate `lane_plan_source` (the thin-crosswalk **binding**) with `lane_plan` (the extraction
 **outcome**). Accepted seams: stacked-sheet routing is a scoped text match. The old "rebuild before scrape"
 operational invariant is **gone** — `swimzh build` runs discovery → scrape → lanes → compose in one atomic pass,

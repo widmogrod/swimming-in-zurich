@@ -375,19 +375,19 @@ def test_the_declared_sources_are_exactly_twenty_six_pools() -> None:
 
 
 def test_the_two_unparseable_operator_pages_are_excluded_by_id() -> None:
-    """`seebad-enge` (tonttu.ch) and `freibad-dolder` (doldersports.com) are `LAKE`/`OUTDOOR` and
+    """`seebad-enge` (tonttu.ch) and `dolder-wellenbad` (doldersports.com) are `LAKE`/`OUTDOOR` and
     hold UNSHARED urls, so neither the kind test nor the url test excludes them — only the
     explicit id list does. Both `ParseError('no HTML schedule table')`, and under fail-fast that
     aborts the whole build, so this is the one test standing between a green build and an abort."""
     entries = catalog_json.loads(_CATALOG.read_text(encoding="utf-8"))
-    excluded = {e for e in entries if e.pool_id in {"seebad-enge", "freibad-dolder"}}
+    excluded = {e for e in entries if e.pool_id in {"seebad-enge", "dolder-wellenbad"}}
     assert len(excluded) == 2
     # They pass every OTHER conjunct — that is why the id list has to exist.
     for entry in excluded:
         assert entry.kind in (PoolKind.LAKE, PoolKind.OUTDOOR), entry
         assert entry.url is not None and "stadt-zuerich" not in entry.url, entry
         assert sum(1 for o in entries if o.url == entry.url) == 1, entry
-    assert not _declared_ids(entries) & {"seebad-enge", "freibad-dolder"}
+    assert not _declared_ids(entries) & {"seebad-enge", "dolder-wellenbad"}
 
 
 def test_an_excluded_operator_page_is_not_even_fetched_so_it_cannot_fail() -> None:
@@ -396,7 +396,7 @@ def test_an_excluded_operator_page_is_not_even_fetched_so_it_cannot_fail() -> No
     entry in `failures`), so a test that only asserted "no extract" would assert nothing."""
     catalog = (
         _entry("seebad-enge", "Seebad Enge", PoolKind.LAKE, "https://www.tonttu.ch/"),
-        _entry("freibad-dolder", "Freibad Dolder", PoolKind.OUTDOOR, "https://x/dolder/"),
+        _entry("dolder-wellenbad", "Dolder Wellenbad", PoolKind.OUTDOOR, "https://x/dolder/"),
     )
     report = scrape_declared_sources(
         _client(lambda _r: httpx.Response(200, content=b"<html>no table</html>")),
@@ -416,7 +416,7 @@ def test_the_unshared_url_test_alone_would_select_more_than_the_predicate_does()
     shared = {e.url for e in entries if e.url and sum(1 for o in entries if o.url == e.url) > 1}
     unshared = {e.pool_id for e in entries if e.url and e.url not in shared}
     assert len(unshared) == 28
-    assert unshared - _declared_ids(entries) == {"seebad-enge", "freibad-dolder"}
+    assert unshared - _declared_ids(entries) == {"seebad-enge", "dolder-wellenbad"}
 
 
 def test_the_school_pools_without_public_swimming_share_one_overview_url() -> None:

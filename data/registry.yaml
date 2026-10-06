@@ -109,8 +109,10 @@ facilities:
     baditicker_poiid: "fb008"
     aliases: ["auhof", "Freibad Auhof"]
 
-  - facility_id: "freibad-dolder"
-    name: "Freibad Dolder"
+  # WFS renamed this pool 2026-10 (was "Freibad Dolder" / `freibad-dolder`); the old name
+  # stays below as a lossless alias so every legacy id still resolves by lookup.
+  - facility_id: "dolder-wellenbad"
+    name: "Dolder Wellenbad"
     kind: "outdoor"
     crowdmonitor_keys: []
     baditicker_poiid: "fb016"

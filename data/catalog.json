@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-08-01T14:13:11.989459+02:00",
+  "generated_at": "2026-10-05T23:18:45.163099+02:00",
   "count": 57,
   "entries": [
     {
@@ -11,7 +11,8 @@
       "lon": 8.560139,
       "url": "https://www.stadt-zuerich.ch/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/hallenbaeder/bungertwies.html",
       "description": "25m Mehrzweckbecken mit Hubboden und Sprungbrett 1m, Sonnenterrasse",
-      "phone": "+41 44 413 55 70"
+      "phone": "+41 44 413 55 70",
+      "poi_id": "hb002"
     },
     {
       "pool_id": "hallenbad-city",
@@ -22,7 +23,8 @@
       "lon": 8.532973,
       "url": "https://www.stadt-zuerich.ch/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/hallenbaeder/city.html",
       "description": "Schwimmerbecken 50 x 15 m (6 Bahnen) 28°C, Nichtschwimmerbecken 10,5 x 7 m 30°C, Variobecken mit Hubboden 16,66 x 8 m (4 Bahnen) 30°C, Turnhalle 44 x 12 m, trennbar in 2 gleiche Hälften, gemischte Sauna 8 - 22 Uhr, Eintritt Fr. 10.-",
-      "phone": "+41 44 413 56 00"
+      "phone": "+41 44 413 56 00",
+      "poi_id": "hb001"
     },
     {
       "pool_id": "hallenbad-blaesi",
@@ -33,7 +35,8 @@
       "lon": 8.501733,
       "url": "https://www.stadt-zuerich.ch/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/hallenbaeder/blaesi.html",
       "description": null,
-      "phone": "+41 44 413 55 80"
+      "phone": "+41 44 413 55 80",
+      "poi_id": "hb005"
     },
     {
       "pool_id": "hallenbad-leimbach",
@@ -44,7 +47,8 @@
       "lon": 8.513445,
       "url": "https://www.stadt-zuerich.ch/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/hallenbaeder/leimbach.html",
       "description": null,
-      "phone": "+41 44 413 55 50"
+      "phone": "+41 44 413 55 50",
+      "poi_id": "hb006"
     },
     {
       "pool_id": "hallenbad-oerlikon",
@@ -55,7 +59,8 @@
       "lon": 8.556733,
       "url": "https://www.stadt-zuerich.ch/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/hallenbaeder/oerlikon.html",
       "description": null,
-      "phone": "+41 44 413 55 00"
+      "phone": "+41 44 413 55 00",
+      "poi_id": "hb004"
     },
     {
       "pool_id": "hallenbad-altstetten",
@@ -66,7 +71,8 @@
       "lon": 8.479864,
       "url": "http://www.bad-altstetten.ch",
       "description": "25 m Schwimmbecken, Wärme-Innenbad mit Sprudelliegen und Massagedüsen, Wärme-Aussenbad mit Sprudelliegen und Massagedüsen, Nichtschwimmerbecken, Sprungbecken 1/3/5m, Rutschbahn 110m, Gartensauna, Dampfbad, Aussenanlage mit ruhiger Liegewiese_",
-      "phone": "+41 44 431 77 44"
+      "phone": "+41 44 431 77 44",
+      "poi_id": "hb003"
     },
     {
       "pool_id": "waermebad-kaeferberg",
@@ -77,7 +83,8 @@
       "lon": 8.518032,
       "url": "https://www.stadt-zuerich.ch/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/hallenbaeder/kaeferberg.html",
       "description": null,
-      "phone": "+41 44 413 55 90"
+      "phone": "+41 44 413 55 90",
+      "poi_id": "hb007"
     },
     {
       "pool_id": "freibad-letzigraben",
@@ -88,7 +95,8 @@
       "lon": 8.501339,
       "url": "http://www.sportamt.ch/freibad-letzigraben",
       "description": null,
-      "phone": "+41 44 413 57 00"
+      "phone": "+41 44 413 57 00",
+      "poi_id": "fb002"
     },
     {
       "pool_id": "freibad-zwischen-den-hoelzern",
@@ -99,18 +107,8 @@
       "lon": 8.473779,
       "url": "http://www.sportamt.ch/freibad-zwischen-den-hoelzern",
       "description": null,
-      "phone": "+41 44 413 57 70"
-    },
-    {
-      "pool_id": "freibad-auhof",
-      "name": "Freibad Auhof",
-      "kind": "outdoor",
-      "address": "Luegislandstrasse 160, 8051 Zürich",
-      "lat": 47.408675,
-      "lon": 8.571325,
-      "url": "http://www.sportamt.ch/freibad-auhof",
-      "description": null,
-      "phone": "+41 44 413 57 40"
+      "phone": "+41 44 413 57 70",
+      "poi_id": "fb018"
     },
     {
       "pool_id": "freibad-allenmoos",
@@ -121,18 +119,32 @@
       "lon": 8.539021,
       "url": "http://www.sportamt.ch/freibad-allenmoos",
       "description": null,
-      "phone": "+41 44 413 57 30"
+      "phone": "+41 44 413 57 30",
+      "poi_id": "fb006"
     },
     {
-      "pool_id": "freibad-dolder",
-      "name": "Freibad Dolder",
+      "pool_id": "dolder-wellenbad",
+      "name": "Dolder Wellenbad",
       "kind": "outdoor",
       "address": "Adlisbergstrasse 36, 8044 Zürich",
       "lat": 47.375609,
       "lon": 8.576846,
       "url": "https://www.doldersports.com/summer-front-page/",
       "description": "Parkplatz_Restaurant täglich geöffnet_grösste offene Kunsteisfläche Europas",
-      "phone": "+41 44 267 70 80"
+      "phone": "+41 44 267 70 80",
+      "poi_id": "fb016"
+    },
+    {
+      "pool_id": "freibad-auhof",
+      "name": "Freibad Auhof",
+      "kind": "outdoor",
+      "address": "Luegislandstrasse 160, 8051 Zürich",
+      "lat": 47.408675,
+      "lon": 8.571325,
+      "url": "http://www.sportamt.ch/freibad-auhof",
+      "description": null,
+      "phone": "+41 44 413 57 40",
+      "poi_id": "fb008"
     },
     {
       "pool_id": "freibad-heuried",
@@ -143,7 +155,8 @@
       "lon": 8.505062,
       "url": "http://www.sportamt.ch/freibad-heuried",
       "description": null,
-      "phone": "+41 44 413 95 30"
+      "phone": "+41 44 413 95 30",
+      "poi_id": "fb012"
     },
     {
       "pool_id": "freibad-seebach",
@@ -154,7 +167,20 @@
       "lon": 8.548248,
       "url": "http://www.sportamt.ch/freibad-seebach",
       "description": null,
-      "phone": "+41 44 413 57 50"
+      "phone": "+41 44 413 57 50",
+      "poi_id": "fb013"
+    },
+    {
+      "pool_id": "maennerbad-schanzengraben",
+      "name": "Männerbad Schanzengraben",
+      "kind": "river",
+      "address": "8001 Zürich",
+      "lat": 47.371269,
+      "lon": 8.532594,
+      "url": "https://www.stadt-zuerich.ch/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/sommerbaeder/schanzengraben.html",
+      "description": null,
+      "phone": "+41 44 211 95 94",
+      "poi_id": "flb6942"
     },
     {
       "pool_id": "flussbad-unterer-letten-flussteil",
@@ -165,7 +191,8 @@
       "lon": 8.529852,
       "url": "http://www.sportamt.ch/flussbad-unterer-letten",
       "description": null,
-      "phone": "+41 44 413 58 90"
+      "phone": "+41 44 413 58 90",
+      "poi_id": "flb8803"
     },
     {
       "pool_id": "flussbad-au-hoengg",
@@ -176,7 +203,8 @@
       "lon": 8.489277,
       "url": "http://www.sportamt.ch/flussbad-au-hoengg",
       "description": null,
-      "phone": "+41 44 413 58 60"
+      "phone": "+41 44 413 58 60",
+      "poi_id": "flb6938"
     },
     {
       "pool_id": "flussbad-unterer-letten",
@@ -187,18 +215,8 @@
       "lon": 8.529852,
       "url": "http://www.sportamt.ch/flussbad-unterer-letten",
       "description": null,
-      "phone": "+41 44 413 58 90"
-    },
-    {
-      "pool_id": "maennerbad-schanzengraben",
-      "name": "Männerbad Schanzengraben",
-      "kind": "river",
-      "address": "8001 Zürich",
-      "lat": 47.371269,
-      "lon": 8.532594,
-      "url": "http://www.sportamt.ch/maennerbad",
-      "description": null,
-      "phone": "+41 44 211 95 94"
+      "phone": "+41 44 413 58 90",
+      "poi_id": "flb6940"
     },
     {
       "pool_id": "flussbad-oberer-letten",
@@ -209,7 +227,8 @@
       "lon": 8.534268,
       "url": "http://www.sportamt.ch/flussbad-oberer-letten",
       "description": null,
-      "phone": "+41 44 413 58 80"
+      "phone": "+41 44 413 58 80",
+      "poi_id": "flb6939"
     },
     {
       "pool_id": "frauenbad-stadthausquai",
@@ -220,7 +239,8 @@
       "lon": 8.54199,
       "url": "http://www.sportamt.ch/frauenbad",
       "description": null,
-      "phone": "+41 44 413 58 70"
+      "phone": "+41 44 413 58 70",
+      "poi_id": "flb6941"
     },
     {
       "pool_id": "strandbad-tiefenbrunnen",
@@ -231,7 +251,8 @@
       "lon": 8.557555,
       "url": "http://www.sportamt.ch/strandbad-tiefenbrunnen",
       "description": "Nichtschwimmerbereich im See, Kinderplanschbecken, Sprungplattform 1/3/5 m, 3 Flosse, Super-See-Rutschbahn 62m, Volleyballnetz",
-      "phone": "+41 44 413 58 00"
+      "phone": "+41 44 413 58 00",
+      "poi_id": "seb6947"
     },
     {
       "pool_id": "seebad-katzensee",
@@ -242,7 +263,8 @@
       "lon": 8.493309,
       "url": "http://www.sportamt.ch/seebad-katzensee",
       "description": null,
-      "phone": "+41 44 371 08 90"
+      "phone": "+41 44 371 08 90",
+      "poi_id": "seb6944"
     },
     {
       "pool_id": "seebad-enge",
@@ -253,7 +275,8 @@
       "lon": 8.53662,
       "url": "http://www.tonttu.ch/",
       "description": null,
-      "phone": "+41 44 201 38 89"
+      "phone": "+41 44 201 38 89",
+      "poi_id": "seb6943"
     },
     {
       "pool_id": "strandbad-wollishofen",
@@ -264,7 +287,8 @@
       "lon": 8.537319,
       "url": "http://www.sportamt.ch/strandbad-wollishofen",
       "description": "Nichtschwimmerbereich im See mit Blasio Spielgeräten, Sprungplattform 1/3m, 2 Flosse",
-      "phone": "+41 44 413 58 10"
+      "phone": "+41 44 413 58 10",
+      "poi_id": "seb6948"
     },
     {
       "pool_id": "seebad-utoquai",
@@ -275,7 +299,8 @@
       "lon": 8.5472,
       "url": "http://www.sportamt.ch/seebad-utoquai",
       "description": null,
-      "phone": "+41 44 413 58 20"
+      "phone": "+41 44 413 58 20",
+      "poi_id": "seb6945"
     },
     {
       "pool_id": "strandbad-mythenquai",
@@ -286,7 +311,20 @@
       "lon": 8.534629,
       "url": "http://www.sportamt.ch/strandbad-mythenquai",
       "description": "Sandstrand, grosszügiger und moderner Kinderbereich mit Wasserspielen",
-      "phone": "+41 44 413 58 30"
+      "phone": "+41 44 413 58 30",
+      "poi_id": "seb6946"
+    },
+    {
+      "pool_id": "schulschwimmanlage-wolfsblick",
+      "name": "Schulschwimmanlage Wolfsblick",
+      "kind": "school",
+      "address": "8046 Zürich",
+      "lat": 47.423271,
+      "lon": 8.514245,
+      "url": "https://www.stadt-zuerich.ch/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/hallenbaeder.html",
+      "description": null,
+      "phone": "+41 44 413 59 77",
+      "poi_id": "ssa1357"
     },
     {
       "pool_id": "schulschwimmanlage-hardau",
@@ -297,7 +335,8 @@
       "lon": 8.509988,
       "url": "https://www.stadt-zuerich.ch/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/hallenbaeder.html",
       "description": null,
-      "phone": "+41 44 413 59 76"
+      "phone": "+41 44 413 59 76",
+      "poi_id": "ssa1356"
     },
     {
       "pool_id": "schulschwimmanlage-stettbach",
@@ -308,18 +347,8 @@
       "lon": 8.580703,
       "url": "https://www.stadt-zuerich.ch/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/hallenbaeder.html",
       "description": null,
-      "phone": "+41 44 413 59 84"
-    },
-    {
-      "pool_id": "schulschwimmanlage-isengrind",
-      "name": "Schulschwimmanlage Isengrind",
-      "kind": "school",
-      "address": "8046 Zürich",
-      "lat": 47.423271,
-      "lon": 8.514245,
-      "url": "https://www.stadt-zuerich.ch/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/hallenbaeder.html",
-      "description": null,
-      "phone": "+41 44 413 59 77"
+      "phone": "+41 44 413 59 84",
+      "poi_id": "ssa1364"
     },
     {
       "pool_id": "schulschwimmanlage-aubruecke",
@@ -330,7 +359,8 @@
       "lon": 8.571182,
       "url": "https://www.stadt-zuerich.ch/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/hallenbaeder.html",
       "description": null,
-      "phone": "+41 44 413 59 72"
+      "phone": "+41 44 413 59 72",
+      "poi_id": "ssa1352"
     },
     {
       "pool_id": "schulschwimmanlage-letten",
@@ -341,7 +371,8 @@
       "lon": 8.533092,
       "url": "https://www.stadt-zuerich.ch/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/hallenbaeder.html",
       "description": null,
-      "phone": "+41 44 413 59 79"
+      "phone": "+41 44 413 59 79",
+      "poi_id": "ssa1359"
     },
     {
       "pool_id": "schulschwimmanlage-aemtler",
@@ -352,7 +383,8 @@
       "lon": 8.512659,
       "url": "https://www.stadt-zuerich.ch/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/hallenbaeder/aemtler.html",
       "description": null,
-      "phone": "+41 44 413 59 70"
+      "phone": "+41 44 413 59 70",
+      "poi_id": "ssa1336"
     },
     {
       "pool_id": "schulschwimmanlage-buhn",
@@ -363,7 +395,8 @@
       "lon": 8.54499,
       "url": "https://www.stadt-zuerich.ch/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/hallenbaeder.html",
       "description": null,
-      "phone": "+41 44 413 59 74"
+      "phone": "+41 44 413 59 74",
+      "poi_id": "ssa1355"
     },
     {
       "pool_id": "schulschwimmanlage-gruenau",
@@ -374,7 +407,8 @@
       "lon": 8.48958,
       "url": "https://www.stadt-zuerich.ch/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/hallenbaeder.html",
       "description": null,
-      "phone": "+41 44 413 59 75"
+      "phone": "+41 44 413 59 75",
+      "poi_id": "ssa1354"
     },
     {
       "pool_id": "schulschwimmanlage-vogtsrain",
@@ -385,7 +419,8 @@
       "lon": 8.499656,
       "url": "https://www.stadt-zuerich.ch/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/hallenbaeder.html",
       "description": null,
-      "phone": "+41 44 413 59 86"
+      "phone": "+41 44 413 59 86",
+      "poi_id": "ssa1366"
     },
     {
       "pool_id": "schulschwimmanlage-altweg",
@@ -396,7 +431,8 @@
       "lon": 8.492244,
       "url": "https://www.stadt-zuerich.ch/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/hallenbaeder/altweg.html",
       "description": null,
-      "phone": "+41 44 413 59 71"
+      "phone": "+41 44 413 59 71",
+      "poi_id": "ssa1351"
     },
     {
       "pool_id": "schulschwimmanlage-borrweg",
@@ -407,7 +443,8 @@
       "lon": 8.504726,
       "url": "https://www.stadt-zuerich.ch/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/hallenbaeder.html",
       "description": null,
-      "phone": "+41 44 413 59 73"
+      "phone": "+41 44 413 59 73",
+      "poi_id": "ssa1353"
     },
     {
       "pool_id": "schulschwimmanlage-freilager",
@@ -418,7 +455,8 @@
       "lon": 8.487568,
       "url": "https://www.stadt-zuerich.ch/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/hallenbaeder.html",
       "description": null,
-      "phone": "+41 44 413 59 68"
+      "phone": "+41 44 413 59 68",
+      "poi_id": "ssa11721"
     },
     {
       "pool_id": "schulschwimmanlage-riesbach",
@@ -429,7 +467,8 @@
       "lon": 8.553911,
       "url": "https://www.stadt-zuerich.ch/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/hallenbaeder.html",
       "description": null,
-      "phone": "+41 44 413 59 82"
+      "phone": "+41 44 413 59 82",
+      "poi_id": "ssa1362"
     },
     {
       "pool_id": "schulschwimmanlage-kuegeliloo",
@@ -440,7 +479,8 @@
       "lon": 8.528322,
       "url": "https://www.stadt-zuerich.ch/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/hallenbaeder.html",
       "description": null,
-      "phone": "+41 44 413 59 78"
+      "phone": "+41 44 413 59 78",
+      "poi_id": "ssa1358"
     },
     {
       "pool_id": "schulschwimmanlage-staudenbuehl",
@@ -451,7 +491,8 @@
       "lon": 8.535407,
       "url": "https://www.stadt-zuerich.ch/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/hallenbaeder.html",
       "description": null,
-      "phone": "+41 44 413 59 83"
+      "phone": "+41 44 413 59 83",
+      "poi_id": "ssa1363"
     },
     {
       "pool_id": "schulschwimmanlage-riedtli",
@@ -462,7 +503,8 @@
       "lon": 8.542899,
       "url": "https://www.stadt-zuerich.ch/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/hallenbaeder/riedtli.html",
       "description": null,
-      "phone": "+41 44 413 59 81"
+      "phone": "+41 44 413 59 81",
+      "poi_id": "ssa1361"
     },
     {
       "pool_id": "schulschwimmanlage-looren",
@@ -473,7 +515,8 @@
       "lon": 8.596346,
       "url": "https://www.stadt-zuerich.ch/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/hallenbaeder.html",
       "description": null,
-      "phone": "+41 44 413 59 80"
+      "phone": "+41 44 413 59 80",
+      "poi_id": "ssa1360"
     },
     {
       "pool_id": "schulschwimmanlage-tannenrauch",
@@ -484,7 +527,8 @@
       "lon": 8.528065,
       "url": "https://www.stadt-zuerich.ch/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/hallenbaeder/tannenrauch.html",
       "description": null,
-      "phone": "+41 44 413 59 85"
+      "phone": "+41 44 413 59 85",
+      "poi_id": "ssa1365"
     },
     {
       "pool_id": "planschbecken-pfingstweid",
@@ -495,7 +539,8 @@
       "lon": 8.512742,
       "url": "https://www.stadt-zuerich.ch/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/sommerbaeder/planschbecken.html",
       "description": null,
-      "phone": null
+      "phone": null,
+      "poi_id": "pb8805"
     },
     {
       "pool_id": "planschbecken-schloessliareal",
@@ -506,7 +551,8 @@
       "lon": 8.558334,
       "url": "https://www.stadt-zuerich.ch/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/sommerbaeder/planschbecken.html",
       "description": null,
-      "phone": null
+      "phone": null,
+      "poi_id": "pb3962"
     },
     {
       "pool_id": "planschbecken-sihlhoelzli",
@@ -517,7 +563,8 @@
       "lon": 8.523723,
       "url": "https://www.stadt-zuerich.ch/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/sommerbaeder/planschbecken.html",
       "description": null,
-      "phone": null
+      "phone": null,
+      "poi_id": "pb3963"
     },
     {
       "pool_id": "planschbecken-wahlenpark",
@@ -528,7 +575,8 @@
       "lon": 8.541036,
       "url": "https://www.stadt-zuerich.ch/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/sommerbaeder/planschbecken.html",
       "description": null,
-      "phone": null
+      "phone": null,
+      "poi_id": "pb3964"
     },
     {
       "pool_id": "planschbecken-artergut",
@@ -539,7 +587,8 @@
       "lon": 8.554476,
       "url": "https://www.stadt-zuerich.ch/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/sommerbaeder/planschbecken.html",
       "description": null,
-      "phone": null
+      "phone": null,
+      "poi_id": "pb3966"
     },
     {
       "pool_id": "planschbecken-bachwiesen",
@@ -550,7 +599,8 @@
       "lon": 8.486068,
       "url": "https://www.stadt-zuerich.ch/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/sommerbaeder/planschbecken.html",
       "description": null,
-      "phone": null
+      "phone": null,
+      "poi_id": "pb3967"
     },
     {
       "pool_id": "planschbecken-baeckeranlage",
@@ -561,7 +611,8 @@
       "lon": 8.523426,
       "url": "https://www.stadt-zuerich.ch/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/sommerbaeder/planschbecken.html",
       "description": null,
-      "phone": null
+      "phone": null,
+      "poi_id": "pb3968"
     },
     {
       "pool_id": "planschbecken-bullingerhof",
@@ -572,7 +623,8 @@
       "lon": 8.514024,
       "url": "https://www.stadt-zuerich.ch/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/sommerbaeder/planschbecken.html",
       "description": null,
-      "phone": null
+      "phone": null,
+      "poi_id": "pb3970"
     },
     {
       "pool_id": "planschbecken-fritschiwiese",
@@ -583,7 +635,8 @@
       "lon": 8.512256,
       "url": "https://www.stadt-zuerich.ch/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/sommerbaeder/planschbecken.html",
       "description": null,
-      "phone": null
+      "phone": null,
+      "poi_id": "pb3960"
     },
     {
       "pool_id": "planschbecken-josefswiese",
@@ -594,7 +647,8 @@
       "lon": 8.522791,
       "url": "https://www.stadt-zuerich.ch/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/sommerbaeder/planschbecken.html",
       "description": null,
-      "phone": null
+      "phone": null,
+      "poi_id": "pb3961"
     },
     {
       "pool_id": "planschbecken-foehrenwald",
@@ -605,7 +659,8 @@
       "lon": 8.541704,
       "url": "https://www.stadt-zuerich.ch/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/sommerbaeder/planschbecken.html",
       "description": null,
-      "phone": null
+      "phone": null,
+      "poi_id": "pb3971"
     },
     {
       "pool_id": "planschbecken-am-uetliberg",
@@ -616,7 +671,8 @@
       "lon": 8.505481,
       "url": "https://www.stadt-zuerich.ch/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/sommerbaeder/planschbecken.html",
       "description": null,
-      "phone": null
+      "phone": null,
+      "poi_id": "pb3969"
     },
     {
       "pool_id": "planschbecken-althoos",
@@ -627,7 +683,8 @@
       "lon": 8.521488,
       "url": "https://www.stadt-zuerich.ch/de/stadtleben/sport-und-erholung/sport-und-badeanlagen/sommerbaeder/planschbecken.html",
       "description": null,
-      "phone": null
+      "phone": null,
+      "poi_id": "pb3965"
     }
   ]
 }

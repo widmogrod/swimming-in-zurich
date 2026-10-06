@@ -88,7 +88,7 @@ card/row stays visible alongside the panel.
   `Täglich ab 7 Uhr geöffnet` is open-ended and `TimeRange` requires `start < end`. A real
   loss against "we shouldn't compress information"; the raw-layer plan is where an
   unparsed cell gets a home.
-- **Live WFS has drifted and it is not absorbed**: `schulschwimmanlage-isengrind` is
+- **Live WFS had drifted (absorbed 2026-10-05 by regenerating `data/catalog.json` + re-recording the roster cassette; `freibad-dolder` → `dolder-wellenbad` landed the same day)**: `schulschwimmanlage-isengrind` is
   renamed *Wolfsblick* (a pool_id change) and `maennerbad-schanzengraben`'s URL moved off
   sportamt.ch. Builds tolerate both; the next `build-catalog` re-snapshot must decide them.
 - That URL move also means **Männerbad alone among the newly admitted pools carries the

@@ -70,7 +70,9 @@ def test_roster_spine_matches_committed_catalog(tmp_path: Path) -> None:
     # pins the sportamt repair end-to-end: the cassette carries the WFS's `https` form, so these
     # entries only match the snapshot because the provider normalized them.
     sportamt = [e.url for e in roster if "sportamt.ch" in (e.url or "")]
-    assert len(sportamt) == 17, sportamt
+    # 16 since 2026-10: the WFS moved `maennerbad-schanzengraben` off sportamt.ch onto the
+    # city's own sommerbaeder page (absorbed with the Dolder rename, same snapshot refresh).
+    assert len(sportamt) == 16, sportamt
     assert all(u is not None and u.startswith("http://") for u in sportamt), sportamt
 
     # …and the spine built from that provider roster carries the same geo onto every pool row.

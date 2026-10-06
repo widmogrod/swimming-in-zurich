@@ -94,15 +94,15 @@ _SCRAPEABLE_KINDS = (
 #: `ParseError('no HTML schedule table')` — which under fail-fast aborts the whole run.
 #:
 #: * `seebad-enge` (tonttu.ch) publishes a guaranteed core window nested inside a conditional one;
-#: * `freibad-dolder` (doldersports.com) publishes date-range exceptions.
+#: * `dolder-wellenbad` (doldersports.com) publishes date-range exceptions.
 #:
 #: Neither shape exists in the domain model yet (2026-08-06 Gap 7), so admitting them would mean
 #: inventing facts. Keyed by `pool_id` — the identity spine — for the same reason
 #: `_OPERATOR_CLOSURES` is: dolder's operator has already changed domain once without notice.
-_UNPARSEABLE_OPERATOR_PAGES = frozenset({"seebad-enge", "freibad-dolder"})
+_UNPARSEABLE_OPERATOR_PAGES = frozenset({"seebad-enge", "dolder-wellenbad"})
 
 #: Per-pool extra closure extractors for pools whose page is a **private operator's**, not the
-#: city's. Keyed by `pool_id` — deliberately NOT by host: `freibad-dolder`'s operator changed
+#: city's. Keyed by `pool_id` — deliberately NOT by host: `dolder-wellenbad`'s operator changed
 #: domain (doldersports.com → doldereisundbad.ch) without notice, and a host-keyed table would
 #: have fallen through silently. `pool_id` is the identity spine and is the only stable key.
 #:

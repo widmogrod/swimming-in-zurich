@@ -129,7 +129,7 @@ def test_schedule_less_facilities_are_distinguished_from_closed(dataset: Dataset
         # S4: the outdoor/river/lake pins that gained a Baditicker `baditicker_poiid`.
         "Freibad Allenmoos",
         "Freibad Auhof",
-        "Freibad Dolder",
+        "Dolder Wellenbad",  # WFS rename 2026-10 (was "Freibad Dolder")
         "Freibad Letzigraben",
         "Freibad Seebach",
         "Freibad Zwischen den Hölzern",

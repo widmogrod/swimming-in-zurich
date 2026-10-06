@@ -371,7 +371,7 @@ def test_a_relayer_over_unchanged_sources_changes_nothing_but_provenance(tmp_pat
     # them changes only by the scrape's timestamps (asserted below).
     assert len(rewritten) == 26, sorted(rewritten)
     assert not any(pool_id.startswith("planschbecken-") for pool_id in rewritten)
-    assert not rewritten & {"freibad-dolder", "seebad-enge", "schulschwimmanlage-hardau"}
+    assert not rewritten & {"dolder-wellenbad", "seebad-enge", "schulschwimmanlage-hardau"}
 
     after = {str(f.identity.facility_id): f for f in GoldRepository(open_db(db)).load_all()}
     assert {k: _timeless(v) for k, v in after.items()} == {
@@ -383,7 +383,7 @@ def test_a_relayer_over_unchanged_sources_changes_nothing_but_provenance(tmp_pat
     "pool_id",
     [
         # An operator page no parser understands (`_UNPARSEABLE_OPERATOR_PAGES`).
-        "freibad-dolder",
+        "dolder-wellenbad",
         "seebad-enge",
         # No page of its own: one of the 14 entries on the generic `hallenbaeder.html`.
         "schulschwimmanlage-hardau",
@@ -993,11 +993,11 @@ def test_build_admits_the_seasonal_pools_with_real_hours(tmp_path: Path) -> None
     assert "freibad-zwischen-den-hoelzern" in scheduled
     # The two operator pages no parser understands are excluded, not failed: schedule-less, and
     # `no_source` rather than a promise (`freshness_of` deliberately did not widen its kind test).
-    for excluded in ("seebad-enge", "freibad-dolder"):
+    for excluded in ("seebad-enge", "dolder-wellenbad"):
         assert excluded not in scheduled
     freshness = {str(e.entry.pool_id): e.freshness for e in load_roster(open_db(db))}
     assert freshness["seebad-enge"] is ScheduleFreshness.NO_SOURCE
-    assert freshness["freibad-dolder"] is ScheduleFreshness.NO_SOURCE
+    assert freshness["dolder-wellenbad"] is ScheduleFreshness.NO_SOURCE
     assert freshness["freibad-heuried"] is ScheduleFreshness.SCRAPED
     # The two river pools that SHARE one URL can never be declared sources — and must therefore
     # never read `awaiting_scrape`, the state the `freshness_of` widening would have given them.
